@@ -97,6 +97,7 @@ public sealed class Plugin : IDalamudPlugin {
     // treating it as an accounting observation.
     private const int RetainerBalanceStabilityMilliseconds = 1500;
     private const int RetainerReceiptCorrelationSeconds = 5;
+    private const int AutomaticFailureRetrySeconds = 10;
 
     public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commands, IClientState clientState, IObjectTable objects, IFramework framework, IDataManager dataManager, IUnlockState unlockState, IGameInventory gameInventory, IChatGui chatGui, IPluginLog log) {
         this.pluginInterface = pluginInterface;
@@ -555,12 +556,15 @@ public sealed class Plugin : IDalamudPlugin {
         catch (GillionsSyncRejectedException error) when (IsAccountAccessBlocked(error.Code)) {
             log.Warning("Gillions automatic sync stopped: {Code}.", error.Code);
         }
-        catch (Exception error) { log.Warning(error, "Gillions automatic sync failed; it will retry on the next interval."); }
+        catch (Exception error) {
+            if (configuration.PendingGilLedgerEvents is { Count: > 0 })
+                nextGilLedgerUploadUtc = DateTime.UtcNow.AddSeconds(AutomaticFailureRetrySeconds);
+            log.Warning(error, "Gillions automatic sync failed; it will retry after a short backoff.");
+        }
     }
 
     private async Task SyncAsync(bool force = true, bool background = false, IEnumerable<string>? scopes = null) {
         if (string.IsNullOrWhiteSpace(configuration.DeviceToken)) throw new InvalidOperationException("Pair this plugin with Gillions before syncing.");
-        if (!clientState.IsLoggedIn) throw new InvalidOperationException("Log into a character before syncing.");
         if (syncInFlight) {
             if (!background) throw new InvalidOperationException("A Gillions sync is already running.");
             return;
@@ -573,10 +577,21 @@ public sealed class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
             var collectionStopwatch = Stopwatch.StartNew();
 #endif
-            var snapshots = DirectGameSnapshotCollector.Collect(pluginInterface, clientState, objects, dataManager, unlockState, configuration.RetainerGilBalances, scopes ?? SyncScopes).ToArray();
+            // Every Dalamud service and native pointer access is confined to the
+            // framework thread, including identity for ledger-only uploads.
+            var selectedScopes = (scopes ?? SyncScopes).ToArray();
+            var captured = await framework.RunOnFrameworkThread(() => {
+                if (!clientState.IsLoggedIn) throw new InvalidOperationException("Log into a character before syncing.");
+                var currentName = objects.LocalPlayer?.Name.TextValue ?? "";
+                var currentWorld = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "";
+                var snapshots = DirectGameSnapshotCollector.Collect(pluginInterface, clientState, objects, dataManager, unlockState, configuration.RetainerGilBalances, selectedScopes).ToArray();
+                return new CapturedSnapshotBatch(currentName, currentWorld, snapshots);
+            });
+            var snapshots = captured.Snapshots;
 #if GILLIONS_TEST_BUILD
             collectionStopwatch.Stop();
-            RecordDiagnostic($"Collected {string.Join(", ", snapshots.Select(snapshot => snapshot.ResourceType))} in {collectionStopwatch.Elapsed.TotalMilliseconds:N0} ms.");
+            var collectedLabel = snapshots.Length > 0 ? string.Join(", ", snapshots.Select(snapshot => snapshot.ResourceType)) : "queued ledger data";
+            RecordDiagnostic($"Collected {collectedLabel} in {collectionStopwatch.Elapsed.TotalMilliseconds:N0} ms.");
 #endif
             // All Dalamud and native-memory reads above remain on the framework
             // thread. The resulting managed snapshots are immutable, so JSON
@@ -619,8 +634,8 @@ public sealed class Plugin : IDalamudPlugin {
             }
             var pendingGilLedgerEvents = configuration.PendingGilLedgerEvents ?? [];
             if (pendingGilLedgerEvents.Count > 0) {
-                var currentName = objects.LocalPlayer?.Name.TextValue ?? "";
-                var currentWorld = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "";
+                var currentName = captured.CharacterName;
+                var currentWorld = captured.CharacterWorld;
                 foreach (var characterEvents in pendingGilLedgerEvents.GroupBy(entry => new { Name = string.IsNullOrWhiteSpace(entry.CharacterName) ? currentName : entry.CharacterName, World = string.IsNullOrWhiteSpace(entry.CharacterWorld) ? currentWorld : entry.CharacterWorld }).ToArray()) {
                     var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).Replace('+','-').Replace('/','_').TrimEnd('=');
                     var payload = new {
@@ -655,7 +670,7 @@ public sealed class Plugin : IDalamudPlugin {
                 RecordDiagnostic($"Saved changed local sync state once in {saveStopwatch.Elapsed.TotalMilliseconds:N0} ms.");
 #endif
                 if (!background) settingsMessage = "Sync completed successfully.";
-                log.Information("Gillions Game Sync submitted {Count} changed data category(s) for {Character}.", submitted, objects.LocalPlayer?.Name.TextValue ?? "current character");
+                log.Information("Gillions Game Sync submitted {Count} changed data category(s) for {Character}.", submitted, string.IsNullOrWhiteSpace(captured.CharacterName) ? "current character" : captured.CharacterName);
             } else if (!background) settingsMessage = "No changed data was found; Gillions is already current.";
         } catch (GillionsSyncRejectedException error) when (IsAccountAccessBlocked(error.Code)) {
             await MarkSyncBlockedAsync(error);
@@ -868,6 +883,8 @@ internal sealed record PreparedSnapshot(
     string Description,
     string InventoryDelta,
     double PreparationMilliseconds);
+
+internal sealed record CapturedSnapshotBatch(string CharacterName, string CharacterWorld, GameSnapshot[] Snapshots);
 
 public sealed class PluginConfiguration : IPluginConfiguration {
     public int Version { get; set; } = 1;

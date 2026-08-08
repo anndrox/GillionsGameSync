@@ -17,6 +17,7 @@ $workerIndex = $pluginSource.IndexOf("Task.Run(() => snapshots.Select(PrepareSna
 if ($collectIndex -lt 0 -or $workerIndex -lt 0 -or $collectIndex -ge $workerIndex) {
   throw "Native collection must finish before managed payload preparation moves off-thread."
 }
+Assert-Contains $pluginSource "await framework.RunOnFrameworkThread" "All game-owned state capture must be marshaled to the framework thread."
 
 Assert-Contains $pluginSource "JsonSerializer.SerializeToUtf8Bytes(snapshot.Payload)" "Snapshots must be serialized once into UTF-8 bytes."
 Assert-Contains $pluginSource "writer.WriteRawValue(payloadUtf8, skipInputValidation: true)" "The prepared payload must be reused verbatim inside the upload wrapper."
@@ -30,6 +31,10 @@ $syncStart = $pluginSource.IndexOf("private async Task SyncAsync", [StringCompar
 $syncEnd = $pluginSource.IndexOf("private void DrawSettings", $syncStart, [StringComparison]::Ordinal)
 if ($syncStart -lt 0 -or $syncEnd -le $syncStart) { throw "Unable to inspect SyncAsync." }
 $syncBody = $pluginSource.Substring($syncStart, $syncEnd - $syncStart)
+$syncWorkerIndex = $syncBody.IndexOf("Task.Run(() => snapshots.Select(PrepareSnapshot)", [StringComparison]::Ordinal)
+$afterWorker = $syncBody.Substring($syncWorkerIndex)
+Assert-NotContains $afterWorker "objects.LocalPlayer" "Worker continuations must use the captured character identity, not Dalamud object state."
+Assert-Contains $pluginSource "AutomaticFailureRetrySeconds" "Automatic failures must use bounded retry backoff instead of retrying every frame."
 $saveCount = ([regex]::Matches($syncBody, "SaveConfigurationAsync\(\)")).Count
 if ($saveCount -ne 1) { throw "SyncAsync must batch successful sync-state persistence into exactly one save; found $saveCount." }
 
