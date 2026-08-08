@@ -1,0 +1,31 @@
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+  <PropertyGroup>
+    <Version>1.0.8</Version>
+    <AssemblyName>GillionsGameSync</AssemblyName>
+    <RootNamespace>GillionsGameSync</RootNamespace>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**;artifacts/**</DefaultItemExcludes>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Author>Gillions</Author>
+    <Name>Gillions Game Sync</Name>
+    <Punchline>Opt-in account sync for your Gillions profile.</Punchline>
+    <Description>Read-only, manually initiated character inventory synchronization for Gillions. Never automates gameplay or sends Square Enix credentials.</Description>
+    <ApplicableVersion>any</ApplicableVersion>
+    <RepoUrl>https://gillions.lanlab.one</RepoUrl>
+    <IconUrl>https://gillions.lanlab.one/downloads/plugins/GillionsGameSync-icon-v4.png</IconUrl>
+    <Tags>inventory;collection;utility</Tags>
+    <DalamudApiLevel>15</DalamudApiLevel>
+    <LoadRequiredState>0</LoadRequiredState>
+    <LoadSync>false</LoadSync>
+    <CanUnloadAsync>false</CanUnloadAsync>
+  </PropertyGroup>
+  <!-- A separate Dalamud identity keeps the test repository from updating or
+       sharing configuration with the stable member plugin. -->
+  <PropertyGroup Condition="'$(GillionsTestBuild)' == 'true'">
+    <Version>0.0.1</Version>
+    <AssemblyName>GillionsGameSyncTest</AssemblyName>
+    <Name>Gillions Game Sync Testing</Name>
+    <Punchline>Unreleased Gillions sync test build.</Punchline>
+    <DefineConstants>$(DefineConstants);GILLIONS_TEST_BUILD</DefineConstants>
+  </PropertyGroup>
+</Project>

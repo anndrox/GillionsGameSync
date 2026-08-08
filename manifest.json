@@ -1,0 +1,13 @@
+{
+  "Author": "Gillions",
+  "Name": "Gillions Game Sync",
+  "Punchline": "Opt-in account sync for your own Gillions profile.",
+  "Description": "Read-only, manually initiated collection of selected character data for the Gillions website. Never automates gameplay or sends Square Enix credentials.",
+  "InternalName": "GillionsGameSync",
+  "ApplicableVersion": "any",
+  "Tags": ["inventory", "collection", "utility"],
+  "DalamudApiLevel": 15,
+  "LoadRequiredState": 0,
+  "LoadSync": false,
+  "CanUnloadAsync": false
+}
