@@ -1,0 +1,36 @@
+$ErrorActionPreference = "Stop"
+
+$pluginRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+$pluginSource = Get-Content -LiteralPath (Join-Path $pluginRoot "Plugin.cs") -Raw
+$collectorSource = Get-Content -LiteralPath (Join-Path $pluginRoot "DirectGameSnapshotCollector.cs") -Raw
+
+function Assert-Contains([string]$Text, [string]$Needle, [string]$Message) {
+  if ($Text.IndexOf($Needle, [StringComparison]::Ordinal) -lt 0) { throw $Message }
+}
+
+function Assert-NotContains([string]$Text, [string]$Needle, [string]$Message) {
+  if ($Text.IndexOf($Needle, [StringComparison]::Ordinal) -ge 0) { throw $Message }
+}
+
+$collectIndex = $pluginSource.IndexOf("DirectGameSnapshotCollector.Collect", [StringComparison]::Ordinal)
+$workerIndex = $pluginSource.IndexOf("Task.Run(() => snapshots.Select(PrepareSnapshot)", [StringComparison]::Ordinal)
+if ($collectIndex -lt 0 -or $workerIndex -lt 0 -or $collectIndex -ge $workerIndex) {
+  throw "Native collection must finish before managed payload preparation moves off-thread."
+}
+
+Assert-Contains $pluginSource "JsonSerializer.SerializeToUtf8Bytes(snapshot.Payload)" "Snapshots must be serialized once into UTF-8 bytes."
+Assert-Contains $pluginSource "writer.WriteRawValue(payloadUtf8, skipInputValidation: true)" "The prepared payload must be reused verbatim inside the upload wrapper."
+Assert-NotContains $pluginSource "GetPayloadHash(object payload)" "The legacy second serialization path must remain removed."
+Assert-NotContains $collectorSource "JsonSerializer.Serialize(prior) == JsonSerializer.Serialize(read)" "Retainer listing comparisons must not serialize both snapshots."
+Assert-Contains $collectorSource "prior.Items.SequenceEqual(read.Items)" "Retainer listing changes must use typed structural comparison."
+Assert-Contains $collectorSource 'JsonPropertyName("retainerId")' "Typed retainer rows must preserve the existing camel-case wire contract."
+Assert-Contains $collectorSource "SheetRowCache<T>.Get(dataManager)" "Static Lumina row catalogs must be cached."
+
+$syncStart = $pluginSource.IndexOf("private async Task SyncAsync", [StringComparison]::Ordinal)
+$syncEnd = $pluginSource.IndexOf("private void DrawSettings", $syncStart, [StringComparison]::Ordinal)
+if ($syncStart -lt 0 -or $syncEnd -le $syncStart) { throw "Unable to inspect SyncAsync." }
+$syncBody = $pluginSource.Substring($syncStart, $syncEnd - $syncStart)
+$saveCount = ([regex]::Matches($syncBody, "SaveConfigurationAsync\(\)")).Count
+if ($saveCount -ne 1) { throw "SyncAsync must batch successful sync-state persistence into exactly one save; found $saveCount." }
+
+Write-Output "Gillions Game Sync performance contract checks passed."

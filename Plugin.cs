@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -59,6 +60,7 @@ public sealed class Plugin : IDalamudPlugin {
     private bool syncInFlight;
     private int automaticScopeIndex;
 #if GILLIONS_TEST_BUILD
+    private readonly object diagnosticsLock = new();
     private readonly List<string> diagnostics = [];
     private readonly Dictionary<string, string> lastObservedPayloadHashes = new(StringComparer.Ordinal);
     private Dictionary<string, int> lastInventoryRecords = new(StringComparer.Ordinal);
@@ -66,6 +68,8 @@ public sealed class Plugin : IDalamudPlugin {
     private static readonly string PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "1.0.4";
     private static readonly string[] SyncScopes = ["inventory", "currencies", "achievements", "collectibles", "character", "quest_journal", "glamour_plates"];
     private static readonly string[] CurrentChangelog = [
+        "Testing performance: Payload serialization and hashing now run off the game framework thread after native data has been safely copied.",
+        "Testing performance: Each snapshot is serialized once, static game-data catalogs are cached, and successful sync state is saved once per batch.",
         "Performance: Idle native reads stop completely when automatic sync is off or the client is not paired.",
         "Performance: Retainer capture is idle outside the retainer interface and checks only every 5 seconds while a retainer is open.",
         "Performance: Automatic sync rotates one data category every 30 seconds; inventory changes and Gil Ledger entries remain prompt.",
@@ -565,6 +569,7 @@ public sealed class Plugin : IDalamudPlugin {
         try {
             configuration.LastPayloadHashes ??= new Dictionary<string, string>(StringComparer.Ordinal);
             var submitted = 0;
+            var configurationChanged = false;
 #if GILLIONS_TEST_BUILD
             var collectionStopwatch = Stopwatch.StartNew();
 #endif
@@ -573,39 +578,50 @@ public sealed class Plugin : IDalamudPlugin {
             collectionStopwatch.Stop();
             RecordDiagnostic($"Collected {string.Join(", ", snapshots.Select(snapshot => snapshot.ResourceType))} in {collectionStopwatch.Elapsed.TotalMilliseconds:N0} ms.");
 #endif
-            foreach (var snapshot in snapshots) {
-                var payloadHash = GetPayloadHash(snapshot.Payload);
+            // All Dalamud and native-memory reads above remain on the framework
+            // thread. The resulting managed snapshots are immutable, so JSON
+            // preparation and hashing can run without blocking game frames.
+            var preparedSnapshots = await Task.Run(() => snapshots.Select(PrepareSnapshot).ToArray());
+#if GILLIONS_TEST_BUILD
+            if (preparedSnapshots.Length > 0)
+                RecordDiagnostic($"Prepared {string.Join(", ", preparedSnapshots.Select(snapshot => snapshot.ResourceType))} off-thread in {preparedSnapshots.Sum(snapshot => snapshot.PreparationMilliseconds):N0} ms.");
+#endif
+            foreach (var snapshot in preparedSnapshots) {
+                var payloadHash = snapshot.PayloadHash;
 #if GILLIONS_TEST_BUILD
                 if (!lastObservedPayloadHashes.TryGetValue(snapshot.ResourceType, out var observedHash) || observedHash != payloadHash) {
-                    var inventoryDelta = snapshot.ResourceType == "inventory" ? DescribeInventoryDelta(snapshot.Payload) : ".";
-                    RecordDiagnostic($"Collected {snapshot.ResourceType}: {DescribePayload(snapshot.Payload)}; hash {payloadHash[..12]}{inventoryDelta}");
+                    RecordDiagnostic($"Collected {snapshot.ResourceType}: {snapshot.Description}; hash {payloadHash[..12]}{snapshot.InventoryDelta}");
                     lastObservedPayloadHashes[snapshot.ResourceType] = payloadHash;
                 }
 #endif
                 if (!force && configuration.LastPayloadHashes.TryGetValue(snapshot.ResourceType, out var previousHash) && previousHash == payloadHash) continue;
-                var inventoryComponents = snapshot.ResourceType == "inventory" ? GetInventoryComponentHashes(snapshot.Payload) : null;
+                var inventoryComponents = snapshot.InventoryComponentHashes;
                 if (inventoryComponents is not null && !force) {
                     var changed = inventoryComponents.Where(entry => !configuration.LastInventoryComponentHashes.TryGetValue(entry.Key, out var previous) || previous != entry.Value).Select(entry => entry.Key).ToArray();
                     log.Information("Gillions inventory fingerprint changed: {Components}.", changed.Length > 0 ? string.Join(", ", changed) : "character identity or inventory metadata");
                 }
                 var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).Replace('+','-').Replace('/','_').TrimEnd('=');
-                using var request = Request("/api/game-sync/sync", configuration.DeviceToken, new { resourceType = snapshot.ResourceType, nonce, payload = snapshot.Payload });
+                using var request = SnapshotRequest("/api/game-sync/sync", configuration.DeviceToken, snapshot.ResourceType, nonce, snapshot.PayloadUtf8);
+#if GILLIONS_TEST_BUILD
+                var uploadStopwatch = Stopwatch.StartNew();
+#endif
                 using var response = await http.SendAsync(request);
                 await EnsureSuccessfulResponse(response);
 #if GILLIONS_TEST_BUILD
-                RecordDiagnostic($"Uploaded {snapshot.ResourceType}: HTTP {(int)response.StatusCode}; hash {payloadHash[..12]}.");
+                uploadStopwatch.Stop();
+                RecordDiagnostic($"Uploaded {snapshot.ResourceType}: HTTP {(int)response.StatusCode}; hash {payloadHash[..12]}; network {uploadStopwatch.Elapsed.TotalMilliseconds:N0} ms.");
 #endif
                 configuration.LastPayloadHashes[snapshot.ResourceType] = payloadHash;
                 if (inventoryComponents is not null) configuration.LastInventoryComponentHashes = inventoryComponents;
                 configuration.LastSyncUtc = DateTime.UtcNow;
-                await SaveConfigurationAsync();
+                configurationChanged = true;
                 submitted++;
             }
             var pendingGilLedgerEvents = configuration.PendingGilLedgerEvents ?? [];
             if (pendingGilLedgerEvents.Count > 0) {
                 var currentName = objects.LocalPlayer?.Name.TextValue ?? "";
                 var currentWorld = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "";
-                foreach (var characterEvents in pendingGilLedgerEvents.GroupBy(entry => new { Name = string.IsNullOrWhiteSpace(entry.CharacterName) ? currentName : entry.CharacterName, World = string.IsNullOrWhiteSpace(entry.CharacterWorld) ? currentWorld : entry.CharacterWorld })) {
+                foreach (var characterEvents in pendingGilLedgerEvents.GroupBy(entry => new { Name = string.IsNullOrWhiteSpace(entry.CharacterName) ? currentName : entry.CharacterName, World = string.IsNullOrWhiteSpace(entry.CharacterWorld) ? currentWorld : entry.CharacterWorld }).ToArray()) {
                     var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).Replace('+','-').Replace('/','_').TrimEnd('=');
                     var payload = new {
                         character = new { name = characterEvents.Key.Name, world = characterEvents.Key.World },
@@ -617,7 +633,7 @@ public sealed class Plugin : IDalamudPlugin {
                     await EnsureSuccessfulResponse(response);
                     var uploadedEventIds = characterEvents.Select(entry => entry.EventId).ToHashSet(StringComparer.Ordinal);
                     configuration.PendingGilLedgerEvents?.RemoveAll(entry => uploadedEventIds.Contains(entry.EventId));
-                    await SaveConfigurationAsync();
+                    configurationChanged = true;
                     submitted++;
 #if GILLIONS_TEST_BUILD
                     RecordDiagnostic($"Uploaded gil ledger: HTTP {(int)response.StatusCode}; character={characterEvents.Key.Name}; events={uploadedEventIds.Count}.");
@@ -628,7 +644,16 @@ public sealed class Plugin : IDalamudPlugin {
                 if (!string.IsNullOrWhiteSpace(configuration.SyncBlockedCode)) {
                     configuration.SyncBlockedCode = "";
                     configuration.SyncBlockedMessage = "";
+                    configurationChanged = true;
                 }
+#if GILLIONS_TEST_BUILD
+                var saveStopwatch = Stopwatch.StartNew();
+#endif
+                if (configurationChanged) await SaveConfigurationAsync();
+#if GILLIONS_TEST_BUILD
+                saveStopwatch.Stop();
+                RecordDiagnostic($"Saved changed local sync state once in {saveStopwatch.Elapsed.TotalMilliseconds:N0} ms.");
+#endif
                 if (!background) settingsMessage = "Sync completed successfully.";
                 log.Information("Gillions Game Sync submitted {Count} changed data category(s) for {Character}.", submitted, objects.LocalPlayer?.Name.TextValue ?? "current character");
             } else if (!background) settingsMessage = "No changed data was found; Gillions is already current.";
@@ -712,6 +737,24 @@ public sealed class Plugin : IDalamudPlugin {
         return request;
     }
 
+    private HttpRequestMessage SnapshotRequest(string path, string token, string resourceType, string nonce, byte[] payloadUtf8) {
+        var buffer = new ArrayBufferWriter<byte>(payloadUtf8.Length + 256);
+        using (var writer = new Utf8JsonWriter(buffer)) {
+            writer.WriteStartObject();
+            writer.WriteString("resourceType", resourceType);
+            writer.WriteString("nonce", nonce);
+            writer.WritePropertyName("payload");
+            writer.WriteRawValue(payloadUtf8, skipInputValidation: true);
+            writer.WriteEndObject();
+        }
+        var content = new ByteArrayContent(buffer.WrittenSpan.ToArray());
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
+        var request = new HttpRequestMessage(HttpMethod.Post, configuration.ServerUrl.TrimEnd('/') + path) { Content = content };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.UserAgent.ParseAdd($"GillionsGameSync/{PluginVersion}");
+        return request;
+    }
+
     private async Task MarkSyncBlockedAsync(GillionsSyncRejectedException error) {
         configuration.AutomaticSync = false;
         configuration.SyncBlockedCode = error.Code;
@@ -738,15 +781,26 @@ public sealed class Plugin : IDalamudPlugin {
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Environment.MachineName + Environment.UserDomainName + channel))).ToLowerInvariant();
     }
 
-    private static string GetPayloadHash(object payload) {
-        using var document = JsonDocument.Parse(JsonSerializer.Serialize(payload));
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(CanonicalizeJson(document.RootElement))));
+    private PreparedSnapshot PrepareSnapshot(GameSnapshot snapshot) {
+        var stopwatch = Stopwatch.StartNew();
+        var payloadUtf8 = JsonSerializer.SerializeToUtf8Bytes(snapshot.Payload);
+        using var document = JsonDocument.Parse(payloadUtf8);
+        var payloadHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(CanonicalizeJson(document.RootElement))));
+        var inventoryComponents = snapshot.ResourceType == "inventory" ? GetInventoryComponentHashes(document.RootElement) : null;
+#if GILLIONS_TEST_BUILD
+        var description = DescribePayload(document.RootElement, payloadUtf8.Length);
+        var inventoryDelta = snapshot.ResourceType == "inventory" ? DescribeInventoryDelta(document.RootElement) : ".";
+#else
+        var description = "";
+        var inventoryDelta = ".";
+#endif
+        stopwatch.Stop();
+        return new PreparedSnapshot(snapshot.ResourceType, payloadUtf8, payloadHash, inventoryComponents, description, inventoryDelta, stopwatch.Elapsed.TotalMilliseconds);
     }
 
-    private static Dictionary<string, string> GetInventoryComponentHashes(object payload) {
-        using var document = JsonDocument.Parse(JsonSerializer.Serialize(payload));
+    private static Dictionary<string, string> GetInventoryComponentHashes(JsonElement root) {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var name in new[] { "items", "retainerListings", "retainerListingsObserved" }) if (document.RootElement.TryGetProperty(name, out var value)) result[name] = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(CanonicalizeJson(value))));
+        foreach (var name in new[] { "items", "retainerListings", "retainerListingsObserved" }) if (root.TryGetProperty(name, out var value)) result[name] = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(CanonicalizeJson(value))));
         return result;
     }
 
@@ -759,15 +813,14 @@ public sealed class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
     private void RecordDiagnostic(string message) {
         var line = $"{DateTime.Now:HH:mm:ss} {message}";
-        diagnostics.Insert(0, line);
-        if (diagnostics.Count > 40) diagnostics.RemoveRange(40, diagnostics.Count - 40);
+        lock (diagnosticsLock) {
+            diagnostics.Insert(0, line);
+            if (diagnostics.Count > 40) diagnostics.RemoveRange(40, diagnostics.Count - 40);
+        }
         log.Information("[Testing diagnostics] {Message}", message);
     }
 
-    private static string DescribePayload(object payload) {
-        using var document = JsonDocument.Parse(JsonSerializer.Serialize(payload));
-        var root = document.RootElement;
-        var bytes = Encoding.UTF8.GetByteCount(root.GetRawText());
+    private static string DescribePayload(JsonElement root, int bytes) {
         var parts = new List<string> { $"{bytes:N0} B" };
         foreach (var name in new[] { "items", "retainerListings", "retainerBags", "ids", "completedQuestIds", "cards", "minions", "mounts", "bardings", "emotes", "orchestrions", "fashions", "blueMageSpells", "sightseeingLogIds", "aetherCurrentIds", "portraitBackgrounds", "portraitConditions", "portraitDecorations", "portraitFacials", "portraitFrames", "portraitPoses", "masterRecipeBookIds", "folkloreBookIds", "jobs", "craftingRecipeIds", "gatheringLogIds" }) {
             if (root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array) parts.Add($"{name}={value.GetArrayLength()}");
@@ -779,9 +832,8 @@ public sealed class Plugin : IDalamudPlugin {
         return string.Join(", ", parts);
     }
 
-    private string DescribeInventoryDelta(object payload) {
-        using var document = JsonDocument.Parse(JsonSerializer.Serialize(payload));
-        if (!document.RootElement.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array) return ".";
+    private string DescribeInventoryDelta(JsonElement root) {
+        if (!root.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array) return ".";
         var current = items.EnumerateArray().Select(CanonicalizeJson).GroupBy(value => value, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
         var added = current.Where(entry => entry.Value > (lastInventoryRecords.TryGetValue(entry.Key, out var previous) ? previous : 0)).Select(entry => entry.Key).Take(3).ToArray();
         var removed = lastInventoryRecords.Where(entry => entry.Value > (current.TryGetValue(entry.Key, out var next) ? next : 0)).Select(entry => entry.Key).Take(3).ToArray();
@@ -794,15 +846,28 @@ public sealed class Plugin : IDalamudPlugin {
         if (!ImGui.CollapsingHeader("Testing diagnostics")) return;
         ImGui.TextWrapped("This test build uses the native Gillions collector only. Copy this report after a manual sync, an inventory change, and opening the Mount/Minion/Achievement lists.");
         if (ImGui.Button("Copy diagnostic report")) {
-            var report = $"Gillions Game Sync Testing {PluginVersion}\nCharacter: {objects.LocalPlayer?.Name.TextValue ?? "not logged in"}\n{string.Join("\n", diagnostics.AsEnumerable().Reverse())}";
+            string[] snapshot;
+            lock (diagnosticsLock) snapshot = diagnostics.ToArray();
+            var report = $"Gillions Game Sync Testing {PluginVersion}\nCharacter: {objects.LocalPlayer?.Name.TextValue ?? "not logged in"}\n{string.Join("\n", snapshot.Reverse())}";
             ImGui.SetClipboardText(report);
         }
-        if (ImGui.Button("Clear diagnostics")) diagnostics.Clear();
-        foreach (var line in diagnostics.ToArray()) ImGui.TextWrapped(line);
+        if (ImGui.Button("Clear diagnostics")) lock (diagnosticsLock) diagnostics.Clear();
+        string[] lines;
+        lock (diagnosticsLock) lines = diagnostics.ToArray();
+        foreach (var line in lines) ImGui.TextWrapped(line);
     }
 #endif
     public void Dispose() { chatGui.ChatMessage -= OnChatMessage; chatGui.LogMessage -= OnLogMessage; gameInventory.InventoryChangedRaw -= OnInventoryChangedRaw; framework.Update -= OnFrameworkUpdate; pluginInterface.UiBuilder.Draw -= DrawSettings; pluginInterface.UiBuilder.OpenConfigUi -= OpenSettings; commands.RemoveHandler("/gillionssync"); http.Dispose(); }
 }
+
+internal sealed record PreparedSnapshot(
+    string ResourceType,
+    byte[] PayloadUtf8,
+    string PayloadHash,
+    Dictionary<string, string>? InventoryComponentHashes,
+    string Description,
+    string InventoryDelta,
+    double PreparationMilliseconds);
 
 public sealed class PluginConfiguration : IPluginConfiguration {
     public int Version { get; set; } = 1;

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -83,21 +84,21 @@ public static class DirectGameSnapshotCollector {
 }
 
 internal static class QuestJournalCollector {
+    private static readonly object CatalogLock = new();
+    private static IDataManager? catalogSource;
+    private static Quest[]? eligibleCatalog;
+
     public static unsafe QuestJournalRead? Read(IDataManager dataManager, IUnlockState unlockState) {
         try {
             var manager = QuestManager.Instance();
             if (manager == null) return null;
-            var sheet = dataManager.GetExcelSheet<Quest>(null, "Quest");
-            if (sheet == null) return null;
-            var rows = sheet.ToArray();
-            if (rows.Length == 0) return null;
-            var eligible = 0;
+            var rows = GetEligibleCatalog(dataManager);
+            if (rows == null || rows.Length == 0) return null;
+            var eligible = rows.Length;
             var verified = 0;
             var excludedByIdRange = 0;
             var completed = new List<long>();
             foreach (var row in rows) {
-                if (!IsEligibleOneTimeNormalQuest(row)) continue;
-                eligible++;
                 verified++;
                 // IUnlockState's Quest overload uses Dalamud's QuestManager-backed
                 // completion mapping. Do not cast the Lumina RowId to ushort: modern
@@ -114,6 +115,19 @@ internal static class QuestJournalCollector {
             // Never turn a missing/invalid native or catalog state into an empty
             // completion set. The caller omits the resource instead.
             return null;
+        }
+    }
+
+    private static Quest[]? GetEligibleCatalog(IDataManager dataManager) {
+        lock (CatalogLock) {
+            if (ReferenceEquals(catalogSource, dataManager) && eligibleCatalog is not null) return eligibleCatalog;
+            var sheet = dataManager.GetExcelSheet<Quest>(null, "Quest");
+            if (sheet == null) return null;
+            var rows = sheet.Where(IsEligibleOneTimeNormalQuest).ToArray();
+            if (rows.Length == 0) return null;
+            catalogSource = dataManager;
+            eligibleCatalog = rows;
+            return rows;
         }
     }
 
@@ -246,7 +260,8 @@ internal static class NativeInventoryCollector {
             lock (RetainerListingCacheLock) {
                 var retainerId = read.RetainerIds[0];
                 if (RetainerListingCache.TryGetValue(retainerId, out var prior)
-                    && JsonSerializer.Serialize(prior) == JsonSerializer.Serialize(read)) return false;
+                    && prior.RetainerIds.SequenceEqual(read.RetainerIds, StringComparer.Ordinal)
+                    && prior.Items.SequenceEqual(read.Items)) return false;
                 RetainerListingCache[retainerId] = read;
                 return true;
             }
@@ -333,7 +348,7 @@ internal static class NativeInventoryCollector {
         var container = manager->GetInventoryContainer(InventoryType.RetainerMarket);
         if (container == null || !container->IsLoaded || container->Items == null || container->Size <= 0) return new RetainerListingRead([], false, []);
 
-        var result = new List<object>();
+        var result = new List<RetainerListingItem>();
         var retainerId = activeRetainer->RetainerId;
         var retainerName = activeRetainer->NameString ?? "";
         for (var index = 0; index < container->Size; index++) {
@@ -341,16 +356,15 @@ internal static class NativeInventoryCollector {
             if (listing.ItemId == 0 || listing.Quantity <= 0 || listing.IsSymbolic) continue;
             var unitPrice = manager->GetRetainerMarketPrice(listing.Slot);
             if (unitPrice == 0) continue;
-            result.Add(new {
-                retainerId = retainerId.ToString(),
+            result.Add(new RetainerListingItem(
+                retainerId.ToString(),
                 retainerName,
-                itemId = listing.ItemId,
-                quantity = listing.Quantity,
+                listing.ItemId,
+                listing.Quantity,
                 unitPrice,
-                isHq = (listing.Flags & InventoryItem.ItemFlags.HighQuality) != 0,
-                slot = listing.Slot,
-                source = "native_loaded_retainer_listing_state",
-            });
+                (listing.Flags & InventoryItem.ItemFlags.HighQuality) != 0,
+                listing.Slot,
+                "native_loaded_retainer_listing_state"));
         }
         return new RetainerListingRead(result.ToArray(), true, [retainerId.ToString()]);
     }
@@ -374,15 +388,24 @@ internal sealed record InventoryRead(object[] Items, object[] RetainerListings, 
 internal sealed record RetainerBagRead(object[] Items, bool Observed);
 internal sealed record RetainerContext(string RetainerId, string RetainerName);
 internal sealed record RetainerBalanceRead(string RetainerId, string RetainerName, string Town, long Gil);
-internal sealed record RetainerListingRead(object[] Items, bool Observed, string[] RetainerIds);
+internal sealed record RetainerListingRead(RetainerListingItem[] Items, bool Observed, string[] RetainerIds);
+internal sealed record RetainerListingItem(
+    [property: JsonPropertyName("retainerId")] string RetainerId,
+    [property: JsonPropertyName("retainerName")] string RetainerName,
+    [property: JsonPropertyName("itemId")] uint ItemId,
+    [property: JsonPropertyName("quantity")] int Quantity,
+    [property: JsonPropertyName("unitPrice")] ulong UnitPrice,
+    [property: JsonPropertyName("isHq")] bool IsHq,
+    [property: JsonPropertyName("slot")] short Slot,
+    [property: JsonPropertyName("source")] string Source);
 internal static class CurrencyCollector { public static object[] Read() => NativeInventoryCollector.ReadCurrencyItems(); }
 
 internal static class AchievementCollector {
     public static AchievementRead ReadUnlockedIds(IDataManager dataManager, IUnlockState unlockState) {
         if (!unlockState.IsAchievementListLoaded) return new AchievementRead(false, []);
         try {
-            var sheet = dataManager.GetExcelSheet<Lumina.Excel.Sheets.Achievement>();
-            return sheet == null ? new AchievementRead(false, []) : new AchievementRead(true, sheet.Where(unlockState.IsAchievementComplete).Select(row => (long)row.RowId).ToArray());
+            var rows = SheetRowCache<Lumina.Excel.Sheets.Achievement>.Get(dataManager);
+            return rows.Length == 0 ? new AchievementRead(false, []) : new AchievementRead(true, rows.Where(unlockState.IsAchievementComplete).Select(row => (long)row.RowId).ToArray());
         } catch { return new AchievementRead(false, []); }
     }
 }
@@ -393,13 +416,13 @@ internal static class CharacterProgressCollector {
         var player = PlayerState.Instance();
         var jobs = new List<object>();
         if (player != null) {
-            var classJobs = dataManager.GetExcelSheet<ClassJob>();
-            if (classJobs != null) jobs = classJobs.Where(row => row.RowId > 0).Select(row => new { id = (int)row.RowId, name = row.Name.ToString(), abbreviation = row.Abbreviation.ToString(), level = (int)player->GetClassJobLevel((int)row.RowId, false) }).Where(row => row.level > 0).Cast<object>().ToList();
+            var classJobs = SheetRowCache<ClassJob>.Get(dataManager);
+            jobs = classJobs.Select(row => new { id = (int)row.RowId, name = row.Name.ToString(), abbreviation = row.Abbreviation.ToString(), level = (int)player->GetClassJobLevel((int)row.RowId, false) }).Where(row => row.level > 0).Cast<object>().ToList();
         }
-        var recipes = dataManager.GetExcelSheet<Recipe>();
-        var crafting = recipes == null ? [] : recipes.Where(unlockState.IsRecipeUnlocked).Select(row => (long)row.RowId).ToArray();
-        var fish = dataManager.GetExcelSheet<FishParameter>();
-        var gathering = player == null || fish == null ? [] : fish.Where(row => row.IsInLog && player->IsFishCaught((uint)row.RowId)).Select(row => (long)row.RowId).ToArray();
+        var recipes = SheetRowCache<Recipe>.Get(dataManager);
+        var crafting = recipes.Where(unlockState.IsRecipeUnlocked).Select(row => (long)row.RowId).ToArray();
+        var fish = SheetRowCache<FishParameter>.Get(dataManager);
+        var gathering = player == null ? [] : fish.Where(row => row.IsInLog && player->IsFishCaught((uint)row.RowId)).Select(row => (long)row.RowId).ToArray();
         return new CharacterProgressRead(player == null ? 0 : (uint)player->CurrentClassJobId, jobs.ToArray(), NativeInventoryCollector.ReadEquippedItems(), crafting, gathering);
     }
 }
@@ -407,26 +430,22 @@ internal sealed record CharacterProgressRead(uint CurrentJobId, object[] Jobs, o
 
 internal static class CollectibleCollector {
     public static long[] ReadCards(IDataManager dataManager, IUnlockState unlockState) {
-        var sheet = dataManager.GetExcelSheet<TripleTriadCard>();
-        return sheet == null ? [] : sheet.Where(unlockState.IsTripleTriadCardUnlocked).Select(row => (long)row.RowId).ToArray();
+        return Read<TripleTriadCard>(dataManager, unlockState.IsTripleTriadCardUnlocked);
     }
     public static long[] ReadMinions(IDataManager dataManager, IUnlockState unlockState) {
-        var sheet = dataManager.GetExcelSheet<Companion>();
-        return sheet == null ? [] : sheet.Where(unlockState.IsCompanionUnlocked).Select(row => (long)row.RowId).ToArray();
+        return Read<Companion>(dataManager, unlockState.IsCompanionUnlocked);
     }
     public static long[] ReadMounts(IDataManager dataManager, IUnlockState unlockState) {
-        var sheet = dataManager.GetExcelSheet<Mount>();
-        return sheet == null ? [] : sheet.Where(unlockState.IsMountUnlocked).Select(row => (long)row.RowId).ToArray();
+        return Read<Mount>(dataManager, unlockState.IsMountUnlocked);
     }
     // BuddyEquip is the authoritative game-data sheet for the player's chocobo
     // companion equipment. IUnlockState reads its client-owned unlock state;
     // this deliberately does not infer bardings from mounts or item ownership.
     public static long[] ReadBardings(IDataManager dataManager, IUnlockState unlockState) => Read<BuddyEquip>(dataManager, unlockState.IsBuddyEquipUnlocked);
     public static long[] ReadEmotes(IDataManager dataManager, IUnlockState unlockState) {
-        var sheet = dataManager.GetExcelSheet<Emote>();
-        return sheet == null ? [] : sheet.Where(unlockState.IsEmoteUnlocked).Select(row => (long)row.RowId).ToArray();
+        return Read<Emote>(dataManager, unlockState.IsEmoteUnlocked);
     }
-    private static long[] Read<T>(IDataManager dataManager, Func<T,bool> unlocked) where T : struct, Lumina.Excel.IExcelRow<T> => dataManager.GetExcelSheet<T>()?.Where(unlocked).Select(row => (long)row.RowId).ToArray() ?? [];
+    private static long[] Read<T>(IDataManager dataManager, Func<T,bool> unlocked) where T : struct, Lumina.Excel.IExcelRow<T> => SheetRowCache<T>.Get(dataManager).Where(unlocked).Select(row => (long)row.RowId).ToArray();
     public static long[] ReadOrchestrions(IDataManager dataManager, IUnlockState unlockState) => Read<Orchestrion>(dataManager, unlockState.IsOrchestrionUnlocked);
     public static long[] ReadFashions(IDataManager dataManager, IUnlockState unlockState) => Read<Ornament>(dataManager, unlockState.IsOrnamentUnlocked);
     public static long[] ReadBlueMageSpells(IDataManager dataManager, IUnlockState unlockState) => Read<AozAction>(dataManager, unlockState.IsAozActionUnlocked);
@@ -444,8 +463,23 @@ internal static class CollectibleCollector {
     // read-only and values are sent only when a book is known unlocked.
     public static unsafe long[] ReadFolkloreBookIds(IDataManager dataManager) {
         var player = PlayerState.Instance();
-        var books = dataManager.GetExcelSheet<GatheringSubCategory>();
-        if (player == null || books == null) return [];
+        var books = SheetRowCache<GatheringSubCategory>.Get(dataManager);
+        if (player == null) return [];
         return books.Where(row => row.RowId > 0 && player->IsFolkloreBookUnlocked((uint)row.RowId)).Select(row => (long)row.RowId).ToArray();
+    }
+}
+
+internal static class SheetRowCache<T> where T : struct, Lumina.Excel.IExcelRow<T> {
+    private static readonly object CacheLock = new();
+    private static IDataManager? source;
+    private static T[] rows = [];
+
+    public static T[] Get(IDataManager dataManager) {
+        lock (CacheLock) {
+            if (ReferenceEquals(source, dataManager)) return rows;
+            rows = dataManager.GetExcelSheet<T>()?.Where(row => row.RowId > 0).ToArray() ?? [];
+            source = dataManager;
+            return rows;
+        }
     }
 }
