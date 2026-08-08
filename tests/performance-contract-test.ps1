@@ -13,7 +13,7 @@ function Assert-NotContains([string]$Text, [string]$Needle, [string]$Message) {
 }
 
 $collectIndex = $pluginSource.IndexOf("DirectGameSnapshotCollector.Collect", [StringComparison]::Ordinal)
-$workerIndex = $pluginSource.IndexOf("Task.Run(() => snapshots.Select(PrepareSnapshot)", [StringComparison]::Ordinal)
+$workerIndex = $pluginSource.IndexOf("Task.Run(() => snapshots.Select(snapshot => PrepareSnapshot", [StringComparison]::Ordinal)
 if ($collectIndex -lt 0 -or $workerIndex -lt 0 -or $collectIndex -ge $workerIndex) {
   throw "Native collection must finish before managed payload preparation moves off-thread."
 }
@@ -31,11 +31,16 @@ $syncStart = $pluginSource.IndexOf("private async Task SyncAsync", [StringCompar
 $syncEnd = $pluginSource.IndexOf("private void DrawSettings", $syncStart, [StringComparison]::Ordinal)
 if ($syncStart -lt 0 -or $syncEnd -le $syncStart) { throw "Unable to inspect SyncAsync." }
 $syncBody = $pluginSource.Substring($syncStart, $syncEnd - $syncStart)
-$syncWorkerIndex = $syncBody.IndexOf("Task.Run(() => snapshots.Select(PrepareSnapshot)", [StringComparison]::Ordinal)
+$syncWorkerIndex = $syncBody.IndexOf("Task.Run(() => snapshots.Select(snapshot => PrepareSnapshot", [StringComparison]::Ordinal)
 $afterWorker = $syncBody.Substring($syncWorkerIndex)
 Assert-NotContains $afterWorker "objects.LocalPlayer" "Worker continuations must use the captured character identity, not Dalamud object state."
 Assert-Contains $pluginSource "AutomaticFailureRetrySeconds" "Automatic failures must use bounded retry backoff instead of retrying every frame."
 $saveCount = ([regex]::Matches($syncBody, "SaveConfigurationAsync\(\)")).Count
 if ($saveCount -ne 1) { throw "SyncAsync must batch successful sync-state persistence into exactly one save; found $saveCount." }
+
+Assert-Contains $pluginSource "Start 10-minute diagnostic recording" "Public diagnostics must be explicitly started by the user."
+Assert-Contains $pluginSource "if (!IsDiagnosticRecording) return;" "Public diagnostics must remain idle by default."
+Assert-Contains $pluginSource "if (diagnostics.Count > 40)" "Diagnostic history must remain bounded."
+Assert-Contains $pluginSource "It never uploads logs, chat text, credentials, or device identifiers." "The public UI must state the diagnostic privacy boundary."
 
 Write-Output "Gillions Game Sync performance contract checks passed."

@@ -59,26 +59,20 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly HashSet<string> emittedRetainerChatEvidence = new(StringComparer.Ordinal);
     private bool syncInFlight;
     private int automaticScopeIndex;
-#if GILLIONS_TEST_BUILD
     private readonly object diagnosticsLock = new();
     private readonly List<string> diagnostics = [];
     private readonly Dictionary<string, string> lastObservedPayloadHashes = new(StringComparer.Ordinal);
     private Dictionary<string, int> lastInventoryRecords = new(StringComparer.Ordinal);
-#endif
+    private DateTime diagnosticRecordingUntilUtc = DateTime.MinValue;
     private static readonly string PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "1.0.4";
     private static readonly string[] SyncScopes = ["inventory", "currencies", "achievements", "collectibles", "character", "quest_journal", "glamour_plates"];
     private static readonly string[] CurrentChangelog = [
-        "Testing performance: Payload serialization and hashing now run off the game framework thread after native data has been safely copied.",
-        "Testing performance: Each snapshot is serialized once, static game-data catalogs are cached, and successful sync state is saved once per batch.",
-        "Performance: Idle native reads stop completely when automatic sync is off or the client is not paired.",
-        "Performance: Retainer capture is idle outside the retainer interface and checks only every 5 seconds while a retainer is open.",
-        "Performance: Automatic sync rotates one data category every 30 seconds; inventory changes and Gil Ledger entries remain prompt.",
-        "Fix: Local plugin settings are saved only when ledger state changes, never once per game frame.",
-        "Fix: Current Game Plates now remain available after you leave the glamour dresser. Gillions keeps your last valid snapshot until the game provides a newer one.",
-        "Improvement: Glamour Plates, inventory, currencies, collections, character progress, and your session Gil Ledger all sync directly from the game client.",
-        "Improvement: Sync remains compact and change-aware, uploading a category only when its local data changes.",
-        "Testing: Quest Journal sync includes only verified one-time normal quest completion IDs; repeatable, tribal, levequest, and active journal state are excluded.",
-        "Your Gillions Saved Plates remain permanent references until you choose to delete them.",
+        "Smoother gameplay: JSON preparation and hashing now run away from the game thread after Gillions safely copies native state.",
+        "Lower overhead: Snapshots serialize once, static game-data catalogs are cached, and local sync state is saved once per batch.",
+        "Diagnostics: You can manually record a private, time-limited diagnostic report from plugin settings when troubleshooting a sync problem.",
+        "Collections: Native sync includes unlocked chocobo bardings alongside mounts, minions, emotes, orchestrion rolls, and other supported collections.",
+        "Quest completion: Gillions syncs verified one-time normal quest completion while excluding repeatable, tribal, daily, and levequest history.",
+        "Retainers: Loaded bags, market listings, Gil balances, and correlated sale receipts remain character-aware and change-driven.",
     ];
     // Automatic work must remain below a visible frame hitch. One resource is
     // collected per cadence; changed inventory gets its own short debounce.
@@ -298,9 +292,7 @@ public sealed class Plugin : IDalamudPlugin {
                 foreach (var sale in confirmedRetainerSales) configuration.PendingGilLedgerEvents.Add(CreateGilLedgerEvent(sale.Amount, "retainer_sale", "confirmed", sale.ItemId, sale.ItemQuantity, sale.RetainerId, sale.RetainerName, null, []));
                 configuration.Save(pluginInterface);
                 QueueGilLedgerUpload();
-#if GILLIONS_TEST_BUILD
                 RecordDiagnostic($"Retainer gil ledger: +{retainerDelta:#,##0} gil; confirmed/retainer_sale; retainer={retainerBalance.RetainerName}; town={retainerBalance.Town}; items={confirmedRetainerSales.Count}.");
-#endif
             }
         }
         else if (retainerBalance is not null && lastObservedRetainerGil is not null && retainerBalance.Gil < lastObservedRetainerGil.Value) {
@@ -334,9 +326,7 @@ public sealed class Plugin : IDalamudPlugin {
         if (delta < 0 && recent?.LogMessageId == 737) {
             QueueRetainerGilDeposit(CreateGilLedgerEvent(delta, "unclassified", "inferred", null, null, null, null, recent.LogMessageId, recent.IntegerParameters));
             configuration.Save(pluginInterface);
-#if GILLIONS_TEST_BUILD
             RecordDiagnostic($"Pending retainer Gil deposit: {delta:#,##0} gil; awaiting a matching retainer balance increase.");
-#endif
             return;
         }
         configuration.PendingGilLedgerEvents ??= [];
@@ -347,16 +337,12 @@ public sealed class Plugin : IDalamudPlugin {
                     sale.Amount, "retainer_sale", "confirmed", sale.ItemId, sale.ItemQuantity, sale.RetainerId, sale.RetainerName, recent.LogMessageId, recent.IntegerParameters));
                 configuration.Save(pluginInterface);
                 QueueGilLedgerUpload();
-#if GILLIONS_TEST_BUILD
                 RecordDiagnostic($"Gil ledger: +{delta:#,##0} gil; confirmed/retainer_sale; items={confirmedRetainerSales.Count}; retainer={confirmedRetainerSales[0].RetainerName ?? "unknown"}.");
-#endif
                 return;
             }
             QueueRetainerGilReceipt(CreateGilLedgerEvent(delta, "retainer_gil_receipt", "inferred", null, null, null, null, recent.LogMessageId, recent.IntegerParameters));
             configuration.Save(pluginInterface);
-#if GILLIONS_TEST_BUILD
             RecordDiagnostic($"Pending retainer Gil receipt: +{delta:#,##0} gil; awaiting a matching retainer balance withdrawal.");
-#endif
             return;
         }
         var classification = ClassifyGilLedgerEvent(delta, recent, recentChatSale);
@@ -367,9 +353,7 @@ public sealed class Plugin : IDalamudPlugin {
         if (configuration.PendingGilLedgerEvents.Count > 200) configuration.PendingGilLedgerEvents.RemoveRange(0, configuration.PendingGilLedgerEvents.Count - 200);
         configuration.Save(pluginInterface);
         QueueGilLedgerUpload();
-#if GILLIONS_TEST_BUILD
         RecordDiagnostic($"Gil ledger: {delta:+#,##0;-#,##0} gil; {classification.Confidence}/{classification.Kind}{(classification.ItemId is null ? "" : $"; item={classification.ItemId} x{classification.ItemQuantity}")}{(recent is null ? "" : $"; log {recent.LogMessageId}, ints=[{string.Join(",", recent.IntegerParameters)}]")}{(recentChatSale is null ? "" : "; chat=vendor_sale")}.");
-#endif
     }
 
     private bool RecordRetainerBalanceChange(RetainerBalanceRead retainer, long delta) {
@@ -384,9 +368,7 @@ public sealed class Plugin : IDalamudPlugin {
             ConfirmPendingRetainerGilReceipts(retainer, -delta);
         }
         configuration.Save(pluginInterface);
-#if GILLIONS_TEST_BUILD
         RecordDiagnostic($"Retainer balance: {delta:+#,##0;-#,##0} gil; retainer={retainer.RetainerName}; current={retainer.Gil:#,##0}; retained locally for receipt correlation.");
-#endif
         return confirmedDeposit;
     }
 
@@ -409,9 +391,7 @@ public sealed class Plugin : IDalamudPlugin {
         configuration.PendingRetainerGilReceipts.Remove(receipt);
         QueueGilLedgerEvent(receipt with { RetainerId = retainer.RetainerId, RetainerName = retainer.RetainerName });
         QueueGilLedgerUpload();
-#if GILLIONS_TEST_BUILD
         RecordDiagnostic($"Gil ledger: +{amount:#,##0} gil; inferred/retainer_gil_receipt; retainer={retainer.RetainerName}.");
-#endif
     }
 
     private bool FlushExpiredRetainerGilReceipts() {
@@ -437,9 +417,7 @@ public sealed class Plugin : IDalamudPlugin {
         configuration.PendingRetainerGilDeposits.Remove(deposit);
         QueueGilLedgerEvent(deposit with { Kind = "retainer_gil_deposit", RetainerId = retainer.RetainerId, RetainerName = retainer.RetainerName });
         QueueGilLedgerUpload();
-#if GILLIONS_TEST_BUILD
         RecordDiagnostic($"Gil ledger: -{amount:#,##0} gil; inferred/retainer_gil_deposit; retainer={retainer.RetainerName}.");
-#endif
         return true;
     }
 
@@ -511,9 +489,7 @@ public sealed class Plugin : IDalamudPlugin {
                 changed = true;
             }
             emittedRetainerChatEvidence.Add(evidence.EvidenceId);
-#if GILLIONS_TEST_BUILD
             RecordDiagnostic($"Pending retainer sale: +{evidence.Amount:#,##0} gil{(evidence.ItemId is null ? "" : $"; item={evidence.ItemId} x{evidence.ItemQuantity}")}{(evidence.RetainerName is null ? "" : $"; retainer={evidence.RetainerName}")}.");
-#endif
         }
         if (configuration.PendingGilLedgerEvents?.Count > 200) {
             configuration.PendingGilLedgerEvents.RemoveRange(0, configuration.PendingGilLedgerEvents.Count - 200);
@@ -574,9 +550,8 @@ public sealed class Plugin : IDalamudPlugin {
             configuration.LastPayloadHashes ??= new Dictionary<string, string>(StringComparer.Ordinal);
             var submitted = 0;
             var configurationChanged = false;
-#if GILLIONS_TEST_BUILD
-            var collectionStopwatch = Stopwatch.StartNew();
-#endif
+            var recordDiagnostics = IsDiagnosticRecording;
+            var collectionStopwatch = recordDiagnostics ? Stopwatch.StartNew() : null;
             // Every Dalamud service and native pointer access is confined to the
             // framework thread, including identity for ledger-only uploads.
             var selectedScopes = (scopes ?? SyncScopes).ToArray();
@@ -588,27 +563,27 @@ public sealed class Plugin : IDalamudPlugin {
                 return new CapturedSnapshotBatch(currentName, currentWorld, snapshots);
             });
             var snapshots = captured.Snapshots;
-#if GILLIONS_TEST_BUILD
-            collectionStopwatch.Stop();
-            var collectedLabel = snapshots.Length > 0 ? string.Join(", ", snapshots.Select(snapshot => snapshot.ResourceType)) : "queued ledger data";
-            RecordDiagnostic($"Collected {collectedLabel} in {collectionStopwatch.Elapsed.TotalMilliseconds:N0} ms.");
-#endif
+            if (collectionStopwatch is not null) {
+                collectionStopwatch.Stop();
+                var collectedLabel = snapshots.Length > 0 ? string.Join(", ", snapshots.Select(snapshot => snapshot.ResourceType)) : "queued ledger data";
+                RecordDiagnostic($"Collected {collectedLabel} in {collectionStopwatch.Elapsed.TotalMilliseconds:N0} ms.");
+            }
             // All Dalamud and native-memory reads above remain on the framework
             // thread. The resulting managed snapshots are immutable, so JSON
             // preparation and hashing can run without blocking game frames.
-            var preparedSnapshots = await Task.Run(() => snapshots.Select(PrepareSnapshot).ToArray());
-#if GILLIONS_TEST_BUILD
-            if (preparedSnapshots.Length > 0)
+            var preparedSnapshots = await Task.Run(() => snapshots.Select(snapshot => PrepareSnapshot(snapshot, recordDiagnostics)).ToArray());
+            if (recordDiagnostics && preparedSnapshots.Length > 0)
                 RecordDiagnostic($"Prepared {string.Join(", ", preparedSnapshots.Select(snapshot => snapshot.ResourceType))} off-thread in {preparedSnapshots.Sum(snapshot => snapshot.PreparationMilliseconds):N0} ms.");
-#endif
             foreach (var snapshot in preparedSnapshots) {
                 var payloadHash = snapshot.PayloadHash;
-#if GILLIONS_TEST_BUILD
-                if (!lastObservedPayloadHashes.TryGetValue(snapshot.ResourceType, out var observedHash) || observedHash != payloadHash) {
-                    RecordDiagnostic($"Collected {snapshot.ResourceType}: {snapshot.Description}; hash {payloadHash[..12]}{snapshot.InventoryDelta}");
-                    lastObservedPayloadHashes[snapshot.ResourceType] = payloadHash;
+                var diagnosticPayloadChanged = false;
+                if (recordDiagnostics) lock (diagnosticsLock) {
+                    diagnosticPayloadChanged = !lastObservedPayloadHashes.TryGetValue(snapshot.ResourceType, out var observedHash) || observedHash != payloadHash;
+                    if (diagnosticPayloadChanged) lastObservedPayloadHashes[snapshot.ResourceType] = payloadHash;
                 }
-#endif
+                if (diagnosticPayloadChanged) {
+                    RecordDiagnostic($"Collected {snapshot.ResourceType}: {snapshot.Description}; hash {payloadHash[..12]}{snapshot.InventoryDelta}");
+                }
                 if (!force && configuration.LastPayloadHashes.TryGetValue(snapshot.ResourceType, out var previousHash) && previousHash == payloadHash) continue;
                 var inventoryComponents = snapshot.InventoryComponentHashes;
                 if (inventoryComponents is not null && !force) {
@@ -617,15 +592,13 @@ public sealed class Plugin : IDalamudPlugin {
                 }
                 var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).Replace('+','-').Replace('/','_').TrimEnd('=');
                 using var request = SnapshotRequest("/api/game-sync/sync", configuration.DeviceToken, snapshot.ResourceType, nonce, snapshot.PayloadUtf8);
-#if GILLIONS_TEST_BUILD
-                var uploadStopwatch = Stopwatch.StartNew();
-#endif
+                var uploadStopwatch = recordDiagnostics ? Stopwatch.StartNew() : null;
                 using var response = await http.SendAsync(request);
                 await EnsureSuccessfulResponse(response);
-#if GILLIONS_TEST_BUILD
-                uploadStopwatch.Stop();
-                RecordDiagnostic($"Uploaded {snapshot.ResourceType}: HTTP {(int)response.StatusCode}; hash {payloadHash[..12]}; network {uploadStopwatch.Elapsed.TotalMilliseconds:N0} ms.");
-#endif
+                if (uploadStopwatch is not null) {
+                    uploadStopwatch.Stop();
+                    RecordDiagnostic($"Uploaded {snapshot.ResourceType}: HTTP {(int)response.StatusCode}; hash {payloadHash[..12]}; network {uploadStopwatch.Elapsed.TotalMilliseconds:N0} ms.");
+                }
                 configuration.LastPayloadHashes[snapshot.ResourceType] = payloadHash;
                 if (inventoryComponents is not null) configuration.LastInventoryComponentHashes = inventoryComponents;
                 configuration.LastSyncUtc = DateTime.UtcNow;
@@ -650,9 +623,7 @@ public sealed class Plugin : IDalamudPlugin {
                     configuration.PendingGilLedgerEvents?.RemoveAll(entry => uploadedEventIds.Contains(entry.EventId));
                     configurationChanged = true;
                     submitted++;
-#if GILLIONS_TEST_BUILD
                     RecordDiagnostic($"Uploaded gil ledger: HTTP {(int)response.StatusCode}; character={characterEvents.Key.Name}; events={uploadedEventIds.Count}.");
-#endif
                 }
             }
             if (submitted > 0) {
@@ -661,28 +632,22 @@ public sealed class Plugin : IDalamudPlugin {
                     configuration.SyncBlockedMessage = "";
                     configurationChanged = true;
                 }
-#if GILLIONS_TEST_BUILD
-                var saveStopwatch = Stopwatch.StartNew();
-#endif
+                var saveStopwatch = recordDiagnostics ? Stopwatch.StartNew() : null;
                 if (configurationChanged) await SaveConfigurationAsync();
-#if GILLIONS_TEST_BUILD
-                saveStopwatch.Stop();
-                RecordDiagnostic($"Saved changed local sync state once in {saveStopwatch.Elapsed.TotalMilliseconds:N0} ms.");
-#endif
+                if (saveStopwatch is not null) {
+                    saveStopwatch.Stop();
+                    RecordDiagnostic($"Saved changed local sync state once in {saveStopwatch.Elapsed.TotalMilliseconds:N0} ms.");
+                }
                 if (!background) settingsMessage = "Sync completed successfully.";
                 log.Information("Gillions Game Sync submitted {Count} changed data category(s) for {Character}.", submitted, string.IsNullOrWhiteSpace(captured.CharacterName) ? "current character" : captured.CharacterName);
             } else if (!background) settingsMessage = "No changed data was found; Gillions is already current.";
         } catch (GillionsSyncRejectedException error) when (IsAccountAccessBlocked(error.Code)) {
             await MarkSyncBlockedAsync(error);
-#if GILLIONS_TEST_BUILD
             RecordDiagnostic($"Sync blocked: {error.Code} — {error.Message}");
-#endif
             throw;
         } catch (Exception error) {
             log.Debug(error, "Gillions sync failed.");
-#if GILLIONS_TEST_BUILD
             RecordDiagnostic($"Sync failed: {error.GetType().Name} — {error.Message}");
-#endif
             throw;
         } finally { syncInFlight = false; }
     }
@@ -724,9 +689,7 @@ public sealed class Plugin : IDalamudPlugin {
         }
         ImGui.TextDisabled("Gillions syncs all supported data: inventory, currencies, achievements, collectibles, character progress, and beta session ledger entries.");
         ImGui.TextDisabled("Achievements sync after the in-game Achievement list has loaded.");
-#if GILLIONS_TEST_BUILD
         DrawDiagnostics();
-#endif
         if (!string.IsNullOrWhiteSpace(settingsMessage)) {
             ImGui.Separator();
             ImGui.TextWrapped(settingsMessage);
@@ -796,19 +759,14 @@ public sealed class Plugin : IDalamudPlugin {
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Environment.MachineName + Environment.UserDomainName + channel))).ToLowerInvariant();
     }
 
-    private PreparedSnapshot PrepareSnapshot(GameSnapshot snapshot) {
+    private PreparedSnapshot PrepareSnapshot(GameSnapshot snapshot, bool recordDiagnostics) {
         var stopwatch = Stopwatch.StartNew();
         var payloadUtf8 = JsonSerializer.SerializeToUtf8Bytes(snapshot.Payload);
         using var document = JsonDocument.Parse(payloadUtf8);
         var payloadHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(CanonicalizeJson(document.RootElement))));
         var inventoryComponents = snapshot.ResourceType == "inventory" ? GetInventoryComponentHashes(document.RootElement) : null;
-#if GILLIONS_TEST_BUILD
-        var description = DescribePayload(document.RootElement, payloadUtf8.Length);
-        var inventoryDelta = snapshot.ResourceType == "inventory" ? DescribeInventoryDelta(document.RootElement) : ".";
-#else
-        var description = "";
-        var inventoryDelta = ".";
-#endif
+        var description = recordDiagnostics ? DescribePayload(document.RootElement, payloadUtf8.Length) : "";
+        var inventoryDelta = recordDiagnostics && snapshot.ResourceType == "inventory" ? DescribeInventoryDelta(document.RootElement) : ".";
         stopwatch.Stop();
         return new PreparedSnapshot(snapshot.ResourceType, payloadUtf8, payloadHash, inventoryComponents, description, inventoryDelta, stopwatch.Elapsed.TotalMilliseconds);
     }
@@ -825,14 +783,24 @@ public sealed class Plugin : IDalamudPlugin {
         JsonValueKind.String => JsonSerializer.Serialize(element.GetString()), JsonValueKind.Number => element.GetRawText(), JsonValueKind.True => "true", JsonValueKind.False => "false", JsonValueKind.Null => "null", _ => element.GetRawText(),
     };
 
+    private bool IsDiagnosticRecording {
+        get {
 #if GILLIONS_TEST_BUILD
+            return true;
+#else
+            return DateTime.UtcNow < diagnosticRecordingUntilUtc;
+#endif
+        }
+    }
+
     private void RecordDiagnostic(string message) {
+        if (!IsDiagnosticRecording) return;
         var line = $"{DateTime.Now:HH:mm:ss} {message}";
         lock (diagnosticsLock) {
             diagnostics.Insert(0, line);
             if (diagnostics.Count > 40) diagnostics.RemoveRange(40, diagnostics.Count - 40);
         }
-        log.Information("[Testing diagnostics] {Message}", message);
+        log.Information("[Gillions diagnostics] {Message}", message);
     }
 
     private static string DescribePayload(JsonElement root, int bytes) {
@@ -850,28 +818,54 @@ public sealed class Plugin : IDalamudPlugin {
     private string DescribeInventoryDelta(JsonElement root) {
         if (!root.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array) return ".";
         var current = items.EnumerateArray().Select(CanonicalizeJson).GroupBy(value => value, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
-        var added = current.Where(entry => entry.Value > (lastInventoryRecords.TryGetValue(entry.Key, out var previous) ? previous : 0)).Select(entry => entry.Key).Take(3).ToArray();
-        var removed = lastInventoryRecords.Where(entry => entry.Value > (current.TryGetValue(entry.Key, out var next) ? next : 0)).Select(entry => entry.Key).Take(3).ToArray();
-        lastInventoryRecords = current;
-        return added.Length == 0 && removed.Length == 0 ? "." : $"; inventory delta +[{string.Join(" | ", added)}] -[{string.Join(" | ", removed)}].";
+        lock (diagnosticsLock) {
+            var added = current.Where(entry => entry.Value > (lastInventoryRecords.TryGetValue(entry.Key, out var previous) ? previous : 0)).Select(entry => entry.Key).Take(3).ToArray();
+            var removed = lastInventoryRecords.Where(entry => entry.Value > (current.TryGetValue(entry.Key, out var next) ? next : 0)).Select(entry => entry.Key).Take(3).ToArray();
+            lastInventoryRecords = current;
+            return added.Length == 0 && removed.Length == 0 ? "." : $"; inventory delta +[{string.Join(" | ", added)}] -[{string.Join(" | ", removed)}].";
+        }
     }
 
     private void DrawDiagnostics() {
         ImGui.Separator();
-        if (!ImGui.CollapsingHeader("Testing diagnostics")) return;
-        ImGui.TextWrapped("This test build uses the native Gillions collector only. Copy this report after a manual sync, an inventory change, and opening the Mount/Minion/Achievement lists.");
+        if (!ImGui.CollapsingHeader("Diagnostics")) return;
+#if GILLIONS_TEST_BUILD
+        ImGui.TextWrapped("Testing diagnostics record automatically. Copy this report after reproducing a sync issue or completing a performance test.");
+#else
+        ImGui.TextWrapped("Diagnostic recording is off by default and stays on this PC. It never uploads logs, chat text, credentials, or device identifiers. Start it only when reproducing a sync problem, then copy the report for Gillions support.");
+        if (!IsDiagnosticRecording) {
+            if (ImGui.Button("Start 10-minute diagnostic recording")) {
+                lock (diagnosticsLock) {
+                    diagnostics.Clear();
+                    lastObservedPayloadHashes.Clear();
+                    lastInventoryRecords.Clear();
+                }
+                diagnosticRecordingUntilUtc = DateTime.UtcNow.AddMinutes(10);
+                RecordDiagnostic("Manual diagnostic recording started.");
+            }
+        } else {
+            var remaining = diagnosticRecordingUntilUtc - DateTime.UtcNow;
+            ImGui.TextColored(new System.Numerics.Vector4(.55f, .78f, 1f, 1f), $"Recording — {Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes))} minute(s) remaining");
+            if (ImGui.Button("Stop diagnostic recording")) {
+                RecordDiagnostic("Manual diagnostic recording stopped.");
+                diagnosticRecordingUntilUtc = DateTime.MinValue;
+            }
+        }
+#endif
+        string[] snapshot;
+        lock (diagnosticsLock) snapshot = diagnostics.ToArray();
+        if (snapshot.Length == 0) {
+            ImGui.TextDisabled("No diagnostic entries recorded.");
+            return;
+        }
         if (ImGui.Button("Copy diagnostic report")) {
-            string[] snapshot;
-            lock (diagnosticsLock) snapshot = diagnostics.ToArray();
-            var report = $"Gillions Game Sync Testing {PluginVersion}\nCharacter: {objects.LocalPlayer?.Name.TextValue ?? "not logged in"}\n{string.Join("\n", snapshot.Reverse())}";
+            var channel = string.Equals(typeof(Plugin).Assembly.GetName().Name, "GillionsGameSyncTest", StringComparison.Ordinal) ? "Testing" : "Public";
+            var report = $"Gillions Game Sync {channel} {PluginVersion}\nCharacter: {objects.LocalPlayer?.Name.TextValue ?? "not logged in"}\n{string.Join("\n", snapshot.Reverse())}";
             ImGui.SetClipboardText(report);
         }
         if (ImGui.Button("Clear diagnostics")) lock (diagnosticsLock) diagnostics.Clear();
-        string[] lines;
-        lock (diagnosticsLock) lines = diagnostics.ToArray();
-        foreach (var line in lines) ImGui.TextWrapped(line);
+        foreach (var line in snapshot) ImGui.TextWrapped(line);
     }
-#endif
     public void Dispose() { chatGui.ChatMessage -= OnChatMessage; chatGui.LogMessage -= OnLogMessage; gameInventory.InventoryChangedRaw -= OnInventoryChangedRaw; framework.Update -= OnFrameworkUpdate; pluginInterface.UiBuilder.Draw -= DrawSettings; pluginInterface.UiBuilder.OpenConfigUi -= OpenSettings; commands.RemoveHandler("/gillionssync"); http.Dispose(); }
 }
 
