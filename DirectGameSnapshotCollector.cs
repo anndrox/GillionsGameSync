@@ -9,6 +9,7 @@ using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 
 namespace GillionsGameSync;
@@ -66,6 +67,37 @@ public static class DirectGameSnapshotCollector {
                 excludedByIdRangeCount = quests.ExcludedByIdRangeCount,
             });
         }
+        if (selected.Contains("reputation")) {
+            var reputation = ReputationCollector.Read();
+            if (reputation != null) yield return new GameSnapshot("reputation", new {
+                character = identity,
+                schemaVersion = 1,
+                complete = true,
+                alliedSocieties = reputation.Entries.Select(entry => new {
+                    beastTribeId = entry.BeastTribeId,
+                    rank = entry.Rank,
+                    reputation = entry.Reputation,
+                }).ToArray(),
+            });
+        }
+        if (selected.Contains("shared_fates")) {
+            var sharedFates = SharedFateCollector.ReadComplete();
+            if (sharedFates != null) yield return new GameSnapshot("shared_fates", new {
+                character = identity,
+                schemaVersion = 1,
+                complete = true,
+                tabs = sharedFates.Tabs.Select(tab => new {
+                    tabIndex = tab.TabIndex,
+                    zones = tab.Zones.Select(zone => new {
+                        territoryTypeId = zone.TerritoryTypeId,
+                        rank = zone.Rank,
+                        maxRank = zone.MaxRank,
+                        completedFates = zone.CompletedFates,
+                        neededFates = zone.NeededFates,
+                    }).ToArray(),
+                }).ToArray(),
+            });
+        }
         if (selected.Contains("collectibles")) yield return new GameSnapshot("collectibles", new {
             character = identity, complete = true,
             cards = CollectibleCollector.ReadCards(dataManager, unlockState), minions = CollectibleCollector.ReadMinions(dataManager, unlockState), mounts = CollectibleCollector.ReadMounts(dataManager, unlockState), bardings = CollectibleCollector.ReadBardings(dataManager, unlockState), emotes = CollectibleCollector.ReadEmotes(dataManager, unlockState),
@@ -82,6 +114,56 @@ public static class DirectGameSnapshotCollector {
         }
     }
 }
+
+internal static class ReputationCollector {
+    public static unsafe ReputationRead? Read() {
+        try {
+            var manager = QuestManager.Instance();
+            if (manager == null) return null;
+            var entries = new List<AlliedSocietyProgress>();
+            var reputation = manager->BeastReputation;
+            for (var index = 0; index < reputation.Length; index++) {
+                var rank = ProgressionSnapshotPolicy.NormalizeAlliedSocietyRank(reputation[index].Rank);
+                var value = reputation[index].Value;
+                if (rank == 0 && value == 0) continue;
+                entries.Add(new AlliedSocietyProgress((uint)index + 1, rank, value));
+            }
+            return new ReputationRead(entries.ToArray());
+        } catch {
+            return null;
+        }
+    }
+}
+
+internal static class SharedFateCollector {
+    public static unsafe SharedFateRead? ReadComplete() {
+        try {
+            var agent = AgentFateProgress.Instance();
+            if (agent == null) return null;
+            var tabs = new List<SharedFateTabProgress>();
+            foreach (ref var tab in agent->Tabs) {
+                var zoneEntries = new List<SharedFateZoneProgress>();
+                foreach (ref var zone in tab.Zones) {
+                    if (zone.TerritoryTypeId == 0) continue;
+                    zoneEntries.Add(new SharedFateZoneProgress(zone.TerritoryTypeId, zone.CurrentRank, zone.MaxRank, zone.FateProgress, zone.NeededFates));
+                }
+                var zones = zoneEntries.ToArray();
+                if (!ProgressionSnapshotPolicy.IsCompleteSharedFateTab(tab.TabIndex, zones)) continue;
+                tabs.Add(new SharedFateTabProgress(tab.TabIndex, zones));
+            }
+            return ProgressionSnapshotPolicy.IsCompleteSharedFateSnapshot(tabs)
+                ? new SharedFateRead(tabs.OrderBy(tab => tab.TabIndex).ToArray())
+                : null;
+        } catch {
+            // The Shared FATE agent is server-loaded UI state. Never turn an
+            // unopened or partially loaded window into a complete empty result.
+            return null;
+        }
+    }
+}
+
+internal sealed record ReputationRead(AlliedSocietyProgress[] Entries);
+internal sealed record SharedFateRead(SharedFateTabProgress[] Tabs);
 
 internal static class QuestJournalCollector {
     private static readonly object CatalogLock = new();

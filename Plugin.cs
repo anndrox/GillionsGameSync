@@ -5,6 +5,8 @@ using System.Diagnostics;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -16,12 +18,28 @@ using Dalamud.Configuration;
 using Dalamud.Game.Inventory;
 using Dalamud.Game.Inventory.InventoryEventArgTypes;
 using Dalamud.Game.Text;
+using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using Lumina.Excel.Sheets;
 
 namespace GillionsGameSync;
+
+internal static class GillionsEndpoints {
+    public static string DefaultServerUrl {
+        get {
+            var configured = typeof(Plugin).Assembly
+                .GetCustomAttributes<AssemblyMetadataAttribute>()
+                .FirstOrDefault(attribute => string.Equals(attribute.Key, "GillionsPublicBaseUrl", StringComparison.Ordinal))
+                ?.Value;
+            return string.IsNullOrWhiteSpace(configured)
+                ? throw new InvalidOperationException("GillionsPublicBaseUrl build metadata is missing.")
+                : configured.TrimEnd('/');
+        }
+    }
+}
 
 public sealed class Plugin : IDalamudPlugin {
     public string Name => "Gillions Game Sync";
@@ -47,6 +65,7 @@ public sealed class Plugin : IDalamudPlugin {
     private DateTime nextGilLedgerUploadUtc = DateTime.MaxValue;
     private DateTime nextInventorySyncUtc = DateTime.MaxValue;
     private DateTime nextGilLedgerFlushUtc = DateTime.MinValue;
+    private DateTime nextItemLinkPollUtc = DateTime.MinValue;
     private long? lastObservedGil;
     private string? lastObservedRetainerId;
     private long? lastObservedRetainerGil;
@@ -58,6 +77,8 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly List<GilLedgerChatEvidence> recentGilLedgerChat = [];
     private readonly HashSet<string> emittedRetainerChatEvidence = new(StringComparer.Ordinal);
     private bool syncInFlight;
+    private bool itemLinkPollInFlight;
+    private readonly ItemLinkRequestProcessor itemLinkRequestProcessor = new();
     private int automaticScopeIndex;
     private readonly object diagnosticsLock = new();
     private readonly List<string> diagnostics = [];
@@ -65,14 +86,11 @@ public sealed class Plugin : IDalamudPlugin {
     private Dictionary<string, int> lastInventoryRecords = new(StringComparer.Ordinal);
     private DateTime diagnosticRecordingUntilUtc = DateTime.MinValue;
     private static readonly string PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "1.0.4";
-    private static readonly string[] SyncScopes = ["inventory", "currencies", "achievements", "collectibles", "character", "quest_journal", "glamour_plates"];
+    private static readonly string[] SyncScopes = ["inventory", "currencies", "achievements", "collectibles", "character", "quest_journal", "reputation", "shared_fates", "glamour_plates"];
     private static readonly string[] CurrentChangelog = [
-        "Smoother gameplay: JSON preparation and hashing now run away from the game thread after Gillions safely copies native state.",
-        "Lower overhead: Snapshots serialize once, static game-data catalogs are cached, and local sync state is saved once per batch.",
-        "Diagnostics: You can manually record a private, time-limited diagnostic report from plugin settings when troubleshooting a sync problem.",
-        "Collections: Native sync includes unlocked chocobo bardings alongside mounts, minions, emotes, orchestrion rolls, and other supported collections.",
-        "Quest completion: Gillions syncs verified one-time normal quest completion while excluding repeatable, tribal, daily, and levequest history.",
-        "Retainers: Loaded bags, market listings, Gil balances, and correlated sale receipts remain character-aware and change-driven.",
+        "Reputation: Gillions now syncs authoritative Allied Society rank and reputation values for the selected character.",
+        "Shared FATEs: Zone rank and completion progress sync after all three Shared FATE tabs have been opened in game.",
+        "Safe completeness: Gillions omits partially loaded Shared FATE data instead of treating unopened zones as incomplete.",
     ];
     // Automatic work must remain below a visible frame hitch. One resource is
     // collected per cadence; changed inventory gets its own short debounce.
@@ -92,6 +110,8 @@ public sealed class Plugin : IDalamudPlugin {
     private const int RetainerBalanceStabilityMilliseconds = 1500;
     private const int RetainerReceiptCorrelationSeconds = 5;
     private const int AutomaticFailureRetrySeconds = 10;
+    private const int ItemLinkPollIntervalSeconds = 5;
+    private const int UnsupportedItemLinkRetryMinutes = 15;
 
     public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commands, IClientState clientState, IObjectTable objects, IFramework framework, IDataManager dataManager, IUnlockState unlockState, IGameInventory gameInventory, IChatGui chatGui, IPluginLog log) {
         this.pluginInterface = pluginInterface;
@@ -105,6 +125,7 @@ public sealed class Plugin : IDalamudPlugin {
         this.chatGui = chatGui;
         this.log = log;
         configuration = pluginInterface.GetPluginConfig() as PluginConfiguration ?? new PluginConfiguration();
+        if (configuration.UseCompiledDefaultServerUrl(GillionsEndpoints.DefaultServerUrl)) configuration.Save(pluginInterface);
         commands.AddHandler("/gillionssync", new CommandInfo(OnCommand) { HelpMessage = "Pair or sync your selected Gillions data." });
         pluginInterface.UiBuilder.Draw += DrawSettings;
         pluginInterface.UiBuilder.OpenConfigUi += OpenSettings;
@@ -149,6 +170,10 @@ public sealed class Plugin : IDalamudPlugin {
             gilLedgerDirty = false;
             nextInventorySyncUtc = DateTime.MaxValue;
             return;
+        }
+        if (ItemLinkPollPolicy.ShouldPoll(configuration.EnableItemLinkRequests, clientState.IsLoggedIn, configuration.DeviceToken, itemLinkPollInFlight, now, nextItemLinkPollUtc)) {
+            nextItemLinkPollUtc = now.AddSeconds(ItemLinkPollIntervalSeconds);
+            _ = PollItemLinkRequestsAsync();
         }
         // An unpaired client, or one whose owner has disabled automatic sync,
         // must have no recurring native-memory work. Manual Sync remains
@@ -204,6 +229,61 @@ public sealed class Plugin : IDalamudPlugin {
         nextGilLedgerFlushUtc = DateTime.UtcNow.AddMilliseconds(750);
         if (configuration.AutomaticSync && !string.IsNullOrWhiteSpace(configuration.DeviceToken))
             nextInventorySyncUtc = DateTime.UtcNow.AddMilliseconds(InventoryChangeDebounceMilliseconds);
+    }
+
+    private async Task PollItemLinkRequestsAsync() {
+        if (itemLinkPollInFlight || !clientState.IsLoggedIn || string.IsNullOrWhiteSpace(configuration.DeviceToken)) return;
+        itemLinkPollInFlight = true;
+        var token = configuration.DeviceToken;
+        try {
+            using var pollRequest = Request("/api/game-sync/item-links/poll", token, new { capability = "native_item_link", pluginVersion = PluginVersion });
+            using var pollResponse = await http.SendAsync(pollRequest);
+            if (pollResponse.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed or HttpStatusCode.NotImplemented) {
+                nextItemLinkPollUtc = DateTime.UtcNow.AddMinutes(UnsupportedItemLinkRetryMinutes);
+                return;
+            }
+            if (pollResponse.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden) {
+                nextItemLinkPollUtc = DateTime.UtcNow.AddMinutes(5);
+                return;
+            }
+            await EnsureSuccessfulResponse(pollResponse);
+            var response = await JsonSerializer.DeserializeAsync<ItemLinkPollResponse>(await pollResponse.Content.ReadAsStreamAsync());
+            if (response?.Ok != true || response.Request is null) return;
+
+            var result = await itemLinkRequestProcessor.ProcessAsync(
+                response.Request,
+                DateTime.UtcNow,
+                ResolveItemNameAsync,
+                request => ConsumeItemLinkRequestAsync(token, request),
+                link => framework.RunOnFrameworkThread(() => chatGui.Print(link, "Gillions")));
+            if (result == ItemLinkDeliveryResult.Delivered) RecordDiagnostic("Delivered one authenticated native item link.");
+            else if (result is not ItemLinkDeliveryResult.AlreadyDelivered) RecordDiagnostic($"Rejected an item-link request safely ({result}).");
+        } catch (Exception error) {
+            nextItemLinkPollUtc = DateTime.UtcNow.AddSeconds(30);
+            log.Warning(error, "Gillions item-link polling failed safely.");
+        } finally {
+            itemLinkPollInFlight = false;
+        }
+    }
+
+    private Task<string?> ResolveItemNameAsync(long itemId) => framework.RunOnFrameworkThread(() => {
+        if (!clientState.IsLoggedIn || !NativeItemLinkFactory.IsValidItemId(itemId)) return null;
+        var item = dataManager.GetExcelSheet<Item>()?.GetRowOrDefault((uint)itemId);
+        return item is { RowId: > 0 } ? item.Value.Name.ExtractText() : null;
+    });
+
+    private async Task<bool> ConsumeItemLinkRequestAsync(string token, ItemLinkRequest request) {
+        using var consumeRequest = Request("/api/game-sync/item-links/consume", token, new { requestId = request.RequestId, claimToken = request.ClaimToken });
+        using var consumeResponse = await http.SendAsync(consumeRequest);
+        if (!consumeResponse.IsSuccessStatusCode) {
+            RecordDiagnostic($"Item-link claim rejected by Gillions: HTTP {(int)consumeResponse.StatusCode}.");
+            return false;
+        }
+        using var document = JsonDocument.Parse(await consumeResponse.Content.ReadAsStringAsync());
+        var confirmed = document.RootElement.TryGetProperty("ok", out var ok) && ok.ValueKind == JsonValueKind.True
+            && document.RootElement.TryGetProperty("consumed", out var consumedProperty) && consumedProperty.ValueKind == JsonValueKind.True;
+        if (!confirmed) RecordDiagnostic("Item-link claim response was accepted without a consumed confirmation.");
+        return confirmed;
     }
 
     private void OnLogMessage(ILogMessage message) {
@@ -684,10 +764,17 @@ public sealed class Plugin : IDalamudPlugin {
             configuration.Save(pluginInterface);
         }
         ImGui.TextDisabled($"Automatic sync checks one data category every {AutomaticSyncIntervalSeconds} seconds. Inventory changes are debounced and synced promptly.");
+        var enableItemLinkRequests = configuration.EnableItemLinkRequests;
+        if (ImGui.Checkbox("Allow website 'Link in game' requests", ref enableItemLinkRequests)) {
+            configuration.EnableItemLinkRequests = enableItemLinkRequests;
+            configuration.Save(pluginInterface);
+        }
+        ImGui.TextDisabled("Uses the paired device connection only to print requested native item links in chat. No gameplay controls are used.");
         if (!string.IsNullOrWhiteSpace(configuration.SyncBlockedMessage)) {
             ImGui.TextColored(new System.Numerics.Vector4(1f, .5f, .5f, 1f), configuration.SyncBlockedMessage);
         }
-        ImGui.TextDisabled("Gillions syncs all supported data: inventory, currencies, achievements, collectibles, character progress, and beta session ledger entries.");
+        ImGui.TextDisabled("Gillions syncs all supported data: inventory, currencies, achievements, collections, character progress, reputation, Shared FATE progress, and beta session ledger entries.");
+        ImGui.TextDisabled("Shared FATE progress syncs only after all three in-game Shared FATE tabs have been opened and positively loaded.");
         ImGui.TextDisabled("Achievements sync after the in-game Achievement list has loaded.");
         DrawDiagnostics();
         if (!string.IsNullOrWhiteSpace(settingsMessage)) {
@@ -805,7 +892,7 @@ public sealed class Plugin : IDalamudPlugin {
 
     private static string DescribePayload(JsonElement root, int bytes) {
         var parts = new List<string> { $"{bytes:N0} B" };
-        foreach (var name in new[] { "items", "retainerListings", "retainerBags", "ids", "completedQuestIds", "cards", "minions", "mounts", "bardings", "emotes", "orchestrions", "fashions", "blueMageSpells", "sightseeingLogIds", "aetherCurrentIds", "portraitBackgrounds", "portraitConditions", "portraitDecorations", "portraitFacials", "portraitFrames", "portraitPoses", "masterRecipeBookIds", "folkloreBookIds", "jobs", "craftingRecipeIds", "gatheringLogIds" }) {
+        foreach (var name in new[] { "items", "retainerListings", "retainerBags", "ids", "completedQuestIds", "alliedSocieties", "tabs", "cards", "minions", "mounts", "bardings", "emotes", "orchestrions", "fashions", "blueMageSpells", "sightseeingLogIds", "aetherCurrentIds", "portraitBackgrounds", "portraitConditions", "portraitDecorations", "portraitFacials", "portraitFrames", "portraitPoses", "masterRecipeBookIds", "folkloreBookIds", "jobs", "craftingRecipeIds", "gatheringLogIds" }) {
             if (root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array) parts.Add($"{name}={value.GetArrayLength()}");
         }
         if (root.TryGetProperty("eligibleCount", out var eligible) && eligible.TryGetInt32(out var eligibleCount)) parts.Add($"eligible={eligibleCount}");
@@ -882,11 +969,12 @@ internal sealed record CapturedSnapshotBatch(string CharacterName, string Charac
 
 public sealed class PluginConfiguration : IPluginConfiguration {
     public int Version { get; set; } = 1;
-    public string ServerUrl { get; set; } = "https://gillions.lanlab.one";
+    public string ServerUrl { get; set; } = GillionsEndpoints.DefaultServerUrl;
     public string PairingCode { get; set; } = "";
     public string DeviceId { get; set; } = "";
     public string DeviceToken { get; set; } = "";
     public bool AutomaticSync { get; set; } = true;
+    public bool EnableItemLinkRequests { get; set; } = true;
     public Dictionary<string, string> LastPayloadHashes { get; set; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> LastInventoryComponentHashes { get; set; } = new(StringComparer.Ordinal);
     public DateTime? LastSyncUtc { get; set; }
@@ -899,6 +987,11 @@ public sealed class PluginConfiguration : IPluginConfiguration {
     public List<GilLedgerEvent> PendingRetainerGilDeposits { get; set; } = [];
     public List<PendingRetainerSale> PendingRetainerSales { get; set; } = [];
     public Dictionary<string, long> RetainerGilBalances { get; set; } = new(StringComparer.Ordinal);
+    public bool UseCompiledDefaultServerUrl(string compiledDefault) {
+        if (!PublicUrlConfiguration.TryUseCompiledDefault(ServerUrl, compiledDefault, out var serverUrl)) return false;
+        ServerUrl = serverUrl;
+        return true;
+    }
     public void Save(IDalamudPluginInterface pluginInterface) => pluginInterface.SavePluginConfig(this);
 }
 

@@ -11,14 +11,22 @@
     <Punchline>Opt-in account sync for your Gillions profile.</Punchline>
     <Description>Read-only, manually initiated character inventory synchronization for Gillions. Never automates gameplay or sends Square Enix credentials.</Description>
     <ApplicableVersion>any</ApplicableVersion>
-    <RepoUrl>https://gillions.lanlab.one</RepoUrl>
-    <IconUrl>https://gillions.lanlab.one/downloads/plugins/GillionsGameSync-icon-v4.png</IconUrl>
+    <GillionsPublicBaseUrl Condition="'$(GillionsPublicBaseUrl)' == ''">https://gillions.app</GillionsPublicBaseUrl>
+    <RepoUrl>$(GillionsPublicBaseUrl)</RepoUrl>
+    <IconUrl>$(GillionsPublicBaseUrl)/downloads/plugins/GillionsGameSync-icon-v4.png</IconUrl>
     <Tags>inventory;collection;utility</Tags>
     <DalamudApiLevel>15</DalamudApiLevel>
     <LoadRequiredState>0</LoadRequiredState>
     <LoadSync>false</LoadSync>
     <CanUnloadAsync>false</CanUnloadAsync>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="tests\**\*.cs" />
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>GillionsPublicBaseUrl</_Parameter1>
+      <_Parameter2>$(GillionsPublicBaseUrl)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
   <!-- A separate Dalamud identity keeps the test repository from updating or
        sharing configuration with the stable member plugin. -->
   <PropertyGroup Condition="'$(GillionsTestBuild)' == 'true'">

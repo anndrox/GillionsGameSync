@@ -1,0 +1,100 @@
+using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Game.Text.SeStringHandling.Payloads;
+using GillionsGameSync;
+
+static void Assert(bool condition, string message) {
+    if (!condition) throw new InvalidOperationException(message);
+}
+
+static ItemLinkRequest Request(string id = "request-1", long itemId = 4555, DateTime? expires = null, string claim = "claim-1") =>
+    new(id, itemId, expires ?? DateTime.UtcNow.AddMinutes(1), claim);
+
+const string currentPublicOrigin = "https://gillions.app";
+Assert(PublicUrlConfiguration.TryUseCompiledDefault("", currentPublicOrigin, out var initialOrigin)
+    && initialOrigin == currentPublicOrigin, "a new configuration must use the compiled public origin");
+Assert(PublicUrlConfiguration.TryUseCompiledDefault(PublicUrlConfiguration.LegacyPublicBaseUrl + "/", currentPublicOrigin + "/", out var migratedOrigin)
+    && migratedOrigin == currentPublicOrigin, "the legacy default must migrate to the compiled public origin");
+Assert(!PublicUrlConfiguration.TryUseCompiledDefault("https://self-hosted.example", currentPublicOrigin, out var customOrigin)
+    && customOrigin == "https://self-hosted.example", "a custom server URL must be preserved");
+Assert(!PublicUrlConfiguration.TryUseCompiledDefault(currentPublicOrigin, currentPublicOrigin, out var unchangedOrigin)
+    && unchangedOrigin == currentPublicOrigin, "the current compiled origin must not rewrite configuration");
+Console.WriteLine("public URL configuration tests passed");
+
+Assert(ProgressionSnapshotPolicy.NormalizeAlliedSocietyRank(0x87) == 7, "the rank-increased-today flag must not inflate allied-society rank");
+var completeTabs = Enumerable.Range(0, 3).Select(tabIndex => new SharedFateTabProgress((byte)tabIndex,
+    Enumerable.Range(0, 6).Select(zoneIndex => new SharedFateZoneProgress((uint)(1000 + tabIndex * 10 + zoneIndex), 2, 3, 20, 60)).ToArray())).ToArray();
+Assert(ProgressionSnapshotPolicy.IsCompleteSharedFateSnapshot(completeTabs), "three valid six-zone Shared FATE tabs must be complete");
+Assert(!ProgressionSnapshotPolicy.IsCompleteSharedFateSnapshot(completeTabs.Take(2)), "a partial Shared FATE tab set must not be uploaded as complete");
+var duplicateZoneTabs = completeTabs.Select(tab => new SharedFateTabProgress(tab.TabIndex, tab.Zones.ToArray())).ToArray();
+duplicateZoneTabs[2].Zones[5] = duplicateZoneTabs[2].Zones[4];
+Assert(!ProgressionSnapshotPolicy.IsCompleteSharedFateSnapshot(duplicateZoneTabs), "duplicate Shared FATE territories must be rejected");
+Console.WriteLine("reputation and Shared FATE completeness tests passed");
+
+Assert(!NativeItemLinkFactory.IsValidItemId(0), "zero item ID must be rejected");
+Assert(!NativeItemLinkFactory.IsValidItemId(-1), "negative item ID must be rejected");
+Assert(!NativeItemLinkFactory.IsValidItemId((long)uint.MaxValue + 1), "out-of-range item ID must be rejected");
+Assert(NativeItemLinkFactory.IsValidItemId(4555), "positive uint item ID must pass range validation");
+
+Console.WriteLine("item-id validation passed");
+var nativeLink = NativeItemLinkFactory.Create(4555, "Ether");
+Assert(nativeLink.Payloads.OfType<ItemPayload>().Single().ItemId == 4555, "native link must contain the requested ItemPayload");
+Assert(nativeLink.TextValue.Contains("Ether", StringComparison.Ordinal), "native link must display the authoritative item name");
+Console.WriteLine("native-link construction passed");
+
+var now = DateTime.UtcNow;
+Assert(ItemLinkPollPolicy.ShouldPoll(true, true, "device-token", false, now, now), "a linked, logged-in idle plugin should poll");
+Assert(!ItemLinkPollPolicy.ShouldPoll(false, true, "device-token", false, now, now), "a disabled handler must not poll");
+Assert(!ItemLinkPollPolicy.ShouldPoll(true, false, "device-token", false, now, now), "an offline plugin must not poll");
+Assert(!ItemLinkPollPolicy.ShouldPoll(true, true, "", false, now, now), "an unlinked plugin must not poll");
+Assert(!ItemLinkPollPolicy.ShouldPoll(true, true, "device-token", true, now, now), "an in-flight poll must not overlap");
+
+var processor = new ItemLinkRequestProcessor();
+var sequence = new List<string>();
+var printed = 0;
+var success = await processor.ProcessAsync(
+    Request(expires: now.AddMinutes(1)), now,
+    _ => Task.FromResult<string?>("Ether"),
+    _ => { sequence.Add("consume"); return Task.FromResult(true); },
+    _ => { sequence.Add("print"); printed++; return Task.CompletedTask; });
+Assert(success == ItemLinkDeliveryResult.Delivered && printed == 1, "a valid claimed request must print once");
+Assert(sequence.SequenceEqual(["consume", "print"]), "the server claim must be consumed before printing");
+
+var replay = await processor.ProcessAsync(
+    Request(expires: now.AddMinutes(1)), now,
+    _ => Task.FromResult<string?>("Ether"),
+    _ => Task.FromResult(true),
+    _ => { printed++; return Task.CompletedTask; });
+Assert(replay == ItemLinkDeliveryResult.AlreadyDelivered && printed == 1, "a consumed request must not replay");
+
+var expiredProcessor = new ItemLinkRequestProcessor();
+var expiredTouchedTransport = false;
+var expired = await expiredProcessor.ProcessAsync(
+    Request(expires: now.AddSeconds(-1)), now,
+    _ => { expiredTouchedTransport = true; return Task.FromResult<string?>("Ether"); },
+    _ => { expiredTouchedTransport = true; return Task.FromResult(true); },
+    _ => { expiredTouchedTransport = true; return Task.CompletedTask; });
+Assert(expired == ItemLinkDeliveryResult.Expired && !expiredTouchedTransport, "expired requests must be rejected before item or transport work");
+
+var invalid = await new ItemLinkRequestProcessor().ProcessAsync(
+    Request(itemId: 0, expires: now.AddMinutes(1)), now,
+    _ => Task.FromResult<string?>("Invalid"),
+    _ => Task.FromResult(true),
+    _ => Task.CompletedTask);
+Assert(invalid == ItemLinkDeliveryResult.InvalidRequest, "invalid item IDs must be rejected");
+
+var missingCatalogItem = await new ItemLinkRequestProcessor().ProcessAsync(
+    Request("missing-item", 999999, now.AddMinutes(1)), now,
+    _ => Task.FromResult<string?>(null),
+    _ => Task.FromResult(true),
+    _ => Task.CompletedTask);
+Assert(missingCatalogItem == ItemLinkDeliveryResult.InvalidItem, "IDs absent from the Lumina catalog must be rejected");
+
+var isolatedPrinted = false;
+var accountIsolation = await new ItemLinkRequestProcessor().ProcessAsync(
+    Request("wrong-account", 4555, now.AddMinutes(1), "unauthorized-claim"), now,
+    _ => Task.FromResult<string?>("Ether"),
+    _ => Task.FromResult(false),
+    _ => { isolatedPrinted = true; return Task.CompletedTask; });
+Assert(accountIsolation == ItemLinkDeliveryResult.ConsumeRejected && !isolatedPrinted, "an unauthorized account claim must never print");
+
+Console.WriteLine("Gillions item-link protocol tests passed.");
