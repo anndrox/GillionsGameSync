@@ -23,6 +23,7 @@ using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using Lumina.Excel.Sheets;
 
 namespace GillionsGameSync;
@@ -70,6 +71,9 @@ public sealed class Plugin : IDalamudPlugin {
     private DateTime nextRetainerVentureRosterCaptureUtc = DateTime.MinValue;
     private string lastRetainerVentureResultProbeStatus = "inactive";
     private bool autoRetainerLoaded;
+#if GILLIONS_TEST_BUILD
+    private readonly AutoRetainerVenturePlanWriter autoRetainerPlanWriter;
+#endif
     private long? lastObservedGil;
     private string? lastObservedRetainerId;
     private long? lastObservedRetainerGil;
@@ -136,10 +140,14 @@ public sealed class Plugin : IDalamudPlugin {
         this.gameInventory = gameInventory;
         this.chatGui = chatGui;
         this.log = log;
+#if GILLIONS_TEST_BUILD
+        autoRetainerPlanWriter = new AutoRetainerVenturePlanWriter(pluginInterface);
+#endif
         configuration = pluginInterface.GetPluginConfig() as PluginConfiguration ?? new PluginConfiguration();
         configuration.RetainerVentureState ??= new RetainerVentureLocalState();
         configuration.RetainerVentureState.Retainers ??= [];
         configuration.RetainerVentureState.PendingResultEvents ??= [];
+        configuration.AutoRetainerVenturePlanBackups ??= new(StringComparer.Ordinal);
         if (configuration.UseCompiledDefaultServerUrl(GillionsEndpoints.DefaultServerUrl)) configuration.Save(pluginInterface);
         commands.AddHandler("/gillionssync", new CommandInfo(OnCommand) { HelpMessage = "Pair or sync your selected Gillions data." });
         pluginInterface.UiBuilder.Draw += DrawSettings;
@@ -153,8 +161,76 @@ public sealed class Plugin : IDalamudPlugin {
     }
 
     private void OnCommand(string command, string arguments) {
+#if GILLIONS_TEST_BUILD
+        if (arguments.TrimStart().StartsWith("venture-test", StringComparison.OrdinalIgnoreCase)) {
+            ApplySyntheticVenturePlan(arguments);
+            return;
+        }
+        if (arguments.TrimStart().StartsWith("venture-restore", StringComparison.OrdinalIgnoreCase)) {
+            RestoreSyntheticVenturePlan(arguments);
+            return;
+        }
+#endif
         _ = arguments.Trim().Equals("pair", StringComparison.OrdinalIgnoreCase) ? PairAsync() : SyncAsync();
     }
+
+#if GILLIONS_TEST_BUILD
+    private void ApplySyntheticVenturePlan(string arguments) {
+        try {
+            var parts = arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length is < 3 or > 4 || !uint.TryParse(parts[2], out var ventureId) || ventureId == 0
+                || (parts.Length == 4 && (!int.TryParse(parts[3], out var parsedRepetitions) || parsedRepetitions is < 1 or > 999)))
+                throw new InvalidOperationException("Use /gillionssync venture-test <retainer-name> <venture-id> [repetitions].");
+            if (!configuration.EnableAutoRetainerVenturePlans) throw new InvalidOperationException("Enable Gillions venture plans in plugin settings first.");
+            if (!autoRetainerLoaded) throw new InvalidOperationException("AutoRetainer is not currently loaded.");
+            var retainer = configuration.RetainerVentureState.Retainers.FirstOrDefault(entry =>
+                string.Equals(entry.Name, parts[1], StringComparison.OrdinalIgnoreCase));
+            if (retainer is null) throw new InvalidOperationException("That retainer is not present in the current Gillions observation.");
+            if (dataManager.GetExcelSheet<RetainerTask>()?.GetRowOrDefault(ventureId) is not { RowId: > 0 })
+                throw new InvalidOperationException("That venture ID is not present in the current game data.");
+            var repetitions = parts.Length == 4 ? int.Parse(parts[3]) : 1;
+            var plan = new GillionsVenturePlanSpec(retainer.RetainerId, retainer.Name, [new(ventureId, repetitions)]);
+            var contentId = ReadLocalContentId();
+            var result = autoRetainerPlanWriter.Apply(contentId, plan, out var backup);
+            if (result != AutoRetainerPlanApplyResult.Applied) throw new InvalidOperationException($"AutoRetainer rejected the test plan ({result}).");
+            if (backup is not null && !configuration.AutoRetainerVenturePlanBackups.ContainsKey(retainer.RetainerId)) {
+                configuration.AutoRetainerVenturePlanBackups[retainer.RetainerId] = backup;
+                configuration.Save(pluginInterface);
+            }
+            settingsMessage = $"Applied {VenturePlannerCapabilityPolicy.BuildManagedPlanName(retainer.Name)} in AutoRetainer.";
+            RecordDiagnostic("Applied one synthetic Gillions venture plan through AutoRetainer IPC.");
+        } catch (Exception error) {
+            settingsMessage = error.Message;
+            log.Warning(error, "Gillions venture-plan test failed safely.");
+        }
+    }
+
+    private void RestoreSyntheticVenturePlan(string arguments) {
+        try {
+            var parts = arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length != 2) throw new InvalidOperationException("Use /gillionssync venture-restore <retainer-name>.");
+            var retainer = configuration.RetainerVentureState.Retainers.FirstOrDefault(entry =>
+                string.Equals(entry.Name, parts[1], StringComparison.OrdinalIgnoreCase));
+            if (retainer is null) throw new InvalidOperationException("That retainer is not present in the current Gillions observation.");
+            if (!configuration.AutoRetainerVenturePlanBackups.TryGetValue(retainer.RetainerId, out var backup))
+                throw new InvalidOperationException("Gillions has no saved prior plan for that retainer.");
+            var result = autoRetainerPlanWriter.Restore(ReadLocalContentId(), retainer.Name, backup);
+            if (result != AutoRetainerPlanApplyResult.Applied) throw new InvalidOperationException($"AutoRetainer rejected the plan restore ({result}).");
+            configuration.AutoRetainerVenturePlanBackups.Remove(retainer.RetainerId);
+            configuration.Save(pluginInterface);
+            settingsMessage = $"Restored the prior AutoRetainer plan for {retainer.Name}.";
+            RecordDiagnostic("Restored one AutoRetainer venture plan after a synthetic Gillions test.");
+        } catch (Exception error) {
+            settingsMessage = error.Message;
+            log.Warning(error, "Gillions venture-plan restore failed safely.");
+        }
+    }
+
+    private static unsafe ulong ReadLocalContentId() {
+        var player = PlayerState.Instance();
+        return player is null || !player->IsLoaded ? 0 : player->ContentId;
+    }
+#endif
 
     private void OnActivePluginsChanged(IActivePluginsChangedEventArgs args) {
         if (!args.AffectedInternalNames.Any(name => string.Equals(name, "AutoRetainer", StringComparison.OrdinalIgnoreCase))) return;
@@ -834,6 +910,21 @@ public sealed class Plugin : IDalamudPlugin {
             configuration.Save(pluginInterface);
         }
         ImGui.TextDisabled("Uses the paired device connection only to print requested native item links in chat. No gameplay controls are used.");
+#if GILLIONS_TEST_BUILD
+        ImGui.Separator();
+        if (autoRetainerLoaded) {
+            var enableAutoRetainerVenturePlans = configuration.EnableAutoRetainerVenturePlans;
+            if (ImGui.Checkbox("Allow Gillions to manage AutoRetainer venture plans", ref enableAutoRetainerVenturePlans)) {
+                configuration.EnableAutoRetainerVenturePlans = enableAutoRetainerVenturePlans;
+                configuration.Save(pluginInterface);
+            }
+            ImGui.TextDisabled(autoRetainerPlanWriter.IsReady()
+                ? "Testing only. Gillions may replace a retainer's active AutoRetainer planner after an authenticated plan request."
+                : "AutoRetainer is loaded, but its public API is not ready.");
+        } else {
+            ImGui.TextDisabled("Install and load AutoRetainer to test Gillions-managed venture plans.");
+        }
+#endif
         if (!string.IsNullOrWhiteSpace(configuration.SyncBlockedMessage)) {
             ImGui.TextColored(new System.Numerics.Vector4(1f, .5f, .5f, 1f), configuration.SyncBlockedMessage);
         }
@@ -1051,6 +1142,8 @@ public sealed class PluginConfiguration : IPluginConfiguration {
     public string DeviceToken { get; set; } = "";
     public bool AutomaticSync { get; set; } = true;
     public bool EnableItemLinkRequests { get; set; } = true;
+    public bool EnableAutoRetainerVenturePlans { get; set; }
+    public Dictionary<string, AutoRetainerVenturePlanBackup> AutoRetainerVenturePlanBackups { get; set; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> LastPayloadHashes { get; set; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> LastInventoryComponentHashes { get; set; } = new(StringComparer.Ordinal);
     public DateTime? LastSyncUtc { get; set; }

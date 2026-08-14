@@ -108,6 +108,26 @@ Assert(olderVentureState is not null && !olderVentureState.RosterComplete && old
     "older configuration payloads without venture state must remain compatible");
 Console.WriteLine("retainer venture snapshot and retry tests passed");
 
+var managedPlan = new GillionsVenturePlanSpec("100", "Fixture-retainer", [new(245, 3), new(112, 1)]);
+Assert(VenturePlannerCapabilityPolicy.IsValid(managedPlan), "a bounded Gillions venture plan must be valid");
+Assert(!VenturePlannerCapabilityPolicy.IsValid(managedPlan with { RetainerId = "invalid" }), "a malformed retainer identity must be rejected");
+Assert(!VenturePlannerCapabilityPolicy.IsValid(managedPlan with { Steps = [new(0, 1)] }), "a zero venture ID must be rejected");
+Assert(!VenturePlannerCapabilityPolicy.IsAvailable(false, true, true, true, true), "venture planning must remain explicitly opted out by default");
+Assert(!VenturePlannerCapabilityPolicy.IsAvailable(true, false, true, true, true), "AutoRetainer absence must disable venture planning");
+Assert(VenturePlannerCapabilityPolicy.IsAvailable(true, true, true, true, true), "the complete opted-in capability must be available");
+var fakeAdditionalData = new FakeAdditionalRetainerData();
+fakeAdditionalData.VenturePlan.List.Add(new FakePlannedVenture { ID = 999, Num = 9 });
+var originalPlan = AutoRetainerVenturePlanMutation.Capture(fakeAdditionalData);
+AutoRetainerVenturePlanMutation.Apply(fakeAdditionalData, managedPlan);
+Assert(fakeAdditionalData.EnablePlanner && fakeAdditionalData.LinkedVenturePlan == "" && fakeAdditionalData.VenturePlanIndex == 0, "the embedded planner must be enabled without linking a global plan");
+Assert(fakeAdditionalData.VenturePlan.Name == "Gillions Venture (Fixture-retainer)", "the managed plan must use the Gillions retainer-specific name");
+Assert(fakeAdditionalData.VenturePlan.List.Select(entry => (entry.ID, entry.Num)).SequenceEqual(new[] { (245u, 3), (112u, 1) }), "the managed plan must replace only the embedded venture sequence");
+Assert(fakeAdditionalData.Deposit, "unrelated AutoRetainer settings must be preserved");
+AutoRetainerVenturePlanMutation.Restore(fakeAdditionalData, originalPlan);
+Assert(!fakeAdditionalData.EnablePlanner && fakeAdditionalData.LinkedVenturePlan == "saved-plan" && fakeAdditionalData.VenturePlanIndex == 7, "the prior planner linkage and enabled state must be restorable");
+Assert(fakeAdditionalData.VenturePlan.Name == "Existing plan" && fakeAdditionalData.VenturePlan.List.Single().ID == 999, "the prior embedded plan must be restorable");
+Console.WriteLine("AutoRetainer venture-plan policy tests passed");
+
 Assert(!NativeItemLinkFactory.IsValidItemId(0), "zero item ID must be rejected");
 Assert(!NativeItemLinkFactory.IsValidItemId(-1), "negative item ID must be rejected");
 Assert(!NativeItemLinkFactory.IsValidItemId((long)uint.MaxValue + 1), "out-of-range item ID must be rejected");
@@ -176,3 +196,21 @@ var accountIsolation = await new ItemLinkRequestProcessor().ProcessAsync(
 Assert(accountIsolation == ItemLinkDeliveryResult.ConsumeRejected && !isolatedPrinted, "an unauthorized account claim must never print");
 
 Console.WriteLine("Gillions item-link protocol tests passed.");
+
+public sealed class FakeAdditionalRetainerData {
+    public bool Deposit = true;
+    public FakeVenturePlan VenturePlan = new();
+    public string LinkedVenturePlan = "saved-plan";
+    public uint VenturePlanIndex = 7;
+    public bool EnablePlanner;
+}
+
+public sealed class FakeVenturePlan {
+    public string Name = "Existing plan";
+    public List<FakePlannedVenture> List = [];
+}
+
+public sealed class FakePlannedVenture {
+    public uint ID;
+    public int Num = 1;
+}
