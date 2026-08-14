@@ -27,6 +27,13 @@ Assert-Contains $collectorSource "prior.Items.SequenceEqual(read.Items)" "Retain
 Assert-Contains $collectorSource 'JsonPropertyName("retainerId")' "Typed retainer rows must preserve the existing camel-case wire contract."
 Assert-Contains $collectorSource "SheetRowCache<T>.Get(dataManager)" "Static Lumina row catalogs must be cached."
 
+$ventureResultIndex = $pluginSource.IndexOf("CaptureRetainerVentureResultObservation", [StringComparison]::Ordinal)
+$ventureCadenceIndex = $pluginSource.IndexOf("if (now >= nextRetainerVentureCaptureUtc)", [StringComparison]::Ordinal)
+$ventureRosterIndex = $pluginSource.IndexOf("CaptureRetainerVentureRosterAndGear", [StringComparison]::Ordinal)
+if (($ventureResultIndex -lt 0) -or ($ventureCadenceIndex -lt 0) -or ($ventureRosterIndex -lt 0) -or ($ventureResultIndex -ge $ventureCadenceIndex) -or ($ventureRosterIndex -le $ventureCadenceIndex)) {
+  throw "Transient Venture result evidence must be checked each frame while roster and gear reads remain cadence-limited."
+}
+
 $syncStart = $pluginSource.IndexOf("private async Task SyncAsync", [StringComparison]::Ordinal)
 $syncEnd = $pluginSource.IndexOf("private void DrawSettings", $syncStart, [StringComparison]::Ordinal)
 if ($syncStart -lt 0 -or $syncEnd -le $syncStart) { throw "Unable to inspect SyncAsync." }

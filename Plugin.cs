@@ -207,17 +207,21 @@ public sealed class Plugin : IDalamudPlugin {
             return;
         }
 #if GILLIONS_TEST_BUILD
+        // Reward views can be advanced automatically in less than the normal
+        // collection interval. This check reads one small native agent record
+        // per frame; roster and gear scans remain on the slower cadence below.
+        var ventureChanged = DirectGameSnapshotCollector.CaptureRetainerVentureResultObservation(configuration.RetainerVentureState, out var resultProbeStatus);
+        if (resultProbeStatus != lastRetainerVentureResultProbeStatus) {
+            if (resultProbeStatus != "inactive") RecordDiagnostic($"Retainer venture result probe: {resultProbeStatus}.");
+            lastRetainerVentureResultProbeStatus = resultProbeStatus;
+        }
         if (now >= nextRetainerVentureCaptureUtc) {
             nextRetainerVentureCaptureUtc = now.AddMilliseconds(500);
-            var ventureChanged = DirectGameSnapshotCollector.CaptureRetainerVentureObservations(configuration.RetainerVentureState, out var resultProbeStatus);
-            if (resultProbeStatus != lastRetainerVentureResultProbeStatus) {
-                if (resultProbeStatus != "inactive") RecordDiagnostic($"Retainer venture result probe: {resultProbeStatus}.");
-                lastRetainerVentureResultProbeStatus = resultProbeStatus;
-            }
-            if (ventureChanged) {
-                configuration.Save(pluginInterface);
-                if (RetainerVentureUploadEnabled) nextAutomaticSyncUtc = now;
-            }
+            ventureChanged |= DirectGameSnapshotCollector.CaptureRetainerVentureRosterAndGear(configuration.RetainerVentureState);
+        }
+        if (ventureChanged) {
+            configuration.Save(pluginInterface);
+            if (RetainerVentureUploadEnabled) nextAutomaticSyncUtc = now;
         }
 #endif
         if (now >= nextGilLedgerPollUtc || (gilLedgerDirty && now >= nextGilLedgerFlushUtc)) {
@@ -669,7 +673,8 @@ public sealed class Plugin : IDalamudPlugin {
                 var currentName = objects.LocalPlayer?.Name.TextValue ?? "";
                 var currentWorld = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "";
 #if GILLIONS_TEST_BUILD
-                DirectGameSnapshotCollector.CaptureRetainerVentureObservations(configuration.RetainerVentureState, out _);
+                DirectGameSnapshotCollector.CaptureRetainerVentureResultObservation(configuration.RetainerVentureState, out _);
+                DirectGameSnapshotCollector.CaptureRetainerVentureRosterAndGear(configuration.RetainerVentureState);
                 selectedScopes = selectedScopes.Where(scope => RetainerVentureUploadEnabled || scope != "retainer_ventures").ToArray();
 #endif
                 var snapshots = DirectGameSnapshotCollector.Collect(pluginInterface, clientState, objects, dataManager, unlockState, configuration.RetainerGilBalances, configuration.RetainerVentureState, selectedScopes).ToArray();

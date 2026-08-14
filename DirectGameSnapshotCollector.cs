@@ -29,14 +29,18 @@ public static class DirectGameSnapshotCollector {
     internal static RetainerBalanceRead? ReadActiveRetainerGil() => NativeInventoryCollector.ReadActiveRetainerGil();
 
 #if GILLIONS_TEST_BUILD
-    internal static bool CaptureRetainerVentureObservations(RetainerVentureLocalState state, out string resultProbeStatus) {
+    internal static bool CaptureRetainerVentureResultObservation(RetainerVentureLocalState state, out string resultProbeStatus) {
         var now = DateTime.UtcNow;
         // The game can clear the active retainer's completion timestamp while
         // constructing the result view. Capture reward evidence against the
         // prior positive assignment before the fresh roster replaces it.
-        var changed = RetainerVentureSnapshotPolicy.AddPendingResult(state,
+        return RetainerVentureSnapshotPolicy.AddPendingResult(state,
             RetainerVentureSnapshotPolicy.CreateResultEvent(RetainerVentureNativeCollector.ReadVisibleResult(now, state, out resultProbeStatus)));
-        changed |= RetainerVentureSnapshotPolicy.MergeGear(state, RetainerVentureNativeCollector.ReadLoadedActiveRetainerGear(now));
+    }
+
+    internal static bool CaptureRetainerVentureRosterAndGear(RetainerVentureLocalState state) {
+        var now = DateTime.UtcNow;
+        var changed = RetainerVentureSnapshotPolicy.MergeGear(state, RetainerVentureNativeCollector.ReadLoadedActiveRetainerGear(now));
         changed |= RetainerVentureSnapshotPolicy.MergeRoster(state, RetainerVentureNativeCollector.ReadCompleteRoster(now), now);
         return changed;
     }
