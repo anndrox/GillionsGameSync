@@ -66,12 +66,10 @@ public sealed class Plugin : IDalamudPlugin {
     private DateTime nextInventorySyncUtc = DateTime.MaxValue;
     private DateTime nextGilLedgerFlushUtc = DateTime.MinValue;
     private DateTime nextItemLinkPollUtc = DateTime.MinValue;
-#if GILLIONS_TEST_BUILD
     private DateTime nextRetainerVentureResultCaptureUtc = DateTime.MinValue;
     private DateTime nextRetainerVentureRosterCaptureUtc = DateTime.MinValue;
     private string lastRetainerVentureResultProbeStatus = "inactive";
     private bool autoRetainerLoaded;
-#endif
     private long? lastObservedGil;
     private string? lastObservedRetainerId;
     private long? lastObservedRetainerGil;
@@ -93,17 +91,15 @@ public sealed class Plugin : IDalamudPlugin {
     private DateTime diagnosticRecordingUntilUtc = DateTime.MinValue;
     private static readonly string PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "1.0.4";
     private static readonly string[] SyncScopes = ["inventory", "currencies", "achievements", "collectibles", "character", "quest_journal", "reputation", "shared_fates", "glamour_plates"];
-#if GILLIONS_TEST_BUILD
-    // The server contract does not exist yet. The testing collector persists
+    // The server contract does not exist yet. The collector persists
     // observations locally, but this gate prevents either automatic or manual
     // sync from submitting an unsupported resource.
     private static readonly bool RetainerVentureUploadEnabled = false;
-#endif
     private static readonly string[] CurrentChangelog = [
-        "Link in game: Paired Gillions item requests can now produce genuine clickable item links in your local game chat.",
-        "Reputation: Gillions now syncs authoritative Allied Society rank and reputation values for the selected character.",
-        "Shared FATEs: Zone rank and completion progress sync after all three Shared FATE tabs have been opened in game.",
-        "Safe completeness: Gillions omits partially loaded Shared FATE data instead of treating unopened zones as incomplete.",
+        "Retainer ventures: Gillions now observes retainer identity, job, level, current assignment, readiness, and loaded gear without automating the game.",
+        "Venture rewards: Received item evidence is retained locally across the short venture-result window for future Gillions support.",
+        "AutoRetainer compatibility: When AutoRetainer is loaded, Gillions adapts its local observation timing without depending on AutoRetainer internals.",
+        "Safe rollout: Retainer Venture data remains local until the Gillions website contract is ready.",
     ];
     // Automatic work must remain below a visible frame hitch. One resource is
     // collected per cadence; changed inventory gets its own short debounce.
@@ -125,11 +121,9 @@ public sealed class Plugin : IDalamudPlugin {
     private const int AutomaticFailureRetrySeconds = 10;
     private const int ItemLinkPollIntervalSeconds = 5;
     private const int UnsupportedItemLinkRetryMinutes = 15;
-#if GILLIONS_TEST_BUILD
     private const int NormalVentureResultCaptureIntervalMilliseconds = 100;
     private const int NormalVentureRosterCaptureIntervalMilliseconds = 500;
     private const int AutomatedVentureRosterCaptureIntervalMilliseconds = 100;
-#endif
 
     public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commands, IClientState clientState, IObjectTable objects, IFramework framework, IDataManager dataManager, IUnlockState unlockState, IGameInventory gameInventory, IChatGui chatGui, IPluginLog log) {
         this.pluginInterface = pluginInterface;
@@ -150,10 +144,8 @@ public sealed class Plugin : IDalamudPlugin {
         commands.AddHandler("/gillionssync", new CommandInfo(OnCommand) { HelpMessage = "Pair or sync your selected Gillions data." });
         pluginInterface.UiBuilder.Draw += DrawSettings;
         pluginInterface.UiBuilder.OpenConfigUi += OpenSettings;
-#if GILLIONS_TEST_BUILD
         RefreshAutoRetainerCompatibilityMode();
         pluginInterface.ActivePluginsChanged += OnActivePluginsChanged;
-#endif
         framework.Update += OnFrameworkUpdate;
         gameInventory.InventoryChangedRaw += OnInventoryChangedRaw;
         chatGui.LogMessage += OnLogMessage;
@@ -164,7 +156,6 @@ public sealed class Plugin : IDalamudPlugin {
         _ = arguments.Trim().Equals("pair", StringComparison.OrdinalIgnoreCase) ? PairAsync() : SyncAsync();
     }
 
-#if GILLIONS_TEST_BUILD
     private void OnActivePluginsChanged(IActivePluginsChangedEventArgs args) {
         if (!args.AffectedInternalNames.Any(name => string.Equals(name, "AutoRetainer", StringComparison.OrdinalIgnoreCase))) return;
         RefreshAutoRetainerCompatibilityMode();
@@ -180,7 +171,6 @@ public sealed class Plugin : IDalamudPlugin {
         nextRetainerVentureRosterCaptureUtc = DateTime.MinValue;
         RecordDiagnostic($"AutoRetainer venture compatibility mode {(autoRetainerLoaded ? "enabled" : "disabled")}.");
     }
-#endif
 
     private void OpenSettings() => settingsVisible = true;
 
@@ -235,7 +225,6 @@ public sealed class Plugin : IDalamudPlugin {
             nextInventorySyncUtc = DateTime.MaxValue;
             return;
         }
-#if GILLIONS_TEST_BUILD
         // AutoRetainer can advance its non-adjustable reward view inside the
         // normal observation interval. Use Dalamud's public loaded-plugin state
         // to enable a bounded compatibility mode without depending on its IPC
@@ -261,7 +250,6 @@ public sealed class Plugin : IDalamudPlugin {
             configuration.Save(pluginInterface);
             if (RetainerVentureUploadEnabled) nextAutomaticSyncUtc = now;
         }
-#endif
         if (now >= nextGilLedgerPollUtc || (gilLedgerDirty && now >= nextGilLedgerFlushUtc)) {
             nextGilLedgerPollUtc = now.AddMilliseconds(GilLedgerPollIntervalMilliseconds);
             CaptureGilLedgerChange();
@@ -710,11 +698,9 @@ public sealed class Plugin : IDalamudPlugin {
                 if (!clientState.IsLoggedIn) throw new InvalidOperationException("Log into a character before syncing.");
                 var currentName = objects.LocalPlayer?.Name.TextValue ?? "";
                 var currentWorld = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "";
-#if GILLIONS_TEST_BUILD
                 DirectGameSnapshotCollector.CaptureRetainerVentureResultObservation(configuration.RetainerVentureState, out _);
                 DirectGameSnapshotCollector.CaptureRetainerVentureRosterAndGear(configuration.RetainerVentureState);
                 selectedScopes = selectedScopes.Where(scope => RetainerVentureUploadEnabled || scope != "retainer_ventures").ToArray();
-#endif
                 var snapshots = DirectGameSnapshotCollector.Collect(pluginInterface, clientState, objects, dataManager, unlockState, configuration.RetainerGilBalances, configuration.RetainerVentureState, selectedScopes).ToArray();
                 return new CapturedSnapshotBatch(currentName, currentWorld, snapshots);
             });
@@ -1039,9 +1025,7 @@ public sealed class Plugin : IDalamudPlugin {
         framework.Update -= OnFrameworkUpdate;
         pluginInterface.UiBuilder.Draw -= DrawSettings;
         pluginInterface.UiBuilder.OpenConfigUi -= OpenSettings;
-#if GILLIONS_TEST_BUILD
         pluginInterface.ActivePluginsChanged -= OnActivePluginsChanged;
-#endif
         commands.RemoveHandler("/gillionssync");
         http.Dispose();
     }

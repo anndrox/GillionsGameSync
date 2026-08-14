@@ -28,7 +28,6 @@ public static class DirectGameSnapshotCollector {
     internal static RetainerContext? FindLoadedRetainerItem(uint itemId) => NativeInventoryCollector.FindLoadedRetainerItem(itemId);
     internal static RetainerBalanceRead? ReadActiveRetainerGil() => NativeInventoryCollector.ReadActiveRetainerGil();
 
-#if GILLIONS_TEST_BUILD
     internal static bool CaptureRetainerVentureResultObservation(RetainerVentureLocalState state, out string resultProbeStatus) {
         var now = DateTime.UtcNow;
         // The game can clear the active retainer's completion timestamp while
@@ -44,7 +43,6 @@ public static class DirectGameSnapshotCollector {
         changed |= RetainerVentureSnapshotPolicy.MergeRoster(state, RetainerVentureNativeCollector.ReadCompleteRoster(now), now);
         return changed;
     }
-#endif
 
     public static IEnumerable<GameSnapshot> Collect(IDalamudPluginInterface pluginInterface, IClientState clientState, IObjectTable objects, IDataManager dataManager, IUnlockState unlockState, IReadOnlyDictionary<string, long>? retainerGilBalances, RetainerVentureLocalState? retainerVentureState, IEnumerable<string> scopes) {
         var selected = new HashSet<string>(scopes ?? [], StringComparer.Ordinal);
@@ -130,16 +128,13 @@ public static class DirectGameSnapshotCollector {
             // last successful server snapshot until a loaded manager is read.
             if (plates != null) yield return new GameSnapshot("glamour_plates", new { character = identity, complete = true, plates });
         }
-#if GILLIONS_TEST_BUILD
         if (selected.Contains("retainer_ventures") && retainerVentureState is not null && retainerVentureState.RosterComplete) {
             var payload = RetainerVentureSnapshotPolicy.BuildPayload(retainerVentureState, identity);
             yield return new GameSnapshot("retainer_ventures", payload, payload.ResultEvents.Select(entry => entry.EventId).ToArray());
         }
-#endif
     }
 }
 
-#if GILLIONS_TEST_BUILD
 internal static class RetainerVentureNativeCollector {
     public static unsafe RetainerVentureRosterRead? ReadCompleteRoster(DateTime observedAtUtc) {
         try {
@@ -236,7 +231,6 @@ internal static class RetainerVentureNativeCollector {
         }
     }
 }
-#endif
 
 internal static class ReputationCollector {
     public static unsafe ReputationRead? Read() {
