@@ -34,7 +34,7 @@ public static class DirectGameSnapshotCollector {
         // constructing the result view. Capture reward evidence against the
         // prior positive assignment before the fresh roster replaces it.
         return RetainerVentureSnapshotPolicy.AddPendingResult(state,
-            RetainerVentureSnapshotPolicy.CreateResultEvent(RetainerVentureNativeCollector.ReadVisibleResult(now, state, out resultProbeStatus)));
+            RetainerVentureSnapshotPolicy.CreateResultEvent(state, RetainerVentureNativeCollector.ReadVisibleResult(now, state, out resultProbeStatus)));
     }
 
     internal static bool CaptureRetainerVentureRosterAndGear(RetainerVentureLocalState state) {
@@ -43,6 +43,9 @@ public static class DirectGameSnapshotCollector {
         changed |= RetainerVentureSnapshotPolicy.MergeRoster(state, RetainerVentureNativeCollector.ReadCompleteRoster(now), now);
         return changed;
     }
+
+    internal static bool CaptureRetainerInventoryCoverage(RetainerVentureLocalState state) =>
+        RetainerVentureSnapshotPolicy.MergeInventorySources(state, NativeInventoryCollector.ReadRetainerInventoryCoverage(state.Retainers));
 
     public static IEnumerable<GameSnapshot> Collect(IDalamudPluginInterface pluginInterface, IClientState clientState, IObjectTable objects, IDataManager dataManager, IUnlockState unlockState, IReadOnlyDictionary<string, long>? retainerGilBalances, RetainerVentureLocalState? retainerVentureState, IEnumerable<string> scopes) {
         var selected = new HashSet<string>(scopes ?? [], StringComparer.Ordinal);
@@ -128,8 +131,9 @@ public static class DirectGameSnapshotCollector {
             // last successful server snapshot until a loaded manager is read.
             if (plates != null) yield return new GameSnapshot("glamour_plates", new { character = identity, complete = true, plates });
         }
-        if (selected.Contains("retainer_ventures") && retainerVentureState is not null && retainerVentureState.RosterComplete) {
-            var payload = RetainerVentureSnapshotPolicy.BuildPayload(retainerVentureState, identity);
+        if (selected.Contains("retainer_ventures") && retainerVentureState is not null && !string.IsNullOrWhiteSpace(retainerVentureState.CharacterContentId)) {
+            var retainerIdentity = new { contentId = retainerVentureState.CharacterContentId, name = identity.name, world = identity.world };
+            var payload = RetainerVentureSnapshotPolicy.BuildPayload(retainerVentureState, retainerIdentity);
             yield return new GameSnapshot("retainer_ventures", payload, payload.ResultEvents.Select(entry => entry.EventId).ToArray());
         }
     }
@@ -150,7 +154,8 @@ internal static class RetainerVentureNativeCollector {
                     retainer.ClassJob,
                     retainer.Level,
                     retainer.VentureId,
-                    retainer.VentureComplete));
+                    retainer.VentureComplete,
+                    retainer.Gil));
             }
             return new RetainerVentureRosterRead(observedAtUtc, true, retainers.ToArray());
         } catch {
@@ -581,6 +586,48 @@ internal static class NativeInventoryCollector {
             result.Add(new { itemId = item.ItemId, quantity = item.Quantity, source = "native_client_state" });
         }
         return result.ToArray();
+    }
+
+    public static unsafe RetainerInventorySourceRead[] ReadRetainerInventoryCoverage(IEnumerable<RetainerVentureProfile> retainers) {
+        var now = DateTime.UtcNow;
+        var manager = InventoryManager.Instance();
+        var result = new List<RetainerInventorySourceRead>();
+        result.Add(ReadCoverageSource(manager, "character_inventory", null, now,
+            InventoryType.Inventory1, InventoryType.Inventory2, InventoryType.Inventory3, InventoryType.Inventory4));
+        result.Add(ReadCoverageSource(manager, "chocobo_saddlebag", null, now,
+            InventoryType.SaddleBag1, InventoryType.SaddleBag2));
+        result.Add(ReadCoverageSource(manager, "premium_saddlebag", null, now,
+            InventoryType.PremiumSaddleBag1, InventoryType.PremiumSaddleBag2));
+        result.Add(ReadCoverageSource(manager, "armoury_chest", null, now,
+            InventoryType.EquippedItems, InventoryType.ArmoryMainHand, InventoryType.ArmoryOffHand, InventoryType.ArmoryHead,
+            InventoryType.ArmoryBody, InventoryType.ArmoryHands, InventoryType.ArmoryLegs, InventoryType.ArmoryFeets,
+            InventoryType.ArmoryEar, InventoryType.ArmoryNeck, InventoryType.ArmoryWrist, InventoryType.ArmoryRings, InventoryType.ArmorySoulCrystal));
+        result.Add(ReadCoverageSource(manager, "crystals", null, now, InventoryType.Crystals));
+        result.Add(ReadCoverageSource(manager, "currency_inventory", null, now, InventoryType.Currency));
+
+        var retainerManager = RetainerManager.Instance();
+        var activeRetainer = retainerManager == null ? null : retainerManager->GetActiveRetainer();
+        var activeRetainerId = activeRetainer == null || activeRetainer->RetainerId == 0 ? null : activeRetainer->RetainerId.ToString();
+        var retainerContainerNames = new[] { "RetainerPage1", "RetainerPage2", "RetainerPage3", "RetainerPage4", "RetainerPage5", "RetainerPage6", "RetainerPage7", "RetainerCrystals" };
+        var retainerTypes = retainerContainerNames.Where(name => Enum.TryParse<InventoryType>(name, out _)).Select(name => Enum.Parse<InventoryType>(name)).ToArray();
+        foreach (var retainer in retainers.OrderBy(entry => entry.RetainerId, StringComparer.Ordinal)) {
+            result.Add(ReadCoverageSource(activeRetainerId == retainer.RetainerId ? manager : null, "retainer_inventory", retainer.RetainerId, now, retainerTypes));
+        }
+        return result.ToArray();
+    }
+
+    private static unsafe RetainerInventorySourceRead ReadCoverageSource(InventoryManager* manager, string source, string? retainerId, DateTime observedAtUtc, params InventoryType[] types) {
+        var containers = types.Select(type => {
+            var container = manager == null ? null : manager->GetInventoryContainer(type);
+            var loaded = container != null && container->IsLoaded && container->Items != null && container->Size >= 0;
+            var used = 0;
+            if (loaded) for (var index = 0; index < container->Size; index++) {
+                var item = container->Items[index];
+                if (item.ItemId > 0 && item.Quantity > 0 && !item.IsSymbolic) used++;
+            }
+            return new RetainerInventoryContainerRead(type.ToString(), loaded, used, loaded ? container->Size : 0);
+        }).ToArray();
+        return new RetainerInventorySourceRead(source, retainerId, observedAtUtc, containers);
     }
 }
 

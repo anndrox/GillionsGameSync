@@ -46,39 +46,69 @@ Console.WriteLine("armoire snapshot tests passed");
 var ventureNow = new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc);
 var activeCompleteUnix = (uint)new DateTimeOffset(ventureNow.AddHours(1)).ToUnixTimeSeconds();
 var readyCompleteUnix = (uint)new DateTimeOffset(ventureNow.AddMinutes(-5)).ToUnixTimeSeconds();
-var ventureState = new RetainerVentureLocalState();
-Assert(!RetainerVentureSnapshotPolicy.MergeRoster(ventureState, null, ventureNow), "an unavailable roster must preserve prior state");
-Assert(!RetainerVentureSnapshotPolicy.MergeRoster(ventureState,
-    new RetainerVentureRosterRead(ventureNow, false, []), ventureNow), "a partial roster must not become authoritative");
+var characterStates = new Dictionary<string, RetainerVentureLocalState>(StringComparer.Ordinal);
+var ventureState = RetainerVentureSnapshotPolicy.GetCharacterState(characterStates, 111);
+var otherCharacterState = RetainerVentureSnapshotPolicy.GetCharacterState(characterStates, 222);
+Assert(ventureState != otherCharacterState && ventureState.CharacterContentId == "111" && otherCharacterState.CharacterContentId == "222",
+    "retainer state must be partitioned by character content ID");
+Assert(RetainerVentureSnapshotPolicy.MergeRoster(ventureState, null, ventureNow)
+    && ventureState.RosterObservation.Status == "unavailable", "an unavailable roster must be explicit and non-authoritative");
 Assert(RetainerVentureSnapshotPolicy.MergeRoster(ventureState,
     new RetainerVentureRosterRead(ventureNow, true, [
-        new("200", "Ready", 0, 0, 22, readyCompleteUnix),
-        new("100", "Active", 18, 90, 11, activeCompleteUnix),
+        new("200", "Ready", 0, 0, 22, readyCompleteUnix, 2000),
+        new("100", "Active", 18, 90, 11, activeCompleteUnix, 1000),
     ]), ventureNow), "a complete native roster must be accepted");
 Assert(ventureState.Retainers.Select(entry => entry.RetainerId).SequenceEqual(["100", "200"]), "retainers must be stable and sorted");
 Assert(ventureState.Retainers[0].ClassJobId == 18 && ventureState.Retainers[0].Level == 90, "known class/job and level values must be preserved");
 Assert(ventureState.Retainers[1].ClassJobId is null && ventureState.Retainers[1].Level is null, "zero class/job and level values must remain unknown");
-Assert(ventureState.Retainers[0].Venture?.State == "in_progress", "a future completion time must be in progress");
-Assert(ventureState.Retainers[1].Venture?.State == "ready", "a past completion time must be ready");
-var unchangedObservedAt = ventureState.RosterObservedAtUtc;
-Assert(!RetainerVentureSnapshotPolicy.MergeRoster(ventureState,
+Assert(ventureState.Retainers[0].Venture.Assignment?.VentureId == 11, "an active venture must retain its stable task ID");
+Assert(ventureState.Retainers[0].Gil.Single().Value == 1000, "native roster gil must carry current provenance");
+var unchangedChangedAt = ventureState.RosterObservation.LastChangedAtUtc;
+Assert(RetainerVentureSnapshotPolicy.MergeRoster(ventureState,
     new RetainerVentureRosterRead(ventureNow.AddSeconds(5), true, [
-        new("200", "Ready", 0, 0, 22, readyCompleteUnix),
-        new("100", "Active", 18, 90, 11, activeCompleteUnix),
-    ]), ventureNow.AddSeconds(5)), "an unchanged roster must not churn timestamps or hashes");
-Assert(ventureState.RosterObservedAtUtc == unchangedObservedAt, "unchanged roster observations must retain their prior timestamp");
-Assert(ventureState.Retainers.All(entry => !entry.GearObserved && entry.EquippedItems is null), "gear must remain explicitly unknown before the active retainer inventory loads");
+        new("200", "Ready", 0, 0, 22, readyCompleteUnix, 2000),
+        new("100", "Active", 18, 90, 11, activeCompleteUnix, 1000),
+    ]), ventureNow.AddSeconds(5)), "an unchanged roster must refresh observation evidence");
+Assert(ventureState.RosterObservation.LastObservedAtUtc == ventureNow.AddSeconds(5)
+    && ventureState.RosterObservation.LastChangedAtUtc == unchangedChangedAt,
+    "unchanged data must refresh lastObservedAtUtc without changing lastChangedAtUtc");
+Assert(ventureState.Retainers.All(entry => entry.Equipment.Observation.Status == "unavailable" && entry.Equipment.Items is null),
+    "gear must remain explicitly unavailable before the active retainer inventory loads");
 Assert(RetainerVentureSnapshotPolicy.MergeGear(ventureState,
     new RetainerVentureGearRead("100", ventureNow.AddMinutes(1), [new(5, 400, true), new(1, 300, false)])), "loaded native retainer gear must be accepted");
-Assert(ventureState.Retainers[0].GearObserved && ventureState.Retainers[0].EquippedItems!.Select(item => item.SlotIndex).SequenceEqual([1, 5]), "observed gear must be sorted and marked authoritative for that retainer");
+Assert(ventureState.Retainers[0].Equipment.Observation.Status == "complete"
+    && ventureState.Retainers[0].Equipment.Items!.Select(item => item.SlotIndex).SequenceEqual([1, 5]),
+    "observed gear must be sorted and marked complete for that loaded retainer");
 Assert(!RetainerVentureSnapshotPolicy.MergeGear(ventureState, null), "an unloaded gear container must preserve the last observation");
+Assert(RetainerVentureSnapshotPolicy.MergeAutoRetainerStats(ventureState,
+    [new("100", ventureNow.AddMinutes(1), 650, null, null, ventureNow.AddMinutes(-55))], ventureNow.AddMinutes(1)),
+    "AutoRetainer-cached stats must be accepted with explicit provenance");
+Assert(ventureState.Retainers[0].Stats.ItemLevel == 650
+    && ventureState.Retainers[0].Stats.Observation.Provenance == "autoretainer_cached"
+    && ventureState.Retainers[0].Venture.Assignment?.BeginAt?.Provenance == "autoretainer_cached",
+    "cached item level and venture start must not be represented as native-current data");
+RetainerVentureSnapshotPolicy.MergeAutoRetainerStats(ventureState, [], ventureNow.AddMinutes(2));
+Assert(ventureState.Retainers[0].Stats.ItemLevel == 650
+    && ventureState.Retainers[0].Stats.Observation.Provenance == "retained_historical"
+    && ventureState.Retainers[0].Stats.Observation.RetainedData,
+    "unavailable cached stats must retain prior values as historical evidence");
+Assert(RetainerVentureSnapshotPolicy.MergeInventorySources(ventureState, [
+    new("character_inventory", null, ventureNow, [new("Inventory1", true, 2, 35), new("Inventory2", false, 0, 0)]),
+    new("retainer_inventory", "100", ventureNow, [new("RetainerPage1", true, 1, 25)]),
+    new("retainer_inventory", "200", ventureNow, [new("RetainerPage1", false, 0, 0)]),
+]), "inventory source coverage must be stored");
+Assert(ventureState.InventorySources.Single(entry => entry.Source == "character_inventory").Observation.Status == "partial"
+    && ventureState.InventorySources.Single(entry => entry.RetainerId == "100").Observation.Status == "complete"
+    && ventureState.InventorySources.Single(entry => entry.RetainerId == "200").Observation.Status == "unavailable",
+    "inventory coverage must distinguish partial, complete, and unavailable sources");
 Assert(RetainerVentureSnapshotPolicy.MergeRoster(ventureState,
     new RetainerVentureRosterRead(ventureNow.AddMinutes(2), true, [
-        new("200", "Ready", 0, 0, 0, 0),
-        new("100", "Active", 18, 90, 33, readyCompleteUnix),
+        new("200", "Ready", 0, 0, 0, 0, 2000),
+        new("100", "Active", 18, 90, 33, readyCompleteUnix, 1000),
     ]), ventureNow.AddMinutes(2)), "a changed assignment must update the venture observation");
-Assert(ventureState.Retainers[0].Venture?.VentureId == 33 && ventureState.Retainers[0].Venture?.State == "ready", "replacement ready venture state must be represented");
-Assert(ventureState.Retainers[1].VentureObserved && ventureState.Retainers[1].Venture is null, "a positive zero-task roster observation must represent idle");
+Assert(ventureState.Retainers[0].Venture.Assignment?.VentureId == 33, "replacement venture state must be represented");
+Assert(ventureState.Retainers[1].Venture.Observation.Status == "authoritative_empty" && ventureState.Retainers[1].Venture.Assignment is null,
+    "a positive zero-task roster observation must represent authoritative idle");
 Assert(RetainerVentureSnapshotPolicy.ResolveResultCompletionUnix(ventureState, "100", 33, 0) == readyCompleteUnix,
     "a matching last-known positive assignment must recover completion evidence after the active native field clears");
 Assert(RetainerVentureSnapshotPolicy.ResolveResultCompletionUnix(ventureState, "100", 33, activeCompleteUnix) == activeCompleteUnix,
@@ -88,24 +118,56 @@ Assert(RetainerVentureSnapshotPolicy.ResolveResultCompletionUnix(ventureState, "
 
 var resultRead = new RetainerVentureResultRead("100", 33, readyCompleteUnix, ventureNow.AddMinutes(3), 1234,
     [new(500, 2), new(400, 1)]);
-var ventureResult = RetainerVentureSnapshotPolicy.CreateResultEvent(resultRead);
+var ventureResult = RetainerVentureSnapshotPolicy.CreateResultEvent(ventureState, resultRead);
 Assert(ventureResult is not null && ventureResult.Items.Select(item => item.ItemId).SequenceEqual(new uint[] { 400, 500 }), "a structured result must preserve and sort both native reward items");
-Assert(ventureResult!.EventId == RetainerVentureSnapshotPolicy.CreateResultEvent(resultRead)!.EventId, "result event IDs must be deterministic");
+var revisedEvidence = RetainerVentureSnapshotPolicy.CreateResultEvent(ventureState, resultRead with { AwardedExperience = 2222, Items = [new(600, 1)] });
+Assert(ventureResult!.EventId == revisedEvidence!.EventId && ventureResult.PayloadFingerprint != revisedEvidence.PayloadFingerprint,
+    "reward contents and XP must change fingerprint evidence without changing durable event identity");
 Assert(RetainerVentureSnapshotPolicy.AddPendingResult(ventureState, ventureResult), "a new result must enter the bounded retry queue");
 Assert(!RetainerVentureSnapshotPolicy.AddPendingResult(ventureState, ventureResult), "a duplicate result must not replay into the queue");
-Assert(RetainerVentureSnapshotPolicy.CreateResultEvent(resultRead with { VentureCompleteUnix = 0 }) is null, "a result without authoritative completion evidence must be rejected");
+Assert(RetainerVentureSnapshotPolicy.AddPendingResult(ventureState, revisedEvidence)
+    && ventureState.PendingResultEvents.Single().PayloadFingerprint == revisedEvidence.PayloadFingerprint,
+    "new evidence for the same event must replace the pending payload without duplicating logical identity");
+Assert(RetainerVentureSnapshotPolicy.CreateResultEvent(ventureState, resultRead with { VentureCompleteUnix = 0 }) is null,
+    "a result without authoritative completion evidence must be rejected");
 
 var persistedState = JsonSerializer.Deserialize<RetainerVentureLocalState>(JsonSerializer.Serialize(ventureState));
 Assert(persistedState is not null && persistedState.PendingResultEvents.Single().EventId == ventureResult.EventId, "pending result evidence must survive a plugin restart");
-var venturePayloadJson = JsonSerializer.Serialize(RetainerVentureSnapshotPolicy.BuildPayload(persistedState!, new { name = "Fixture", world = "Test" }));
-Assert(venturePayloadJson.Contains("\"rosterComplete\":true", StringComparison.Ordinal)
+var venturePayloadJson = JsonSerializer.Serialize(RetainerVentureSnapshotPolicy.BuildPayload(persistedState!, new { contentId = "111", name = "Fixture", world = "Test" }));
+Assert(venturePayloadJson.Contains("\"rosterObservation\"", StringComparison.Ordinal)
     && venturePayloadJson.Contains("\"resultEvents\"", StringComparison.Ordinal)
-    && !venturePayloadJson.Contains("RosterComplete", StringComparison.Ordinal), "the proposed payload must be deterministic and camel-case compatible");
-RetainerVentureSnapshotPolicy.AcknowledgeResults(persistedState!, [ventureResult.EventId]);
-Assert(persistedState!.PendingResultEvents.Count == 0, "acknowledged result evidence must leave the retry queue");
+    && venturePayloadJson.Contains("\"inventorySources\"", StringComparison.Ordinal), "the payload must match the v1 evidence contract");
+var acknowledgement = JsonSerializer.Serialize(new { ok = true, resourceType = "retainer_ventures", schemaVersion = 1, snapshotAccepted = true,
+    acceptedEventIds = new[] { ventureResult.EventId }, serverTimeUtc = ventureNow });
+Assert(RetainerAcknowledgementPolicy.TryParseExact(acknowledgement, [ventureResult.EventId], out var acceptedIds)
+    && acceptedIds.SequenceEqual([ventureResult.EventId]), "an exact acknowledgement must accept only the requested event ID");
+Assert(RetainerAcknowledgementPolicy.TryParseExact(acknowledgement.Replace(ventureResult.EventId, new string('a', 64)), [ventureResult.EventId], out _) == false,
+    "an acknowledgement containing an unrelated ID must delete nothing");
+Assert(!RetainerAcknowledgementPolicy.TryParseExact("{}", [ventureResult.EventId], out _), "a malformed 2xx body must delete nothing");
+Assert(!RetainerAcknowledgementPolicy.TryParseExact(acknowledgement.Replace("retainer_ventures", "inventory"), [ventureResult.EventId], out _),
+    "a wrong-resource acknowledgement must delete nothing");
+var explicitEmpty = JsonSerializer.Serialize(new { ok = true, resourceType = "retainer_ventures", schemaVersion = 1, snapshotAccepted = true,
+    acceptedEventIds = Array.Empty<string>(), serverTimeUtc = ventureNow });
+Assert(RetainerAcknowledgementPolicy.TryParseExact(explicitEmpty, [ventureResult.EventId], out var noAccepted) && noAccepted.Length == 0,
+    "an empty acknowledgement must preserve every pending event");
+RetainerVentureSnapshotPolicy.AcknowledgeResults(persistedState!, acceptedIds);
+Assert(persistedState!.PendingResultEvents.Count == 0, "only an exactly acknowledged result may leave the retry queue");
 var olderVentureState = JsonSerializer.Deserialize<RetainerVentureLocalState>("{}");
-Assert(olderVentureState is not null && !olderVentureState.RosterComplete && olderVentureState.Retainers.Count == 0 && olderVentureState.PendingResultEvents.Count == 0,
+Assert(olderVentureState is not null && olderVentureState.RosterObservation.Status == "unavailable"
+    && olderVentureState.Retainers.Count == 0 && olderVentureState.PendingResultEvents.Count == 0,
     "older configuration payloads without venture state must remain compatible");
+var emptyState = RetainerVentureSnapshotPolicy.GetCharacterState(characterStates, 333);
+RetainerVentureSnapshotPolicy.MergeRoster(emptyState, new(ventureNow, true, []), ventureNow);
+Assert(emptyState.RosterObservation.Status == "authoritative_empty" && emptyState.Retainers.Count == 0,
+    "a positively observed empty roster must be authoritative empty");
+Assert(RetainerPresencePolicy.NextSuccessDelay(5) == TimeSpan.FromSeconds(35)
+    && RetainerPresencePolicy.NextFailureDelay(20, 5) == TimeSpan.FromSeconds(300),
+    "presence cadence must use bounded jitter and capped exponential backoff");
+var presenceResponse = JsonSerializer.Serialize(new { ok = true, schemaVersion = 1, serverTimeUtc = ventureNow,
+    recommendedHeartbeatSeconds = 30, onlineWindowSeconds = 90, maximumBackoffSeconds = 300,
+    featureCompatibility = new { observations = "supported", results = "supported", planner = "server_disabled" } });
+Assert(RetainerPresenceResponsePolicy.TryParse(presenceResponse, out var uploadSupported) && uploadSupported,
+    "a compatible testing presence response must enable only the scoped upload path");
 Console.WriteLine("retainer venture snapshot and retry tests passed");
 
 var managedPlan = new GillionsVenturePlanSpec("100", "Fixture-retainer", [new(245, 3), new(112, 1)]);

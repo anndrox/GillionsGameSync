@@ -7,7 +7,7 @@ GitHub is the source-history authority. The Gillions static plugin service remai
 Create a candidate without publishing:
 
 ```powershell
-./scripts/package.ps1 -Channel testing -Version 0.0.54
+./scripts/package.ps1 -Channel testing -Version 0.0.55
 ./scripts/package.ps1 -Channel stable -Version 1.0.25
 ```
 
@@ -24,3 +24,5 @@ The script validates the version and public origin, builds Release, creates the 
 - Tag only the source commit that corresponds to the published artifact. Do not replace an artifact under an existing version.
 
 Publishing credentials and server configuration are intentionally not stored in this repository.
+
+Testing `0.0.55` requires a production web runtime with `RETAINER_TESTING_UPLOAD_ENABLED=true`. That switch enables only an authenticated, currently present `GillionsGameSyncTest` client declaring the complete v1 observation/result/exact-ack/presence capability set. It does not enable stable clients, add the resource to legacy scopes, or enable plan delivery or AutoRetainer writes. Disabling the switch and recreating web immediately closes only this testing path.
