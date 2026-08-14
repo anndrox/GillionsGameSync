@@ -16,5 +16,6 @@
     <Compile Include="..\..\RetainerVentureSnapshots.cs" Link="RetainerVentureSnapshots.cs" />
     <Compile Include="..\..\RetainerPresence.cs" Link="RetainerPresence.cs" />
     <Compile Include="..\..\AutoRetainerVenturePlans.cs" Link="AutoRetainerVenturePlans.cs" />
+    <Compile Include="..\..\RetainerPlanDelivery.cs" Link="RetainerPlanDelivery.cs" />
   </ItemGroup>
 </Project>

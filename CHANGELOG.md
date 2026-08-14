@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.56 - 2026-08-14 (testing)
+
+- Added explicit testing-only AutoRetainer planner opt-in and authenticated latest-only Gillions plan polling.
+- Added device-pinned ownership, a complete original embedded-plan and `PlanCompleteBehavior` backup, and compare-and-set protection against outside plan changes.
+- Added same-framework-update read, bounded write, immediate read-back verification, exact application acknowledgement, and safe original-plan restoration.
+- Enforced a maximum of 24 executions and limited Gillions completion behavior to Assign Quick Venture or Do Nothing. Stable `1.0.25` remains read-only and unchanged.
+
 ## 0.0.55 - 2026-08-14 (testing)
 
 - Added character-partitioned Retainer roster, profile, gear, venture, inventory-coverage, and optional read-only AutoRetainer cache observations using the approved v1 evidence vocabulary.

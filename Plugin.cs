@@ -70,13 +70,17 @@ public sealed class Plugin : IDalamudPlugin {
     private DateTime nextRetainerVentureResultCaptureUtc = DateTime.MinValue;
     private DateTime nextRetainerVentureRosterCaptureUtc = DateTime.MinValue;
     private DateTime nextRetainerPresenceUtc = DateTime.MinValue;
+    private DateTime nextRetainerPlanPollUtc = DateTime.MinValue;
     private string lastRetainerVentureResultProbeStatus = "inactive";
     private bool autoRetainerLoaded;
     private readonly AutoRetainerObservationReader autoRetainerObservationReader;
+    private readonly AutoRetainerVenturePlanWriter autoRetainerPlanWriter;
     private bool presenceInFlight;
+    private bool retainerPlanPollInFlight;
     private int presenceFailureCount;
     private ulong activeRetainerCharacterContentId;
     private bool retainerUploadServerSupported;
+    private bool retainerPlanServerSupported;
     private long? lastObservedGil;
     private string? lastObservedRetainerId;
     private long? lastObservedRetainerGil;
@@ -105,12 +109,21 @@ public sealed class Plugin : IDalamudPlugin {
     private const bool RetainerVentureUploadEnabled = false;
     private const string ClientProductName = "GillionsGameSync";
 #endif
+#if GILLIONS_TEST_BUILD
+    private static readonly string[] CurrentChangelog = [
+        "Testing planner: Gillions can deliver only an explicitly synchronized, fixed Retainer venture plan after you opt in.",
+        "Plan safety: The original AutoRetainer plan and completion behavior are backed up, verified after every write, and restorable.",
+        "Bounded execution: Gillions accepts at most 24 executions and never creates a local repeat queue.",
+        "Device ownership: The first applying device remains the plan owner; outside changes stop synchronization instead of being overwritten.",
+    ];
+#else
     private static readonly string[] CurrentChangelog = [
         "Retainer ventures: Gillions now observes retainer identity, job, level, current assignment, readiness, and loaded gear without automating the game.",
         "Venture rewards: Received item evidence is retained locally across the short venture-result window for future Gillions support.",
         "AutoRetainer compatibility: When AutoRetainer is loaded, Gillions adapts its local observation timing without depending on AutoRetainer internals.",
         "Safe rollout: Retainer Venture data remains local until the Gillions website contract is ready.",
     ];
+#endif
     // Automatic work must remain below a visible frame hitch. One resource is
     // collected per cadence; changed inventory gets its own short debounce.
     private const int AutomaticSyncIntervalSeconds = 30;
@@ -147,9 +160,11 @@ public sealed class Plugin : IDalamudPlugin {
         this.chatGui = chatGui;
         this.log = log;
         autoRetainerObservationReader = new AutoRetainerObservationReader(pluginInterface);
+        autoRetainerPlanWriter = new AutoRetainerVenturePlanWriter(pluginInterface);
         configuration = pluginInterface.GetPluginConfig() as PluginConfiguration ?? new PluginConfiguration();
         configuration.RetainerVentureStates ??= new(StringComparer.Ordinal);
         configuration.AutoRetainerVenturePlanBackups ??= new(StringComparer.Ordinal);
+        configuration.AutoRetainerPlanOwnershipStates ??= new(StringComparer.Ordinal);
         if (configuration.UseCompiledDefaultServerUrl(GillionsEndpoints.DefaultServerUrl)) configuration.Save(pluginInterface);
         commands.AddHandler("/gillionssync", new CommandInfo(OnCommand) { HelpMessage = "Pair or sync your selected Gillions data." });
         pluginInterface.UiBuilder.Draw += DrawSettings;
@@ -217,14 +232,16 @@ public sealed class Plugin : IDalamudPlugin {
             using var response = await http.SendAsync(request);
             await EnsureSuccessfulResponse(response);
             var responseJson = await response.Content.ReadAsStringAsync();
-            if (!RetainerPresenceResponsePolicy.TryParse(responseJson, out var uploadSupported))
+            if (!RetainerPresenceResponsePolicy.TryParse(responseJson, out var uploadSupported, out var plannerSupported))
                 throw new InvalidOperationException("Gillions returned an invalid Retainer presence acknowledgement.");
             await framework.RunOnFrameworkThread(() => {
                 if (ReadLocalContentId() != characterContentId) return;
                 retainerUploadServerSupported = uploadSupported;
+                retainerPlanServerSupported = plannerSupported;
                 presenceFailureCount = 0;
                 nextRetainerPresenceUtc = DateTime.UtcNow.Add(RetainerPresencePolicy.NextSuccessDelay(Random.Shared.Next(-5, 6)));
                 if (uploadSupported) nextAutomaticSyncUtc = DateTime.MinValue;
+                if (plannerSupported) nextRetainerPlanPollUtc = DateTime.MinValue;
                 configuration.Save(pluginInterface);
             });
         } catch (Exception error) {
@@ -242,7 +259,9 @@ public sealed class Plugin : IDalamudPlugin {
         if (!clientState.IsLoggedIn) {
             activeRetainerCharacterContentId = 0;
             retainerUploadServerSupported = false;
+            retainerPlanServerSupported = false;
             nextRetainerPresenceUtc = DateTime.MinValue;
+            nextRetainerPlanPollUtc = DateTime.MinValue;
             lastObservedGil = null;
             lastObservedRetainerId = null;
             lastObservedRetainerGil = null;
@@ -255,10 +274,12 @@ public sealed class Plugin : IDalamudPlugin {
         if (activeRetainerCharacterContentId != contentId) {
             activeRetainerCharacterContentId = contentId;
             retainerUploadServerSupported = false;
+            retainerPlanServerSupported = false;
             presenceFailureCount = 0;
             nextRetainerPresenceUtc = DateTime.MinValue;
             nextRetainerVentureResultCaptureUtc = DateTime.MinValue;
             nextRetainerVentureRosterCaptureUtc = DateTime.MinValue;
+            nextRetainerPlanPollUtc = DateTime.MinValue;
         }
         var retainerState = RetainerVentureSnapshotPolicy.GetCharacterState(configuration.RetainerVentureStates, contentId);
         if (ItemLinkPollPolicy.ShouldPoll(configuration.EnableItemLinkRequests, clientState.IsLoggedIn, configuration.DeviceToken, itemLinkPollInFlight, now, nextItemLinkPollUtc)) {
@@ -285,12 +306,18 @@ public sealed class Plugin : IDalamudPlugin {
         if (RetainerVentureUploadEnabled && !presenceInFlight && now >= nextRetainerPresenceUtc) {
             var currentName = objects.LocalPlayer?.Name.TextValue ?? "";
             var currentWorld = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "";
-            var probe = autoRetainerObservationReader.Read(contentId, retainerState.Retainers, false, now);
+            var probe = autoRetainerObservationReader.Read(contentId, retainerState.Retainers, configuration.EnableAutoRetainerVenturePlans, now);
             RetainerVentureSnapshotPolicy.MergeAutoRetainerStats(retainerState, probe.Stats, now);
+            var appliedPlans = RetainerPlanDeliveryPolicy.AppliedPlansForCharacter(configuration.AutoRetainerPlanOwnershipStates, contentId);
             var presence = new RetainerPresenceDocument(1,
                 new(contentId.ToString(), currentName, currentWorld), now, PluginVersion, 1,
-                RetainerTestingCapabilities.Client, probe.Presence, []);
+                RetainerTestingCapabilities.Client, probe.Presence, appliedPlans);
             _ = SendRetainerPresenceAsync(contentId, presence);
+        }
+        if (RetainerVentureUploadEnabled && retainerPlanServerSupported && configuration.EnableAutoRetainerVenturePlans
+            && !retainerPlanPollInFlight && now >= nextRetainerPlanPollUtc) {
+            nextRetainerPlanPollUtc = now.AddSeconds(15);
+            _ = PollRetainerPlansAsync(contentId);
         }
         // AutoRetainer can advance its non-adjustable reward view inside the
         // normal observation interval. Use Dalamud's public loaded-plugin state
@@ -883,6 +910,135 @@ public sealed class Plugin : IDalamudPlugin {
         } finally { syncInFlight = false; }
     }
 
+    private async Task PollRetainerPlansAsync(ulong characterContentId) {
+        if (retainerPlanPollInFlight || !RetainerVentureUploadEnabled || !configuration.EnableAutoRetainerVenturePlans
+            || string.IsNullOrWhiteSpace(configuration.DeviceToken)) return;
+        retainerPlanPollInFlight = true;
+        try {
+            using var request = Request("/api/game-sync/retainer-plans/poll", configuration.DeviceToken, new {
+                schemaVersion = 1,
+                contractVersion = 1,
+                characterContentId = characterContentId.ToString(),
+                clientVersion = PluginVersion,
+            });
+            using var response = await http.SendAsync(request);
+            await EnsureSuccessfulResponse(response);
+            var responseJson = await response.Content.ReadAsStringAsync();
+            if (!RetainerPlanDeliveryPolicy.TryParse(responseJson, DateTime.UtcNow, out var poll) || poll is null)
+                throw new InvalidOperationException("Gillions returned an invalid Retainer plan delivery response.");
+            nextRetainerPlanPollUtc = DateTime.UtcNow.AddSeconds(poll.PollAfterSeconds);
+            foreach (var delivery in poll.Deliveries) {
+                var acknowledgement = await framework.RunOnFrameworkThread(() => ApplyRetainerPlanDelivery(characterContentId, delivery));
+                using var acknowledgementRequest = Request("/api/game-sync/retainer-plans/acknowledge", configuration.DeviceToken, acknowledgement);
+                using var acknowledgementResponse = await http.SendAsync(acknowledgementRequest);
+                await EnsureSuccessfulResponse(acknowledgementResponse);
+                using var acknowledgementJson = JsonDocument.Parse(await acknowledgementResponse.Content.ReadAsStringAsync());
+                var root = acknowledgementJson.RootElement;
+                var current = root.TryGetProperty("ok", out var ok) && ok.ValueKind == JsonValueKind.True
+                    && root.TryGetProperty("acknowledged", out var acknowledged) && acknowledged.ValueKind == JsonValueKind.True
+                    && root.TryGetProperty("current", out var isCurrent) && isCurrent.ValueKind == JsonValueKind.True;
+                if (current && acknowledgement.Status == "applied" && acknowledgement.Operation == "restore_prior") {
+                    await framework.RunOnFrameworkThread(() => {
+                        configuration.AutoRetainerPlanOwnershipStates.Remove(RetainerPlanDeliveryPolicy.OwnershipKey(characterContentId, acknowledgement.RetainerId));
+                        configuration.Save(pluginInterface);
+                    });
+                }
+            }
+        } catch (Exception error) {
+            nextRetainerPlanPollUtc = DateTime.UtcNow.AddSeconds(30);
+            log.Debug(error, "Gillions Retainer plan polling failed; no additional plan work will be invented locally.");
+        } finally { retainerPlanPollInFlight = false; }
+    }
+
+    private RetainerPlanAcknowledgementDocument ApplyRetainerPlanDelivery(ulong characterContentId, RetainerPlanDeliveryDocument delivery) {
+        var now = DateTime.UtcNow;
+        RetainerPlanAcknowledgementDocument Result(string status, string code, AutoRetainerPlanMutationOutcome? outcome = null) => new(
+            1,
+            delivery.Operation,
+            delivery.DeliveryId,
+            delivery.LeaseToken,
+            delivery.RevisionId,
+            delivery.ProjectionGeneration,
+            delivery.RetainerId,
+            status,
+            code,
+            PluginVersion,
+            RetainerTestingCapabilities.Client,
+            status == "applied" ? now : null,
+            outcome?.ObservedBeforeHash,
+            outcome?.AppliedHash,
+            outcome?.ReadBackHash,
+            outcome?.PriorPlanBackupHash,
+            outcome?.PriorPlanBackup,
+            outcome?.PriorPlanBackup is not null);
+
+        if (ReadLocalContentId() != characterContentId) return Result("deferred", "character_mismatch");
+        if (!configuration.EnableAutoRetainerVenturePlans) return Result("deferred", "planner_opt_in_required");
+        if (!autoRetainerLoaded || !autoRetainerPlanWriter.IsReady()) return Result("deferred", "autoretainer_not_ready");
+        if (string.IsNullOrWhiteSpace(configuration.DeviceId)) return Result("rejected", "client_update_required");
+        var state = RetainerVentureSnapshotPolicy.GetCharacterState(configuration.RetainerVentureStates, characterContentId);
+        if (state.RosterObservation.Status != RetainerObservationVocabulary.Complete || state.RosterObservation.RetainedData)
+            return Result("deferred", "retainer_not_found");
+        var retainer = state.Retainers.SingleOrDefault(entry => entry.RetainerId == delivery.RetainerId);
+        if (retainer?.Name is null) return Result("deferred", "retainer_not_found");
+        var ownershipKey = RetainerPlanDeliveryPolicy.OwnershipKey(characterContentId, delivery.RetainerId);
+        configuration.AutoRetainerPlanOwnershipStates.TryGetValue(ownershipKey, out var ownership);
+        if (ownership is not null && !string.Equals(ownership.OwnerDeviceId, configuration.DeviceId, StringComparison.Ordinal))
+            return Result("rejected", "plan_owner_mismatch");
+
+        if (delivery.Operation == "apply_projection") {
+            if (delivery.Steps is null || delivery.CompletionBehavior is null || delivery.RevisionId is null || delivery.ProjectionGeneration is null)
+                return Result("rejected", "invalid_venture");
+            var taskSheet = dataManager.GetExcelSheet<RetainerTask>();
+            if (taskSheet is null || delivery.Steps.Any(step => taskSheet.GetRowOrDefault(step.VentureId)?.RowId != step.VentureId))
+                return Result("rejected", "invalid_venture");
+            var plan = new GillionsVenturePlanSpec(delivery.RetainerId, retainer.Name, delivery.Steps, delivery.CompletionBehavior);
+            if (!VenturePlannerCapabilityPolicy.IsValid(plan)) return Result("rejected", "execution_limit_exceeded");
+            var outcome = autoRetainerPlanWriter.Apply(characterContentId, plan, delivery.ExpectedAppliedHash, ownership);
+            if (outcome.Result is AutoRetainerPlanApplyResult.Applied or AutoRetainerPlanApplyResult.Idempotent) {
+                if (outcome.PriorPlanBackup is null || outcome.PriorPlanBackupHash is null || outcome.ReadBackHash is null)
+                    return Result("rejected", "prior_plan_backup_missing", outcome);
+                configuration.AutoRetainerPlanOwnershipStates[ownershipKey] = new(
+                    configuration.DeviceId,
+                    delivery.RetainerId,
+                    delivery.RevisionId,
+                    delivery.ProjectionGeneration.Value,
+                    delivery.DeliveryId,
+                    outcome.ReadBackHash,
+                    outcome.PriorPlanBackupHash,
+                    outcome.PriorPlanBackup);
+                configuration.Save(pluginInterface);
+                return Result("applied", "applied", outcome);
+            }
+            return outcome.Result switch {
+                AutoRetainerPlanApplyResult.CasMismatch => Result("deferred", "local_plan_changed", outcome),
+                AutoRetainerPlanApplyResult.ReadBackMismatch => Result("rejected", "read_back_mismatch", outcome),
+                AutoRetainerPlanApplyResult.InvalidPlan => Result("rejected", "execution_limit_exceeded", outcome),
+                AutoRetainerPlanApplyResult.PlannerDisabled => Result("deferred", "autoretainer_not_ready", outcome),
+                AutoRetainerPlanApplyResult.AutoRetainerUnavailable => Result("deferred", "autoretainer_not_ready", outcome),
+                _ => Result("deferred", "ipc_rejected", outcome),
+            };
+        }
+
+        if (ownership is null) return Result("rejected", "prior_plan_backup_missing");
+        if (delivery.PriorPlanBackup is null
+            || !string.Equals(delivery.PriorPlanBackupHash, ownership.PriorPlanBackupHash, StringComparison.Ordinal)
+            || !string.Equals(AutoRetainerVenturePlanMutation.Hash(delivery.PriorPlanBackup), ownership.PriorPlanBackupHash, StringComparison.Ordinal))
+            return Result("rejected", "prior_plan_backup_mismatch");
+        var restoreOutcome = autoRetainerPlanWriter.Restore(characterContentId, retainer.Name, delivery.ExpectedAppliedHash ?? "", ownership);
+        if (restoreOutcome.Result is AutoRetainerPlanApplyResult.Restored or AutoRetainerPlanApplyResult.Idempotent) {
+            configuration.AutoRetainerPlanOwnershipStates[ownershipKey] = ownership with { RestoreApplied = true };
+            configuration.Save(pluginInterface);
+            return Result("applied", "restored", restoreOutcome);
+        }
+        return restoreOutcome.Result switch {
+            AutoRetainerPlanApplyResult.CasMismatch => Result("deferred", "local_plan_changed", restoreOutcome),
+            AutoRetainerPlanApplyResult.ReadBackMismatch => Result("rejected", "read_back_mismatch", restoreOutcome),
+            AutoRetainerPlanApplyResult.AutoRetainerUnavailable => Result("deferred", "autoretainer_not_ready", restoreOutcome),
+            _ => Result("deferred", "ipc_rejected", restoreOutcome),
+        };
+    }
+
     private void DrawSettings() {
         if (!settingsVisible) return;
         ImGui.SetNextWindowSize(new System.Numerics.Vector2(510, 0), ImGuiCond.FirstUseEver);
@@ -923,9 +1079,18 @@ public sealed class Plugin : IDalamudPlugin {
         ImGui.TextDisabled("Uses the paired device connection only to print requested native item links in chat. No gameplay controls are used.");
 #if GILLIONS_TEST_BUILD
         ImGui.Separator();
-        ImGui.TextDisabled(retainerUploadServerSupported
-            ? "Retainer observation testing is enabled for this paired testing client. No venture plans are written."
-            : "Retainer observations remain local until the testing server capability is available.");
+        var enableAutoRetainerVenturePlans = configuration.EnableAutoRetainerVenturePlans;
+        if (ImGui.Checkbox("Allow testing Gillions plans to update AutoRetainer", ref enableAutoRetainerVenturePlans)) {
+            configuration.EnableAutoRetainerVenturePlans = enableAutoRetainerVenturePlans;
+            retainerPlanServerSupported = false;
+            nextRetainerPresenceUtc = DateTime.MinValue;
+            nextRetainerPlanPollUtc = DateTime.MinValue;
+            configuration.Save(pluginInterface);
+        }
+        ImGui.TextDisabled("Testing only. Every plan is bounded to 24 executions, backed up before the first write, and protected against outside changes.");
+        ImGui.TextDisabled(retainerPlanServerSupported
+            ? "The testing server and AutoRetainer safety gates are ready for an explicitly requested plan."
+            : (retainerUploadServerSupported ? "Retainer observation testing is enabled; plan delivery is not currently ready." : "Retainer observations remain local until the testing server capability is available."));
 #endif
         if (!string.IsNullOrWhiteSpace(configuration.SyncBlockedMessage)) {
             ImGui.TextColored(new System.Numerics.Vector4(1f, .5f, .5f, 1f), configuration.SyncBlockedMessage);
@@ -1146,6 +1311,7 @@ public sealed class PluginConfiguration : IPluginConfiguration {
     public bool EnableItemLinkRequests { get; set; } = true;
     public bool EnableAutoRetainerVenturePlans { get; set; }
     public Dictionary<string, AutoRetainerVenturePlanBackup> AutoRetainerVenturePlanBackups { get; set; } = new(StringComparer.Ordinal);
+    public Dictionary<string, AutoRetainerPlanOwnershipState> AutoRetainerPlanOwnershipStates { get; set; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> LastPayloadHashes { get; set; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> LastInventoryComponentHashes { get; set; } = new(StringComparer.Ordinal);
     public DateTime? LastSyncUtc { get; set; }

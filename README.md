@@ -1,8 +1,8 @@
 # Gillions Game Sync
 
-Gillions Game Sync is the open-source, read-only Dalamud plugin for [Gillions](https://gillions.app). It lets a player pair one FFXIV character with their Gillions account and synchronize the data categories they explicitly enable.
+Gillions Game Sync is the open-source Dalamud plugin for [Gillions](https://gillions.app). The stable release is read-only and lets a player pair one FFXIV character with their Gillions account and synchronize the data categories they explicitly enable. Testing builds may include separately gated, explicitly opted-in integrations described in their testing notes.
 
-The plugin reads supported state from the running game client through Dalamud and sends it only to the configured Gillions HTTPS origin. It does not capture packets, automate gameplay, accept inbound network connections, read Square Enix credentials, or depend on another plugin for its core collection behavior.
+The plugin reads supported state from the running game client through Dalamud and sends it only to the configured Gillions HTTPS origin. It does not capture packets, accept inbound network connections, read Square Enix credentials, or depend on another plugin for its core collection behavior. Stable does not automate gameplay or modify another plugin.
 
 ## Install
 
@@ -40,7 +40,7 @@ Create a local package without publishing it:
 
 ```powershell
 ./scripts/package.ps1 -Channel stable -Version 1.0.25
-./scripts/package.ps1 -Channel testing -Version 0.0.55
+./scripts/package.ps1 -Channel testing -Version 0.0.56
 ```
 
 Packages are written below `artifacts/`, which is ignored by Git. Publication to the Gillions feed remains a separate, controlled operation.

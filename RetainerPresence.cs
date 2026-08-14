@@ -17,6 +17,11 @@ public static class RetainerTestingCapabilities {
         "retainer.results.v1",
         "retainer.results.exact-ack.v1",
         "retainer.presence.v1",
+        "retainer.plan-delivery.v1",
+        "retainer.plan-ack.v1",
+        "retainer.autoretainer.plan-apply.v1",
+        "retainer.autoretainer.quick-completion.v1",
+        "retainer.autoretainer.do-nothing-completion.v1",
     ];
 }
 
@@ -46,15 +51,16 @@ public sealed record RetainerPresenceDocument(
     [property: JsonPropertyName("contractVersion")] int ContractVersion,
     [property: JsonPropertyName("capabilities")] string[] Capabilities,
     [property: JsonPropertyName("autoRetainer")] AutoRetainerPresenceDocument AutoRetainer,
-    [property: JsonPropertyName("appliedPlans")] object[] AppliedPlans);
+    [property: JsonPropertyName("appliedPlans")] RetainerAppliedPlanDocument[] AppliedPlans);
 
 public sealed record AutoRetainerObservationProbe(
     AutoRetainerPresenceDocument Presence,
     AutoRetainerStatsRead[] Stats);
 
 public static class RetainerPresenceResponsePolicy {
-    public static bool TryParse(string json, out bool uploadSupported) {
+    public static bool TryParse(string json, out bool uploadSupported, out bool plannerSupported) {
         uploadSupported = false;
+        plannerSupported = false;
         try {
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
@@ -66,8 +72,10 @@ public static class RetainerPresenceResponsePolicy {
                 || !root.TryGetProperty("maximumBackoffSeconds", out var backoff) || backoff.GetInt32() is < 30 or > 900
                 || !root.TryGetProperty("featureCompatibility", out var compatibility) || compatibility.ValueKind != JsonValueKind.Object
                 || !compatibility.TryGetProperty("observations", out var observations)
-                || !compatibility.TryGetProperty("results", out var results)) return false;
+                || !compatibility.TryGetProperty("results", out var results)
+                || !compatibility.TryGetProperty("planner", out var planner)) return false;
             uploadSupported = observations.GetString() == "supported" && results.GetString() == "supported";
+            plannerSupported = planner.GetString() == "supported";
             return true;
         } catch (Exception error) when (error is JsonException or InvalidOperationException or FormatException) { return false; }
     }
@@ -113,8 +121,14 @@ internal sealed class AutoRetainerObservationReader(IDalamudPluginInterface plug
             }
             stats.Add(new(retainer.RetainerId, observedAtUtc, itemLevel, gathering, perception, startedAtUtc));
         }
+        var completionActions = new[] { "assign_quick_venture", "do_nothing" };
+        var capabilities = new[] {
+            "retainer.autoretainer.plan-apply.v1",
+            "retainer.autoretainer.quick-completion.v1",
+            "retainer.autoretainer.do-nothing-completion.v1",
+        };
         return new(new(true, true, true, suppressed, multiModeEnabled, characterEnabled, plannerEnabled,
-            plannerOptIn, version, [], []), stats.ToArray());
+            plannerOptIn, version, completionActions, capabilities), stats.ToArray());
     }
 
     private bool InvokeReady() {

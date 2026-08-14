@@ -166,14 +166,17 @@ Assert(RetainerPresencePolicy.NextSuccessDelay(5) == TimeSpan.FromSeconds(35)
 var presenceResponse = JsonSerializer.Serialize(new { ok = true, schemaVersion = 1, serverTimeUtc = ventureNow,
     recommendedHeartbeatSeconds = 30, onlineWindowSeconds = 90, maximumBackoffSeconds = 300,
     featureCompatibility = new { observations = "supported", results = "supported", planner = "server_disabled" } });
-Assert(RetainerPresenceResponsePolicy.TryParse(presenceResponse, out var uploadSupported) && uploadSupported,
+Assert(RetainerPresenceResponsePolicy.TryParse(presenceResponse, out var uploadSupported, out var plannerSupported) && uploadSupported && !plannerSupported,
     "a compatible testing presence response must enable only the scoped upload path");
 Console.WriteLine("retainer venture snapshot and retry tests passed");
 
-var managedPlan = new GillionsVenturePlanSpec("100", "Fixture-retainer", [new(245, 3), new(112, 1)]);
+var managedPlan = new GillionsVenturePlanSpec("100", "Fixture-retainer", [new(245, 3), new(112, 1)], "do_nothing");
 Assert(VenturePlannerCapabilityPolicy.IsValid(managedPlan), "a bounded Gillions venture plan must be valid");
 Assert(!VenturePlannerCapabilityPolicy.IsValid(managedPlan with { RetainerId = "invalid" }), "a malformed retainer identity must be rejected");
 Assert(!VenturePlannerCapabilityPolicy.IsValid(managedPlan with { Steps = [new(0, 1)] }), "a zero venture ID must be rejected");
+Assert(VenturePlannerCapabilityPolicy.IsValid(managedPlan with { Steps = [new(245, 24)] }), "exactly 24 pending executions must be accepted");
+Assert(!VenturePlannerCapabilityPolicy.IsValid(managedPlan with { Steps = [new(245, 24), new(112, 1)] }), "a 25th pending execution must be rejected client-side");
+Assert(!VenturePlannerCapabilityPolicy.IsValid(managedPlan with { CompletionBehavior = "repeat_last_venture" }), "unbounded completion behavior must be rejected");
 Assert(!VenturePlannerCapabilityPolicy.IsAvailable(false, true, true, true, true), "venture planning must remain explicitly opted out by default");
 Assert(!VenturePlannerCapabilityPolicy.IsAvailable(true, false, true, true, true), "AutoRetainer absence must disable venture planning");
 Assert(VenturePlannerCapabilityPolicy.IsAvailable(true, true, true, true, true), "the complete opted-in capability must be available");
@@ -184,11 +187,56 @@ AutoRetainerVenturePlanMutation.Apply(fakeAdditionalData, managedPlan);
 Assert(fakeAdditionalData.EnablePlanner && fakeAdditionalData.LinkedVenturePlan == "" && fakeAdditionalData.VenturePlanIndex == 0, "the embedded planner must be enabled without linking a global plan");
 Assert(fakeAdditionalData.VenturePlan.Name == "Gillions Venture (Fixture-retainer)", "the managed plan must use the Gillions retainer-specific name");
 Assert(fakeAdditionalData.VenturePlan.List.Select(entry => (entry.ID, entry.Num)).SequenceEqual(new[] { (245u, 3), (112u, 1) }), "the managed plan must replace only the embedded venture sequence");
+Assert(fakeAdditionalData.VenturePlan.PlanCompleteBehavior == FakePlanCompleteBehavior.Do_nothing, "the bounded Do Nothing completion behavior must be applied explicitly");
 Assert(fakeAdditionalData.Deposit, "unrelated AutoRetainer settings must be preserved");
 AutoRetainerVenturePlanMutation.Restore(fakeAdditionalData, originalPlan);
 Assert(!fakeAdditionalData.EnablePlanner && fakeAdditionalData.LinkedVenturePlan == "saved-plan" && fakeAdditionalData.VenturePlanIndex == 7, "the prior planner linkage and enabled state must be restorable");
 Assert(fakeAdditionalData.VenturePlan.Name == "Existing plan" && fakeAdditionalData.VenturePlan.List.Single().ID == 999, "the prior embedded plan must be restorable");
+Assert(fakeAdditionalData.VenturePlan.PlanCompleteBehavior == FakePlanCompleteBehavior.Restart_plan, "the original unbounded completion behavior must be preserved only in the restorable backup");
+Assert(AutoRetainerVenturePlanMutation.Hash(AutoRetainerVenturePlanMutation.Capture(fakeAdditionalData)) == AutoRetainerVenturePlanMutation.Hash(originalPlan), "restoration read-back must match the exact pre-write plan hash");
+Assert(AutoRetainerVenturePlanMutation.Hash(originalPlan) == "3bc8171dd8512db86fe7a8b75ffa5bd8053921e3b64c45e12b6ccd780a261ab4", "client and server must share the canonical prior-plan backup hash");
 Console.WriteLine("AutoRetainer venture-plan policy tests passed");
+
+var deliveryJson = JsonSerializer.Serialize(new {
+    ok = true,
+    schemaVersion = 1,
+    serverTimeUtc = ventureNow,
+    pollAfterSeconds = 15,
+    deliveries = new[] { new {
+        schemaVersion = 1,
+        operation = "apply_projection",
+        deliveryId = Guid.NewGuid().ToString(),
+        leaseToken = new string('a', 43),
+        planId = Guid.NewGuid().ToString(),
+        revisionId = Guid.NewGuid().ToString(),
+        revisionNumber = 1,
+        revisionHash = new string('b', 64),
+        projectionGeneration = 1,
+        retainerId = "100",
+        retainerName = "Fixture-retainer",
+        expectedAppliedHash = (string?)null,
+        completionBehavior = "assign_quick_venture",
+        steps = new[] { new { ventureId = 245u, repetitions = 24 } },
+        priorPlanBackupHash = (string?)null,
+        priorPlanBackup = (object?)null,
+        requiredCapabilities = RetainerTestingCapabilities.Client,
+        createdAtUtc = ventureNow,
+        expiresAtUtc = ventureNow.AddMinutes(1),
+    } }
+});
+Assert(RetainerPlanDeliveryPolicy.TryParse(deliveryJson, ventureNow, out var parsedDelivery)
+    && parsedDelivery?.Deliveries.Single().CompletionBehavior == "assign_quick_venture",
+    "a current, bounded, fully capable testing delivery must parse");
+var oversizedDeliveryJson = deliveryJson.Replace("\"repetitions\":24", "\"repetitions\":25", StringComparison.Ordinal);
+Assert(!RetainerPlanDeliveryPolicy.TryParse(oversizedDeliveryJson, ventureNow, out _), "a 25-execution delivery must be rejected before AutoRetainer access");
+Assert(!RetainerPlanDeliveryPolicy.TryParse(deliveryJson, ventureNow.AddMinutes(2), out _), "an expired delivery lease must be rejected before AutoRetainer access");
+var ownershipFixtures = new Dictionary<string, AutoRetainerPlanOwnershipState>(StringComparer.Ordinal) {
+    [RetainerPlanDeliveryPolicy.OwnershipKey(111, "100")] = new("device", "100", Guid.NewGuid().ToString(), 1, Guid.NewGuid().ToString(), new string('c', 64), AutoRetainerVenturePlanMutation.Hash(originalPlan), originalPlan),
+    [RetainerPlanDeliveryPolicy.OwnershipKey(222, "100")] = new("device", "100", Guid.NewGuid().ToString(), 1, Guid.NewGuid().ToString(), new string('d', 64), AutoRetainerVenturePlanMutation.Hash(originalPlan), originalPlan),
+};
+Assert(RetainerPlanDeliveryPolicy.AppliedPlansForCharacter(ownershipFixtures, 111).Single().RetainerId == "100",
+    "presence must report only the active character's locally applied plan state");
+Console.WriteLine("Retainer plan delivery contract tests passed");
 
 Assert(!NativeItemLinkFactory.IsValidItemId(0), "zero item ID must be rejected");
 Assert(!NativeItemLinkFactory.IsValidItemId(-1), "negative item ID must be rejected");
@@ -270,7 +318,10 @@ public sealed class FakeAdditionalRetainerData {
 public sealed class FakeVenturePlan {
     public string Name = "Existing plan";
     public List<FakePlannedVenture> List = [];
+    public FakePlanCompleteBehavior PlanCompleteBehavior = FakePlanCompleteBehavior.Restart_plan;
 }
+
+public enum FakePlanCompleteBehavior { Restart_plan, Assign_Quick_Venture, Do_nothing, Repeat_last_venture }
 
 public sealed class FakePlannedVenture {
     public uint ID;
