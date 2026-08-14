@@ -29,12 +29,15 @@ public static class DirectGameSnapshotCollector {
     internal static RetainerBalanceRead? ReadActiveRetainerGil() => NativeInventoryCollector.ReadActiveRetainerGil();
 
 #if GILLIONS_TEST_BUILD
-    internal static bool CaptureRetainerVentureObservations(RetainerVentureLocalState state) {
+    internal static bool CaptureRetainerVentureObservations(RetainerVentureLocalState state, out string resultProbeStatus) {
         var now = DateTime.UtcNow;
-        var changed = RetainerVentureSnapshotPolicy.MergeRoster(state, RetainerVentureNativeCollector.ReadCompleteRoster(now), now);
+        // The game can clear the active retainer's completion timestamp while
+        // constructing the result view. Capture reward evidence against the
+        // prior positive assignment before the fresh roster replaces it.
+        var changed = RetainerVentureSnapshotPolicy.AddPendingResult(state,
+            RetainerVentureSnapshotPolicy.CreateResultEvent(RetainerVentureNativeCollector.ReadVisibleResult(now, state, out resultProbeStatus)));
         changed |= RetainerVentureSnapshotPolicy.MergeGear(state, RetainerVentureNativeCollector.ReadLoadedActiveRetainerGear(now));
-        changed |= RetainerVentureSnapshotPolicy.AddPendingResult(state,
-            RetainerVentureSnapshotPolicy.CreateResultEvent(RetainerVentureNativeCollector.ReadVisibleResult(now)));
+        changed |= RetainerVentureSnapshotPolicy.MergeRoster(state, RetainerVentureNativeCollector.ReadCompleteRoster(now), now);
         return changed;
     }
 #endif
@@ -177,25 +180,54 @@ internal static class RetainerVentureNativeCollector {
         }
     }
 
-    public static unsafe RetainerVentureResultRead? ReadVisibleResult(DateTime observedAtUtc) {
+    public static unsafe RetainerVentureResultRead? ReadVisibleResult(DateTime observedAtUtc, RetainerVentureLocalState state, out string probeStatus) {
         try {
             var agent = AgentRetainerTask.Instance();
+            if (agent == null || !agent->IsAgentActive()) {
+                probeStatus = "inactive";
+                return null;
+            }
+            if (agent->IsLoading) {
+                probeStatus = "loading";
+                return null;
+            }
+            if (agent->DisplayType != 3) {
+                probeStatus = "not_completed_view";
+                return null;
+            }
             var manager = RetainerManager.Instance();
             var active = manager == null ? null : manager->GetActiveRetainer();
-            if (agent == null || active == null || active->RetainerId == 0
-                || !agent->IsAgentActive() || agent->IsLoading || agent->DisplayType != 3) return null;
+            if (active == null || active->RetainerId == 0) {
+                probeStatus = "completed_view_missing_active_retainer";
+                return null;
+            }
             var ventureId = (uint)agent->RetainerData.RewardRetainerTaskId;
-            if (ventureId == 0 || active->VentureComplete == 0) return null;
+            if (ventureId == 0) {
+                probeStatus = "completed_view_missing_venture_id";
+                return null;
+            }
+            var retainerId = active->RetainerId.ToString();
+            var nativeCompletionUnix = active->VentureId == ventureId ? active->VentureComplete : 0;
+            var completionUnix = RetainerVentureSnapshotPolicy.ResolveResultCompletionUnix(state, retainerId, ventureId, nativeCompletionUnix);
+            if (completionUnix == 0) {
+                probeStatus = "completed_view_missing_completion_evidence";
+                return null;
+            }
             var items = new List<RetainerVentureResultItem>(2);
             for (var index = 0; index < 2; index++) {
                 var itemId = agent->RetainerData.RewardItemIds[index];
                 var quantity = agent->RetainerData.RewardItemCount[index];
                 if (itemId > 0 && quantity > 0) items.Add(new RetainerVentureResultItem(itemId, quantity));
             }
-            if (items.Count == 0) return null;
-            return new RetainerVentureResultRead(active->RetainerId.ToString(), ventureId, active->VentureComplete,
+            if (items.Count == 0) {
+                probeStatus = "completed_view_missing_reward_items";
+                return null;
+            }
+            probeStatus = nativeCompletionUnix == completionUnix ? "captured_native_completion" : "captured_prior_completion";
+            return new RetainerVentureResultRead(retainerId, ventureId, completionUnix,
                 observedAtUtc, agent->RetainerData.RewardXP, items.ToArray());
         } catch {
+            probeStatus = "read_error";
             return null;
         }
     }

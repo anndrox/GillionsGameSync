@@ -68,6 +68,7 @@ public sealed class Plugin : IDalamudPlugin {
     private DateTime nextItemLinkPollUtc = DateTime.MinValue;
 #if GILLIONS_TEST_BUILD
     private DateTime nextRetainerVentureCaptureUtc = DateTime.MinValue;
+    private string lastRetainerVentureResultProbeStatus = "inactive";
 #endif
     private long? lastObservedGil;
     private string? lastObservedRetainerId;
@@ -208,7 +209,12 @@ public sealed class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         if (now >= nextRetainerVentureCaptureUtc) {
             nextRetainerVentureCaptureUtc = now.AddMilliseconds(500);
-            if (DirectGameSnapshotCollector.CaptureRetainerVentureObservations(configuration.RetainerVentureState)) {
+            var ventureChanged = DirectGameSnapshotCollector.CaptureRetainerVentureObservations(configuration.RetainerVentureState, out var resultProbeStatus);
+            if (resultProbeStatus != lastRetainerVentureResultProbeStatus) {
+                if (resultProbeStatus != "inactive") RecordDiagnostic($"Retainer venture result probe: {resultProbeStatus}.");
+                lastRetainerVentureResultProbeStatus = resultProbeStatus;
+            }
+            if (ventureChanged) {
                 configuration.Save(pluginInterface);
                 if (RetainerVentureUploadEnabled) nextAutomaticSyncUtc = now;
             }
@@ -663,7 +669,7 @@ public sealed class Plugin : IDalamudPlugin {
                 var currentName = objects.LocalPlayer?.Name.TextValue ?? "";
                 var currentWorld = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "";
 #if GILLIONS_TEST_BUILD
-                DirectGameSnapshotCollector.CaptureRetainerVentureObservations(configuration.RetainerVentureState);
+                DirectGameSnapshotCollector.CaptureRetainerVentureObservations(configuration.RetainerVentureState, out _);
                 selectedScopes = selectedScopes.Where(scope => RetainerVentureUploadEnabled || scope != "retainer_ventures").ToArray();
 #endif
                 var snapshots = DirectGameSnapshotCollector.Collect(pluginInterface, clientState, objects, dataManager, unlockState, configuration.RetainerGilBalances, configuration.RetainerVentureState, selectedScopes).ToArray();

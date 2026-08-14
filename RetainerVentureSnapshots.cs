@@ -188,6 +188,17 @@ public static class RetainerVentureSnapshotPolicy {
         return new RetainerVentureAssignment(ventureId, completeAt.Value, completeAt.Value <= nowUtc ? "ready" : "in_progress");
     }
 
+    public static uint ResolveResultCompletionUnix(RetainerVentureLocalState state, string retainerId, uint ventureId, uint nativeCompletionUnix) {
+        if (TryReadUnixTime(nativeCompletionUnix) is not null) return nativeCompletionUnix;
+        var prior = state.Retainers.FirstOrDefault(entry => entry.RetainerId == retainerId);
+        if (prior?.VentureObserved != true || prior.Venture?.VentureId != ventureId) return 0;
+        var completeAtUtc = prior.Venture.CompleteAtUtc.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(prior.Venture.CompleteAtUtc, DateTimeKind.Utc)
+            : prior.Venture.CompleteAtUtc.ToUniversalTime();
+        var unix = new DateTimeOffset(completeAtUtc).ToUnixTimeSeconds();
+        return unix is > 0 and <= uint.MaxValue && TryReadUnixTime((uint)unix) is not null ? (uint)unix : 0;
+    }
+
     public static uint? NormalizeClassJob(byte classJobId) => classJobId == 0 ? null : classJobId;
     public static int? NormalizeLevel(byte level) => level == 0 ? null : level;
 

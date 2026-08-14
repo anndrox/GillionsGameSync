@@ -79,6 +79,12 @@ Assert(RetainerVentureSnapshotPolicy.MergeRoster(ventureState,
     ]), ventureNow.AddMinutes(2)), "a changed assignment must update the venture observation");
 Assert(ventureState.Retainers[0].Venture?.VentureId == 33 && ventureState.Retainers[0].Venture?.State == "ready", "replacement ready venture state must be represented");
 Assert(ventureState.Retainers[1].VentureObserved && ventureState.Retainers[1].Venture is null, "a positive zero-task roster observation must represent idle");
+Assert(RetainerVentureSnapshotPolicy.ResolveResultCompletionUnix(ventureState, "100", 33, 0) == readyCompleteUnix,
+    "a matching last-known positive assignment must recover completion evidence after the active native field clears");
+Assert(RetainerVentureSnapshotPolicy.ResolveResultCompletionUnix(ventureState, "100", 33, activeCompleteUnix) == activeCompleteUnix,
+    "valid native completion evidence must take precedence over local fallback state");
+Assert(RetainerVentureSnapshotPolicy.ResolveResultCompletionUnix(ventureState, "100", 999, 0) == 0,
+    "a prior completion timestamp must not be reused for a different venture");
 
 var resultRead = new RetainerVentureResultRead("100", 33, readyCompleteUnix, ventureNow.AddMinutes(3), 1234,
     [new(500, 2), new(400, 1)]);
