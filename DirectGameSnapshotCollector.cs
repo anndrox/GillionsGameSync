@@ -28,7 +28,18 @@ public static class DirectGameSnapshotCollector {
     internal static RetainerContext? FindLoadedRetainerItem(uint itemId) => NativeInventoryCollector.FindLoadedRetainerItem(itemId);
     internal static RetainerBalanceRead? ReadActiveRetainerGil() => NativeInventoryCollector.ReadActiveRetainerGil();
 
-    public static IEnumerable<GameSnapshot> Collect(IDalamudPluginInterface pluginInterface, IClientState clientState, IObjectTable objects, IDataManager dataManager, IUnlockState unlockState, IReadOnlyDictionary<string, long>? retainerGilBalances, IEnumerable<string> scopes) {
+#if GILLIONS_TEST_BUILD
+    internal static bool CaptureRetainerVentureObservations(RetainerVentureLocalState state) {
+        var now = DateTime.UtcNow;
+        var changed = RetainerVentureSnapshotPolicy.MergeRoster(state, RetainerVentureNativeCollector.ReadCompleteRoster(now), now);
+        changed |= RetainerVentureSnapshotPolicy.MergeGear(state, RetainerVentureNativeCollector.ReadLoadedActiveRetainerGear(now));
+        changed |= RetainerVentureSnapshotPolicy.AddPendingResult(state,
+            RetainerVentureSnapshotPolicy.CreateResultEvent(RetainerVentureNativeCollector.ReadVisibleResult(now)));
+        return changed;
+    }
+#endif
+
+    public static IEnumerable<GameSnapshot> Collect(IDalamudPluginInterface pluginInterface, IClientState clientState, IObjectTable objects, IDataManager dataManager, IUnlockState unlockState, IReadOnlyDictionary<string, long>? retainerGilBalances, RetainerVentureLocalState? retainerVentureState, IEnumerable<string> scopes) {
         var selected = new HashSet<string>(scopes ?? [], StringComparer.Ordinal);
         var identity = new { name = objects.LocalPlayer?.Name.TextValue ?? "", world = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "" };
         if (selected.Contains("inventory")) {
@@ -112,8 +123,84 @@ public static class DirectGameSnapshotCollector {
             // last successful server snapshot until a loaded manager is read.
             if (plates != null) yield return new GameSnapshot("glamour_plates", new { character = identity, complete = true, plates });
         }
+#if GILLIONS_TEST_BUILD
+        if (selected.Contains("retainer_ventures") && retainerVentureState is not null && retainerVentureState.RosterComplete) {
+            var payload = RetainerVentureSnapshotPolicy.BuildPayload(retainerVentureState, identity);
+            yield return new GameSnapshot("retainer_ventures", payload, payload.ResultEvents.Select(entry => entry.EventId).ToArray());
+        }
+#endif
     }
 }
+
+#if GILLIONS_TEST_BUILD
+internal static class RetainerVentureNativeCollector {
+    public static unsafe RetainerVentureRosterRead? ReadCompleteRoster(DateTime observedAtUtc) {
+        try {
+            var manager = RetainerManager.Instance();
+            if (manager == null || !manager->IsReady) return null;
+            var retainers = new List<RetainerVentureRosterEntry>(RetainerVentureSnapshotPolicy.MaxRetainers);
+            for (var index = 0; index < RetainerVentureSnapshotPolicy.MaxRetainers; index++) {
+                var retainer = manager->Retainers[index];
+                if (retainer.RetainerId == 0) continue;
+                retainers.Add(new RetainerVentureRosterEntry(
+                    retainer.RetainerId.ToString(),
+                    retainer.NameString ?? "",
+                    retainer.ClassJob,
+                    retainer.Level,
+                    retainer.VentureId,
+                    retainer.VentureComplete));
+            }
+            return new RetainerVentureRosterRead(observedAtUtc, true, retainers.ToArray());
+        } catch {
+            return null;
+        }
+    }
+
+    public static unsafe RetainerVentureGearRead? ReadLoadedActiveRetainerGear(DateTime observedAtUtc) {
+        try {
+            var inventory = InventoryManager.Instance();
+            var retainers = RetainerManager.Instance();
+            var active = retainers == null ? null : retainers->GetActiveRetainer();
+            if (inventory == null || active == null || active->RetainerId == 0) return null;
+            var container = inventory->GetInventoryContainer(InventoryType.RetainerEquippedItems);
+            if (container == null || !container->IsLoaded || container->Items == null || container->Size < 0) return null;
+            var equipped = new List<RetainerVentureGearItem>();
+            for (var index = 0; index < container->Size; index++) {
+                var item = container->Items[index];
+                if (item.ItemId == 0 || item.IsSymbolic) continue;
+                equipped.Add(new RetainerVentureGearItem(index, item.ItemId,
+                    (item.Flags & InventoryItem.ItemFlags.HighQuality) != 0));
+            }
+            return new RetainerVentureGearRead(active->RetainerId.ToString(), observedAtUtc, equipped.ToArray());
+        } catch {
+            return null;
+        }
+    }
+
+    public static unsafe RetainerVentureResultRead? ReadVisibleResult(DateTime observedAtUtc) {
+        try {
+            var agent = AgentRetainerTask.Instance();
+            var manager = RetainerManager.Instance();
+            var active = manager == null ? null : manager->GetActiveRetainer();
+            if (agent == null || active == null || active->RetainerId == 0
+                || !agent->IsAgentActive() || agent->IsLoading || agent->DisplayType != 3) return null;
+            var ventureId = (uint)agent->RetainerData.RewardRetainerTaskId;
+            if (ventureId == 0 || active->VentureComplete == 0) return null;
+            var items = new List<RetainerVentureResultItem>(2);
+            for (var index = 0; index < 2; index++) {
+                var itemId = agent->RetainerData.RewardItemIds[index];
+                var quantity = agent->RetainerData.RewardItemCount[index];
+                if (itemId > 0 && quantity > 0) items.Add(new RetainerVentureResultItem(itemId, quantity));
+            }
+            if (items.Count == 0) return null;
+            return new RetainerVentureResultRead(active->RetainerId.ToString(), ventureId, active->VentureComplete,
+                observedAtUtc, agent->RetainerData.RewardXP, items.ToArray());
+        } catch {
+            return null;
+        }
+    }
+}
+#endif
 
 internal static class ReputationCollector {
     public static unsafe ReputationRead? Read() {

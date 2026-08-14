@@ -66,6 +66,9 @@ public sealed class Plugin : IDalamudPlugin {
     private DateTime nextInventorySyncUtc = DateTime.MaxValue;
     private DateTime nextGilLedgerFlushUtc = DateTime.MinValue;
     private DateTime nextItemLinkPollUtc = DateTime.MinValue;
+#if GILLIONS_TEST_BUILD
+    private DateTime nextRetainerVentureCaptureUtc = DateTime.MinValue;
+#endif
     private long? lastObservedGil;
     private string? lastObservedRetainerId;
     private long? lastObservedRetainerGil;
@@ -87,6 +90,12 @@ public sealed class Plugin : IDalamudPlugin {
     private DateTime diagnosticRecordingUntilUtc = DateTime.MinValue;
     private static readonly string PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "1.0.4";
     private static readonly string[] SyncScopes = ["inventory", "currencies", "achievements", "collectibles", "character", "quest_journal", "reputation", "shared_fates", "glamour_plates"];
+#if GILLIONS_TEST_BUILD
+    // The server contract does not exist yet. The testing collector persists
+    // observations locally, but this gate prevents either automatic or manual
+    // sync from submitting an unsupported resource.
+    private static readonly bool RetainerVentureUploadEnabled = false;
+#endif
     private static readonly string[] CurrentChangelog = [
         "Link in game: Paired Gillions item requests can now produce genuine clickable item links in your local game chat.",
         "Reputation: Gillions now syncs authoritative Allied Society rank and reputation values for the selected character.",
@@ -126,6 +135,9 @@ public sealed class Plugin : IDalamudPlugin {
         this.chatGui = chatGui;
         this.log = log;
         configuration = pluginInterface.GetPluginConfig() as PluginConfiguration ?? new PluginConfiguration();
+        configuration.RetainerVentureState ??= new RetainerVentureLocalState();
+        configuration.RetainerVentureState.Retainers ??= [];
+        configuration.RetainerVentureState.PendingResultEvents ??= [];
         if (configuration.UseCompiledDefaultServerUrl(GillionsEndpoints.DefaultServerUrl)) configuration.Save(pluginInterface);
         commands.AddHandler("/gillionssync", new CommandInfo(OnCommand) { HelpMessage = "Pair or sync your selected Gillions data." });
         pluginInterface.UiBuilder.Draw += DrawSettings;
@@ -193,6 +205,15 @@ public sealed class Plugin : IDalamudPlugin {
             nextInventorySyncUtc = DateTime.MaxValue;
             return;
         }
+#if GILLIONS_TEST_BUILD
+        if (now >= nextRetainerVentureCaptureUtc) {
+            nextRetainerVentureCaptureUtc = now.AddMilliseconds(500);
+            if (DirectGameSnapshotCollector.CaptureRetainerVentureObservations(configuration.RetainerVentureState)) {
+                configuration.Save(pluginInterface);
+                if (RetainerVentureUploadEnabled) nextAutomaticSyncUtc = now;
+            }
+        }
+#endif
         if (now >= nextGilLedgerPollUtc || (gilLedgerDirty && now >= nextGilLedgerFlushUtc)) {
             nextGilLedgerPollUtc = now.AddMilliseconds(GilLedgerPollIntervalMilliseconds);
             CaptureGilLedgerChange();
@@ -614,7 +635,8 @@ public sealed class Plugin : IDalamudPlugin {
             log.Warning("Gillions automatic sync stopped: {Code}.", error.Code);
         }
         catch (Exception error) {
-            if (configuration.PendingGilLedgerEvents is { Count: > 0 })
+            if (configuration.PendingGilLedgerEvents is { Count: > 0 }
+                || configuration.RetainerVentureState.PendingResultEvents.Count > 0)
                 nextGilLedgerUploadUtc = DateTime.UtcNow.AddSeconds(AutomaticFailureRetrySeconds);
             log.Warning(error, "Gillions automatic sync failed; it will retry after a short backoff.");
         }
@@ -640,7 +662,11 @@ public sealed class Plugin : IDalamudPlugin {
                 if (!clientState.IsLoggedIn) throw new InvalidOperationException("Log into a character before syncing.");
                 var currentName = objects.LocalPlayer?.Name.TextValue ?? "";
                 var currentWorld = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "";
-                var snapshots = DirectGameSnapshotCollector.Collect(pluginInterface, clientState, objects, dataManager, unlockState, configuration.RetainerGilBalances, selectedScopes).ToArray();
+#if GILLIONS_TEST_BUILD
+                DirectGameSnapshotCollector.CaptureRetainerVentureObservations(configuration.RetainerVentureState);
+                selectedScopes = selectedScopes.Where(scope => RetainerVentureUploadEnabled || scope != "retainer_ventures").ToArray();
+#endif
+                var snapshots = DirectGameSnapshotCollector.Collect(pluginInterface, clientState, objects, dataManager, unlockState, configuration.RetainerGilBalances, configuration.RetainerVentureState, selectedScopes).ToArray();
                 return new CapturedSnapshotBatch(currentName, currentWorld, snapshots);
             });
             var snapshots = captured.Snapshots;
@@ -682,6 +708,8 @@ public sealed class Plugin : IDalamudPlugin {
                 }
                 configuration.LastPayloadHashes[snapshot.ResourceType] = payloadHash;
                 if (inventoryComponents is not null) configuration.LastInventoryComponentHashes = inventoryComponents;
+                if (snapshot.AcknowledgedEventIds is { Length: > 0 })
+                    RetainerVentureSnapshotPolicy.AcknowledgeResults(configuration.RetainerVentureState, snapshot.AcknowledgedEventIds);
                 configuration.LastSyncUtc = DateTime.UtcNow;
                 configurationChanged = true;
                 submitted++;
@@ -856,7 +884,7 @@ public sealed class Plugin : IDalamudPlugin {
         var description = recordDiagnostics ? DescribePayload(document.RootElement, payloadUtf8.Length) : "";
         var inventoryDelta = recordDiagnostics && snapshot.ResourceType == "inventory" ? DescribeInventoryDelta(document.RootElement) : ".";
         stopwatch.Stop();
-        return new PreparedSnapshot(snapshot.ResourceType, payloadUtf8, payloadHash, inventoryComponents, description, inventoryDelta, stopwatch.Elapsed.TotalMilliseconds);
+        return new PreparedSnapshot(snapshot.ResourceType, payloadUtf8, payloadHash, inventoryComponents, description, inventoryDelta, stopwatch.Elapsed.TotalMilliseconds, snapshot.AcknowledgedEventIds);
     }
 
     private static Dictionary<string, string> GetInventoryComponentHashes(JsonElement root) {
@@ -965,7 +993,8 @@ internal sealed record PreparedSnapshot(
     Dictionary<string, string>? InventoryComponentHashes,
     string Description,
     string InventoryDelta,
-    double PreparationMilliseconds);
+    double PreparationMilliseconds,
+    string[]? AcknowledgedEventIds);
 
 internal sealed record CapturedSnapshotBatch(string CharacterName, string CharacterWorld, GameSnapshot[] Snapshots);
 
@@ -989,6 +1018,7 @@ public sealed class PluginConfiguration : IPluginConfiguration {
     public List<GilLedgerEvent> PendingRetainerGilDeposits { get; set; } = [];
     public List<PendingRetainerSale> PendingRetainerSales { get; set; } = [];
     public Dictionary<string, long> RetainerGilBalances { get; set; } = new(StringComparer.Ordinal);
+    public RetainerVentureLocalState RetainerVentureState { get; set; } = new();
     public bool UseCompiledDefaultServerUrl(string compiledDefault) {
         if (!PublicUrlConfiguration.TryUseCompiledDefault(ServerUrl, compiledDefault, out var serverUrl)) return false;
         ServerUrl = serverUrl;
@@ -1003,7 +1033,7 @@ public sealed class GillionsSyncRejectedException : InvalidOperationException {
 }
 
 public sealed record EnrollmentResponse(bool ok, string device_id, string token);
-public sealed record GameSnapshot(string ResourceType, object Payload);
+public sealed record GameSnapshot(string ResourceType, object Payload, string[]? AcknowledgedEventIds = null);
 public sealed record GilLedgerEvent(string EventId, DateTime OccurredAtUtc, long GilDelta, string Kind, string Confidence, int? ItemId, int? ItemQuantity, string? RetainerId, string? RetainerName, uint? LogMessageId, int[] LogIntegerParameters, string? CharacterName = null, string? CharacterWorld = null);
 internal sealed record RetainerWithdrawalObservation(DateTime ObservedAtUtc, long Amount, string RetainerId, string RetainerName);
 public sealed record PendingRetainerSale(string SaleId, DateTime OccurredAtUtc, long Amount, int? ItemId, int ItemQuantity, string? RetainerId, string? RetainerName);

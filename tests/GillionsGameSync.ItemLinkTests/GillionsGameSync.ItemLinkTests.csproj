@@ -12,5 +12,6 @@
     <Compile Include="..\..\PublicUrlConfiguration.cs" Link="PublicUrlConfiguration.cs" />
     <Compile Include="..\..\ProgressionSnapshots.cs" Link="ProgressionSnapshots.cs" />
     <Compile Include="..\..\ArmoireSnapshots.cs" Link="ArmoireSnapshots.cs" />
+    <Compile Include="..\..\RetainerVentureSnapshots.cs" Link="RetainerVentureSnapshots.cs" />
   </ItemGroup>
 </Project>
