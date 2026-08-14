@@ -27,12 +27,18 @@ Assert-Contains $collectorSource "prior.Items.SequenceEqual(read.Items)" "Retain
 Assert-Contains $collectorSource 'JsonPropertyName("retainerId")' "Typed retainer rows must preserve the existing camel-case wire contract."
 Assert-Contains $collectorSource "SheetRowCache<T>.Get(dataManager)" "Static Lumina row catalogs must be cached."
 
-$ventureResultIndex = $pluginSource.IndexOf("CaptureRetainerVentureResultObservation", [StringComparison]::Ordinal)
-$ventureCadenceIndex = $pluginSource.IndexOf("if (now >= nextRetainerVentureCaptureUtc)", [StringComparison]::Ordinal)
+$ventureResultCadenceIndex = $pluginSource.IndexOf("if (autoRetainerLoaded || now >= nextRetainerVentureResultCaptureUtc)", [StringComparison]::Ordinal)
+$ventureResultIndex = $pluginSource.IndexOf("CaptureRetainerVentureResultObservation", $ventureResultCadenceIndex, [StringComparison]::Ordinal)
+$ventureCadenceIndex = $pluginSource.IndexOf("if (now >= nextRetainerVentureRosterCaptureUtc)", [StringComparison]::Ordinal)
 $ventureRosterIndex = $pluginSource.IndexOf("CaptureRetainerVentureRosterAndGear", [StringComparison]::Ordinal)
-if (($ventureResultIndex -lt 0) -or ($ventureCadenceIndex -lt 0) -or ($ventureRosterIndex -lt 0) -or ($ventureResultIndex -ge $ventureCadenceIndex) -or ($ventureRosterIndex -le $ventureCadenceIndex)) {
-  throw "Transient Venture result evidence must be checked each frame while roster and gear reads remain cadence-limited."
+if (($ventureResultCadenceIndex -lt 0) -or ($ventureResultIndex -le $ventureResultCadenceIndex) -or ($ventureCadenceIndex -le $ventureResultIndex) -or ($ventureRosterIndex -le $ventureCadenceIndex)) {
+  throw "Transient Venture result and roster evidence must retain their separate adaptive cadences."
 }
+Assert-Contains $pluginSource "pluginInterface.InstalledPlugins.Any" "AutoRetainer compatibility mode must use Dalamud's public installed-plugin state."
+Assert-Contains $pluginSource "pluginInterface.ActivePluginsChanged += OnActivePluginsChanged" "AutoRetainer state must be event-driven rather than polled every frame."
+Assert-Contains $pluginSource "pluginInterface.ActivePluginsChanged -= OnActivePluginsChanged" "The loaded-plugin event must be released on disposal."
+Assert-Contains $pluginSource "AutomatedVentureRosterCaptureIntervalMilliseconds" "AutoRetainer clients must receive a bounded faster roster and gear cadence."
+Assert-Contains $pluginSource 'automatedRetainerWindowActive = autoRetainerLoaded && resultProbeStatus != "inactive"' "The faster roster cadence must be limited to an active AutoRetainer venture window."
 
 $syncStart = $pluginSource.IndexOf("private async Task SyncAsync", [StringComparison]::Ordinal)
 $syncEnd = $pluginSource.IndexOf("private void DrawSettings", $syncStart, [StringComparison]::Ordinal)

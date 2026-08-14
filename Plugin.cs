@@ -67,8 +67,10 @@ public sealed class Plugin : IDalamudPlugin {
     private DateTime nextGilLedgerFlushUtc = DateTime.MinValue;
     private DateTime nextItemLinkPollUtc = DateTime.MinValue;
 #if GILLIONS_TEST_BUILD
-    private DateTime nextRetainerVentureCaptureUtc = DateTime.MinValue;
+    private DateTime nextRetainerVentureResultCaptureUtc = DateTime.MinValue;
+    private DateTime nextRetainerVentureRosterCaptureUtc = DateTime.MinValue;
     private string lastRetainerVentureResultProbeStatus = "inactive";
+    private bool autoRetainerLoaded;
 #endif
     private long? lastObservedGil;
     private string? lastObservedRetainerId;
@@ -123,6 +125,11 @@ public sealed class Plugin : IDalamudPlugin {
     private const int AutomaticFailureRetrySeconds = 10;
     private const int ItemLinkPollIntervalSeconds = 5;
     private const int UnsupportedItemLinkRetryMinutes = 15;
+#if GILLIONS_TEST_BUILD
+    private const int NormalVentureResultCaptureIntervalMilliseconds = 100;
+    private const int NormalVentureRosterCaptureIntervalMilliseconds = 500;
+    private const int AutomatedVentureRosterCaptureIntervalMilliseconds = 100;
+#endif
 
     public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commands, IClientState clientState, IObjectTable objects, IFramework framework, IDataManager dataManager, IUnlockState unlockState, IGameInventory gameInventory, IChatGui chatGui, IPluginLog log) {
         this.pluginInterface = pluginInterface;
@@ -143,6 +150,10 @@ public sealed class Plugin : IDalamudPlugin {
         commands.AddHandler("/gillionssync", new CommandInfo(OnCommand) { HelpMessage = "Pair or sync your selected Gillions data." });
         pluginInterface.UiBuilder.Draw += DrawSettings;
         pluginInterface.UiBuilder.OpenConfigUi += OpenSettings;
+#if GILLIONS_TEST_BUILD
+        RefreshAutoRetainerCompatibilityMode();
+        pluginInterface.ActivePluginsChanged += OnActivePluginsChanged;
+#endif
         framework.Update += OnFrameworkUpdate;
         gameInventory.InventoryChangedRaw += OnInventoryChangedRaw;
         chatGui.LogMessage += OnLogMessage;
@@ -152,6 +163,24 @@ public sealed class Plugin : IDalamudPlugin {
     private void OnCommand(string command, string arguments) {
         _ = arguments.Trim().Equals("pair", StringComparison.OrdinalIgnoreCase) ? PairAsync() : SyncAsync();
     }
+
+#if GILLIONS_TEST_BUILD
+    private void OnActivePluginsChanged(IActivePluginsChangedEventArgs args) {
+        if (!args.AffectedInternalNames.Any(name => string.Equals(name, "AutoRetainer", StringComparison.OrdinalIgnoreCase))) return;
+        RefreshAutoRetainerCompatibilityMode();
+    }
+
+    private void RefreshAutoRetainerCompatibilityMode() {
+        var wasLoaded = autoRetainerLoaded;
+        autoRetainerLoaded = pluginInterface.InstalledPlugins.Any(plugin =>
+            plugin.IsLoaded && string.Equals(plugin.InternalName, "AutoRetainer", StringComparison.OrdinalIgnoreCase));
+        if (wasLoaded == autoRetainerLoaded) return;
+
+        nextRetainerVentureResultCaptureUtc = DateTime.MinValue;
+        nextRetainerVentureRosterCaptureUtc = DateTime.MinValue;
+        RecordDiagnostic($"AutoRetainer venture compatibility mode {(autoRetainerLoaded ? "enabled" : "disabled")}.");
+    }
+#endif
 
     private void OpenSettings() => settingsVisible = true;
 
@@ -207,16 +236,25 @@ public sealed class Plugin : IDalamudPlugin {
             return;
         }
 #if GILLIONS_TEST_BUILD
-        // Reward views can be advanced automatically in less than the normal
-        // collection interval. This check reads one small native agent record
-        // per frame; roster and gear scans remain on the slower cadence below.
-        var ventureChanged = DirectGameSnapshotCollector.CaptureRetainerVentureResultObservation(configuration.RetainerVentureState, out var resultProbeStatus);
-        if (resultProbeStatus != lastRetainerVentureResultProbeStatus) {
-            if (resultProbeStatus != "inactive") RecordDiagnostic($"Retainer venture result probe: {resultProbeStatus}.");
-            lastRetainerVentureResultProbeStatus = resultProbeStatus;
+        // AutoRetainer can advance its non-adjustable reward view inside the
+        // normal observation interval. Use Dalamud's public loaded-plugin state
+        // to enable a bounded compatibility mode without depending on its IPC
+        // or internals. Manual clients retain lower-frequency native reads.
+        var ventureChanged = false;
+        var automatedRetainerWindowActive = false;
+        if (autoRetainerLoaded || now >= nextRetainerVentureResultCaptureUtc) {
+            nextRetainerVentureResultCaptureUtc = now.AddMilliseconds(NormalVentureResultCaptureIntervalMilliseconds);
+            ventureChanged = DirectGameSnapshotCollector.CaptureRetainerVentureResultObservation(configuration.RetainerVentureState, out var resultProbeStatus);
+            automatedRetainerWindowActive = autoRetainerLoaded && resultProbeStatus != "inactive";
+            if (resultProbeStatus != lastRetainerVentureResultProbeStatus) {
+                if (resultProbeStatus != "inactive") RecordDiagnostic($"Retainer venture result probe: {resultProbeStatus}.");
+                lastRetainerVentureResultProbeStatus = resultProbeStatus;
+            }
         }
-        if (now >= nextRetainerVentureCaptureUtc) {
-            nextRetainerVentureCaptureUtc = now.AddMilliseconds(500);
+        if (now >= nextRetainerVentureRosterCaptureUtc) {
+            nextRetainerVentureRosterCaptureUtc = now.AddMilliseconds(automatedRetainerWindowActive
+                ? AutomatedVentureRosterCaptureIntervalMilliseconds
+                : NormalVentureRosterCaptureIntervalMilliseconds);
             ventureChanged |= DirectGameSnapshotCollector.CaptureRetainerVentureRosterAndGear(configuration.RetainerVentureState);
         }
         if (ventureChanged) {
@@ -994,7 +1032,19 @@ public sealed class Plugin : IDalamudPlugin {
         if (ImGui.Button("Clear diagnostics")) lock (diagnosticsLock) diagnostics.Clear();
         foreach (var line in snapshot) ImGui.TextWrapped(line);
     }
-    public void Dispose() { chatGui.ChatMessage -= OnChatMessage; chatGui.LogMessage -= OnLogMessage; gameInventory.InventoryChangedRaw -= OnInventoryChangedRaw; framework.Update -= OnFrameworkUpdate; pluginInterface.UiBuilder.Draw -= DrawSettings; pluginInterface.UiBuilder.OpenConfigUi -= OpenSettings; commands.RemoveHandler("/gillionssync"); http.Dispose(); }
+    public void Dispose() {
+        chatGui.ChatMessage -= OnChatMessage;
+        chatGui.LogMessage -= OnLogMessage;
+        gameInventory.InventoryChangedRaw -= OnInventoryChangedRaw;
+        framework.Update -= OnFrameworkUpdate;
+        pluginInterface.UiBuilder.Draw -= DrawSettings;
+        pluginInterface.UiBuilder.OpenConfigUi -= OpenSettings;
+#if GILLIONS_TEST_BUILD
+        pluginInterface.ActivePluginsChanged -= OnActivePluginsChanged;
+#endif
+        commands.RemoveHandler("/gillionssync");
+        http.Dispose();
+    }
 }
 
 internal sealed record PreparedSnapshot(
