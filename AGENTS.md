@@ -1,15 +1,11 @@
-# Native Collector instructions
+# Gillions Game Sync instructions
 
-Scope: Gillions Game Sync plugin source.
+Scope: the standalone Gillions Game Sync Dalamud plugin repository.
 
-Native Collector is the primary specialist for collection, local state, payloads, transport/retry/privacy, enrollment/sync behavior, and backwards compatibility. Read `docs/components/native-collector.md` and `docs/contracts/game-sync-api.md` when relevant.
+Preserve read-only collection, player opt-in, account isolation, privacy, and compatibility with installed older builds. Use authoritative Dalamud or game-client state and never infer ownership from unrelated identifiers. Optional integrations must complement the plugin and must not become dependencies for core synchronization.
 
-This specialization is not a permission boundary. When a requested collector feature reasonably requires related server-handler, normalization, query, test, configuration, or small migration changes, make those changes as part of the same implementation when safe. Do not require an RFC or Site Operations handoff solely because another component is involved.
+Do not commit credentials, pairing codes, player data, diagnostics, private endpoints, local machine paths, build outputs, or release artifacts. Keep `PathMap` enabled so distributed diagnostics use `/_/GillionsGameSync/...` paths.
 
-Backwards compatibility with installed Gillions Game Sync builds is a high-priority technical constraint. Treat breaking protocol or authentication behavior with additional care and focused compatibility testing.
+Run `./scripts/verify.ps1` after material source changes. A release candidate requires zero warnings and zero errors plus proportionate patch-current in-game validation. Packaging does not authorize publication; the Gillions static feed is updated through its separate controlled publisher.
 
-Run the appropriate build/tests and verify affected server behavior when applicable. Use testing/stable release procedures proportionally to the requested task. Publication may proceed when it is part of delivering the requested result; do not create a separate approval loop unless the task reaches a root-level explicit-approval boundary.
-
-Update `docs/changes/native-collector.md` after notable changes and material contract documentation when payload or compatibility behavior changes. Never record credentials, pairing codes, or raw player data.
-
-Material plugin UI changes follow the repository bulk UX review workflow.
+Update the README, privacy/testing/releasing guidance, and changelog when their documented behavior changes.
