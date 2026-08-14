@@ -32,10 +32,10 @@ public static class DirectGameSnapshotCollector {
         var selected = new HashSet<string>(scopes ?? [], StringComparer.Ordinal);
         var identity = new { name = objects.LocalPlayer?.Name.TextValue ?? "", world = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "" };
         if (selected.Contains("inventory")) {
-            var inventory = NativeInventoryCollector.ReadAllContainers();
+            var inventory = NativeInventoryCollector.ReadAllContainers(dataManager);
             if (inventory.Items.Length == 0) throw new InvalidOperationException("No player inventory is currently loaded. Log into the selected character, open Inventory once, then try sync again.");
             var retainerGil = (retainerGilBalances ?? new Dictionary<string, long>()).Where(entry => !string.IsNullOrWhiteSpace(entry.Key) && entry.Value >= 0).Select(entry => new { retainerId = entry.Key, gil = entry.Value }).ToArray();
-            yield return new GameSnapshot("inventory", new { character = identity, items = inventory.Items, retainerListings = inventory.RetainerListings, retainerListingsObserved = inventory.RetainerListingsObserved, retainerListingRetainerIds = inventory.RetainerListingRetainerIds, retainerBags = inventory.RetainerBags, retainerBagsObserved = inventory.RetainerBagsObserved, retainerGil });
+            yield return new GameSnapshot("inventory", new { character = identity, items = inventory.Items, armoireItems = inventory.ArmoireItems, armoireObserved = inventory.ArmoireObserved, retainerListings = inventory.RetainerListings, retainerListingsObserved = inventory.RetainerListingsObserved, retainerListingRetainerIds = inventory.RetainerListingRetainerIds, retainerBags = inventory.RetainerBags, retainerBagsObserved = inventory.RetainerBagsObserved, retainerGil });
         }
         if (selected.Contains("currencies")) yield return new GameSnapshot("currencies", new { character = identity, items = CurrencyCollector.Read() });
         if (selected.Contains("achievements")) {
@@ -350,9 +350,9 @@ internal static class NativeInventoryCollector {
         }
     }
 
-    public static unsafe InventoryRead ReadAllContainers() {
+    public static unsafe InventoryRead ReadAllContainers(IDataManager dataManager) {
         var manager = InventoryManager.Instance();
-        if (manager == null) return new InventoryRead([], [], false, [], [], false);
+        if (manager == null) return new InventoryRead([], [], false, [], [], false, [], false);
         var items = new List<object>();
         foreach (var containerType in PlayerContainers) {
             var container = manager->GetInventoryContainer(containerType);
@@ -372,13 +372,14 @@ internal static class NativeInventoryCollector {
             }
         }
         var retainerBags = ReadLoadedRetainerBags(manager);
+        var armoire = ArmoireCollector.Read(dataManager);
         CaptureLoadedRetainerListings();
         RetainerListingRead retainerListings;
         lock (RetainerListingCacheLock) {
             var cached = RetainerListingCache.Values.ToArray();
             retainerListings = new RetainerListingRead(cached.SelectMany((entry) => entry.Items).ToArray(), cached.Length > 0, cached.SelectMany((entry) => entry.RetainerIds).Distinct(StringComparer.Ordinal).ToArray());
         }
-        return new InventoryRead(items.ToArray(), retainerListings.Items, retainerListings.Observed, retainerListings.RetainerIds, retainerBags.Items, retainerBags.Observed);
+        return new InventoryRead(items.ToArray(), retainerListings.Items, retainerListings.Observed, retainerListings.RetainerIds, retainerBags.Items, retainerBags.Observed, armoire.Items, armoire.Observed);
     }
 
     public static unsafe object[] ReadEquippedItems() {
@@ -466,7 +467,7 @@ internal static class NativeInventoryCollector {
     }
 }
 
-internal sealed record InventoryRead(object[] Items, object[] RetainerListings, bool RetainerListingsObserved, string[] RetainerListingRetainerIds, object[] RetainerBags, bool RetainerBagsObserved);
+internal sealed record InventoryRead(object[] Items, object[] RetainerListings, bool RetainerListingsObserved, string[] RetainerListingRetainerIds, object[] RetainerBags, bool RetainerBagsObserved, object[] ArmoireItems, bool ArmoireObserved);
 internal sealed record RetainerBagRead(object[] Items, bool Observed);
 internal sealed record RetainerContext(string RetainerId, string RetainerName);
 internal sealed record RetainerBalanceRead(string RetainerId, string RetainerName, string Town, long Gil);
@@ -481,6 +482,30 @@ internal sealed record RetainerListingItem(
     [property: JsonPropertyName("slot")] short Slot,
     [property: JsonPropertyName("source")] string Source);
 internal static class CurrencyCollector { public static object[] Read() => NativeInventoryCollector.ReadCurrencyItems(); }
+
+internal static class ArmoireCollector {
+    public static unsafe ArmoireRead Read(IDataManager dataManager) {
+        try {
+            var uiState = UIState.Instance();
+            if (uiState == null || !uiState->Cabinet.IsCabinetLoaded()) return new ArmoireRead(false, []);
+            var cabinet = &uiState->Cabinet;
+            var catalog = SheetRowCache<Lumina.Excel.Sheets.Cabinet>.Get(dataManager)
+                .Select(row => new ArmoireCatalogEntry(row.RowId, row.Item.RowId))
+                .ToArray();
+            if (catalog.Length == 0) return new ArmoireRead(false, []);
+            var itemIds = ArmoireSnapshotPolicy.BuildOwnedItemIds(catalog, cabinet->IsItemInCabinet);
+            return new ArmoireRead(true, itemIds.Select(itemId => (object)new {
+                itemId,
+                armoireQuantity = 1,
+                location = "Armoire",
+                source = "native_loaded_armoire_state",
+            }).ToArray());
+        } catch {
+            return new ArmoireRead(false, []);
+        }
+    }
+}
+internal sealed record ArmoireRead(bool Observed, object[] Items);
 
 internal static class AchievementCollector {
     public static AchievementRead ReadUnlockedIds(IDataManager dataManager, IUnlockState unlockState) {

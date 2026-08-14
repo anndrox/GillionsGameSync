@@ -19,6 +19,9 @@
     <LoadRequiredState>0</LoadRequiredState>
     <LoadSync>false</LoadSync>
     <CanUnloadAsync>false</CanUnloadAsync>
+    <!-- Keep useful file/line diagnostics without embedding the developer's
+         local workspace path in distributed assemblies. -->
+    <PathMap>$(MSBuildProjectDirectory)=/_/GillionsGameSync</PathMap>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="tests\**\*.cs" />

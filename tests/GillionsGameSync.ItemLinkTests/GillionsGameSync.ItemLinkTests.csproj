@@ -11,5 +11,6 @@
     <Compile Include="..\..\ItemLinkRequests.cs" Link="ItemLinkRequests.cs" />
     <Compile Include="..\..\PublicUrlConfiguration.cs" Link="PublicUrlConfiguration.cs" />
     <Compile Include="..\..\ProgressionSnapshots.cs" Link="ProgressionSnapshots.cs" />
+    <Compile Include="..\..\ArmoireSnapshots.cs" Link="ArmoireSnapshots.cs" />
   </ItemGroup>
 </Project>

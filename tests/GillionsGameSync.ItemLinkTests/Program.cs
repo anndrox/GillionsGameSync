@@ -30,6 +30,18 @@ duplicateZoneTabs[2].Zones[5] = duplicateZoneTabs[2].Zones[4];
 Assert(!ProgressionSnapshotPolicy.IsCompleteSharedFateSnapshot(duplicateZoneTabs), "duplicate Shared FATE territories must be rejected");
 Console.WriteLine("reputation and Shared FATE completeness tests passed");
 
+var armoireCatalog = new[] {
+    new ArmoireCatalogEntry(0, 2897),
+    new ArmoireCatalogEntry(1, 2888),
+    new ArmoireCatalogEntry(2, 2897),
+    new ArmoireCatalogEntry(3, 0),
+};
+var armoireItems = ArmoireSnapshotPolicy.BuildOwnedItemIds(armoireCatalog, cabinetId => cabinetId is 0 or 2 or 3);
+Assert(armoireItems.SequenceEqual(new uint[] { 2897 }), "unlocked Cabinet rows, including row zero, must emit their authoritative Item IDs once");
+Assert(!armoireItems.Contains(2888u), "locked Cabinet rows must not be emitted");
+Assert(!armoireItems.Contains(0u), "malformed Cabinet item mappings must not be emitted");
+Console.WriteLine("armoire snapshot tests passed");
+
 Assert(!NativeItemLinkFactory.IsValidItemId(0), "zero item ID must be rejected");
 Assert(!NativeItemLinkFactory.IsValidItemId(-1), "negative item ID must be rejected");
 Assert(!NativeItemLinkFactory.IsValidItemId((long)uint.MaxValue + 1), "out-of-range item ID must be rejected");

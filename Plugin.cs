@@ -88,6 +88,7 @@ public sealed class Plugin : IDalamudPlugin {
     private static readonly string PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "1.0.4";
     private static readonly string[] SyncScopes = ["inventory", "currencies", "achievements", "collectibles", "character", "quest_journal", "reputation", "shared_fates", "glamour_plates"];
     private static readonly string[] CurrentChangelog = [
+        "Link in game: Paired Gillions item requests can now produce genuine clickable item links in your local game chat.",
         "Reputation: Gillions now syncs authoritative Allied Society rank and reputation values for the selected character.",
         "Shared FATEs: Zone rank and completion progress sync after all three Shared FATE tabs have been opened in game.",
         "Safe completeness: Gillions omits partially loaded Shared FATE data instead of treating unopened zones as incomplete.",
@@ -860,7 +861,7 @@ public sealed class Plugin : IDalamudPlugin {
 
     private static Dictionary<string, string> GetInventoryComponentHashes(JsonElement root) {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var name in new[] { "items", "retainerListings", "retainerListingsObserved" }) if (root.TryGetProperty(name, out var value)) result[name] = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(CanonicalizeJson(value))));
+        foreach (var name in new[] { "items", "armoireItems", "armoireObserved", "retainerListings", "retainerListingsObserved" }) if (root.TryGetProperty(name, out var value)) result[name] = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(CanonicalizeJson(value))));
         return result;
     }
 
@@ -892,13 +893,14 @@ public sealed class Plugin : IDalamudPlugin {
 
     private static string DescribePayload(JsonElement root, int bytes) {
         var parts = new List<string> { $"{bytes:N0} B" };
-        foreach (var name in new[] { "items", "retainerListings", "retainerBags", "ids", "completedQuestIds", "alliedSocieties", "tabs", "cards", "minions", "mounts", "bardings", "emotes", "orchestrions", "fashions", "blueMageSpells", "sightseeingLogIds", "aetherCurrentIds", "portraitBackgrounds", "portraitConditions", "portraitDecorations", "portraitFacials", "portraitFrames", "portraitPoses", "masterRecipeBookIds", "folkloreBookIds", "jobs", "craftingRecipeIds", "gatheringLogIds" }) {
+        foreach (var name in new[] { "items", "armoireItems", "retainerListings", "retainerBags", "ids", "completedQuestIds", "alliedSocieties", "tabs", "cards", "minions", "mounts", "bardings", "emotes", "orchestrions", "fashions", "blueMageSpells", "sightseeingLogIds", "aetherCurrentIds", "portraitBackgrounds", "portraitConditions", "portraitDecorations", "portraitFacials", "portraitFrames", "portraitPoses", "masterRecipeBookIds", "folkloreBookIds", "jobs", "craftingRecipeIds", "gatheringLogIds" }) {
             if (root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array) parts.Add($"{name}={value.GetArrayLength()}");
         }
         if (root.TryGetProperty("eligibleCount", out var eligible) && eligible.TryGetInt32(out var eligibleCount)) parts.Add($"eligible={eligibleCount}");
         if (root.TryGetProperty("verifiedCount", out var verified) && verified.TryGetInt32(out var verifiedCount)) parts.Add($"verified={verifiedCount}");
         if (root.TryGetProperty("excludedByIdRangeCount", out var excluded) && excluded.TryGetInt32(out var excludedCount)) parts.Add($"excludedByIdRange={excludedCount}");
         if (root.TryGetProperty("ready", out var ready) && ready.ValueKind is JsonValueKind.True or JsonValueKind.False) parts.Add($"ready={ready.GetBoolean()}");
+        if (root.TryGetProperty("armoireObserved", out var armoireObserved) && armoireObserved.ValueKind is JsonValueKind.True or JsonValueKind.False) parts.Add($"armoireObserved={armoireObserved.GetBoolean()}");
         return string.Join(", ", parts);
     }
 
