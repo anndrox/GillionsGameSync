@@ -12,7 +12,7 @@ Client-facing collection changes also require proportionate in-game validation a
 
 Testing builds use a separate Dalamud identity and configuration from stable. Passing local and testing-feed checks does not by itself authorize stable publication.
 
-The prepared stable `1.0.26` candidate uses the same Retainer contract implementation as testing while retaining the `GillionsGameSync` product identity. An older or testing-only server response cannot activate stable Retainer traffic: stable requires the server to acknowledge the exact stable product and contract v1 before accepting observation/result support or planner support. Ordinary resources continue syncing when that acknowledgement is absent or malformed.
+Stable `1.0.26` uses the same Retainer contract implementation as testing while retaining the `GillionsGameSync` product identity. An older or testing-only server response cannot activate stable Retainer traffic: stable requires the server to acknowledge the exact stable product and contract v1 before accepting observation/result support or planner support. Ordinary resources continue syncing when that acknowledgement is absent or malformed.
 
 Upgrading from stable `1.0.25` leaves AutoRetainer plan access disabled. Test the explicit opt-in independently from read-only Retainer observation, including AutoRetainer absent, unloaded, outdated, API-unready, and planner-disabled states. Multi Mode remains diagnostic and is not a prerequisite.
 

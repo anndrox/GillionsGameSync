@@ -29,13 +29,13 @@ Testing `0.0.59` requires a production web runtime with `RETAINER_TESTING_UPLOAD
 
 Testing `0.0.59` requires the independent `RETAINER_PLAN_DELIVERY_ENABLED=true` runtime gate and the full plan-delivery/application/completion capability set. Disable that gate and recreate only web to stop all Gillions-to-AutoRetainer writes without disabling normal Game Sync or Retainer observations. Never publish this build to the stable manifest.
 
-## Prepared stable Retainer rollout
+## Stable Retainer rollout
 
-Stable `1.0.26` is a release candidate only. Before publication, Site Operations must add separately disabled `RETAINER_STABLE_UPLOAD_ENABLED` and `RETAINER_STABLE_PLAN_DELIVERY_ENABLED` gates. A stable presence response may advertise support only after validating the authenticated `GillionsGameSync` product, contract v1, and required capabilities, and must echo:
+Stable `1.0.26` is published. Production uses separate `RETAINER_STABLE_UPLOAD_ENABLED` and `RETAINER_STABLE_PLAN_DELIVERY_ENABLED` gates. A stable presence response may advertise support only after validating the authenticated `GillionsGameSync` product, contract v1, and required capabilities, and must echo:
 
 - `acceptedClientProduct: "GillionsGameSync"`;
 - `acceptedContractVersion: 1`.
 
 Absent, malformed, testing-product, or mismatched-contract acknowledgements keep stable Retainer uploads and plan polling disabled. The stable planner gate must remain independent from stable observation intake. Disable the planner gate to stop new AutoRetainer writes; disable the stable intake gate to stop stable Retainer uploads. Neither rollback requires disabling ordinary Game Sync.
 
-Recommended order: deploy the echo and disabled gates; validate the stable candidate against a non-production enrollment; publish the immutable stable artifact with both gates still disabled; enable stable observation for a bounded cohort; then enable stable planner delivery for an explicitly opted-in cohort. Stable publication and production enablement remain separate decisions.
+Production enabled stable observation and plan delivery only after the exact source tree passed local and GitHub verification, the immutable artifact was reproduced, and the server acceptance probe passed. Planner delivery remains separately kill-switchable and still requires explicit player opt-in plus the complete capability, presence, AutoRetainer readiness, ownership, compare-and-set, read-back, backup, and execution-limit gates.
