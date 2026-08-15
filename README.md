@@ -40,7 +40,7 @@ Create a local package without publishing it:
 
 ```powershell
 ./scripts/package.ps1 -Channel stable -Version 1.0.25
-./scripts/package.ps1 -Channel testing -Version 0.0.56
+./scripts/package.ps1 -Channel testing -Version 0.0.59
 ```
 
 Packages are written below `artifacts/`, which is ignored by Git. Publication to the Gillions feed remains a separate, controlled operation.

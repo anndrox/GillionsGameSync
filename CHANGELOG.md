@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.59 - 2026-08-15 (testing)
+
+- Allowed a new deliberate Sync to compare-and-set from the exact AutoRetainer plan hash previously reported in a bounded `local_plan_changed` acknowledgement.
+- Preserved fail-closed behavior when AutoRetainer changes again, plus the existing testing-only opt-in, device ownership, 24-execution limit, backup, read-back, and restoration safeguards. Stable `1.0.25` remains unchanged.
+
 ## 0.0.58 - 2026-08-14 (testing)
 
 - Corrected AutoRetainer additional-data IPC calls with a data-only mirror of AutoRetainer's complete writable record, avoiding plugin-owned constructor execution across Dalamud load contexts.

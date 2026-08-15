@@ -54,6 +54,12 @@ internal enum AutoRetainerPlanApplyResult {
     IpcRejected,
 }
 
+internal enum AutoRetainerOwnedPlanDecision {
+    Apply,
+    Idempotent,
+    Conflict,
+}
+
 internal sealed record AutoRetainerPlanMutationOutcome(
     AutoRetainerPlanApplyResult Result,
     string? ObservedBeforeHash = null,
@@ -79,6 +85,24 @@ internal static class VenturePlannerCapabilityPolicy {
         && plan.Steps.Sum(step => step.Repetitions) <= MaximumPendingExecutions;
 
     public static string BuildManagedPlanName(string retainerName) => $"Gillions Venture ({retainerName.Trim()})";
+}
+
+internal static class AutoRetainerOwnedPlanPolicy {
+    public static AutoRetainerOwnedPlanDecision Decide(
+        string? expectedAppliedHash,
+        string ownershipAppliedHash,
+        string observedBeforeHash,
+        bool matchesManagedPlan) {
+        if (matchesManagedPlan && (
+            string.Equals(observedBeforeHash, ownershipAppliedHash, StringComparison.Ordinal)
+            || string.Equals(expectedAppliedHash, ownershipAppliedHash, StringComparison.Ordinal)
+            || string.Equals(expectedAppliedHash, observedBeforeHash, StringComparison.Ordinal)))
+            return AutoRetainerOwnedPlanDecision.Idempotent;
+        return !string.IsNullOrWhiteSpace(expectedAppliedHash)
+            && string.Equals(observedBeforeHash, expectedAppliedHash, StringComparison.Ordinal)
+                ? AutoRetainerOwnedPlanDecision.Apply
+                : AutoRetainerOwnedPlanDecision.Conflict;
+    }
 }
 
 #if !GILLIONS_POLICY_TESTS
@@ -113,11 +137,14 @@ internal sealed class AutoRetainerVenturePlanWriter(IDalamudPluginInterface plug
             if (ownership is null && !before.EnablePlanner)
                 return new(AutoRetainerPlanApplyResult.PlannerDisabled, beforeHash, PriorPlanBackupHash: priorBackupHash, PriorPlanBackup: priorBackup);
             if (ownership is not null) {
-                if (!string.Equals(expectedAppliedHash, ownership.AppliedHash, StringComparison.Ordinal)
-                    || (!string.Equals(beforeHash, ownership.AppliedHash, StringComparison.Ordinal)
-                        && !AutoRetainerVenturePlanMutation.MatchesManaged(before, plan)))
+                var decision = AutoRetainerOwnedPlanPolicy.Decide(
+                    expectedAppliedHash,
+                    ownership.AppliedHash,
+                    beforeHash,
+                    AutoRetainerVenturePlanMutation.MatchesManaged(before, plan));
+                if (decision == AutoRetainerOwnedPlanDecision.Conflict)
                     return new(AutoRetainerPlanApplyResult.CasMismatch, beforeHash, PriorPlanBackupHash: priorBackupHash, PriorPlanBackup: priorBackup);
-                if (AutoRetainerVenturePlanMutation.MatchesManaged(before, plan))
+                if (decision == AutoRetainerOwnedPlanDecision.Idempotent)
                     return new(AutoRetainerPlanApplyResult.Idempotent, beforeHash, beforeHash, beforeHash, priorBackupHash, priorBackup);
             } else if (expectedAppliedHash is not null) {
                 return new(AutoRetainerPlanApplyResult.CasMismatch, beforeHash, PriorPlanBackupHash: priorBackupHash, PriorPlanBackup: priorBackup);

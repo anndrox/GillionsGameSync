@@ -180,6 +180,17 @@ Assert(!VenturePlannerCapabilityPolicy.IsValid(managedPlan with { CompletionBeha
 Assert(!VenturePlannerCapabilityPolicy.IsAvailable(false, true, true, true, true), "venture planning must remain explicitly opted out by default");
 Assert(!VenturePlannerCapabilityPolicy.IsAvailable(true, false, true, true, true), "AutoRetainer absence must disable venture planning");
 Assert(VenturePlannerCapabilityPolicy.IsAvailable(true, true, true, true, true), "the complete opted-in capability must be available");
+var ownedHash = new string('a', 64);
+var conflictHash = new string('b', 64);
+var changedAgainHash = new string('c', 64);
+Assert(AutoRetainerOwnedPlanPolicy.Decide(ownedHash, ownedHash, ownedHash, false) == AutoRetainerOwnedPlanDecision.Apply,
+    "a normal later revision must compare-and-set from the last owned hash");
+Assert(AutoRetainerOwnedPlanPolicy.Decide(conflictHash, ownedHash, conflictHash, false) == AutoRetainerOwnedPlanDecision.Apply,
+    "a deliberate retry may compare-and-set from the exact server-delivered conflict observation");
+Assert(AutoRetainerOwnedPlanPolicy.Decide(conflictHash, ownedHash, changedAgainHash, false) == AutoRetainerOwnedPlanDecision.Conflict,
+    "another local edit after the conflict observation must fail closed");
+Assert(AutoRetainerOwnedPlanPolicy.Decide(ownedHash, changedAgainHash, changedAgainHash, true) == AutoRetainerOwnedPlanDecision.Idempotent,
+    "an already applied managed plan must remain replay-safe");
 var fakeAdditionalData = new FakeAdditionalRetainerData();
 fakeAdditionalData.VenturePlan.List.Add(new FakePlannedVenture { ID = 999, Num = 9 });
 var originalPlan = AutoRetainerVenturePlanMutation.Capture(fakeAdditionalData);

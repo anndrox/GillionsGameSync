@@ -113,6 +113,7 @@ public sealed class Plugin : IDalamudPlugin {
     private static readonly string[] CurrentChangelog = [
         "Testing planner: Gillions can deliver only an explicitly synchronized, fixed Retainer venture plan after you opt in.",
         "Plan safety: The original AutoRetainer plan and completion behavior are backed up, verified after every write, and restorable.",
+        "Conflict recovery: A new deliberate Sync may adopt only the exact AutoRetainer plan state previously reported to Gillions; another local edit still blocks the write.",
         "Bounded execution: Gillions accepts at most 24 executions and never creates a local repeat queue.",
         "Device ownership: The first applying device remains the plan owner; outside changes stop synchronization instead of being overwritten.",
     ];
