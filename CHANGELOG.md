@@ -1,9 +1,13 @@
 # Changelog
 
+## 0.0.58 - 2026-08-14 (testing)
+
+- Corrected AutoRetainer additional-data IPC calls with a data-only mirror of AutoRetainer's complete writable record, avoiding plugin-owned constructor execution across Dalamud load contexts.
+- Preserved the existing testing-only opt-in, bounded-plan, backup, compare-and-set, read-back, and restoration safeguards. Stable `1.0.25` remains unchanged.
+
 ## 0.0.57 - 2026-08-14 (testing)
 
-- Corrected AutoRetainer additional-data IPC calls to bind to AutoRetainer's loaded runtime contract instead of the incompatible generic `object` return type.
-- Preserved the existing testing-only opt-in, bounded-plan, backup, compare-and-set, read-back, and restoration safeguards. Stable `1.0.25` remains unchanged.
+- Superseded testing build; its direct runtime-type binding exposed AutoRetainer's load-context conversion incompatibility before any plan was delivered.
 
 ## 0.0.56 - 2026-08-14 (testing)
 
