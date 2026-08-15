@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.27 - 2026-08-15
+
+- Fixed prior-plan restoration after a deliberate conflict review so the exact newly acknowledged AutoRetainer state can be used as the retry baseline.
+- Preserved fail-closed behavior if AutoRetainer changes again before restoration, plus the original backup, immediate read-back, device ownership, and execution-limit safeguards.
+
 ## 1.0.26 - 2026-08-15
 
 - Promoted the live-validated Retainer observation, result acknowledgement, presence, and bounded AutoRetainer plan-delivery implementation to stable.
