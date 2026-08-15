@@ -73,6 +73,7 @@ public sealed class Plugin : IDalamudPlugin {
     private DateTime nextRetainerPlanPollUtc = DateTime.MinValue;
     private string lastRetainerVentureResultProbeStatus = "inactive";
     private bool autoRetainerLoaded;
+    private bool autoRetainerApiReady;
     private readonly AutoRetainerObservationReader autoRetainerObservationReader;
     private readonly AutoRetainerVenturePlanWriter autoRetainerPlanWriter;
     private bool presenceInFlight;
@@ -103,11 +104,9 @@ public sealed class Plugin : IDalamudPlugin {
     private static readonly string PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "1.0.4";
     private static readonly string[] SyncScopes = ["inventory", "currencies", "achievements", "collectibles", "character", "quest_journal", "reputation", "shared_fates", "glamour_plates"];
 #if GILLIONS_TEST_BUILD
-    private const bool RetainerVentureUploadEnabled = true;
-    private const string ClientProductName = "GillionsGameSyncTest";
+    private static readonly RetainerClientProfile RetainerClient = RetainerClientPolicy.Testing;
 #else
-    private const bool RetainerVentureUploadEnabled = false;
-    private const string ClientProductName = "GillionsGameSync";
+    private static readonly RetainerClientProfile RetainerClient = RetainerClientPolicy.Stable;
 #endif
 #if GILLIONS_TEST_BUILD
     private static readonly string[] CurrentChangelog = [
@@ -119,10 +118,10 @@ public sealed class Plugin : IDalamudPlugin {
     ];
 #else
     private static readonly string[] CurrentChangelog = [
-        "Retainer ventures: Gillions now observes retainer identity, job, level, current assignment, readiness, and loaded gear without automating the game.",
-        "Venture rewards: Received item evidence is retained locally across the short venture-result window for future Gillions support.",
-        "AutoRetainer compatibility: When AutoRetainer is loaded, Gillions adapts its local observation timing without depending on AutoRetainer internals.",
-        "Safe rollout: Retainer Venture data remains local until the Gillions website contract is ready.",
+        "Retainer readiness: The validated read-only Retainer observation and result contract is prepared for a future stable rollout.",
+        "Explicit server gate: Stable Retainer traffic stays off unless Gillions explicitly accepts the stable client product and contract.",
+        "Planner safety: AutoRetainer plan control remains off by default and requires your separate opt-in plus every server and client safety check.",
+        "Compatibility: Ordinary Game Sync continues unchanged when Retainer support or AutoRetainer is unavailable.",
     ];
 #endif
     // Automatic work must remain below a visible frame hitch. One resource is
@@ -196,6 +195,7 @@ public sealed class Plugin : IDalamudPlugin {
         var wasLoaded = autoRetainerLoaded;
         autoRetainerLoaded = pluginInterface.InstalledPlugins.Any(plugin =>
             plugin.IsLoaded && string.Equals(plugin.InternalName, "AutoRetainer", StringComparison.OrdinalIgnoreCase));
+        if (!autoRetainerLoaded) autoRetainerApiReady = false;
         if (wasLoaded == autoRetainerLoaded) return;
 
         nextRetainerVentureResultCaptureUtc = DateTime.MinValue;
@@ -226,14 +226,14 @@ public sealed class Plugin : IDalamudPlugin {
     }
 
     private async Task SendRetainerPresenceAsync(ulong characterContentId, RetainerPresenceDocument presence) {
-        if (!RetainerVentureUploadEnabled || string.IsNullOrWhiteSpace(configuration.DeviceToken)) return;
+        if (string.IsNullOrWhiteSpace(configuration.DeviceToken)) return;
         presenceInFlight = true;
         try {
             using var request = Request("/api/game-sync/presence", configuration.DeviceToken, presence);
             using var response = await http.SendAsync(request);
             await EnsureSuccessfulResponse(response);
             var responseJson = await response.Content.ReadAsStringAsync();
-            if (!RetainerPresenceResponsePolicy.TryParse(responseJson, out var uploadSupported, out var plannerSupported))
+            if (!RetainerPresenceResponsePolicy.TryParse(responseJson, RetainerClient, out var uploadSupported, out var plannerSupported))
                 throw new InvalidOperationException("Gillions returned an invalid Retainer presence acknowledgement.");
             await framework.RunOnFrameworkThread(() => {
                 if (ReadLocalContentId() != characterContentId) return;
@@ -248,19 +248,25 @@ public sealed class Plugin : IDalamudPlugin {
         } catch (Exception error) {
             await framework.RunOnFrameworkThread(() => {
                 if (ReadLocalContentId() != characterContentId) return;
+                ClearRetainerServerAcceptance();
                 presenceFailureCount++;
                 nextRetainerPresenceUtc = DateTime.UtcNow.Add(RetainerPresencePolicy.NextFailureDelay(presenceFailureCount, Random.Shared.Next(-5, 6)));
             });
-            log.Debug(error, "Gillions Retainer presence failed; the testing client will retry with bounded backoff.");
+            log.Debug(error, "Gillions Retainer presence failed; the client will retry with bounded backoff.");
         } finally { presenceInFlight = false; }
+    }
+
+    private void ClearRetainerServerAcceptance() {
+        retainerUploadServerSupported = false;
+        retainerPlanServerSupported = false;
     }
 
     private void OnFrameworkUpdate(IFramework frameworkInstance) {
         var now = DateTime.UtcNow;
         if (!clientState.IsLoggedIn) {
             activeRetainerCharacterContentId = 0;
-            retainerUploadServerSupported = false;
-            retainerPlanServerSupported = false;
+            autoRetainerApiReady = false;
+            ClearRetainerServerAcceptance();
             nextRetainerPresenceUtc = DateTime.MinValue;
             nextRetainerPlanPollUtc = DateTime.MinValue;
             lastObservedGil = null;
@@ -274,8 +280,8 @@ public sealed class Plugin : IDalamudPlugin {
         if (contentId == 0) return;
         if (activeRetainerCharacterContentId != contentId) {
             activeRetainerCharacterContentId = contentId;
-            retainerUploadServerSupported = false;
-            retainerPlanServerSupported = false;
+            autoRetainerApiReady = false;
+            ClearRetainerServerAcceptance();
             presenceFailureCount = 0;
             nextRetainerPresenceUtc = DateTime.MinValue;
             nextRetainerVentureResultCaptureUtc = DateTime.MinValue;
@@ -302,20 +308,31 @@ public sealed class Plugin : IDalamudPlugin {
             pendingRetainerBalanceSinceUtc = DateTime.MinValue;
             gilLedgerDirty = false;
             nextInventorySyncUtc = DateTime.MaxValue;
+            ClearRetainerServerAcceptance();
             return;
         }
-        if (RetainerVentureUploadEnabled && !presenceInFlight && now >= nextRetainerPresenceUtc) {
+        if (!presenceInFlight && now >= nextRetainerPresenceUtc) {
             var currentName = objects.LocalPlayer?.Name.TextValue ?? "";
             var currentWorld = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "";
             var probe = autoRetainerObservationReader.Read(contentId, retainerState.Retainers, configuration.EnableAutoRetainerVenturePlans, now);
+            autoRetainerApiReady = probe.Presence.ApiReady;
             RetainerVentureSnapshotPolicy.MergeAutoRetainerStats(retainerState, probe.Stats, now);
             var appliedPlans = RetainerPlanDeliveryPolicy.AppliedPlansForCharacter(configuration.AutoRetainerPlanOwnershipStates, contentId);
             var presence = new RetainerPresenceDocument(1,
-                new(contentId.ToString(), currentName, currentWorld), now, PluginVersion, 1,
-                RetainerTestingCapabilities.Client, probe.Presence, appliedPlans);
+                new(contentId.ToString(), currentName, currentWorld), now,
+                RetainerClient.ProductName, RetainerClient.Channel, PluginVersion, RetainerClientPolicy.ContractVersion,
+                RetainerCapabilities.Client, probe.Presence, appliedPlans);
+            // The next heartbeat response must renew acceptance. A missing or
+            // malformed response cannot leave a previous server grant active.
+            ClearRetainerServerAcceptance();
             _ = SendRetainerPresenceAsync(contentId, presence);
         }
-        if (RetainerVentureUploadEnabled && retainerPlanServerSupported && configuration.EnableAutoRetainerVenturePlans
+        if (RetainerClientPolicy.ShouldPollPlans(
+                retainerPlanServerSupported,
+                configuration.EnableAutoRetainerVenturePlans,
+                autoRetainerLoaded,
+                autoRetainerApiReady,
+                !string.IsNullOrWhiteSpace(configuration.DeviceToken))
             && !retainerPlanPollInFlight && now >= nextRetainerPlanPollUtc) {
             nextRetainerPlanPollUtc = now.AddSeconds(15);
             _ = PollRetainerPlansAsync(contentId);
@@ -343,7 +360,7 @@ public sealed class Plugin : IDalamudPlugin {
         }
         if (ventureChanged) {
             configuration.Save(pluginInterface);
-            if (RetainerVentureUploadEnabled && retainerUploadServerSupported) nextAutomaticSyncUtc = now;
+            if (retainerUploadServerSupported) nextAutomaticSyncUtc = now;
         }
         if (now >= nextGilLedgerPollUtc || (gilLedgerDirty && now >= nextGilLedgerFlushUtc)) {
             nextGilLedgerPollUtc = now.AddMilliseconds(GilLedgerPollIntervalMilliseconds);
@@ -750,7 +767,7 @@ public sealed class Plugin : IDalamudPlugin {
     private static int NormalizeLedgerItemId(int itemId) => itemId is >= 1_000_000 and < 2_000_000 ? itemId - 1_000_000 : itemId;
 
     private string NextAutomaticScope() {
-        var scopes = RetainerVentureUploadEnabled && retainerUploadServerSupported ? SyncScopes.Append("retainer_ventures").ToArray() : SyncScopes;
+        var scopes = RetainerClientPolicy.BuildSyncScopes(SyncScopes, retainerUploadServerSupported);
         if (automaticScopeIndex >= scopes.Length) automaticScopeIndex = 0;
         var scope = scopes[automaticScopeIndex];
         automaticScopeIndex = (automaticScopeIndex + 1) % scopes.Length;
@@ -790,7 +807,7 @@ public sealed class Plugin : IDalamudPlugin {
             var collectionStopwatch = recordDiagnostics ? Stopwatch.StartNew() : null;
             // Every Dalamud service and native pointer access is confined to the
             // framework thread, including identity for ledger-only uploads.
-            var selectedScopes = (scopes ?? (RetainerVentureUploadEnabled && retainerUploadServerSupported ? SyncScopes.Append("retainer_ventures") : SyncScopes)).ToArray();
+            var selectedScopes = (scopes ?? RetainerClientPolicy.BuildSyncScopes(SyncScopes, retainerUploadServerSupported)).ToArray();
             var captured = await framework.RunOnFrameworkThread(() => {
                 if (!clientState.IsLoggedIn) throw new InvalidOperationException("Log into a character before syncing.");
                 var currentName = objects.LocalPlayer?.Name.TextValue ?? "";
@@ -800,7 +817,7 @@ public sealed class Plugin : IDalamudPlugin {
                 var retainerState = RetainerVentureSnapshotPolicy.GetCharacterState(configuration.RetainerVentureStates, contentId);
                 DirectGameSnapshotCollector.CaptureRetainerVentureResultObservation(retainerState, out _);
                 DirectGameSnapshotCollector.CaptureRetainerVentureRosterAndGear(retainerState);
-                selectedScopes = selectedScopes.Where(scope => (RetainerVentureUploadEnabled && retainerUploadServerSupported) || scope != "retainer_ventures").ToArray();
+                selectedScopes = selectedScopes.Where(scope => retainerUploadServerSupported || scope != RetainerClientPolicy.ResourceType).ToArray();
                 if (selectedScopes.Contains("retainer_ventures", StringComparer.Ordinal))
                     DirectGameSnapshotCollector.CaptureRetainerInventoryCoverage(retainerState);
                 var snapshots = DirectGameSnapshotCollector.Collect(pluginInterface, clientState, objects, dataManager, unlockState, configuration.RetainerGilBalances, retainerState, selectedScopes).ToArray();
@@ -912,8 +929,12 @@ public sealed class Plugin : IDalamudPlugin {
     }
 
     private async Task PollRetainerPlansAsync(ulong characterContentId) {
-        if (retainerPlanPollInFlight || !RetainerVentureUploadEnabled || !configuration.EnableAutoRetainerVenturePlans
-            || string.IsNullOrWhiteSpace(configuration.DeviceToken)) return;
+        if (retainerPlanPollInFlight || !RetainerClientPolicy.ShouldPollPlans(
+                retainerPlanServerSupported,
+                configuration.EnableAutoRetainerVenturePlans,
+                autoRetainerLoaded,
+                autoRetainerApiReady,
+                !string.IsNullOrWhiteSpace(configuration.DeviceToken))) return;
         retainerPlanPollInFlight = true;
         try {
             using var request = Request("/api/game-sync/retainer-plans/poll", configuration.DeviceToken, new {
@@ -964,7 +985,7 @@ public sealed class Plugin : IDalamudPlugin {
             status,
             code,
             PluginVersion,
-            RetainerTestingCapabilities.Client,
+            RetainerCapabilities.Client,
             status == "applied" ? now : null,
             outcome?.ObservedBeforeHash,
             outcome?.AppliedHash,
@@ -973,22 +994,25 @@ public sealed class Plugin : IDalamudPlugin {
             outcome?.PriorPlanBackup,
             outcome?.PriorPlanBackup is not null);
 
-        if (ReadLocalContentId() != characterContentId) return Result("deferred", "character_mismatch");
+        if (!RetainerPlanDeliveryPolicy.IsCurrentCharacter(characterContentId, ReadLocalContentId())) return Result("deferred", "character_mismatch");
         if (!configuration.EnableAutoRetainerVenturePlans) return Result("deferred", "planner_opt_in_required");
         if (!autoRetainerLoaded || !autoRetainerPlanWriter.IsReady()) return Result("deferred", "autoretainer_not_ready");
         if (string.IsNullOrWhiteSpace(configuration.DeviceId)) return Result("rejected", "client_update_required");
         var state = RetainerVentureSnapshotPolicy.GetCharacterState(configuration.RetainerVentureStates, characterContentId);
         if (state.RosterObservation.Status != RetainerObservationVocabulary.Complete || state.RosterObservation.RetainedData)
             return Result("deferred", "retainer_not_found");
-        var retainer = state.Retainers.SingleOrDefault(entry => entry.RetainerId == delivery.RetainerId);
+        var retainer = RetainerPlanDeliveryPolicy.ResolveRetainer(state.Retainers, delivery.RetainerId);
         if (retainer?.Name is null) return Result("deferred", "retainer_not_found");
         var ownershipKey = RetainerPlanDeliveryPolicy.OwnershipKey(characterContentId, delivery.RetainerId);
         configuration.AutoRetainerPlanOwnershipStates.TryGetValue(ownershipKey, out var ownership);
-        if (ownership is not null && !string.Equals(ownership.OwnerDeviceId, configuration.DeviceId, StringComparison.Ordinal))
+        if (!RetainerPlanDeliveryPolicy.IsOwnedByDevice(ownership, configuration.DeviceId))
             return Result("rejected", "plan_owner_mismatch");
+        if (delivery.Operation == "apply_projection" && !RetainerPlanDeliveryPolicy.IsLatestDelivery(ownership, delivery))
+            return Result("rejected", "stale_revision");
 
         if (delivery.Operation == "apply_projection") {
-            if (delivery.Steps is null || delivery.CompletionBehavior is null || delivery.RevisionId is null || delivery.ProjectionGeneration is null)
+            if (delivery.Steps is null || delivery.CompletionBehavior is null || delivery.RevisionId is null
+                || delivery.RevisionNumber is null || delivery.ProjectionGeneration is null)
                 return Result("rejected", "invalid_venture");
             var taskSheet = dataManager.GetExcelSheet<RetainerTask>();
             if (taskSheet is null || delivery.Steps.Any(step => taskSheet.GetRowOrDefault(step.VentureId)?.RowId != step.VentureId))
@@ -1007,7 +1031,8 @@ public sealed class Plugin : IDalamudPlugin {
                     delivery.DeliveryId,
                     outcome.ReadBackHash,
                     outcome.PriorPlanBackupHash,
-                    outcome.PriorPlanBackup);
+                    outcome.PriorPlanBackup,
+                    delivery.RevisionNumber.Value);
                 configuration.Save(pluginInterface);
                 return Result("applied", "applied", outcome);
             }
@@ -1078,21 +1103,22 @@ public sealed class Plugin : IDalamudPlugin {
             configuration.Save(pluginInterface);
         }
         ImGui.TextDisabled("Uses the paired device connection only to print requested native item links in chat. No gameplay controls are used.");
-#if GILLIONS_TEST_BUILD
         ImGui.Separator();
         var enableAutoRetainerVenturePlans = configuration.EnableAutoRetainerVenturePlans;
-        if (ImGui.Checkbox("Allow testing Gillions plans to update AutoRetainer", ref enableAutoRetainerVenturePlans)) {
+        var plannerOptInLabel = RetainerClient.Channel == "testing"
+            ? "Allow testing Gillions plans to update AutoRetainer"
+            : "Allow Gillions plans to update AutoRetainer";
+        if (ImGui.Checkbox(plannerOptInLabel, ref enableAutoRetainerVenturePlans)) {
             configuration.EnableAutoRetainerVenturePlans = enableAutoRetainerVenturePlans;
             retainerPlanServerSupported = false;
             nextRetainerPresenceUtc = DateTime.MinValue;
             nextRetainerPlanPollUtc = DateTime.MinValue;
             configuration.Save(pluginInterface);
         }
-        ImGui.TextDisabled("Testing only. Every plan is bounded to 24 executions, backed up before the first write, and protected against outside changes.");
+        ImGui.TextDisabled("Off by default. Every plan is bounded to 24 executions, backed up before the first write, and protected against outside changes.");
         ImGui.TextDisabled(retainerPlanServerSupported
-            ? "The testing server and AutoRetainer safety gates are ready for an explicitly requested plan."
-            : (retainerUploadServerSupported ? "Retainer observation testing is enabled; plan delivery is not currently ready." : "Retainer observations remain local until the testing server capability is available."));
-#endif
+            ? "Gillions and the AutoRetainer safety gates are ready for an explicitly requested plan."
+            : (retainerUploadServerSupported ? "Retainer observation is enabled; plan delivery is not currently ready." : "Retainer observations remain local until Gillions explicitly accepts this client channel."));
         if (!string.IsNullOrWhiteSpace(configuration.SyncBlockedMessage)) {
             ImGui.TextColored(new System.Numerics.Vector4(1f, .5f, .5f, 1f), configuration.SyncBlockedMessage);
         }
@@ -1121,7 +1147,7 @@ public sealed class Plugin : IDalamudPlugin {
     private HttpRequestMessage Request(string path, string token, object body) {
         var request = new HttpRequestMessage(HttpMethod.Post, configuration.ServerUrl.TrimEnd('/') + path) { Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json") };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        request.Headers.UserAgent.ParseAdd($"{ClientProductName}/{PluginVersion}");
+        request.Headers.UserAgent.ParseAdd($"{RetainerClient.ProductName}/{PluginVersion}");
         return request;
     }
 
@@ -1139,7 +1165,7 @@ public sealed class Plugin : IDalamudPlugin {
         content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
         var request = new HttpRequestMessage(HttpMethod.Post, configuration.ServerUrl.TrimEnd('/') + path) { Content = content };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        request.Headers.UserAgent.ParseAdd($"{ClientProductName}/{PluginVersion}");
+        request.Headers.UserAgent.ParseAdd($"{RetainerClient.ProductName}/{PluginVersion}");
         return request;
     }
 
@@ -1310,7 +1336,7 @@ public sealed class PluginConfiguration : IPluginConfiguration {
     public string DeviceToken { get; set; } = "";
     public bool AutomaticSync { get; set; } = true;
     public bool EnableItemLinkRequests { get; set; } = true;
-    public bool EnableAutoRetainerVenturePlans { get; set; }
+    public bool EnableAutoRetainerVenturePlans { get; set; } = false;
     public Dictionary<string, AutoRetainerVenturePlanBackup> AutoRetainerVenturePlanBackups { get; set; } = new(StringComparer.Ordinal);
     public Dictionary<string, AutoRetainerPlanOwnershipState> AutoRetainerPlanOwnershipStates { get; set; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> LastPayloadHashes { get; set; } = new(StringComparer.Ordinal);

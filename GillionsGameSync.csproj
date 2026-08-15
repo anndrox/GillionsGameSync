@@ -1,6 +1,6 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>1.0.8</Version>
+    <Version>1.0.26</Version>
     <AssemblyName>GillionsGameSync</AssemblyName>
     <RootNamespace>GillionsGameSync</RootNamespace>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -9,7 +9,7 @@
     <Author>Gillions</Author>
     <Name>Gillions Game Sync</Name>
     <Punchline>Opt-in account sync for your Gillions profile.</Punchline>
-    <Description>Read-only, manually initiated character inventory synchronization for Gillions. Never automates gameplay or sends Square Enix credentials.</Description>
+    <Description>Opt-in character synchronization for Gillions with separately gated Retainer planner integration. Never automates gameplay or sends Square Enix credentials.</Description>
     <ApplicableVersion>any</ApplicableVersion>
     <GillionsPublicBaseUrl Condition="'$(GillionsPublicBaseUrl)' == ''">https://gillions.app</GillionsPublicBaseUrl>
     <RepoUrl>$(GillionsPublicBaseUrl)</RepoUrl>

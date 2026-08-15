@@ -9,6 +9,7 @@ namespace GillionsGameSync;
 public sealed record RetainerAppliedPlanDocument(
     [property: JsonPropertyName("retainerId")] string RetainerId,
     [property: JsonPropertyName("revisionId")] string RevisionId,
+    [property: JsonPropertyName("revisionNumber")] int RevisionNumber,
     [property: JsonPropertyName("projectionGeneration")] int ProjectionGeneration,
     [property: JsonPropertyName("deliveryId")] string DeliveryId,
     [property: JsonPropertyName("appliedHash")] string AppliedHash,
@@ -73,7 +74,8 @@ internal static class RetainerPlanDeliveryPolicy {
             if (parsed is not { Ok: true, SchemaVersion: 1 }
                 || parsed.PollAfterSeconds is < 15 or > 300
                 || parsed.Deliveries is null || parsed.Deliveries.Length > 10
-                || parsed.Deliveries.Any(delivery => !IsValid(delivery, nowUtc))) return false;
+                || parsed.Deliveries.Any(delivery => !IsValid(delivery, nowUtc))
+                || parsed.Deliveries.GroupBy(delivery => delivery.RetainerId, StringComparer.Ordinal).Any(group => group.Count() > 1)) return false;
             response = parsed;
             return true;
         } catch (Exception error) when (error is JsonException or InvalidOperationException or FormatException) {
@@ -87,15 +89,18 @@ internal static class RetainerPlanDeliveryPolicy {
             || delivery.LeaseToken.Length < 32
             || !ulong.TryParse(delivery.RetainerId, out var retainerId) || retainerId == 0
             || delivery.RetainerName.Length is < 1 or > 64
+            || delivery.CreatedAtUtc.ToUniversalTime() > nowUtc.AddMinutes(1)
+            || delivery.ExpiresAtUtc.ToUniversalTime() <= delivery.CreatedAtUtc.ToUniversalTime()
             || delivery.ExpiresAtUtc.ToUniversalTime() <= nowUtc
             || delivery.RequiredCapabilities is null
-                || !delivery.RequiredCapabilities.All(capability => RetainerTestingCapabilities.Client.Contains(capability))) return false;
+                || !delivery.RequiredCapabilities.All(capability => RetainerCapabilities.Client.Contains(capability))) return false;
         if (delivery.Operation == "apply_projection") {
             if (!Guid.TryParse(delivery.PlanId, out _)
                 || !Guid.TryParse(delivery.RevisionId, out _)
                 || delivery.RevisionNumber is null or < 1
                 || delivery.ProjectionGeneration is null or < 1
                 || delivery.RevisionHash?.Length != 64
+                || delivery.ExpectedAppliedHash is not null && delivery.ExpectedAppliedHash.Length != 64
                 || delivery.CompletionBehavior is not ("assign_quick_venture" or "do_nothing")
                 || delivery.Steps is not { Length: > 0 and <= VenturePlannerCapabilityPolicy.MaximumPendingExecutions }) return false;
             var plan = new GillionsVenturePlanSpec(delivery.RetainerId, delivery.RetainerName, delivery.Steps, delivery.CompletionBehavior);
@@ -114,6 +119,7 @@ internal static class RetainerPlanDeliveryPolicy {
         .Select(entry => new RetainerAppliedPlanDocument(
             entry.Value.RetainerId,
             entry.Value.RevisionId,
+            entry.Value.RevisionNumber,
             entry.Value.ProjectionGeneration,
             entry.Value.DeliveryId,
             entry.Value.AppliedHash,
@@ -123,4 +129,33 @@ internal static class RetainerPlanDeliveryPolicy {
         .ToArray();
 
     public static string OwnershipKey(ulong contentId, string retainerId) => $"{contentId}:{retainerId}";
+
+    public static bool IsCurrentCharacter(ulong requestedContentId, ulong currentContentId) =>
+        requestedContentId != 0 && requestedContentId == currentContentId;
+
+    public static bool IsOwnedByDevice(AutoRetainerPlanOwnershipState? ownership, string deviceId) =>
+        ownership is null || (!string.IsNullOrWhiteSpace(deviceId)
+            && string.Equals(ownership.OwnerDeviceId, deviceId, StringComparison.Ordinal));
+
+    public static RetainerVentureProfile? ResolveRetainer(
+        IEnumerable<RetainerVentureProfile> retainers,
+        string retainerId) {
+        var matches = retainers.Where(entry => string.Equals(entry.RetainerId, retainerId, StringComparison.Ordinal)).Take(2).ToArray();
+        return matches.Length == 1 ? matches[0] : null;
+    }
+
+    public static bool IsLatestDelivery(
+        AutoRetainerPlanOwnershipState? ownership,
+        RetainerPlanDeliveryDocument delivery) {
+        if (delivery.Operation != "apply_projection" || delivery.RevisionNumber is null || delivery.ProjectionGeneration is null) return false;
+        if (ownership is null) return true;
+        // Testing builds published before revision-number persistence still retain
+        // the immutable revision ID and CAS hashes. Accept one valid delivery so
+        // the state can be upgraded without stranding an already-owned plan.
+        if (ownership.RevisionNumber == 0) return true;
+        if (string.Equals(ownership.RevisionId, delivery.RevisionId, StringComparison.Ordinal))
+            return delivery.RevisionNumber.Value == ownership.RevisionNumber
+                && delivery.ProjectionGeneration.Value >= ownership.ProjectionGeneration;
+        return delivery.RevisionNumber.Value > ownership.RevisionNumber;
+    }
 }

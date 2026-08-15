@@ -31,7 +31,7 @@ $zipPath = Join-Path $packageDirectory "$zipBase-$Version.zip"
 $manifestPath = Join-Path $packageDirectory "$zipBase.json"
 
 New-Item -ItemType Directory -Path $output -Force | Out-Null
-$arguments = @('build', $project, '-c', 'Release', "-p:Version=$Version", "-p:GillionsPublicBaseUrl=$PublicBaseUrl", "-p:OutputPath=$output")
+$arguments = @('build', $project, '-c', 'Release', '-warnaserror', "-p:Version=$Version", "-p:GillionsPublicBaseUrl=$PublicBaseUrl", "-p:OutputPath=$output")
 if ($isTesting) { $arguments += '-p:GillionsTestBuild=true' }
 dotnet @arguments
 if ($LASTEXITCODE -ne 0) { throw "$displayName build failed." }
@@ -44,7 +44,23 @@ $packageFiles = @(
 foreach ($file in $packageFiles) {
   if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing package file: $file" }
 }
-Compress-Archive -LiteralPath $packageFiles -DestinationPath $zipPath -Force
+# Keep the immutable release artifact reproducible. Compress-Archive stamps
+# entries with build time, which changes the SHA-256 even when every packaged
+# file is byte-identical.
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+if (Test-Path -LiteralPath $zipPath) { [IO.File]::Delete($zipPath) }
+$archive = [IO.Compression.ZipFile]::Open($zipPath, [IO.Compression.ZipArchiveMode]::Create)
+try {
+  foreach ($file in $packageFiles | Sort-Object { [IO.Path]::GetFileName($_) }) {
+    $entry = $archive.CreateEntry([IO.Path]::GetFileName($file), [IO.Compression.CompressionLevel]::Optimal)
+    $entry.LastWriteTime = [DateTimeOffset]::new(1980, 1, 1, 0, 0, 0, [TimeSpan]::Zero)
+    $source = [IO.File]::OpenRead($file)
+    $destination = $entry.Open()
+    try { $source.CopyTo($destination) }
+    finally { $destination.Dispose(); $source.Dispose() }
+  }
+} finally { $archive.Dispose() }
 $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $downloadUrl = "$PublicBaseUrl/downloads/plugins/$zipBase-$Version.zip"
 
@@ -53,7 +69,7 @@ $manifest = @([ordered]@{
   Name = $displayName
   InternalName = $internalName
   AssemblyVersion = "$Version.0"
-  Description = if ($isTesting) { 'Unreleased, opt-in test build for Gillions Game Sync. Install only when directed for in-game verification.' } else { 'Read-only character and collection synchronization for Gillions. Never automates gameplay or sends Square Enix credentials.' }
+  Description = if ($isTesting) { 'Unreleased, opt-in test build for Gillions Game Sync. Install only when directed for in-game verification.' } else { 'Opt-in character synchronization for Gillions with separately gated Retainer planner integration. Never automates gameplay or sends Square Enix credentials.' }
   ApplicableVersion = 'any'
   RepoUrl = $PublicBaseUrl
   Tags = if ($isTesting) { @('inventory', 'collection', 'testing') } else { @('inventory', 'collection', 'utility') }

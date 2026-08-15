@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.26 - Prepared, not published
+
+- Prepared the live-validated Retainer observation, result acknowledgement, presence, and bounded AutoRetainer plan-delivery implementation for a future stable rollout without enabling production stable-client traffic.
+- Added explicit stable product and contract acceptance: stable Retainer uploads and plan polling remain unavailable unless Gillions acknowledges `GillionsGameSync` contract v1 and the applicable feature set.
+- Kept AutoRetainer plan control off by default after upgrading from stable `1.0.25`; observation remains independent and ordinary Game Sync continues when Retainer support or AutoRetainer is unavailable.
+- Preserved latest-only delivery, the 24-execution limit, exact acknowledgements, device ownership, compare-and-set conflict refusal/retry, immediate read-back, and complete prior-plan restoration.
+- Made local release ZIP creation reproducible so identical candidate contents produce the same SHA-256.
+
 ## 0.0.59 - 2026-08-15 (testing)
 
 - Allowed a new deliberate Sync to compare-and-set from the exact AutoRetainer plan hash previously reported in a bounded `local_plan_changed` acknowledgement.

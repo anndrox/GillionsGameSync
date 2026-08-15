@@ -166,8 +166,33 @@ Assert(RetainerPresencePolicy.NextSuccessDelay(5) == TimeSpan.FromSeconds(35)
 var presenceResponse = JsonSerializer.Serialize(new { ok = true, schemaVersion = 1, serverTimeUtc = ventureNow,
     recommendedHeartbeatSeconds = 30, onlineWindowSeconds = 90, maximumBackoffSeconds = 300,
     featureCompatibility = new { observations = "supported", results = "supported", planner = "server_disabled" } });
-Assert(RetainerPresenceResponsePolicy.TryParse(presenceResponse, out var uploadSupported, out var plannerSupported) && uploadSupported && !plannerSupported,
+Assert(RetainerPresenceResponsePolicy.TryParse(presenceResponse, RetainerClientPolicy.Testing, out var uploadSupported, out var plannerSupported) && uploadSupported && !plannerSupported,
     "a compatible testing presence response must enable only the scoped upload path");
+Assert(!RetainerPresenceResponsePolicy.TryParse(presenceResponse, RetainerClientPolicy.Stable, out _, out _),
+    "an older server response must not enable stable Retainer traffic without explicit product acceptance");
+var stablePresenceResponse = JsonSerializer.Serialize(new { ok = true, schemaVersion = 1, serverTimeUtc = ventureNow,
+    acceptedClientProduct = RetainerClientPolicy.Stable.ProductName,
+    acceptedContractVersion = RetainerClientPolicy.ContractVersion,
+    recommendedHeartbeatSeconds = 30, onlineWindowSeconds = 90, maximumBackoffSeconds = 300,
+    featureCompatibility = new { observations = "supported", results = "supported", planner = "supported" } });
+Assert(RetainerPresenceResponsePolicy.TryParse(stablePresenceResponse, RetainerClientPolicy.Stable, out var stableUploadSupported, out var stablePlannerSupported)
+    && stableUploadSupported && stablePlannerSupported,
+    "stable Retainer behavior must require an exact server product and contract acknowledgement");
+Assert(!RetainerPresenceResponsePolicy.TryParse(stablePresenceResponse.Replace(RetainerClientPolicy.Stable.ProductName, RetainerClientPolicy.Testing.ProductName, StringComparison.Ordinal),
+    RetainerClientPolicy.Stable, out _, out _), "a response for the testing product must not activate the stable product");
+Assert(RetainerClientPolicy.Stable.ProductName != RetainerClientPolicy.Testing.ProductName
+    && RetainerClientPolicy.Stable.Channel == "stable" && RetainerClientPolicy.Testing.Channel == "testing",
+    "stable and testing products must retain distinct identities while sharing contract v1");
+var ordinaryScopes = new[] { "inventory", "collectibles" };
+Assert(RetainerClientPolicy.BuildSyncScopes(ordinaryScopes, false).SequenceEqual(ordinaryScopes),
+    "an older server without Retainer support must preserve ordinary Game Sync scopes unchanged");
+Assert(RetainerClientPolicy.BuildSyncScopes(ordinaryScopes, true).SequenceEqual(new[] { "inventory", "collectibles", "retainer_ventures" }),
+    "Retainer observation must activate only after the server accepts the client");
+Assert(!RetainerClientPolicy.ShouldPollPlans(false, true, true, true, true), "server plan acceptance is mandatory");
+Assert(!RetainerClientPolicy.ShouldPollPlans(true, false, true, true, true), "planner opt-in must default to disabled");
+Assert(!RetainerClientPolicy.ShouldPollPlans(true, true, false, true, true), "AutoRetainer absence must disable plan polling");
+Assert(!RetainerClientPolicy.ShouldPollPlans(true, true, true, false, true), "an unavailable AutoRetainer API must disable plan polling");
+Assert(RetainerClientPolicy.ShouldPollPlans(true, true, true, true, true), "Multi Mode must not be a prerequisite for an otherwise eligible plan poll");
 Console.WriteLine("retainer venture snapshot and retry tests passed");
 
 var managedPlan = new GillionsVenturePlanSpec("100", "Fixture-retainer", [new(245, 3), new(112, 1)], "do_nothing");
@@ -230,7 +255,7 @@ var deliveryJson = JsonSerializer.Serialize(new {
         steps = new[] { new { ventureId = 245u, repetitions = 24 } },
         priorPlanBackupHash = (string?)null,
         priorPlanBackup = (object?)null,
-        requiredCapabilities = RetainerTestingCapabilities.Client,
+        requiredCapabilities = RetainerCapabilities.Client,
         createdAtUtc = ventureNow,
         expiresAtUtc = ventureNow.AddMinutes(1),
     } }
@@ -241,12 +266,48 @@ Assert(RetainerPlanDeliveryPolicy.TryParse(deliveryJson, ventureNow, out var par
 var oversizedDeliveryJson = deliveryJson.Replace("\"repetitions\":24", "\"repetitions\":25", StringComparison.Ordinal);
 Assert(!RetainerPlanDeliveryPolicy.TryParse(oversizedDeliveryJson, ventureNow, out _), "a 25-execution delivery must be rejected before AutoRetainer access");
 Assert(!RetainerPlanDeliveryPolicy.TryParse(deliveryJson, ventureNow.AddMinutes(2), out _), "an expired delivery lease must be rejected before AutoRetainer access");
+Assert(!RetainerPlanDeliveryPolicy.TryParse(deliveryJson.Replace("\"expectedAppliedHash\":null", "\"expectedAppliedHash\":\"bad\"", StringComparison.Ordinal), ventureNow, out _),
+    "a mismatched compare-and-set hash shape must be rejected before AutoRetainer access");
+var duplicateRetainerResponse = parsedDelivery! with {
+    Deliveries = [
+        parsedDelivery.Deliveries.Single(),
+        parsedDelivery.Deliveries.Single() with { DeliveryId = Guid.NewGuid().ToString(), RevisionId = Guid.NewGuid().ToString() },
+    ],
+};
+Assert(!RetainerPlanDeliveryPolicy.TryParse(JsonSerializer.Serialize(duplicateRetainerResponse), ventureNow, out _),
+    "multiple revisions for one Retainer in a poll must be rejected rather than applied sequentially");
 var ownershipFixtures = new Dictionary<string, AutoRetainerPlanOwnershipState>(StringComparer.Ordinal) {
     [RetainerPlanDeliveryPolicy.OwnershipKey(111, "100")] = new("device", "100", Guid.NewGuid().ToString(), 1, Guid.NewGuid().ToString(), new string('c', 64), AutoRetainerVenturePlanMutation.Hash(originalPlan), originalPlan),
     [RetainerPlanDeliveryPolicy.OwnershipKey(222, "100")] = new("device", "100", Guid.NewGuid().ToString(), 1, Guid.NewGuid().ToString(), new string('d', 64), AutoRetainerVenturePlanMutation.Hash(originalPlan), originalPlan),
 };
 Assert(RetainerPlanDeliveryPolicy.AppliedPlansForCharacter(ownershipFixtures, 111).Single().RetainerId == "100",
     "presence must report only the active character's locally applied plan state");
+Assert(RetainerPlanDeliveryPolicy.IsCurrentCharacter(111, 111) && !RetainerPlanDeliveryPolicy.IsCurrentCharacter(111, 222),
+    "a delivery captured for another active character must be rejected");
+Assert(RetainerPlanDeliveryPolicy.ResolveRetainer(ventureState.Retainers, "100")?.Name == "Active"
+    && RetainerPlanDeliveryPolicy.ResolveRetainer(ventureState.Retainers, "999") is null,
+    "a delivery for a foreign Retainer ID must be rejected instead of falling back to a name or list position");
+Assert(RetainerPlanDeliveryPolicy.IsOwnedByDevice(null, "device")
+    && RetainerPlanDeliveryPolicy.IsOwnedByDevice(ownershipFixtures[RetainerPlanDeliveryPolicy.OwnershipKey(111, "100")], "device")
+    && !RetainerPlanDeliveryPolicy.IsOwnedByDevice(ownershipFixtures[RetainerPlanDeliveryPolicy.OwnershipKey(111, "100")], "foreign-device"),
+    "existing Gillions plan ownership must remain pinned to its original device");
+var trackedRevision = ownershipFixtures[RetainerPlanDeliveryPolicy.OwnershipKey(111, "100")] with {
+    RevisionId = Guid.NewGuid().ToString(),
+    RevisionNumber = 2,
+    ProjectionGeneration = 1,
+};
+var deliveryFixture = parsedDelivery.Deliveries.Single();
+Assert(RetainerPlanDeliveryPolicy.IsLatestDelivery(trackedRevision with { RevisionNumber = 0 }, deliveryFixture),
+    "ownership persisted by an older client without a revision number must accept one valid delivery to upgrade its state");
+Assert(!RetainerPlanDeliveryPolicy.IsLatestDelivery(trackedRevision, deliveryFixture with { RevisionNumber = 1 }),
+    "an older immutable revision must be rejected even if it arrives with a valid lease");
+Assert(RetainerPlanDeliveryPolicy.IsLatestDelivery(trackedRevision, deliveryFixture with { RevisionNumber = 3 }),
+    "a newer deliberately requested immutable revision may advance the owned plan");
+Assert(RetainerPlanDeliveryPolicy.IsLatestDelivery(trackedRevision, deliveryFixture with {
+    RevisionId = trackedRevision.RevisionId,
+    RevisionNumber = trackedRevision.RevisionNumber,
+    ProjectionGeneration = trackedRevision.ProjectionGeneration + 1,
+}), "a newer server projection of the current revision may advance without becoming a different revision");
 Console.WriteLine("Retainer plan delivery contract tests passed");
 
 Assert(!NativeItemLinkFactory.IsValidItemId(0), "zero item ID must be rejected");

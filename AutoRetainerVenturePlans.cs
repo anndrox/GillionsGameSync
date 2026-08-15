@@ -40,6 +40,7 @@ public sealed record AutoRetainerPlanOwnershipState(
     string AppliedHash,
     string PriorPlanBackupHash,
     AutoRetainerVenturePlanBackup PriorPlanBackup,
+    int RevisionNumber = 0,
     bool RestoreApplied = false);
 
 internal enum AutoRetainerPlanApplyResult {

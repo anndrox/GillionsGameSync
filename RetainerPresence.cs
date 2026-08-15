@@ -11,7 +11,7 @@ using Dalamud.Plugin;
 
 namespace GillionsGameSync;
 
-public static class RetainerTestingCapabilities {
+public static class RetainerCapabilities {
     public static readonly string[] Client = [
         "retainer.observations.v1",
         "retainer.results.v1",
@@ -47,6 +47,8 @@ public sealed record RetainerPresenceDocument(
     [property: JsonPropertyName("schemaVersion")] int SchemaVersion,
     [property: JsonPropertyName("character")] RetainerPresenceCharacter Character,
     [property: JsonPropertyName("observedAtUtc")] DateTime ObservedAtUtc,
+    [property: JsonPropertyName("clientProduct")] string ClientProduct,
+    [property: JsonPropertyName("clientChannel")] string ClientChannel,
     [property: JsonPropertyName("clientVersion")] string ClientVersion,
     [property: JsonPropertyName("contractVersion")] int ContractVersion,
     [property: JsonPropertyName("capabilities")] string[] Capabilities,
@@ -58,7 +60,11 @@ public sealed record AutoRetainerObservationProbe(
     AutoRetainerStatsRead[] Stats);
 
 public static class RetainerPresenceResponsePolicy {
-    public static bool TryParse(string json, out bool uploadSupported, out bool plannerSupported) {
+    public static bool TryParse(
+        string json,
+        RetainerClientProfile client,
+        out bool uploadSupported,
+        out bool plannerSupported) {
         uploadSupported = false;
         plannerSupported = false;
         try {
@@ -74,6 +80,15 @@ public static class RetainerPresenceResponsePolicy {
                 || !compatibility.TryGetProperty("observations", out var observations)
                 || !compatibility.TryGetProperty("results", out var results)
                 || !compatibility.TryGetProperty("planner", out var planner)) return false;
+            var hasAcceptedProduct = root.TryGetProperty("acceptedClientProduct", out var acceptedProduct)
+                && acceptedProduct.ValueKind == JsonValueKind.String;
+            var acceptedContractVersion = 0;
+            var hasAcceptedContract = root.TryGetProperty("acceptedContractVersion", out var acceptedContract)
+                && acceptedContract.ValueKind == JsonValueKind.Number
+                && acceptedContract.TryGetInt32(out acceptedContractVersion);
+            if ((hasAcceptedProduct && !string.Equals(acceptedProduct.GetString(), client.ProductName, StringComparison.Ordinal))
+                || (hasAcceptedContract && acceptedContractVersion != RetainerClientPolicy.ContractVersion)
+                || (client.RequiresExplicitServerProductAcceptance && (!hasAcceptedProduct || !hasAcceptedContract))) return false;
             uploadSupported = observations.GetString() == "supported" && results.GetString() == "supported";
             plannerSupported = planner.GetString() == "supported";
             return true;
