@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.61 - 2026-08-15 (testing)
+
+- Fixed prior-plan restoration after a deliberate conflict review so the exact newly acknowledged AutoRetainer state can be used as the retry baseline.
+- Preserved fail-closed behavior if AutoRetainer changes again before restoration, plus the original backup, immediate read-back, device ownership, and execution-limit safeguards.
+
 ## 0.0.60 - 2026-08-15 (testing)
 
 - Rebased the testing client on the stable `1.0.26` contract implementation so Retainer presence identifies the authenticated `GillionsGameSyncTest` product and `testing` channel explicitly.

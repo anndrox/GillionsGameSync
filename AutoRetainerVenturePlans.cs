@@ -104,6 +104,10 @@ internal static class AutoRetainerOwnedPlanPolicy {
                 ? AutoRetainerOwnedPlanDecision.Apply
                 : AutoRetainerOwnedPlanDecision.Conflict;
     }
+
+    public static bool CanRestore(string? expectedAppliedHash, string observedBeforeHash) =>
+        !string.IsNullOrWhiteSpace(expectedAppliedHash)
+        && string.Equals(observedBeforeHash, expectedAppliedHash, StringComparison.Ordinal);
 }
 
 #if !GILLIONS_POLICY_TESTS
@@ -181,8 +185,7 @@ internal sealed class AutoRetainerVenturePlanWriter(IDalamudPluginInterface plug
             var beforeHash = AutoRetainerVenturePlanMutation.Hash(before);
             if (string.Equals(beforeHash, ownership.PriorPlanBackupHash, StringComparison.Ordinal))
                 return new(AutoRetainerPlanApplyResult.Idempotent, beforeHash, beforeHash, beforeHash, ownership.PriorPlanBackupHash, ownership.PriorPlanBackup);
-            if (!string.Equals(expectedAppliedHash, ownership.AppliedHash, StringComparison.Ordinal)
-                || !string.Equals(beforeHash, ownership.AppliedHash, StringComparison.Ordinal))
+            if (!AutoRetainerOwnedPlanPolicy.CanRestore(expectedAppliedHash, beforeHash))
                 return new(AutoRetainerPlanApplyResult.CasMismatch, beforeHash, PriorPlanBackupHash: ownership.PriorPlanBackupHash, PriorPlanBackup: ownership.PriorPlanBackup);
 
             AutoRetainerVenturePlanMutation.Restore(data, ownership.PriorPlanBackup);
