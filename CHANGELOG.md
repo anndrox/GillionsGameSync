@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.57 - 2026-08-14 (testing)
+
+- Corrected AutoRetainer additional-data IPC calls to bind to AutoRetainer's loaded runtime contract instead of the incompatible generic `object` return type.
+- Preserved the existing testing-only opt-in, bounded-plan, backup, compare-and-set, read-back, and restoration safeguards. Stable `1.0.25` remains unchanged.
+
 ## 0.0.56 - 2026-08-14 (testing)
 
 - Added explicit testing-only AutoRetainer planner opt-in and authenticated latest-only Gillions plan polling.

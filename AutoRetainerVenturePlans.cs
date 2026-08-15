@@ -83,6 +83,8 @@ internal static class VenturePlannerCapabilityPolicy {
 
 #if !GILLIONS_POLICY_TESTS
 internal sealed class AutoRetainerVenturePlanWriter(IDalamudPluginInterface pluginInterface) {
+    private readonly AutoRetainerIpc autoRetainerIpc = new(pluginInterface);
+
     public bool IsReady() {
         try {
             pluginInterface.GetIpcSubscriber<object>("AutoRetainer.Init").InvokeAction();
@@ -171,13 +173,11 @@ internal sealed class AutoRetainerVenturePlanWriter(IDalamudPluginInterface plug
         }
     }
 
-    private object? ReadFresh(ulong contentId, string retainerName) => pluginInterface
-        .GetIpcSubscriber<ulong, string, object>("AutoRetainer.GetAdditionalRetainerData")
-        .InvokeFunc(contentId, retainerName);
+    private object? ReadFresh(ulong contentId, string retainerName) =>
+        autoRetainerIpc.ReadAdditionalRetainerData(contentId, retainerName);
 
-    private void Write(ulong contentId, string retainerName, object data) => pluginInterface
-        .GetIpcSubscriber<ulong, string, object, object>("AutoRetainer.WriteAdditionalRetainerData")
-        .InvokeAction(contentId, retainerName, data);
+    private void Write(ulong contentId, string retainerName, object data) =>
+        autoRetainerIpc.WriteAdditionalRetainerData(contentId, retainerName, data);
 
     private void TryRollback(ulong contentId, string retainerName, AutoRetainerVenturePlanBackup state) {
         try {

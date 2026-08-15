@@ -83,6 +83,8 @@ public static class RetainerPresenceResponsePolicy {
 
 #if !GILLIONS_POLICY_TESTS
 internal sealed class AutoRetainerObservationReader(IDalamudPluginInterface pluginInterface) {
+    private readonly AutoRetainerIpc autoRetainerIpc = new(pluginInterface);
+
     public AutoRetainerObservationProbe Read(ulong contentId, IEnumerable<RetainerVentureProfile> retainers, bool plannerOptIn, DateTime observedAtUtc) {
         var plugin = pluginInterface.InstalledPlugins.FirstOrDefault(entry =>
             string.Equals(entry.InternalName, "AutoRetainer", StringComparison.OrdinalIgnoreCase));
@@ -103,7 +105,7 @@ internal sealed class AutoRetainerObservationReader(IDalamudPluginInterface plug
         var stats = new List<AutoRetainerStatsRead>();
         var plannerEnabled = false;
         foreach (var retainer in retainers) {
-            var additional = TryInvoke<ulong, string, object>("AutoRetainer.GetAdditionalRetainerData", contentId, retainer.Name ?? "");
+            var additional = autoRetainerIpc.ReadAdditionalRetainerData(contentId, retainer.Name ?? "");
             if (additional is null) continue;
             plannerEnabled |= ReadBoolean(additional, "EnablePlanner") == true;
             var itemLevel = ReadNonNegative(additional, "Ilvl");
