@@ -7,7 +7,7 @@ GitHub is the source-history authority. The Gillions static plugin service remai
 Create a candidate without publishing:
 
 ```powershell
-./scripts/package.ps1 -Channel testing -Version 0.0.59
+./scripts/package.ps1 -Channel testing -Version 0.0.60
 ./scripts/package.ps1 -Channel stable -Version 1.0.26
 ```
 
@@ -25,9 +25,9 @@ The script validates the version and public origin, builds Release, creates a de
 
 Publishing credentials and server configuration are intentionally not stored in this repository.
 
-Testing `0.0.59` requires a production web runtime with `RETAINER_TESTING_UPLOAD_ENABLED=true`. That switch enables only an authenticated, currently present `GillionsGameSyncTest` client declaring the complete v1 observation/result/exact-ack/presence capability set. It does not enable stable clients, add the resource to legacy scopes, or enable plan delivery or AutoRetainer writes. Disabling the switch and recreating web immediately closes only this testing path.
+Testing `0.0.60` requires a production web runtime with `RETAINER_TESTING_UPLOAD_ENABLED=true`. That switch enables only an authenticated, currently present `GillionsGameSyncTest` client declaring the complete v1 observation/result/exact-ack/presence capability set. It does not enable stable clients, add the resource to legacy scopes, or enable plan delivery or AutoRetainer writes. Disabling the switch and recreating web immediately closes only this testing path.
 
-Testing `0.0.59` requires the independent `RETAINER_PLAN_DELIVERY_ENABLED=true` runtime gate and the full plan-delivery/application/completion capability set. Disable that gate and recreate only web to stop all Gillions-to-AutoRetainer writes without disabling normal Game Sync or Retainer observations. Never publish this build to the stable manifest.
+Testing `0.0.60` requires the independent `RETAINER_PLAN_DELIVERY_ENABLED=true` runtime gate and the full plan-delivery/application/completion capability set. Disable that gate and recreate only web to stop all Gillions-to-AutoRetainer writes without disabling normal Game Sync or Retainer observations. Never publish this build to the stable manifest.
 
 ## Stable Retainer rollout
 

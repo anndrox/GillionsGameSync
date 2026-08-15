@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.60 - 2026-08-15 (testing)
+
+- Rebased the testing client on the stable `1.0.26` contract implementation so Retainer presence identifies the authenticated `GillionsGameSyncTest` product and `testing` channel explicitly.
+- Restored compatible testing heartbeats and exact prior-plan restoration without weakening the server's product/channel validation, device ownership, compare-and-set, read-back, or execution-limit safeguards.
+
 ## 1.0.26 - 2026-08-15
 
 - Promoted the live-validated Retainer observation, result acknowledgement, presence, and bounded AutoRetainer plan-delivery implementation to stable.
