@@ -216,6 +216,12 @@ Assert(AutoRetainerOwnedPlanPolicy.Decide(conflictHash, ownedHash, changedAgainH
     "another local edit after the conflict observation must fail closed");
 Assert(AutoRetainerOwnedPlanPolicy.Decide(ownedHash, changedAgainHash, changedAgainHash, true) == AutoRetainerOwnedPlanDecision.Idempotent,
     "an already applied managed plan must remain replay-safe");
+Assert(AutoRetainerOwnedPlanPolicy.CanRestore(ownedHash, ownedHash),
+    "an unchanged Gillions-managed plan must remain eligible for exact restoration");
+Assert(AutoRetainerOwnedPlanPolicy.CanRestore(conflictHash, conflictHash),
+    "a deliberate restoration retry must accept the exact externally changed state acknowledged to Gillions");
+Assert(!AutoRetainerOwnedPlanPolicy.CanRestore(conflictHash, changedAgainHash),
+    "restoration must fail closed if AutoRetainer changes again after the acknowledged retry baseline");
 var fakeAdditionalData = new FakeAdditionalRetainerData();
 fakeAdditionalData.VenturePlan.List.Add(new FakePlannedVenture { ID = 999, Num = 9 });
 var originalPlan = AutoRetainerVenturePlanMutation.Capture(fakeAdditionalData);

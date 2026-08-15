@@ -7,8 +7,8 @@ GitHub is the source-history authority. The Gillions static plugin service remai
 Create a candidate without publishing:
 
 ```powershell
-./scripts/package.ps1 -Channel testing -Version 0.0.59
-./scripts/package.ps1 -Channel stable -Version 1.0.26
+./scripts/package.ps1 -Channel testing -Version 0.0.61
+./scripts/package.ps1 -Channel stable -Version 1.0.27
 ```
 
 The script validates the version and public origin, builds Release, creates a deterministic three-file ZIP, writes a feed-compatible manifest, and reports the ZIP SHA-256. Identical source and dependencies produce identical packaged file contents and archive metadata. Output stays below ignored `artifacts/`.
@@ -25,13 +25,13 @@ The script validates the version and public origin, builds Release, creates a de
 
 Publishing credentials and server configuration are intentionally not stored in this repository.
 
-Testing `0.0.59` requires a production web runtime with `RETAINER_TESTING_UPLOAD_ENABLED=true`. That switch enables only an authenticated, currently present `GillionsGameSyncTest` client declaring the complete v1 observation/result/exact-ack/presence capability set. It does not enable stable clients, add the resource to legacy scopes, or enable plan delivery or AutoRetainer writes. Disabling the switch and recreating web immediately closes only this testing path.
+Testing `0.0.61` requires a production web runtime with `RETAINER_TESTING_UPLOAD_ENABLED=true`. That switch enables only an authenticated, currently present `GillionsGameSyncTest` client declaring the complete v1 observation/result/exact-ack/presence capability set. It does not enable stable clients, add the resource to legacy scopes, or enable plan delivery or AutoRetainer writes. Disabling the switch and recreating web immediately closes only this testing path.
 
-Testing `0.0.59` requires the independent `RETAINER_PLAN_DELIVERY_ENABLED=true` runtime gate and the full plan-delivery/application/completion capability set. Disable that gate and recreate only web to stop all Gillions-to-AutoRetainer writes without disabling normal Game Sync or Retainer observations. Never publish this build to the stable manifest.
+Testing `0.0.61` requires the independent `RETAINER_PLAN_DELIVERY_ENABLED=true` runtime gate and the full plan-delivery/application/completion capability set. Disable that gate and recreate only web to stop all Gillions-to-AutoRetainer writes without disabling normal Game Sync or Retainer observations. Never publish this build to the stable manifest.
 
 ## Stable Retainer rollout
 
-Stable `1.0.26` is published. Production uses separate `RETAINER_STABLE_UPLOAD_ENABLED` and `RETAINER_STABLE_PLAN_DELIVERY_ENABLED` gates. A stable presence response may advertise support only after validating the authenticated `GillionsGameSync` product, contract v1, and required capabilities, and must echo:
+Stable `1.0.27` is published. Production uses separate `RETAINER_STABLE_UPLOAD_ENABLED` and `RETAINER_STABLE_PLAN_DELIVERY_ENABLED` gates. A stable presence response may advertise support only after validating the authenticated `GillionsGameSync` product, contract v1, and required capabilities, and must echo:
 
 - `acceptedClientProduct: "GillionsGameSync"`;
 - `acceptedContractVersion: 1`.
