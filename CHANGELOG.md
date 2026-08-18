@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+## 1.0.28 - 2026-08-17
+
+- Send unlocked Tomes of Regional Folklore as stable, deduplicated item IDs in the existing complete Collectibles snapshot for Mining, Botany, and Fishing tracking on Gillions.
+
+## 0.0.62 - 2026-08-17 (testing)
+
+- Validated the stable Regional Folklore tome-ID Collectibles mapping before promotion to stable `1.0.28`.
+
 ## 1.0.27 - 2026-08-15
 
 - Fixed prior-plan restoration after a deliberate conflict review so the exact newly acknowledged AutoRetainer state can be used as the retry baseline.

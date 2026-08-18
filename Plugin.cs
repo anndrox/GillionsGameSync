@@ -110,6 +110,7 @@ public sealed class Plugin : IDalamudPlugin {
 #endif
 #if GILLIONS_TEST_BUILD
     private static readonly string[] CurrentChangelog = [
+        "Gathering Tomes: Gillions now receives stable Regional Folklore tome IDs through the existing Collectibles sync.",
         "Testing planner: Gillions can deliver only an explicitly synchronized, fixed Retainer venture plan after you opt in.",
         "Plan safety: The original AutoRetainer plan and completion behavior are backed up, verified after every write, and restorable.",
         "Conflict recovery: A new deliberate Sync may adopt only the exact AutoRetainer plan state previously reported to Gillions; another local edit still blocks the write.",
@@ -118,6 +119,7 @@ public sealed class Plugin : IDalamudPlugin {
     ];
 #else
     private static readonly string[] CurrentChangelog = [
+        "Gathering Tomes: Gillions now receives stable Regional Folklore tome IDs through the existing Collectibles sync.",
         "Retainer readiness: The validated read-only Retainer observation and result contract is prepared for a future stable rollout.",
         "Explicit server gate: Stable Retainer traffic stays off unless Gillions explicitly accepts the stable client product and contract.",
         "Planner safety: AutoRetainer plan control remains off by default and requires your separate opt-in plus every server and client safety check.",

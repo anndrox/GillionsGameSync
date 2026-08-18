@@ -730,13 +730,20 @@ internal static class CollectibleCollector {
     public static long[] ReadPortraitPoses(IDataManager dataManager, IUnlockState unlockState) => Read<BannerTimeline>(dataManager, unlockState.IsBannerTimelineUnlocked);
     public static long[] ReadMasterRecipeBooks(IDataManager dataManager, IUnlockState unlockState) => Read<SecretRecipeBook>(dataManager, unlockState.IsSecretRecipeBookUnlocked);
 
-    // Folklore access is represented by its book item IDs. The client state is
-    // read-only and values are sent only when a book is known unlocked.
+    // Folklore ownership is read from the authoritative unlock state keyed by
+    // GatheringSubCategory, then transmitted as stable tome Item row IDs. A
+    // single tome may unlock more than one subcategory, so canonical item IDs
+    // are deduplicated before the complete Collectibles snapshot is sent.
     public static unsafe long[] ReadFolkloreBookIds(IDataManager dataManager) {
         var player = PlayerState.Instance();
         var books = SheetRowCache<GatheringSubCategory>.Get(dataManager);
         if (player == null) return [];
-        return books.Where(row => row.RowId > 0 && player->IsFolkloreBookUnlocked((uint)row.RowId)).Select(row => (long)row.RowId).ToArray();
+        return books
+            .Where(row => row.RowId > 0 && row.Item.RowId > 0 && player->IsFolkloreBookUnlocked((uint)row.RowId))
+            .Select(row => (long)row.Item.RowId)
+            .Distinct()
+            .Order()
+            .ToArray();
     }
 }
 
