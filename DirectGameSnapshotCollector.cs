@@ -275,6 +275,7 @@ internal static class SharedFateCollector {
                 var zeroTerritories = 0;
                 var zeroMaximumRanks = 0;
                 var outOfRangeMaximumRanks = 0;
+                var nonCanonicalMaximumRanks = 0;
                 var ranksAboveMaximum = 0;
                 var unavailableRequirements = 0;
                 var progressAboveRequirement = 0;
@@ -287,12 +288,13 @@ internal static class SharedFateCollector {
                     zoneEntries.Add(new SharedFateZoneProgress(zone.TerritoryTypeId, zone.CurrentRank, maximumRank, zone.FateProgress, zone.NeededFates));
                     if (zone.MaxRank == 0) zeroMaximumRanks++;
                     if (zone.MaxRank > ProgressionSnapshotPolicy.SharedFateMaximumAcceptedRank) outOfRangeMaximumRanks++;
+                    if (zone.MaxRank != maximumRank) nonCanonicalMaximumRanks++;
                     if (zone.CurrentRank > maximumRank) ranksAboveMaximum++;
                     if (zone.NeededFates == 0 && zone.CurrentRank != maximumRank) unavailableRequirements++;
                     if (zone.NeededFates > 0 && zone.FateProgress > zone.NeededFates) progressAboveRequirement++;
                 }
                 nativeTabs.Add(zoneEntries);
-                tabDiagnostics.Add($"position={position},nativeIndex={tab.TabIndex},populated={zoneEntries.Count},zeroTerritory={zeroTerritories},zeroMaxRank={zeroMaximumRanks},outOfRangeMaxRank={outOfRangeMaximumRanks},rankAboveMax={ranksAboveMaximum},neededUnavailable={unavailableRequirements},progressAboveNeeded={progressAboveRequirement}");
+                tabDiagnostics.Add($"position={position},nativeIndex={tab.TabIndex},populated={zoneEntries.Count},zeroTerritory={zeroTerritories},zeroMaxRank={zeroMaximumRanks},outOfRangeMaxRank={outOfRangeMaximumRanks},nonCanonicalMaxRank={nonCanonicalMaximumRanks},rankAboveMax={ranksAboveMaximum},neededUnavailable={unavailableRequirements},progressAboveNeeded={progressAboveRequirement}");
                 position++;
             }
             // FateProgressTab.TabIndex is a UI-facing native value. The API

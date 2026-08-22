@@ -30,8 +30,12 @@ Assert(ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(0, byte.MaxValue
     && ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(1, byte.MaxValue) == 3
     && ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(2, byte.MaxValue) == 4,
     "native out-of-contract Shared FATE maximum-rank sentinels must use the established per-tab game caps");
-Assert(ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(2, 5) == 5,
-    "a future nonzero native Shared FATE maximum rank must remain authoritative");
+Assert(ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(0, 75) == 3
+    && ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(1, 33) == 3
+    && ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(2, 5) == 4,
+    "native Shared FATE bytes must not override the fixed game cap for a known tab");
+Assert(ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(3, 5) == 5,
+    "a plausible native Shared FATE maximum rank remains authoritative for an unknown future tab");
 Assert(ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(3, 0) == 0,
     "an unknown tab must not invent a Shared FATE maximum rank");
 var completeTabs = Enumerable.Range(0, 3).Select(tabIndex => new SharedFateTabProgress((byte)tabIndex,

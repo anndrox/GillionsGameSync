@@ -17,10 +17,10 @@ internal static class ProgressionSnapshotPolicy {
     public static byte NormalizeAlliedSocietyRank(byte rank) => (byte)(rank & 0x7F);
 
     public static byte NormalizeSharedFateMaximumRank(int tabIndex, byte nativeMaximumRank) =>
-        nativeMaximumRank is > 0 and <= SharedFateMaximumAcceptedRank
-            ? nativeMaximumRank
-            : tabIndex >= 0 && tabIndex < SharedFateMaximumRanksByTab.Length
-                ? SharedFateMaximumRanksByTab[tabIndex]
+        tabIndex >= 0 && tabIndex < SharedFateMaximumRanksByTab.Length
+            ? SharedFateMaximumRanksByTab[tabIndex]
+            : nativeMaximumRank is > 0 and <= SharedFateMaximumAcceptedRank
+                ? nativeMaximumRank
                 : (byte)0;
 
     public static bool IsCompleteSharedFateTab(byte tabIndex, IReadOnlyCollection<SharedFateZoneProgress> zones) =>
