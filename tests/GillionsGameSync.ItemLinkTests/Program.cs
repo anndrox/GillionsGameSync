@@ -25,7 +25,12 @@ Assert(ProgressionSnapshotPolicy.NormalizeAlliedSocietyRank(0x87) == 7, "the ran
 var completeTabs = Enumerable.Range(0, 3).Select(tabIndex => new SharedFateTabProgress((byte)tabIndex,
     Enumerable.Range(0, 6).Select(zoneIndex => new SharedFateZoneProgress((uint)(1000 + tabIndex * 10 + zoneIndex), 2, 3, 20, 60)).ToArray())).ToArray();
 Assert(ProgressionSnapshotPolicy.IsCompleteSharedFateSnapshot(completeTabs), "three valid six-zone Shared FATE tabs must be complete");
+var canonicalTabs = ProgressionSnapshotPolicy.BuildCompleteSharedFateSnapshot(completeTabs.Select(tab => (IReadOnlyCollection<SharedFateZoneProgress>)tab.Zones));
+Assert(canonicalTabs is not null && canonicalTabs.Select(tab => tab.TabIndex).SequenceEqual(new byte[] { 0, 1, 2 }),
+    "the native fixed-array display order must become the zero-based server tab contract");
 Assert(!ProgressionSnapshotPolicy.IsCompleteSharedFateSnapshot(completeTabs.Take(2)), "a partial Shared FATE tab set must not be uploaded as complete");
+Assert(ProgressionSnapshotPolicy.BuildCompleteSharedFateSnapshot(completeTabs.Take(2).Select(tab => (IReadOnlyCollection<SharedFateZoneProgress>)tab.Zones)) is null,
+    "canonicalization must not turn a partial native tab set into a complete snapshot");
 var duplicateZoneTabs = completeTabs.Select(tab => new SharedFateTabProgress(tab.TabIndex, tab.Zones.ToArray())).ToArray();
 duplicateZoneTabs[2].Zones[5] = duplicateZoneTabs[2].Zones[4];
 Assert(!ProgressionSnapshotPolicy.IsCompleteSharedFateSnapshot(duplicateZoneTabs), "duplicate Shared FATE territories must be rejected");

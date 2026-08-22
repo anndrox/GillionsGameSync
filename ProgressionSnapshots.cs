@@ -22,6 +22,14 @@ internal static class ProgressionSnapshotPolicy {
             && ((zone.NeededFates > 0 && zone.CompletedFates <= zone.NeededFates)
                 || (zone.Rank == zone.MaxRank && zone.NeededFates == 0)));
 
+    public static SharedFateTabProgress[]? BuildCompleteSharedFateSnapshot(
+        IEnumerable<IReadOnlyCollection<SharedFateZoneProgress>> nativeTabsInDisplayOrder) {
+        var tabs = nativeTabsInDisplayOrder
+            .Select((zones, index) => new SharedFateTabProgress((byte)index, zones.ToArray()))
+            .ToArray();
+        return IsCompleteSharedFateSnapshot(tabs) ? tabs : null;
+    }
+
     public static bool IsCompleteSharedFateSnapshot(IEnumerable<SharedFateTabProgress> tabs) {
         var tabList = tabs.ToArray();
         return tabList.Length == SharedFateTabCount

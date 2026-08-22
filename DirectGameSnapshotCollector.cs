@@ -262,20 +262,20 @@ internal static class SharedFateCollector {
         try {
             var agent = AgentFateProgress.Instance();
             if (agent == null) return null;
-            var tabs = new List<SharedFateTabProgress>();
+            var nativeTabs = new List<IReadOnlyCollection<SharedFateZoneProgress>>();
             foreach (ref var tab in agent->Tabs) {
                 var zoneEntries = new List<SharedFateZoneProgress>();
                 foreach (ref var zone in tab.Zones) {
                     if (zone.TerritoryTypeId == 0) continue;
                     zoneEntries.Add(new SharedFateZoneProgress(zone.TerritoryTypeId, zone.CurrentRank, zone.MaxRank, zone.FateProgress, zone.NeededFates));
                 }
-                var zones = zoneEntries.ToArray();
-                if (!ProgressionSnapshotPolicy.IsCompleteSharedFateTab(tab.TabIndex, zones)) continue;
-                tabs.Add(new SharedFateTabProgress(tab.TabIndex, zones));
+                nativeTabs.Add(zoneEntries);
             }
-            return ProgressionSnapshotPolicy.IsCompleteSharedFateSnapshot(tabs)
-                ? new SharedFateRead(tabs.OrderBy(tab => tab.TabIndex).ToArray())
-                : null;
+            // FateProgressTab.TabIndex is a UI-facing native value. The API
+            // contract is zero-based, while the fixed array already supplies
+            // the authoritative display order for its three tabs.
+            var tabs = ProgressionSnapshotPolicy.BuildCompleteSharedFateSnapshot(nativeTabs);
+            return tabs is null ? null : new SharedFateRead(tabs);
         } catch {
             // The Shared FATE agent is server-loaded UI state. Never turn an
             // unopened or partially loaded window into a complete empty result.
