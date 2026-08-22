@@ -282,10 +282,11 @@ internal static class SharedFateCollector {
                         zeroTerritories++;
                         continue;
                     }
-                    zoneEntries.Add(new SharedFateZoneProgress(zone.TerritoryTypeId, zone.CurrentRank, zone.MaxRank, zone.FateProgress, zone.NeededFates));
+                    var maximumRank = ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(position, zone.MaxRank);
+                    zoneEntries.Add(new SharedFateZoneProgress(zone.TerritoryTypeId, zone.CurrentRank, maximumRank, zone.FateProgress, zone.NeededFates));
                     if (zone.MaxRank == 0) zeroMaximumRanks++;
-                    if (zone.CurrentRank > zone.MaxRank) ranksAboveMaximum++;
-                    if (zone.NeededFates == 0 && zone.CurrentRank != zone.MaxRank) unavailableRequirements++;
+                    if (zone.CurrentRank > maximumRank) ranksAboveMaximum++;
+                    if (zone.NeededFates == 0 && zone.CurrentRank != maximumRank) unavailableRequirements++;
                     if (zone.NeededFates > 0 && zone.FateProgress > zone.NeededFates) progressAboveRequirement++;
                 }
                 nativeTabs.Add(zoneEntries);

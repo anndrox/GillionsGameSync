@@ -11,8 +11,16 @@ internal sealed record SharedFateTabProgress(byte TabIndex, SharedFateZoneProgre
 internal static class ProgressionSnapshotPolicy {
     public const int SharedFateTabCount = 3;
     public const int SharedFateZonesPerTab = 6;
+    private static readonly byte[] SharedFateMaximumRanksByTab = [3, 3, 4];
 
     public static byte NormalizeAlliedSocietyRank(byte rank) => (byte)(rank & 0x7F);
+
+    public static byte NormalizeSharedFateMaximumRank(int tabIndex, byte nativeMaximumRank) =>
+        nativeMaximumRank > 0
+            ? nativeMaximumRank
+            : tabIndex >= 0 && tabIndex < SharedFateMaximumRanksByTab.Length
+                ? SharedFateMaximumRanksByTab[tabIndex]
+                : (byte)0;
 
     public static bool IsCompleteSharedFateTab(byte tabIndex, IReadOnlyCollection<SharedFateZoneProgress> zones) =>
         tabIndex < SharedFateTabCount
