@@ -26,6 +26,10 @@ Assert(ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(0, 0) == 3
     && ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(1, 0) == 3
     && ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(2, 0) == 4,
     "native zero Shared FATE maximum-rank sentinels must use the established per-tab game caps");
+Assert(ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(0, byte.MaxValue) == 3
+    && ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(1, byte.MaxValue) == 3
+    && ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(2, byte.MaxValue) == 4,
+    "native out-of-contract Shared FATE maximum-rank sentinels must use the established per-tab game caps");
 Assert(ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(2, 5) == 5,
     "a future nonzero native Shared FATE maximum rank must remain authoritative");
 Assert(ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(3, 0) == 0,
