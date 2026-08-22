@@ -16,9 +16,10 @@ $root = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $root 'GillionsGameSync.csproj'
 $parsedOrigin = $null
 $PublicBaseUrl = $PublicBaseUrl.Trim().TrimEnd('/')
+$allowedSchemes = if ($Channel -eq 'testing') { @('http', 'https') } else { @('https') }
 if (-not [Uri]::TryCreate($PublicBaseUrl, [UriKind]::Absolute, [ref]$parsedOrigin) -or
-    $parsedOrigin.Scheme -ne 'https' -or $parsedOrigin.AbsolutePath -ne '/') {
-  throw 'PublicBaseUrl must be an absolute HTTPS origin without a path.'
+    $parsedOrigin.Scheme -notin $allowedSchemes -or $parsedOrigin.AbsolutePath -ne '/') {
+  throw "PublicBaseUrl must be an absolute $($allowedSchemes -join ' or ') origin without a path."
 }
 
 $isTesting = $Channel -eq 'testing'
