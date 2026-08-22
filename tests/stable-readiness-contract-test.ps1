@@ -19,6 +19,12 @@ if ($plugin -notmatch 'RetainerClientPolicy\.BuildSyncScopes\(SyncScopes, retain
 if ($plugin -notmatch 'RetainerClientPolicy\.ShouldPollPlans\(') {
     throw 'Plan polling is no longer guarded by the shared eligibility policy.'
 }
+if ($plugin -notmatch '#if GILLIONS_TEST_BUILD\s*private const string CommandName = "/gillionssynctest";\s*#else\s*private const string CommandName = "/gillionssync";') {
+    throw 'Stable and testing builds must use distinct command names.'
+}
+if ($plugin -notmatch 'commands\.AddHandler\(CommandName' -or $plugin -notmatch 'commands\.RemoveHandler\(CommandName\)') {
+    throw 'The channel-specific command must be registered and released symmetrically.'
+}
 if ($plugin -notmatch 'A missing or\s*// malformed response cannot leave a previous server grant active\.\s*ClearRetainerServerAcceptance\(\);') {
     throw 'Stable Retainer acceptance is not cleared before heartbeat renewal.'
 }

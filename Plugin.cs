@@ -102,6 +102,11 @@ public sealed class Plugin : IDalamudPlugin {
     private Dictionary<string, int> lastInventoryRecords = new(StringComparer.Ordinal);
     private DateTime diagnosticRecordingUntilUtc = DateTime.MinValue;
     private static readonly string PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "1.0.4";
+#if GILLIONS_TEST_BUILD
+    private const string CommandName = "/gillionssynctest";
+#else
+    private const string CommandName = "/gillionssync";
+#endif
     private static readonly string[] SyncScopes = ["inventory", "currencies", "achievements", "collectibles", "character", "quest_journal", "reputation", "shared_fates", "glamour_plates"];
 #if GILLIONS_TEST_BUILD
     private static readonly RetainerClientProfile RetainerClient = RetainerClientPolicy.Testing;
@@ -168,7 +173,7 @@ public sealed class Plugin : IDalamudPlugin {
         configuration.AutoRetainerVenturePlanBackups ??= new(StringComparer.Ordinal);
         configuration.AutoRetainerPlanOwnershipStates ??= new(StringComparer.Ordinal);
         if (configuration.UseCompiledDefaultServerUrl(GillionsEndpoints.DefaultServerUrl)) configuration.Save(pluginInterface);
-        commands.AddHandler("/gillionssync", new CommandInfo(OnCommand) { HelpMessage = "Pair or sync your selected Gillions data." });
+        commands.AddHandler(CommandName, new CommandInfo(OnCommand) { HelpMessage = "Pair or sync your selected Gillions data." });
         pluginInterface.UiBuilder.Draw += DrawSettings;
         pluginInterface.UiBuilder.OpenConfigUi += OpenSettings;
         RefreshAutoRetainerCompatibilityMode();
@@ -823,6 +828,8 @@ public sealed class Plugin : IDalamudPlugin {
                 if (selectedScopes.Contains("retainer_ventures", StringComparer.Ordinal))
                     DirectGameSnapshotCollector.CaptureRetainerInventoryCoverage(retainerState);
                 var snapshots = DirectGameSnapshotCollector.Collect(pluginInterface, clientState, objects, dataManager, unlockState, configuration.RetainerGilBalances, retainerState, selectedScopes).ToArray();
+                if (!background && selectedScopes.Contains("shared_fates", StringComparer.Ordinal))
+                    RecordDiagnostic(SharedFateCollector.LastAttemptDiagnostic);
                 return new CapturedSnapshotBatch(currentName, currentWorld, snapshots);
             });
             var snapshots = captured.Snapshots;
@@ -1313,7 +1320,7 @@ public sealed class Plugin : IDalamudPlugin {
         pluginInterface.UiBuilder.Draw -= DrawSettings;
         pluginInterface.UiBuilder.OpenConfigUi -= OpenSettings;
         pluginInterface.ActivePluginsChanged -= OnActivePluginsChanged;
-        commands.RemoveHandler("/gillionssync");
+        commands.RemoveHandler(CommandName);
         http.Dispose();
     }
 }

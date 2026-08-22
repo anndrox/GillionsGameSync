@@ -258,27 +258,52 @@ internal static class ReputationCollector {
 }
 
 internal static class SharedFateCollector {
+    public static string LastAttemptDiagnostic { get; private set; } = "Shared FATE collector has not run.";
+
     public static unsafe SharedFateRead? ReadComplete() {
         try {
             var agent = AgentFateProgress.Instance();
-            if (agent == null) return null;
+            if (agent == null) {
+                LastAttemptDiagnostic = "Shared FATE omitted: native agent unavailable.";
+                return null;
+            }
             var nativeTabs = new List<IReadOnlyCollection<SharedFateZoneProgress>>();
+            var tabDiagnostics = new List<string>();
+            var position = 0;
             foreach (ref var tab in agent->Tabs) {
                 var zoneEntries = new List<SharedFateZoneProgress>();
+                var zeroTerritories = 0;
+                var zeroMaximumRanks = 0;
+                var ranksAboveMaximum = 0;
+                var unavailableRequirements = 0;
+                var progressAboveRequirement = 0;
                 foreach (ref var zone in tab.Zones) {
-                    if (zone.TerritoryTypeId == 0) continue;
+                    if (zone.TerritoryTypeId == 0) {
+                        zeroTerritories++;
+                        continue;
+                    }
                     zoneEntries.Add(new SharedFateZoneProgress(zone.TerritoryTypeId, zone.CurrentRank, zone.MaxRank, zone.FateProgress, zone.NeededFates));
+                    if (zone.MaxRank == 0) zeroMaximumRanks++;
+                    if (zone.CurrentRank > zone.MaxRank) ranksAboveMaximum++;
+                    if (zone.NeededFates == 0 && zone.CurrentRank != zone.MaxRank) unavailableRequirements++;
+                    if (zone.NeededFates > 0 && zone.FateProgress > zone.NeededFates) progressAboveRequirement++;
                 }
                 nativeTabs.Add(zoneEntries);
+                tabDiagnostics.Add($"position={position},nativeIndex={tab.TabIndex},populated={zoneEntries.Count},zeroTerritory={zeroTerritories},zeroMaxRank={zeroMaximumRanks},rankAboveMax={ranksAboveMaximum},neededUnavailable={unavailableRequirements},progressAboveNeeded={progressAboveRequirement}");
+                position++;
             }
             // FateProgressTab.TabIndex is a UI-facing native value. The API
             // contract is zero-based, while the fixed array already supplies
             // the authoritative display order for its three tabs.
             var tabs = ProgressionSnapshotPolicy.BuildCompleteSharedFateSnapshot(nativeTabs);
+            LastAttemptDiagnostic = tabs is null
+                ? $"Shared FATE omitted: incomplete native state ({string.Join("; ", tabDiagnostics)})."
+                : $"Shared FATE complete: tabs={tabs.Length},zones={tabs.Sum(tab => tab.Zones.Length)} ({string.Join("; ", tabDiagnostics)}).";
             return tabs is null ? null : new SharedFateRead(tabs);
-        } catch {
+        } catch (Exception error) {
             // The Shared FATE agent is server-loaded UI state. Never turn an
             // unopened or partially loaded window into a complete empty result.
+            LastAttemptDiagnostic = $"Shared FATE omitted: native read failed ({error.GetType().Name}).";
             return null;
         }
     }
