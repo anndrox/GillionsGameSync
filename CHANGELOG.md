@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Expanded opt-in AutoRetainer Venture Plans to 500 executions, added native Restart Plan completion, published per-retainer readiness, and added explicit Quick Venture write/read-back verification coverage. This remains an unpublished testing candidate until the Gillions server negotiates the new capabilities.
 - Moved the canonical stable Dalamud repository manifest into the public GitHub source tree, added manifest validation to normal verification, and kept immutable versioned plugin artifacts on the Gillions release service.
 
 ## 1.0.28 - 2026-08-17

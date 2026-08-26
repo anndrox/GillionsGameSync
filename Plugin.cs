@@ -119,7 +119,7 @@ public sealed class Plugin : IDalamudPlugin {
         "Testing planner: Gillions can deliver only an explicitly synchronized, fixed Retainer venture plan after you opt in.",
         "Plan safety: The original AutoRetainer plan and completion behavior are backed up, verified after every write, and restorable.",
         "Conflict recovery: A new deliberate Sync may adopt only the exact AutoRetainer plan state previously reported to Gillions; another local edit still blocks the write.",
-        "Bounded execution: Gillions accepts at most 24 executions and never creates a local repeat queue.",
+        "Venture planner compatibility: supports up to 500 executions, per-retainer readiness, Quick Venture verification, and AutoRetainer's Restart Plan mode.",
         "Device ownership: The first applying device remains the plan owner; outside changes stop synchronization instead of being overwritten.",
     ];
 #else
@@ -1124,7 +1124,7 @@ public sealed class Plugin : IDalamudPlugin {
             nextRetainerPlanPollUtc = DateTime.MinValue;
             configuration.Save(pluginInterface);
         }
-        ImGui.TextDisabled("Off by default. Every plan is bounded to 24 executions, backed up before the first write, and protected against outside changes.");
+        ImGui.TextDisabled("Off by default. Every plan is bounded to 500 executions, backed up before the first write, and protected against outside changes.");
         ImGui.TextDisabled(retainerPlanServerSupported
             ? "Gillions and the AutoRetainer safety gates are ready for an explicitly requested plan."
             : (retainerUploadServerSupported ? "Retainer observation is enabled; plan delivery is not currently ready." : "Retainer observations remain local until Gillions explicitly accepts this client channel."));
