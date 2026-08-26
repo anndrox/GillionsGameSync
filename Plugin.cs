@@ -95,6 +95,7 @@ public sealed class Plugin : IDalamudPlugin {
     private bool syncInFlight;
     private bool itemLinkPollInFlight;
     private readonly ItemLinkRequestProcessor itemLinkRequestProcessor = new();
+    private readonly PostPairHydrationState postPairHydration = new();
     private int automaticScopeIndex;
     private readonly object diagnosticsLock = new();
     private readonly List<string> diagnostics = [];
@@ -227,8 +228,14 @@ public sealed class Plugin : IDalamudPlugin {
         configuration.PairingCode = "";
         configuration.SyncBlockedCode = "";
         configuration.SyncBlockedMessage = "";
-        await SaveConfigurationAsync();
-        settingsMessage = "Paired successfully. You can now sync your Gillions data.";
+        await framework.RunOnFrameworkThread(() => {
+            postPairHydration.PairingSucceeded();
+            presenceFailureCount = 0;
+            nextRetainerPresenceUtc = DateTime.MinValue;
+            ClearRetainerServerAcceptance();
+            configuration.Save(pluginInterface);
+        });
+        settingsMessage = "Paired successfully. Gillions is loading your selected character.";
         log.Information("Gillions Game Sync paired successfully.");
     }
 
@@ -299,6 +306,14 @@ public sealed class Plugin : IDalamudPlugin {
         if (ItemLinkPollPolicy.ShouldPoll(configuration.EnableItemLinkRequests, clientState.IsLoggedIn, configuration.DeviceToken, itemLinkPollInFlight, now, nextItemLinkPollUtc)) {
             nextItemLinkPollUtc = now.AddSeconds(ItemLinkPollIntervalSeconds);
             _ = PollItemLinkRequestsAsync();
+        }
+        // Pairing is an explicit owner action. Hydrate the selected character
+        // once immediately instead of waiting for the rotating background
+        // schedule to reach the character scope. This one-time sync is also
+        // allowed when recurring automatic sync is disabled.
+        if (postPairHydration.TryBeginCharacterSync(syncInFlight)) {
+            _ = SyncAutomaticallyAsync([PostPairHydrationState.CharacterResource]);
+            return;
         }
         // An unpaired client, or one whose owner has disabled automatic sync,
         // must have no recurring native-memory work. Manual Sync remains

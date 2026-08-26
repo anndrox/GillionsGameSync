@@ -18,5 +18,6 @@
     <Compile Include="..\..\RetainerPresence.cs" Link="RetainerPresence.cs" />
     <Compile Include="..\..\AutoRetainerVenturePlans.cs" Link="AutoRetainerVenturePlans.cs" />
     <Compile Include="..\..\RetainerPlanDelivery.cs" Link="RetainerPlanDelivery.cs" />
+    <Compile Include="..\..\PostPairHydration.cs" Link="PostPairHydration.cs" />
   </ItemGroup>
 </Project>

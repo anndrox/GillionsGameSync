@@ -21,6 +21,21 @@ Assert(!PublicUrlConfiguration.TryUseCompiledDefault(currentPublicOrigin, curren
     && unchangedOrigin == currentPublicOrigin, "the current compiled origin must not rewrite configuration");
 Console.WriteLine("public URL configuration tests passed");
 
+var postPairHydration = new PostPairHydrationState();
+Assert(!postPairHydration.CharacterSyncPending, "post-pair character hydration must be idle before pairing");
+postPairHydration.PairingSucceeded();
+Assert(postPairHydration.CharacterSyncPending, "successful pairing must schedule immediate character hydration");
+Assert(!postPairHydration.TryBeginCharacterSync(syncInFlight: true) && postPairHydration.CharacterSyncPending,
+    "post-pair hydration must remain queued while another sync is active");
+Assert(postPairHydration.TryBeginCharacterSync(syncInFlight: false)
+    && !postPairHydration.CharacterSyncPending,
+    "the first available framework update must claim the queued character hydration exactly once");
+Assert(!postPairHydration.TryBeginCharacterSync(syncInFlight: false),
+    "post-pair character hydration must not become a second recurring sync loop");
+Assert(PostPairHydrationState.CharacterResource == "character",
+    "post-pair hydration must upload only the authoritative character identity resource");
+Console.WriteLine("post-pair character hydration tests passed");
+
 Assert(ProgressionSnapshotPolicy.NormalizeAlliedSocietyRank(0x87) == 7, "the rank-increased-today flag must not inflate allied-society rank");
 Assert(ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(0, 0) == 3
     && ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(1, 0) == 3
