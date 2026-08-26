@@ -12,6 +12,7 @@ dotnet run --project $tests -c Release
 if ($LASTEXITCODE -ne 0) { throw 'Focused fixture executable failed.' }
 
 & (Join-Path $root 'tests/dalamud-manifest-contract-test.ps1')
+& (Join-Path $root 'tests/package-manifest-contract-test.ps1')
 & (Join-Path $root 'tests/bardings-collector-contract-test.ps1')
 & (Join-Path $root 'tests/folklore-collector-contract-test.ps1')
 & (Join-Path $root 'tests/performance-contract-test.ps1')
