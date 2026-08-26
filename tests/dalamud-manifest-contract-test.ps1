@@ -45,11 +45,12 @@ function Test-StableManifest([string]$Json) {
   Assert-Condition ($entry.LastUpdate -is [long] -and $entry.LastUpdate -gt 0) 'LastUpdate must be a positive Unix timestamp.'
 
   $version = $entry.AssemblyVersion.Substring(0, $entry.AssemblyVersion.Length - 2)
-  $expectedDownload = "https://gillions.app/downloads/plugins/GillionsGameSync-$version.zip"
+  $expectedDownload = "https://github.com/anndrox/GillionsGameSync/releases/download/v$version/GillionsGameSync-$version.zip"
   foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate', 'DownloadLinkTesting')) {
     Assert-Condition ($entry[$field] -ceq $expectedDownload) "$field must reference the immutable stable $version ZIP."
   }
-  Assert-Condition ($entry.IconUrl -ceq 'https://gillions.app/downloads/plugins/GillionsGameSync-icon-v4.png') 'IconUrl must reference the reviewed immutable icon.'
+  Assert-Condition ($entry.IconUrl -ceq 'https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png') 'IconUrl must reference the reviewed public GitHub icon.'
+  Assert-Condition (-not $entry.Contains('TestingAssemblyVersion') -and -not $entry.Contains('TestingDalamudApiLevel')) 'The stable manifest must not advertise an in-entry testing build.'
 
   foreach ($field in @('RepoUrl', 'IconUrl', 'DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate', 'DownloadLinkTesting')) {
     $uri = [Uri]$entry[$field]
@@ -81,6 +82,8 @@ $wrongIdentity = $json.Replace('"GillionsGameSync"', '"ForeignPlugin"')
 Assert-Rejected $wrongIdentity 'wrong plugin identity'
 $privateQuery = $json.Replace('GillionsGameSync-1.0.28.zip"', 'GillionsGameSync-1.0.28.zip?characterId=1"')
 Assert-Rejected $privateQuery 'private query data'
+
+Assert-Condition (-not $json.Contains('gillions.app/downloads/plugins/')) 'The active stable manifest must not depend on Gillions-hosted artifacts.'
 
 $readme = [IO.File]::ReadAllText((Join-Path $root 'README.md'))
 Assert-Condition ($readme.Contains($canonicalRawUrl)) 'README must publish the canonical raw GitHub manifest URL.'

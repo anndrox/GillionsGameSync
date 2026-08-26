@@ -12,8 +12,10 @@
     <Description>Opt-in character synchronization for Gillions with separately gated Retainer planner integration. Never automates gameplay or sends Square Enix credentials.</Description>
     <ApplicableVersion>any</ApplicableVersion>
     <GillionsPublicBaseUrl Condition="'$(GillionsPublicBaseUrl)' == ''">https://gillions.app</GillionsPublicBaseUrl>
-    <RepoUrl>$(GillionsPublicBaseUrl)</RepoUrl>
-    <IconUrl>$(GillionsPublicBaseUrl)/downloads/plugins/GillionsGameSync-icon-v4.png</IconUrl>
+    <GillionsRepositoryUrl Condition="'$(GillionsRepositoryUrl)' == ''">https://github.com/anndrox/GillionsGameSync</GillionsRepositoryUrl>
+    <GillionsStableIconUrl Condition="'$(GillionsStableIconUrl)' == ''">https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png</GillionsStableIconUrl>
+    <RepoUrl>$(GillionsRepositoryUrl)</RepoUrl>
+    <IconUrl>$(GillionsStableIconUrl)</IconUrl>
     <Tags>inventory;collection;utility</Tags>
     <DalamudApiLevel>15</DalamudApiLevel>
     <LoadRequiredState>0</LoadRequiredState>
@@ -38,5 +40,9 @@
     <Name>Gillions Game Sync Testing</Name>
     <Punchline>Unreleased Gillions sync test build.</Punchline>
     <DefineConstants>$(DefineConstants);GILLIONS_TEST_BUILD</DefineConstants>
+    <!-- The separately installed testing product remains on the private Gillions
+         testing feed. Stable GitHub distribution does not publish test builds. -->
+    <RepoUrl>$(GillionsPublicBaseUrl)</RepoUrl>
+    <IconUrl>$(GillionsPublicBaseUrl)/downloads/plugins/GillionsGameSync-icon-v4.png</IconUrl>
   </PropertyGroup>
 </Project>

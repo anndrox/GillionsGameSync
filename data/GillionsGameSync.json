@@ -19,11 +19,11 @@
     "LoadPriority": 0,
     "Punchline": "Opt-in account sync for your Gillions profile.",
     "AcceptsFeedback": true,
-    "IconUrl": "https://gillions.app/downloads/plugins/GillionsGameSync-icon-v4.png",
-    "DownloadLink": "https://gillions.app/downloads/plugins/GillionsGameSync-1.0.28.zip",
-    "DownloadLinkInstall": "https://gillions.app/downloads/plugins/GillionsGameSync-1.0.28.zip",
-    "DownloadLinkUpdate": "https://gillions.app/downloads/plugins/GillionsGameSync-1.0.28.zip",
-    "DownloadLinkTesting": "https://gillions.app/downloads/plugins/GillionsGameSync-1.0.28.zip",
+    "IconUrl": "https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png",
+    "DownloadLink": "https://github.com/anndrox/GillionsGameSync/releases/download/v1.0.28/GillionsGameSync-1.0.28.zip",
+    "DownloadLinkInstall": "https://github.com/anndrox/GillionsGameSync/releases/download/v1.0.28/GillionsGameSync-1.0.28.zip",
+    "DownloadLinkUpdate": "https://github.com/anndrox/GillionsGameSync/releases/download/v1.0.28/GillionsGameSync-1.0.28.zip",
+    "DownloadLinkTesting": "https://github.com/anndrox/GillionsGameSync/releases/download/v1.0.28/GillionsGameSync-1.0.28.zip",
     "DownloadCount": 0,
     "LastUpdate": 1787011924
   }

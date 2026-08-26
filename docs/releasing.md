@@ -1,12 +1,12 @@
 # Releasing
 
-GitHub is the source-history authority and the canonical stable Dalamud repository manifest host. The Gillions static plugin service remains the immutable ZIP and icon artifact host.
+GitHub is the source-history, stable Dalamud manifest, icon, tag, and immutable stable ZIP authority. Gillions infrastructure is not part of the stable distribution chain.
 
 The stable custom-repository URL is:
 
 `https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/data/GillionsGameSync.json`
 
-The branch-backed URL is intentional: `main` is the reviewed stable source line, and the manifest must advance with each stable release without asking users to replace their repository URL. The manifest contains public release metadata only. It can select a versioned plugin ZIP, so updates require the same review, verification, and protected-branch controls as plugin source changes.
+The branch-backed URL is intentional: `main` is the reviewed stable source line, and the manifest must advance with each stable release without asking users to replace their repository URL. Each stable ZIP is an immutable GitHub Release asset named `GillionsGameSync-X.Y.Z.zip` under tag `vX.Y.Z`; its SHA-256 is recorded under `data/releases/`.
 
 ## Local package
 
@@ -14,21 +14,22 @@ Create a candidate without publishing:
 
 ```powershell
 ./scripts/package.ps1 -Channel testing -Version 0.0.61
-./scripts/package.ps1 -Channel stable -Version 1.0.27
+./scripts/package.ps1 -Channel stable -Version 1.0.28
 ```
 
-The script validates the version and public origin, builds Release, creates a deterministic three-file ZIP, writes a feed-compatible manifest, and reports the ZIP SHA-256. Identical source and dependencies produce identical packaged file contents and archive metadata. Output stays below ignored `artifacts/`.
+The package script validates its inputs, builds Release, creates a deterministic three-file ZIP, writes a feed-compatible manifest, and reports the ZIP SHA-256. Stable manifests use GitHub Release and raw-content URLs; testing manifests retain the separate Gillions testing origin. Identical source and dependencies produce identical packaged file contents and archive metadata. Output stays below ignored `artifacts/`.
 
 ## Publication requirements
 
-- Review and commit the exact source first.
-- Update `data/GillionsGameSync.json` from the stable package manifest, preserving the GitHub `RepoUrl`, and review its exact version, timestamps, and immutable download URLs.
-- Run `./scripts/verify.ps1` with zero warnings and errors.
-- Inspect the ZIP contents and scan the source and artifact for private paths or secrets.
-- Publish testing first for behavior that needs in-game acceptance.
-- Use the Gillions static-release publisher; do not rebuild the website for a plugin-only release.
-- Verify the GitHub manifest, ZIP, icon, checksum, rollback artifact, and service health.
-- Tag only the source commit that corresponds to the published artifact. Do not replace an artifact under an existing version.
+- Review and commit the exact source first. Publish testing through its separate Gillions feed when in-game acceptance is required.
+- Run `./scripts/prepare-stable-github-release.ps1 -Version X.Y.Z`; review the generated stable manifest, immutable GitHub URLs, artifact, and checksum record.
+- Run `./scripts/verify.ps1` with zero warnings and errors. Inspect the ZIP and scan source/artifacts for private paths or secrets.
+- Commit and integrate the exact source, manifest, icon changes (when any), and checksum record into GitHub `main`.
+- Run `./scripts/publish-stable-github-release.ps1 -Version X.Y.Z`. It requires a clean integrated commit, preserves any existing immutable tag/asset, creates a missing tag/release, and verifies the anonymous public chain.
+- Confirm the raw manifest resolves the plugin entry to the expected GitHub Release ZIP and that the downloaded SHA-256 and embedded Dalamud package match.
+- Never replace an artifact under an existing version or publish a testing artifact as stable.
+
+`DownloadLinkTesting` in the stable entry intentionally equals the stable release URL. The entry does not expose `TestingAssemblyVersion` or `TestingDalamudApiLevel`, so Dalamud cannot select that field as a testing build. Gillions testing uses the distinct `GillionsGameSyncTest` identity and testing feed; it is not published through stable GitHub Releases.
 
 Publishing credentials and server configuration are intentionally not stored in this repository.
 

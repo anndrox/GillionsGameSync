@@ -45,11 +45,11 @@ Create a local package without publishing it:
 ./scripts/package.ps1 -Channel testing -Version 0.0.62
 ```
 
-Packages are written below `artifacts/`, which is ignored by Git. Publication to the Gillions feed remains a separate, controlled operation.
+Packages are written below `artifacts/`, which is ignored by Git. Stable publication uses an immutable GitHub Release asset. The separately identified testing plugin remains on the controlled Gillions testing feed.
 
 ## Source and releases
 
-`main` is the public stable source line. Experimental and release-candidate work is developed and validated separately before promotion. The reviewed [`data/GillionsGameSync.json`](data/GillionsGameSync.json) on `main` is the canonical stable Dalamud repository manifest, while its versioned ZIP and icon URLs remain immutable Gillions release artifacts. A stable release updates the manifest in the same reviewed source commit and validates its schema and download metadata before promotion. Stable `1.0.28` Retainer support still requires the independently controlled server gates and every member/device capability, presence, readiness, ownership, and opt-in check.
+`main` is the public stable source line. Experimental and release-candidate work is developed and validated separately before promotion. The reviewed [`data/GillionsGameSync.json`](data/GillionsGameSync.json) on `main` is the canonical stable Dalamud repository manifest. Stable ZIPs are immutable [GitHub Release assets](https://github.com/anndrox/GillionsGameSync/releases), their SHA-256 records live under [`data/releases`](data/releases), and the public icon lives under [`assets`](assets). A stable release updates the manifest in the same reviewed source history and validates the tag, download, checksum, and package before promotion. Stable `1.0.28` Retainer support still requires the independently controlled server gates and every member/device capability, presence, readiness, ownership, and opt-in check.
 
 See [Privacy](docs/privacy.md), [Testing](docs/testing.md), [Releasing](docs/releasing.md), and [Contributing](CONTRIBUTING.md).
 

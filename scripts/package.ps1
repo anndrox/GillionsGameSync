@@ -9,6 +9,8 @@ param(
 
   [string]$PublicBaseUrl = 'https://gillions.app',
   [string]$RepositoryUrl = 'https://github.com/anndrox/GillionsGameSync',
+  [string]$StableReleaseBaseUrl = 'https://github.com/anndrox/GillionsGameSync/releases/download',
+  [string]$StableIconUrl = 'https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png',
   [long]$PublishedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 )
 
@@ -18,6 +20,8 @@ $project = Join-Path $root 'GillionsGameSync.csproj'
 $parsedOrigin = $null
 $PublicBaseUrl = $PublicBaseUrl.Trim().TrimEnd('/')
 $RepositoryUrl = $RepositoryUrl.Trim().TrimEnd('/')
+$StableReleaseBaseUrl = $StableReleaseBaseUrl.Trim().TrimEnd('/')
+$StableIconUrl = $StableIconUrl.Trim()
 $allowedSchemes = if ($Channel -eq 'testing') { @('http', 'https') } else { @('https') }
 if (-not [Uri]::TryCreate($PublicBaseUrl, [UriKind]::Absolute, [ref]$parsedOrigin) -or
     $parsedOrigin.Scheme -notin $allowedSchemes -or $parsedOrigin.AbsolutePath -ne '/') {
@@ -29,6 +33,21 @@ if (-not [Uri]::TryCreate($RepositoryUrl, [UriKind]::Absolute, [ref]$parsedRepos
     $parsedRepository.Host -ne 'github.com' -or
     $parsedRepository.AbsolutePath -ne '/anndrox/GillionsGameSync') {
   throw 'RepositoryUrl must be https://github.com/anndrox/GillionsGameSync.'
+}
+$parsedReleaseBase = $null
+if (-not [Uri]::TryCreate($StableReleaseBaseUrl, [UriKind]::Absolute, [ref]$parsedReleaseBase) -or
+    $parsedReleaseBase.Scheme -ne 'https' -or
+    $parsedReleaseBase.Host -ne 'github.com' -or
+    $parsedReleaseBase.AbsolutePath -ne '/anndrox/GillionsGameSync/releases/download') {
+  throw 'StableReleaseBaseUrl must be the canonical GillionsGameSync GitHub Releases download path.'
+}
+$parsedIcon = $null
+if (-not [Uri]::TryCreate($StableIconUrl, [UriKind]::Absolute, [ref]$parsedIcon) -or
+    $parsedIcon.Scheme -ne 'https' -or
+    $parsedIcon.Host -ne 'raw.githubusercontent.com' -or
+    $parsedIcon.AbsolutePath -ne '/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png' -or
+    $parsedIcon.Query -or $parsedIcon.UserInfo) {
+  throw 'StableIconUrl must be the canonical anonymous GitHub raw icon URL.'
 }
 
 $isTesting = $Channel -eq 'testing'
@@ -72,7 +91,16 @@ try {
   }
 } finally { $archive.Dispose() }
 $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
-$downloadUrl = "$PublicBaseUrl/downloads/plugins/$zipBase-$Version.zip"
+$downloadUrl = if ($isTesting) {
+  "$PublicBaseUrl/downloads/plugins/$zipBase-$Version.zip"
+} else {
+  "$StableReleaseBaseUrl/v$Version/$zipBase-$Version.zip"
+}
+$iconUrl = if ($isTesting) {
+  "$PublicBaseUrl/downloads/plugins/GillionsGameSync-icon-v4.png"
+} else {
+  $StableIconUrl
+}
 
 $manifest = @([ordered]@{
   Author = 'Gillions'
@@ -90,10 +118,14 @@ $manifest = @([ordered]@{
   LoadPriority = 0
   Punchline = if ($isTesting) { 'Unreleased Gillions sync test build.' } else { 'Opt-in account sync for your Gillions profile.' }
   AcceptsFeedback = $true
-  IconUrl = "$PublicBaseUrl/downloads/plugins/GillionsGameSync-icon-v4.png"
+  IconUrl = $iconUrl
   DownloadLink = $downloadUrl
   DownloadLinkInstall = $downloadUrl
   DownloadLinkUpdate = $downloadUrl
+  # This stable entry does not advertise TestingAssemblyVersion or
+  # TestingDalamudApiLevel, so Dalamud cannot select its testing link. Keeping
+  # it equal to the immutable stable asset is intentional; the separately
+  # identified GillionsGameSyncTest product retains its own testing feed.
   DownloadLinkTesting = $downloadUrl
   DownloadCount = 0
   LastUpdate = $PublishedAt
