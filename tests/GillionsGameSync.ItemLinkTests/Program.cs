@@ -21,10 +21,15 @@ Assert(!PublicUrlConfiguration.TryUseCompiledDefault(currentPublicOrigin, curren
     && unchangedOrigin == currentPublicOrigin, "the current compiled origin must not rewrite configuration");
 Console.WriteLine("public URL configuration tests passed");
 
-var postPairHydration = new PostPairHydrationState();
-Assert(!postPairHydration.CharacterSyncPending, "post-pair character hydration must be idle before pairing");
+var unpairedStartupHydration = new PairedClientHydrationState();
+unpairedStartupHydration.PluginStarted(hasDeviceCredential: false);
+Assert(!unpairedStartupHydration.CharacterSyncPending && !unpairedStartupHydration.PresencePending,
+    "an unpaired startup must not schedule character hydration or presence");
+
+var postPairHydration = new PairedClientHydrationState();
 postPairHydration.PairingSucceeded();
-Assert(postPairHydration.CharacterSyncPending, "successful pairing must schedule immediate character hydration");
+Assert(postPairHydration.CharacterSyncPending && postPairHydration.PresencePending,
+    "successful pairing must schedule immediate character hydration and presence");
 Assert(!postPairHydration.TryBeginCharacterSync(syncInFlight: true) && postPairHydration.CharacterSyncPending,
     "post-pair hydration must remain queued while another sync is active");
 Assert(postPairHydration.TryBeginCharacterSync(syncInFlight: false)
@@ -32,9 +37,24 @@ Assert(postPairHydration.TryBeginCharacterSync(syncInFlight: false)
     "the first available framework update must claim the queued character hydration exactly once");
 Assert(!postPairHydration.TryBeginCharacterSync(syncInFlight: false),
     "post-pair character hydration must not become a second recurring sync loop");
-Assert(PostPairHydrationState.CharacterResource == "character",
+Assert(postPairHydration.TryBeginPresence(presenceInFlight: false) && !postPairHydration.PresencePending,
+    "successful pairing must claim its immediate presence exactly once");
+Assert(!postPairHydration.TryBeginPresence(presenceInFlight: false),
+    "post-pair presence must not become a second recurring heartbeat loop");
+
+var pairedStartupHydration = new PairedClientHydrationState();
+pairedStartupHydration.PluginStarted(hasDeviceCredential: true);
+Assert(pairedStartupHydration.CharacterSyncPending && pairedStartupHydration.PresencePending,
+    "an already-paired startup or reload must schedule immediate character hydration and presence");
+Assert(pairedStartupHydration.TryBeginCharacterSync(syncInFlight: false)
+    && pairedStartupHydration.TryBeginPresence(presenceInFlight: false),
+    "an already-paired startup must allow each one-time action to begin");
+Assert(!pairedStartupHydration.TryBeginCharacterSync(syncInFlight: false)
+    && !pairedStartupHydration.TryBeginPresence(presenceInFlight: false),
+    "an already-paired startup must not repeat either action");
+Assert(PairedClientHydrationState.CharacterResource == "character",
     "post-pair hydration must upload only the authoritative character identity resource");
-Console.WriteLine("post-pair character hydration tests passed");
+Console.WriteLine("paired-client character hydration tests passed");
 
 Assert(ProgressionSnapshotPolicy.NormalizeAlliedSocietyRank(0x87) == 7, "the rank-increased-today flag must not inflate allied-society rank");
 Assert(ProgressionSnapshotPolicy.NormalizeSharedFateMaximumRank(0, 0) == 3

@@ -14,7 +14,7 @@ Client-facing collection changes also require proportionate in-game validation a
 
 Testing builds use a separate Dalamud identity and configuration from stable. Passing local and testing-feed checks does not by itself authorize stable publication.
 
-After successful pairing or re-pairing, the client schedules one immediate `character` resource sync so the selected character appears without a manual Sync action. This one-time hydration does not enable recurring automatic sync, alter the normal 30-second scoped rotation, or perform gameplay/provider actions. Normal Retainer presence is also rescheduled immediately and remains subject to the existing paired automatic-sync safety gate.
+After successful pairing or an ordinary startup/reload with an existing device credential, the client schedules one immediate `character` resource sync and one presence update so the selected character appears without a manual Sync action or another pairing. These one-time actions do not enable recurring automatic sync, alter the normal 30-second scoped rotation, change device identity, or perform gameplay/provider actions.
 
 Stable `1.0.27` uses the same Retainer contract implementation as testing while retaining the `GillionsGameSync` product identity. An older or testing-only server response cannot activate stable Retainer traffic: stable requires the server to acknowledge the exact stable product and contract v1 before accepting observation/result support or planner support. Ordinary resources continue syncing when that acknowledgement is absent or malformed.
 
