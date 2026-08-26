@@ -1,0 +1,30 @@
+[
+  {
+    "Author": "Gillions",
+    "Name": "Gillions Game Sync",
+    "InternalName": "GillionsGameSync",
+    "AssemblyVersion": "1.0.28.0",
+    "Description": "Opt-in character synchronization for Gillions with separately gated Retainer planner integration. Never automates gameplay or sends Square Enix credentials.",
+    "ApplicableVersion": "any",
+    "RepoUrl": "https://github.com/anndrox/GillionsGameSync",
+    "Tags": [
+      "inventory",
+      "collection",
+      "utility"
+    ],
+    "DalamudApiLevel": 15,
+    "LoadRequiredState": 0,
+    "LoadSync": false,
+    "CanUnloadAsync": false,
+    "LoadPriority": 0,
+    "Punchline": "Opt-in account sync for your Gillions profile.",
+    "AcceptsFeedback": true,
+    "IconUrl": "https://gillions.app/downloads/plugins/GillionsGameSync-icon-v4.png",
+    "DownloadLink": "https://gillions.app/downloads/plugins/GillionsGameSync-1.0.28.zip",
+    "DownloadLinkInstall": "https://gillions.app/downloads/plugins/GillionsGameSync-1.0.28.zip",
+    "DownloadLinkUpdate": "https://gillions.app/downloads/plugins/GillionsGameSync-1.0.28.zip",
+    "DownloadLinkTesting": "https://gillions.app/downloads/plugins/GillionsGameSync-1.0.28.zip",
+    "DownloadCount": 0,
+    "LastUpdate": 1787011924
+  }
+]

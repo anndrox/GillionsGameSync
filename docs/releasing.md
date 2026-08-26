@@ -1,6 +1,12 @@
 # Releasing
 
-GitHub is the source-history authority. The Gillions static plugin service remains the distribution authority for Dalamud manifests and immutable ZIP artifacts.
+GitHub is the source-history authority and the canonical stable Dalamud repository manifest host. The Gillions static plugin service remains the immutable ZIP and icon artifact host.
+
+The stable custom-repository URL is:
+
+`https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/data/GillionsGameSync.json`
+
+The branch-backed URL is intentional: `main` is the reviewed stable source line, and the manifest must advance with each stable release without asking users to replace their repository URL. The manifest contains public release metadata only. It can select a versioned plugin ZIP, so updates require the same review, verification, and protected-branch controls as plugin source changes.
 
 ## Local package
 
@@ -16,11 +22,12 @@ The script validates the version and public origin, builds Release, creates a de
 ## Publication requirements
 
 - Review and commit the exact source first.
+- Update `data/GillionsGameSync.json` from the stable package manifest, preserving the GitHub `RepoUrl`, and review its exact version, timestamps, and immutable download URLs.
 - Run `./scripts/verify.ps1` with zero warnings and errors.
 - Inspect the ZIP contents and scan the source and artifact for private paths or secrets.
 - Publish testing first for behavior that needs in-game acceptance.
 - Use the Gillions static-release publisher; do not rebuild the website for a plugin-only release.
-- Verify the manifest, ZIP, icon, checksum, rollback artifact, and service health.
+- Verify the GitHub manifest, ZIP, icon, checksum, rollback artifact, and service health.
 - Tag only the source commit that corresponds to the published artifact. Do not replace an artifact under an existing version.
 
 Publishing credentials and server configuration are intentionally not stored in this repository.

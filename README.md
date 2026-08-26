@@ -10,7 +10,7 @@ Stable `1.0.28` adds stable Regional Folklore tome IDs to the existing complete 
 
 Add the stable custom repository URL to Dalamud:
 
-`https://gillions.app/plugins/GillionsGameSync.json`
+`https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/data/GillionsGameSync.json`
 
 The testing feed is intentionally separate and should be installed only when a Gillions test is requested:
 
@@ -49,7 +49,7 @@ Packages are written below `artifacts/`, which is ignored by Git. Publication to
 
 ## Source and releases
 
-`main` is the public stable source line. Experimental and release-candidate work is developed and validated separately before promotion. The Gillions manifests and immutable ZIP downloads remain the installation authority; a Git tag or GitHub release must correspond to the exact reviewed source used for a published artifact. Stable `1.0.28` Retainer support still requires the independently controlled server gates and every member/device capability, presence, readiness, ownership, and opt-in check.
+`main` is the public stable source line. Experimental and release-candidate work is developed and validated separately before promotion. The reviewed [`data/GillionsGameSync.json`](data/GillionsGameSync.json) on `main` is the canonical stable Dalamud repository manifest, while its versioned ZIP and icon URLs remain immutable Gillions release artifacts. A stable release updates the manifest in the same reviewed source commit and validates its schema and download metadata before promotion. Stable `1.0.28` Retainer support still requires the independently controlled server gates and every member/device capability, presence, readiness, ownership, and opt-in check.
 
 See [Privacy](docs/privacy.md), [Testing](docs/testing.md), [Releasing](docs/releasing.md), and [Contributing](CONTRIBUTING.md).
 

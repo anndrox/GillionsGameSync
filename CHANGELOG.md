@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Moved the canonical stable Dalamud repository manifest into the public GitHub source tree, added manifest validation to normal verification, and kept immutable versioned plugin artifacts on the Gillions release service.
+
 ## 1.0.28 - 2026-08-17
 
 - Send unlocked Tomes of Regional Folklore as stable, deduplicated item IDs in the existing complete Collectibles snapshot for Mining, Botany, and Fishing tracking on Gillions.

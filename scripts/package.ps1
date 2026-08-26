@@ -8,6 +8,7 @@ param(
   [string]$Version,
 
   [string]$PublicBaseUrl = 'https://gillions.app',
+  [string]$RepositoryUrl = 'https://github.com/anndrox/GillionsGameSync',
   [long]$PublishedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 )
 
@@ -16,10 +17,18 @@ $root = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $root 'GillionsGameSync.csproj'
 $parsedOrigin = $null
 $PublicBaseUrl = $PublicBaseUrl.Trim().TrimEnd('/')
+$RepositoryUrl = $RepositoryUrl.Trim().TrimEnd('/')
 $allowedSchemes = if ($Channel -eq 'testing') { @('http', 'https') } else { @('https') }
 if (-not [Uri]::TryCreate($PublicBaseUrl, [UriKind]::Absolute, [ref]$parsedOrigin) -or
     $parsedOrigin.Scheme -notin $allowedSchemes -or $parsedOrigin.AbsolutePath -ne '/') {
   throw "PublicBaseUrl must be an absolute $($allowedSchemes -join ' or ') origin without a path."
+}
+$parsedRepository = $null
+if (-not [Uri]::TryCreate($RepositoryUrl, [UriKind]::Absolute, [ref]$parsedRepository) -or
+    $parsedRepository.Scheme -ne 'https' -or
+    $parsedRepository.Host -ne 'github.com' -or
+    $parsedRepository.AbsolutePath -ne '/anndrox/GillionsGameSync') {
+  throw 'RepositoryUrl must be https://github.com/anndrox/GillionsGameSync.'
 }
 
 $isTesting = $Channel -eq 'testing'
@@ -72,7 +81,7 @@ $manifest = @([ordered]@{
   AssemblyVersion = "$Version.0"
   Description = if ($isTesting) { 'Unreleased, opt-in test build for Gillions Game Sync. Install only when directed for in-game verification.' } else { 'Opt-in character synchronization for Gillions with separately gated Retainer planner integration. Never automates gameplay or sends Square Enix credentials.' }
   ApplicableVersion = 'any'
-  RepoUrl = $PublicBaseUrl
+  RepoUrl = $RepositoryUrl
   Tags = if ($isTesting) { @('inventory', 'collection', 'testing') } else { @('inventory', 'collection', 'utility') }
   DalamudApiLevel = 15
   LoadRequiredState = 0
