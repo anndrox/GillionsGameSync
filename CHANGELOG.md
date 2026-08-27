@@ -2,9 +2,12 @@
 
 ## Unreleased
 
+## 1.0.29 - 2026-08-26
+
 - Hydrate the selected character and refresh paired presence once after pairing or an ordinary plugin update/reload, without requiring another pairing or enabling recurring automatic sync.
-- Expanded opt-in AutoRetainer Venture Plans to 500 executions, added native Restart Plan completion, published per-retainer readiness, and added explicit Quick Venture write/read-back verification coverage. This remains an unpublished testing candidate until the Gillions server negotiates the new capabilities.
-- Moved the canonical stable Dalamud repository manifest into the public GitHub source tree, added manifest validation to normal verification, and kept immutable versioned plugin artifacts on the Gillions release service.
+- Expanded opt-in AutoRetainer Venture Plans to 500 executions and added native Restart Plan completion.
+- Added exact per-Retainer readiness and Quick Venture apply/read-back verification while preserving capability gates, prior-plan restoration, and older-client safety.
+- Publish stable manifests, icons, and immutable release ZIPs through the canonical public GitHub repository.
 
 ## 1.0.28 - 2026-08-17
 

@@ -3,7 +3,7 @@
     "Author": "Gillions",
     "Name": "Gillions Game Sync",
     "InternalName": "GillionsGameSync",
-    "AssemblyVersion": "1.0.28.0",
+    "AssemblyVersion": "1.0.29.0",
     "Description": "Opt-in character synchronization for Gillions with separately gated Retainer planner integration. Never automates gameplay or sends Square Enix credentials.",
     "ApplicableVersion": "any",
     "RepoUrl": "https://github.com/anndrox/GillionsGameSync",
@@ -20,11 +20,11 @@
     "Punchline": "Opt-in account sync for your Gillions profile.",
     "AcceptsFeedback": true,
     "IconUrl": "https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png",
-    "DownloadLink": "https://github.com/anndrox/GillionsGameSync/releases/download/v1.0.28/GillionsGameSync-1.0.28.zip",
-    "DownloadLinkInstall": "https://github.com/anndrox/GillionsGameSync/releases/download/v1.0.28/GillionsGameSync-1.0.28.zip",
-    "DownloadLinkUpdate": "https://github.com/anndrox/GillionsGameSync/releases/download/v1.0.28/GillionsGameSync-1.0.28.zip",
-    "DownloadLinkTesting": "https://github.com/anndrox/GillionsGameSync/releases/download/v1.0.28/GillionsGameSync-1.0.28.zip",
+    "DownloadLink": "https://github.com/anndrox/GillionsGameSync/releases/download/v1.0.29/GillionsGameSync-1.0.29.zip",
+    "DownloadLinkInstall": "https://github.com/anndrox/GillionsGameSync/releases/download/v1.0.29/GillionsGameSync-1.0.29.zip",
+    "DownloadLinkUpdate": "https://github.com/anndrox/GillionsGameSync/releases/download/v1.0.29/GillionsGameSync-1.0.29.zip",
+    "DownloadLinkTesting": "https://github.com/anndrox/GillionsGameSync/releases/download/v1.0.29/GillionsGameSync-1.0.29.zip",
     "DownloadCount": 0,
-    "LastUpdate": 1787011924
+    "LastUpdate": 1787791103
   }
 ]

@@ -16,13 +16,13 @@ Testing builds use a separate Dalamud identity and configuration from stable. Pa
 
 After successful pairing or an ordinary startup/reload with an existing device credential, the client schedules one immediate `character` resource sync and one presence update so the selected character appears without a manual Sync action or another pairing. These one-time actions do not enable recurring automatic sync, alter the normal 30-second scoped rotation, change device identity, or perform gameplay/provider actions.
 
-Stable `1.0.27` uses the same Retainer contract implementation as testing while retaining the `GillionsGameSync` product identity. An older or testing-only server response cannot activate stable Retainer traffic: stable requires the server to acknowledge the exact stable product and contract v1 before accepting observation/result support or planner support. Ordinary resources continue syncing when that acknowledgement is absent or malformed.
+Stable `1.0.29` uses the same accepted Retainer compatibility contract while retaining the `GillionsGameSync` product identity. An older or testing-only server response cannot activate stable Retainer traffic: stable requires the server to acknowledge the exact stable product and contract v1 before accepting observation/result support or planner support. Ordinary resources continue syncing when that acknowledgement is absent or malformed.
 
 Upgrading from stable `1.0.25` leaves AutoRetainer plan access disabled. Test the explicit opt-in independently from read-only Retainer observation, including AutoRetainer absent, unloaded, outdated, API-unready, and planner-disabled states. Multi Mode remains diagnostic and is not a prerequisite.
 
 Testing `0.0.61` preserves the Retainer observation contract and controlled AutoRetainer plan write path, including the live-validated conflict-review restoration retry. It remains inert until the user explicitly enables Gillions planner access, AutoRetainer is loaded/API-ready with its planner enabled, the testing server advertises plan support, and an intentionally synchronized latest revision is delivered to the paired owning device. AutoRetainer Multi Mode is separate and is not required for Gillions plan delivery.
 
-The unpublished `0.0.63` testing candidate accepts up to 500 fixed executions and advertises that limit with `retainer.autoretainer.plan-limit-500.v1`. It accepts `restart_plan` only when the server requires `retainer.autoretainer.restart-completion.v1`; AutoRetainer then applies its native Restart Plan behavior after the final valid entry. The client does not implement a second local repeat loop.
+Stable `1.0.29` accepts up to 500 fixed executions and advertises that limit with `retainer.autoretainer.plan-limit-500.v1`. It accepts `restart_plan` only when the server requires `retainer.autoretainer.restart-completion.v1`; AutoRetainer then applies its native Restart Plan behavior after the final valid entry. The client does not implement a second local repeat loop.
 
 The client resolves the current character and stable retainer identity immediately before access, validates venture IDs against the current Lumina sheet, fetches a fresh AutoRetainer object for that exact retainer, and refuses the write if that retainer's planner is disabled or unavailable. Presence reports `retainerPlannerEnabled: null` and publishes timestamped entries in `retainerPlannerReadiness`; this prevents readiness from one retainer being borrowed for another. Servers must require `retainer.autoretainer.per-retainer-readiness.v1` and treat missing, duplicate, unavailable, or stale entries as not ready.
 
@@ -32,9 +32,9 @@ Retainer acceptance must cover login/logout and character switching, unavailable
 
 Plan-delivery acceptance additionally covers planner opt-out, stable/older-client exclusion, latest-only delivery, lease retry/expiry, multiple-device ownership, the 24/25 and 500/501 boundaries, Restart Plan round-trip, mixed per-retainer readiness, invalid venture rejection, Quick Venture apply/read-back mismatch, outside-change CAS conflict, immediate read-back, exact acknowledgement, original-plan restoration, and confirmation that unrelated Retainers and characters remain unchanged.
 
-## Unpublished Venture compatibility contract
+## Venture compatibility contract
 
-This candidate remains contract version `1`; the extension is additive and capability-gated. Application / Backend must not infer support from the plugin version string alone.
+Stable `1.0.29` remains contract version `1`; the extension is additive and capability-gated. Application / Backend must not infer support from the plugin version string alone.
 
 - `maximumPlanExecutions` is `500`. Both the number of ordered `steps` and the sum of their positive `repetitions` must be at most 500.
 - `supportedCompletionActions` is `restart_plan`, `assign_quick_venture`, and `do_nothing`.

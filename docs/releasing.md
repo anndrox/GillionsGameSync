@@ -14,7 +14,7 @@ Create a candidate without publishing:
 
 ```powershell
 ./scripts/package.ps1 -Channel testing -Version 0.0.61
-./scripts/package.ps1 -Channel stable -Version 1.0.28
+./scripts/package.ps1 -Channel stable -Version 1.0.29
 ```
 
 The package script validates its inputs, builds Release, creates a deterministic three-file ZIP, writes a feed-compatible manifest, and reports the ZIP SHA-256. Stable manifests use GitHub Release and raw-content URLs; testing manifests retain the separate Gillions testing origin. Identical source and dependencies produce identical packaged file contents and archive metadata. Output stays below ignored `artifacts/`.
@@ -39,7 +39,7 @@ Testing `0.0.61` requires the independent `RETAINER_PLAN_DELIVERY_ENABLED=true` 
 
 ## Stable Retainer rollout
 
-Stable `1.0.27` is published. Production uses separate `RETAINER_STABLE_UPLOAD_ENABLED` and `RETAINER_STABLE_PLAN_DELIVERY_ENABLED` gates. A stable presence response may advertise support only after validating the authenticated `GillionsGameSync` product, contract v1, and required capabilities, and must echo:
+Stable `1.0.29` is published. Production uses separate `RETAINER_STABLE_UPLOAD_ENABLED` and `RETAINER_STABLE_PLAN_DELIVERY_ENABLED` gates. A stable presence response may advertise support only after validating the authenticated `GillionsGameSync` product, contract v1, and required capabilities, and must echo:
 
 - `acceptedClientProduct: "GillionsGameSync"`;
 - `acceptedContractVersion: 1`.

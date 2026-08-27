@@ -1,6 +1,6 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>1.0.28</Version>
+    <Version>1.0.29</Version>
     <AssemblyName>GillionsGameSync</AssemblyName>
     <RootNamespace>GillionsGameSync</RootNamespace>
     <TargetFramework>net10.0-windows</TargetFramework>

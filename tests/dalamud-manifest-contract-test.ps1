@@ -80,7 +80,8 @@ $missing[0].Remove('DownloadLinkUpdate')
 Assert-Rejected ($missing | ConvertTo-Json -Depth 8) 'missing required field'
 $wrongIdentity = $json.Replace('"GillionsGameSync"', '"ForeignPlugin"')
 Assert-Rejected $wrongIdentity 'wrong plugin identity'
-$privateQuery = $json.Replace('GillionsGameSync-1.0.28.zip"', 'GillionsGameSync-1.0.28.zip?characterId=1"')
+$manifestVersion = @($json | ConvertFrom-Json -AsHashtable)[0].AssemblyVersion -replace '\.0$', ''
+$privateQuery = $json.Replace("GillionsGameSync-$manifestVersion.zip`"", "GillionsGameSync-$manifestVersion.zip?characterId=1`"")
 Assert-Rejected $privateQuery 'private query data'
 
 Assert-Condition (-not $json.Contains('gillions.app/downloads/plugins/')) 'The active stable manifest must not depend on Gillions-hosted artifacts.'
