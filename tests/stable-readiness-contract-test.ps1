@@ -10,6 +10,12 @@ if ($project -notmatch '<Version>1\.0\.29</Version>') {
 if ($project -notmatch '<PathMap>\$\(MSBuildProjectDirectory\)=/_/GillionsGameSync</PathMap>') {
     throw 'Release diagnostics no longer sanitize the local source root.'
 }
+if ($project -notmatch '<RepositoryUrl>\$\(GillionsRepositoryUrl\)</RepositoryUrl>') {
+    throw 'Release assembly metadata no longer identifies the canonical public repository.'
+}
+if ($project -notmatch '<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>') {
+    throw 'Stable packages are no longer reproducible across their final checksum commit.'
+}
 if ($plugin -notmatch 'EnableAutoRetainerVenturePlans \{ get; set; \} = false;') {
     throw 'Stable upgrade safety requires planner opt-in to default explicitly to false.'
 }

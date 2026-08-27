@@ -14,6 +14,8 @@
     <GillionsPublicBaseUrl Condition="'$(GillionsPublicBaseUrl)' == ''">https://gillions.app</GillionsPublicBaseUrl>
     <GillionsRepositoryUrl Condition="'$(GillionsRepositoryUrl)' == ''">https://github.com/anndrox/GillionsGameSync</GillionsRepositoryUrl>
     <GillionsStableIconUrl Condition="'$(GillionsStableIconUrl)' == ''">https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png</GillionsStableIconUrl>
+    <RepositoryUrl>$(GillionsRepositoryUrl)</RepositoryUrl>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <RepoUrl>$(GillionsRepositoryUrl)</RepoUrl>
     <IconUrl>$(GillionsStableIconUrl)</IconUrl>
     <Tags>inventory;collection;utility</Tags>
