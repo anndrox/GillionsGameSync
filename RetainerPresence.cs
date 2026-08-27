@@ -20,7 +20,11 @@ public static class RetainerCapabilities {
         "retainer.plan-delivery.v1",
         "retainer.plan-ack.v1",
         "retainer.autoretainer.plan-apply.v1",
+        "retainer.autoretainer.plan-limit-500.v1",
+        "retainer.autoretainer.restart-completion.v1",
+        "retainer.autoretainer.per-retainer-readiness.v1",
         "retainer.autoretainer.quick-completion.v1",
+        "retainer.autoretainer.quick-completion-readback.v1",
         "retainer.autoretainer.do-nothing-completion.v1",
     ];
 }
@@ -38,10 +42,59 @@ public sealed record AutoRetainerPresenceDocument(
     [property: JsonPropertyName("multiModeEnabled")] bool? MultiModeEnabled,
     [property: JsonPropertyName("characterEnabled")] bool? CharacterEnabled,
     [property: JsonPropertyName("retainerPlannerEnabled")] bool? RetainerPlannerEnabled,
+    [property: JsonPropertyName("retainerPlannerReadiness")] RetainerPlannerReadinessDocument[] RetainerPlannerReadiness,
     [property: JsonPropertyName("plannerOptIn")] bool PlannerOptIn,
     [property: JsonPropertyName("version")] string? Version,
+    [property: JsonPropertyName("maximumPlanExecutions")] int? MaximumPlanExecutions,
     [property: JsonPropertyName("supportedCompletionActions")] string[] SupportedCompletionActions,
     [property: JsonPropertyName("capabilities")] string[] Capabilities);
+
+public sealed record RetainerPlannerReadinessDocument(
+    [property: JsonPropertyName("retainerId")] string RetainerId,
+    [property: JsonPropertyName("retainerName")] string? RetainerName,
+    [property: JsonPropertyName("plannerEnabled")] bool? PlannerEnabled,
+    [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("observedAtUtc")] DateTime ObservedAtUtc);
+
+internal enum RetainerPlannerReadinessResult {
+    Ready,
+    Disabled,
+    Unavailable,
+    Stale,
+    Missing,
+    Ambiguous,
+}
+
+internal static class RetainerPlannerReadinessPolicy {
+    public static RetainerPlannerReadinessDocument Observation(
+        string retainerId,
+        string? retainerName,
+        bool? plannerEnabled,
+        DateTime observedAtUtc) => new(
+            retainerId,
+            retainerName,
+            plannerEnabled,
+            plannerEnabled switch { true => "ready", false => "disabled", null => "unavailable" },
+            observedAtUtc);
+
+    public static RetainerPlannerReadinessResult Evaluate(
+        IEnumerable<RetainerPlannerReadinessDocument> observations,
+        string retainerId,
+        DateTime nowUtc,
+        TimeSpan maximumAge) {
+        if (string.IsNullOrWhiteSpace(retainerId)) return RetainerPlannerReadinessResult.Missing;
+        var matches = observations.Where(entry => string.Equals(entry.RetainerId, retainerId, StringComparison.Ordinal)).Take(2).ToArray();
+        if (matches.Length == 0) return RetainerPlannerReadinessResult.Missing;
+        if (matches.Length > 1) return RetainerPlannerReadinessResult.Ambiguous;
+        var match = matches[0];
+        if (match.ObservedAtUtc.ToUniversalTime() < nowUtc.ToUniversalTime().Subtract(maximumAge)) return RetainerPlannerReadinessResult.Stale;
+        return match.Status switch {
+            "ready" when match.PlannerEnabled == true => RetainerPlannerReadinessResult.Ready,
+            "disabled" when match.PlannerEnabled == false => RetainerPlannerReadinessResult.Disabled,
+            _ => RetainerPlannerReadinessResult.Unavailable,
+        };
+    }
+}
 
 public sealed record RetainerPresenceDocument(
     [property: JsonPropertyName("schemaVersion")] int SchemaVersion,
@@ -106,10 +159,10 @@ internal sealed class AutoRetainerObservationReader(IDalamudPluginInterface plug
         var installed = plugin is not null;
         var loaded = plugin?.IsLoaded == true;
         var version = plugin is null ? null : Convert.ToString(ReadMember(plugin, "Version"));
-        if (!loaded) return new(new(installed, false, false, null, null, null, null, plannerOptIn, version, [], []), []);
+        if (!loaded) return new(new(installed, false, false, null, null, null, null, [], plannerOptIn, version, null, [], []), []);
 
         var apiReady = InvokeReady();
-        if (!apiReady) return new(new(true, true, false, null, null, null, null, plannerOptIn, version, [], []), []);
+        if (!apiReady) return new(new(true, true, false, null, null, null, null, [], plannerOptIn, version, null, [], []), []);
         var suppressed = TryInvokeValue<bool>("AutoRetainer.GetSuppressed");
         var multiModeEnabled = TryInvokeValue<bool>("AutoRetainer.GetMultiModeEnabled");
         var enabledRetainers = TryInvokeReference<Dictionary<ulong, HashSet<string>>>("AutoRetainer.PluginState.GetEnabledRetainers")
@@ -118,11 +171,16 @@ internal sealed class AutoRetainerObservationReader(IDalamudPluginInterface plug
         var offline = TryInvoke<ulong, object>("AutoRetainer.GetOfflineCharacterData", contentId);
         var offlineRetainers = ReadMember(offline, "RetainerData") as IEnumerable;
         var stats = new List<AutoRetainerStatsRead>();
-        var plannerEnabled = false;
+        var plannerReadiness = new List<RetainerPlannerReadinessDocument>();
         foreach (var retainer in retainers) {
-            var additional = autoRetainerIpc.ReadAdditionalRetainerData(contentId, retainer.Name ?? "");
+            var additional = TryReadAdditionalRetainerData(contentId, retainer.Name ?? "");
+            var plannerEnabled = additional is null ? null : ReadBoolean(additional, "EnablePlanner");
+            plannerReadiness.Add(RetainerPlannerReadinessPolicy.Observation(
+                retainer.RetainerId,
+                retainer.Name,
+                plannerEnabled,
+                observedAtUtc));
             if (additional is null) continue;
-            plannerEnabled |= ReadBoolean(additional, "EnablePlanner") == true;
             var itemLevel = ReadNonNegative(additional, "Ilvl");
             var gathering = ReadNonNegative(additional, "Gathering");
             var perception = ReadNonNegative(additional, "Perception");
@@ -138,19 +196,31 @@ internal sealed class AutoRetainerObservationReader(IDalamudPluginInterface plug
             }
             stats.Add(new(retainer.RetainerId, observedAtUtc, itemLevel, gathering, perception, startedAtUtc));
         }
-        var completionActions = new[] { "assign_quick_venture", "do_nothing" };
+        var completionActions = new[] { "restart_plan", "assign_quick_venture", "do_nothing" };
         var capabilities = new[] {
             "retainer.autoretainer.plan-apply.v1",
+            "retainer.autoretainer.plan-limit-500.v1",
+            "retainer.autoretainer.restart-completion.v1",
+            "retainer.autoretainer.per-retainer-readiness.v1",
             "retainer.autoretainer.quick-completion.v1",
+            "retainer.autoretainer.quick-completion-readback.v1",
             "retainer.autoretainer.do-nothing-completion.v1",
         };
-        return new(new(true, true, true, suppressed, multiModeEnabled, characterEnabled, plannerEnabled,
-            plannerOptIn, version, completionActions, capabilities), stats.ToArray());
+        // The legacy aggregate readiness field is intentionally null. A true
+        // value could be borrowed from a different retainer by an older server.
+        return new(new(true, true, true, suppressed, multiModeEnabled, characterEnabled, null,
+            plannerReadiness.ToArray(), plannerOptIn, version, VenturePlannerCapabilityPolicy.MaximumPendingExecutions,
+            completionActions, capabilities), stats.ToArray());
     }
 
     private bool InvokeReady() {
         try { pluginInterface.GetIpcSubscriber<object>("AutoRetainer.Init").InvokeAction(); return true; }
         catch { return false; }
+    }
+
+    private object? TryReadAdditionalRetainerData(ulong contentId, string retainerName) {
+        try { return autoRetainerIpc.ReadAdditionalRetainerData(contentId, retainerName); }
+        catch { return null; }
     }
 
     private T? TryInvokeValue<T>(string name) where T : struct {

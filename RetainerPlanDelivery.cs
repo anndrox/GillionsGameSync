@@ -101,7 +101,7 @@ internal static class RetainerPlanDeliveryPolicy {
                 || delivery.ProjectionGeneration is null or < 1
                 || delivery.RevisionHash?.Length != 64
                 || delivery.ExpectedAppliedHash is not null && delivery.ExpectedAppliedHash.Length != 64
-                || delivery.CompletionBehavior is not ("assign_quick_venture" or "do_nothing")
+                || delivery.CompletionBehavior is not ("restart_plan" or "assign_quick_venture" or "do_nothing")
                 || delivery.Steps is not { Length: > 0 and <= VenturePlannerCapabilityPolicy.MaximumPendingExecutions }) return false;
             var plan = new GillionsVenturePlanSpec(delivery.RetainerId, delivery.RetainerName, delivery.Steps, delivery.CompletionBehavior);
             return VenturePlannerCapabilityPolicy.IsValid(plan);

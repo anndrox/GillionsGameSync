@@ -70,7 +70,7 @@ internal sealed record AutoRetainerPlanMutationOutcome(
     AutoRetainerVenturePlanBackup? PriorPlanBackup = null);
 
 internal static class VenturePlannerCapabilityPolicy {
-    public const int MaximumPendingExecutions = 24;
+    public const int MaximumPendingExecutions = 500;
 
     public static bool IsAvailable(bool enabled, bool autoRetainerLoaded, bool apiReady, bool paired, bool rosterComplete) =>
         enabled && autoRetainerLoaded && apiReady && paired && rosterComplete;
@@ -81,11 +81,108 @@ internal static class VenturePlannerCapabilityPolicy {
         Steps.Length: > 0 and <= MaximumPendingExecutions,
     } && ulong.TryParse(plan.RetainerId, out var retainerId) && retainerId > 0
         && plan.RetainerName.Length <= 64
-        && plan.CompletionBehavior is "assign_quick_venture" or "do_nothing"
+        && plan.CompletionBehavior is "restart_plan" or "assign_quick_venture" or "do_nothing"
         && plan.Steps.All(step => step.VentureId > 0 && step.Repetitions is > 0 and <= MaximumPendingExecutions)
         && plan.Steps.Sum(step => step.Repetitions) <= MaximumPendingExecutions;
 
     public static string BuildManagedPlanName(string retainerName) => $"Gillions Venture ({retainerName.Trim()})";
+}
+
+internal sealed class AutoRetainerVenturePlanWriterCore(
+    Func<bool> isReady,
+    Func<ulong, string, object?> readFresh,
+    Action<ulong, string, object> write) {
+    public AutoRetainerPlanMutationOutcome Apply(
+        ulong contentId,
+        GillionsVenturePlanSpec plan,
+        string? expectedAppliedHash,
+        AutoRetainerPlanOwnershipState? ownership) {
+        if (contentId == 0 || !VenturePlannerCapabilityPolicy.IsValid(plan)) return new(AutoRetainerPlanApplyResult.InvalidPlan);
+        if (!isReady()) return new(AutoRetainerPlanApplyResult.AutoRetainerUnavailable);
+        try {
+            var data = readFresh(contentId, plan.RetainerName);
+            if (data is null) return new(AutoRetainerPlanApplyResult.IpcRejected);
+            var before = AutoRetainerVenturePlanMutation.Capture(data);
+            var beforeHash = AutoRetainerVenturePlanMutation.Hash(before);
+            var priorBackup = ownership?.PriorPlanBackup ?? before;
+            var priorBackupHash = ownership?.PriorPlanBackupHash ?? beforeHash;
+            // Planner enablement belongs to this exact retainer. Never borrow
+            // readiness from presence for a different retainer or re-enable a
+            // retainer that the user disabled after an earlier Gillions write.
+            if (!before.EnablePlanner)
+                return new(AutoRetainerPlanApplyResult.PlannerDisabled, beforeHash, PriorPlanBackupHash: priorBackupHash, PriorPlanBackup: priorBackup);
+            if (ownership is not null) {
+                var decision = AutoRetainerOwnedPlanPolicy.Decide(
+                    expectedAppliedHash,
+                    ownership.AppliedHash,
+                    beforeHash,
+                    AutoRetainerVenturePlanMutation.MatchesManaged(before, plan));
+                if (decision == AutoRetainerOwnedPlanDecision.Conflict)
+                    return new(AutoRetainerPlanApplyResult.CasMismatch, beforeHash, PriorPlanBackupHash: priorBackupHash, PriorPlanBackup: priorBackup);
+                if (decision == AutoRetainerOwnedPlanDecision.Idempotent)
+                    return new(AutoRetainerPlanApplyResult.Idempotent, beforeHash, beforeHash, beforeHash, priorBackupHash, priorBackup);
+            } else if (expectedAppliedHash is not null) {
+                return new(AutoRetainerPlanApplyResult.CasMismatch, beforeHash, PriorPlanBackupHash: priorBackupHash, PriorPlanBackup: priorBackup);
+            }
+
+            AutoRetainerVenturePlanMutation.Apply(data, plan);
+            write(contentId, plan.RetainerName, data);
+            var readBack = readFresh(contentId, plan.RetainerName);
+            if (readBack is null) return new(AutoRetainerPlanApplyResult.ReadBackMismatch, beforeHash, PriorPlanBackupHash: priorBackupHash, PriorPlanBackup: priorBackup);
+            var readBackState = AutoRetainerVenturePlanMutation.Capture(readBack);
+            var readBackHash = AutoRetainerVenturePlanMutation.Hash(readBackState);
+            if (!AutoRetainerVenturePlanMutation.MatchesManaged(readBackState, plan)) {
+                TryRollback(contentId, plan.RetainerName, before);
+                return new(AutoRetainerPlanApplyResult.ReadBackMismatch, beforeHash, readBackHash, readBackHash, priorBackupHash, priorBackup);
+            }
+            return new(AutoRetainerPlanApplyResult.Applied, beforeHash, readBackHash, readBackHash, priorBackupHash, priorBackup);
+        } catch {
+            return new(AutoRetainerPlanApplyResult.IpcRejected);
+        }
+    }
+
+    public AutoRetainerPlanMutationOutcome Restore(
+        ulong contentId,
+        string retainerName,
+        string expectedAppliedHash,
+        AutoRetainerPlanOwnershipState ownership) {
+        if (contentId == 0 || string.IsNullOrWhiteSpace(retainerName)) return new(AutoRetainerPlanApplyResult.InvalidPlan);
+        if (!isReady()) return new(AutoRetainerPlanApplyResult.AutoRetainerUnavailable);
+        try {
+            var data = readFresh(contentId, retainerName);
+            if (data is null) return new(AutoRetainerPlanApplyResult.IpcRejected);
+            var before = AutoRetainerVenturePlanMutation.Capture(data);
+            var beforeHash = AutoRetainerVenturePlanMutation.Hash(before);
+            if (string.Equals(beforeHash, ownership.PriorPlanBackupHash, StringComparison.Ordinal))
+                return new(AutoRetainerPlanApplyResult.Idempotent, beforeHash, beforeHash, beforeHash, ownership.PriorPlanBackupHash, ownership.PriorPlanBackup);
+            if (!AutoRetainerOwnedPlanPolicy.CanRestore(expectedAppliedHash, beforeHash))
+                return new(AutoRetainerPlanApplyResult.CasMismatch, beforeHash, PriorPlanBackupHash: ownership.PriorPlanBackupHash, PriorPlanBackup: ownership.PriorPlanBackup);
+
+            AutoRetainerVenturePlanMutation.Restore(data, ownership.PriorPlanBackup);
+            write(contentId, retainerName, data);
+            var readBack = readFresh(contentId, retainerName);
+            if (readBack is null) return new(AutoRetainerPlanApplyResult.ReadBackMismatch, beforeHash, PriorPlanBackupHash: ownership.PriorPlanBackupHash, PriorPlanBackup: ownership.PriorPlanBackup);
+            var readBackState = AutoRetainerVenturePlanMutation.Capture(readBack);
+            var readBackHash = AutoRetainerVenturePlanMutation.Hash(readBackState);
+            if (!string.Equals(readBackHash, ownership.PriorPlanBackupHash, StringComparison.Ordinal)) {
+                TryRollback(contentId, retainerName, before);
+                return new(AutoRetainerPlanApplyResult.ReadBackMismatch, beforeHash, readBackHash, readBackHash, ownership.PriorPlanBackupHash, ownership.PriorPlanBackup);
+            }
+            return new(AutoRetainerPlanApplyResult.Restored, beforeHash, readBackHash, readBackHash, ownership.PriorPlanBackupHash, ownership.PriorPlanBackup);
+        } catch {
+            return new(AutoRetainerPlanApplyResult.IpcRejected);
+        }
+    }
+
+    private void TryRollback(ulong contentId, string retainerName, AutoRetainerVenturePlanBackup state) {
+        try {
+            var fresh = readFresh(contentId, retainerName);
+            if (fresh is null) return;
+            AutoRetainerVenturePlanMutation.Restore(fresh, state);
+            write(contentId, retainerName, fresh);
+            _ = readFresh(contentId, retainerName);
+        } catch { }
+    }
 }
 
 internal static class AutoRetainerOwnedPlanPolicy {
@@ -111,8 +208,25 @@ internal static class AutoRetainerOwnedPlanPolicy {
 }
 
 #if !GILLIONS_POLICY_TESTS
-internal sealed class AutoRetainerVenturePlanWriter(IDalamudPluginInterface pluginInterface) {
-    private readonly AutoRetainerIpc autoRetainerIpc = new(pluginInterface);
+internal sealed class AutoRetainerVenturePlanWriter {
+    private readonly IDalamudPluginInterface pluginInterface;
+    private readonly AutoRetainerVenturePlanWriterCore core;
+
+    public AutoRetainerVenturePlanWriter(IDalamudPluginInterface pluginInterface) {
+        this.pluginInterface = pluginInterface;
+        var autoRetainerIpc = new AutoRetainerIpc(pluginInterface);
+        core = new(
+            () => {
+                try {
+                    pluginInterface.GetIpcSubscriber<object>("AutoRetainer.Init").InvokeAction();
+                    return true;
+                } catch {
+                    return false;
+                }
+            },
+            autoRetainerIpc.ReadAdditionalRetainerData,
+            autoRetainerIpc.WriteAdditionalRetainerData);
+    }
 
     public bool IsReady() {
         try {
@@ -127,98 +241,15 @@ internal sealed class AutoRetainerVenturePlanWriter(IDalamudPluginInterface plug
         ulong contentId,
         GillionsVenturePlanSpec plan,
         string? expectedAppliedHash,
-        AutoRetainerPlanOwnershipState? ownership) {
-        if (contentId == 0 || !VenturePlannerCapabilityPolicy.IsValid(plan)) return new(AutoRetainerPlanApplyResult.InvalidPlan);
-        if (!IsReady()) return new(AutoRetainerPlanApplyResult.AutoRetainerUnavailable);
-        try {
-            // Every mutable AutoRetainer object is fetched, changed, written,
-            // and read back synchronously during this one framework update.
-            var data = ReadFresh(contentId, plan.RetainerName);
-            if (data is null) return new(AutoRetainerPlanApplyResult.IpcRejected);
-            var before = AutoRetainerVenturePlanMutation.Capture(data);
-            var beforeHash = AutoRetainerVenturePlanMutation.Hash(before);
-            var priorBackup = ownership?.PriorPlanBackup ?? before;
-            var priorBackupHash = ownership?.PriorPlanBackupHash ?? beforeHash;
-            if (ownership is null && !before.EnablePlanner)
-                return new(AutoRetainerPlanApplyResult.PlannerDisabled, beforeHash, PriorPlanBackupHash: priorBackupHash, PriorPlanBackup: priorBackup);
-            if (ownership is not null) {
-                var decision = AutoRetainerOwnedPlanPolicy.Decide(
-                    expectedAppliedHash,
-                    ownership.AppliedHash,
-                    beforeHash,
-                    AutoRetainerVenturePlanMutation.MatchesManaged(before, plan));
-                if (decision == AutoRetainerOwnedPlanDecision.Conflict)
-                    return new(AutoRetainerPlanApplyResult.CasMismatch, beforeHash, PriorPlanBackupHash: priorBackupHash, PriorPlanBackup: priorBackup);
-                if (decision == AutoRetainerOwnedPlanDecision.Idempotent)
-                    return new(AutoRetainerPlanApplyResult.Idempotent, beforeHash, beforeHash, beforeHash, priorBackupHash, priorBackup);
-            } else if (expectedAppliedHash is not null) {
-                return new(AutoRetainerPlanApplyResult.CasMismatch, beforeHash, PriorPlanBackupHash: priorBackupHash, PriorPlanBackup: priorBackup);
-            }
-
-            AutoRetainerVenturePlanMutation.Apply(data, plan);
-            Write(contentId, plan.RetainerName, data);
-            var readBack = ReadFresh(contentId, plan.RetainerName);
-            if (readBack is null) return new(AutoRetainerPlanApplyResult.ReadBackMismatch, beforeHash, PriorPlanBackupHash: priorBackupHash, PriorPlanBackup: priorBackup);
-            var readBackState = AutoRetainerVenturePlanMutation.Capture(readBack);
-            var readBackHash = AutoRetainerVenturePlanMutation.Hash(readBackState);
-            if (!AutoRetainerVenturePlanMutation.MatchesManaged(readBackState, plan)) {
-                TryRollback(contentId, plan.RetainerName, before);
-                return new(AutoRetainerPlanApplyResult.ReadBackMismatch, beforeHash, readBackHash, readBackHash, priorBackupHash, priorBackup);
-            }
-            return new(AutoRetainerPlanApplyResult.Applied, beforeHash, readBackHash, readBackHash, priorBackupHash, priorBackup);
-        } catch {
-            return new(AutoRetainerPlanApplyResult.IpcRejected);
-        }
-    }
+        AutoRetainerPlanOwnershipState? ownership) =>
+        core.Apply(contentId, plan, expectedAppliedHash, ownership);
 
     public AutoRetainerPlanMutationOutcome Restore(
         ulong contentId,
         string retainerName,
         string expectedAppliedHash,
-        AutoRetainerPlanOwnershipState ownership) {
-        if (contentId == 0 || string.IsNullOrWhiteSpace(retainerName)) return new(AutoRetainerPlanApplyResult.InvalidPlan);
-        if (!IsReady()) return new(AutoRetainerPlanApplyResult.AutoRetainerUnavailable);
-        try {
-            var data = ReadFresh(contentId, retainerName);
-            if (data is null) return new(AutoRetainerPlanApplyResult.IpcRejected);
-            var before = AutoRetainerVenturePlanMutation.Capture(data);
-            var beforeHash = AutoRetainerVenturePlanMutation.Hash(before);
-            if (string.Equals(beforeHash, ownership.PriorPlanBackupHash, StringComparison.Ordinal))
-                return new(AutoRetainerPlanApplyResult.Idempotent, beforeHash, beforeHash, beforeHash, ownership.PriorPlanBackupHash, ownership.PriorPlanBackup);
-            if (!AutoRetainerOwnedPlanPolicy.CanRestore(expectedAppliedHash, beforeHash))
-                return new(AutoRetainerPlanApplyResult.CasMismatch, beforeHash, PriorPlanBackupHash: ownership.PriorPlanBackupHash, PriorPlanBackup: ownership.PriorPlanBackup);
-
-            AutoRetainerVenturePlanMutation.Restore(data, ownership.PriorPlanBackup);
-            Write(contentId, retainerName, data);
-            var readBack = ReadFresh(contentId, retainerName);
-            if (readBack is null) return new(AutoRetainerPlanApplyResult.ReadBackMismatch, beforeHash, PriorPlanBackupHash: ownership.PriorPlanBackupHash, PriorPlanBackup: ownership.PriorPlanBackup);
-            var readBackState = AutoRetainerVenturePlanMutation.Capture(readBack);
-            var readBackHash = AutoRetainerVenturePlanMutation.Hash(readBackState);
-            if (!string.Equals(readBackHash, ownership.PriorPlanBackupHash, StringComparison.Ordinal)) {
-                TryRollback(contentId, retainerName, before);
-                return new(AutoRetainerPlanApplyResult.ReadBackMismatch, beforeHash, readBackHash, readBackHash, ownership.PriorPlanBackupHash, ownership.PriorPlanBackup);
-            }
-            return new(AutoRetainerPlanApplyResult.Restored, beforeHash, readBackHash, readBackHash, ownership.PriorPlanBackupHash, ownership.PriorPlanBackup);
-        } catch {
-            return new(AutoRetainerPlanApplyResult.IpcRejected);
-        }
-    }
-
-    private object? ReadFresh(ulong contentId, string retainerName) =>
-        autoRetainerIpc.ReadAdditionalRetainerData(contentId, retainerName);
-
-    private void Write(ulong contentId, string retainerName, object data) =>
-        autoRetainerIpc.WriteAdditionalRetainerData(contentId, retainerName, data);
-
-    private void TryRollback(ulong contentId, string retainerName, AutoRetainerVenturePlanBackup state) {
-        try {
-            var fresh = ReadFresh(contentId, retainerName);
-            if (fresh is null) return;
-            AutoRetainerVenturePlanMutation.Restore(fresh, state);
-            Write(contentId, retainerName, fresh);
-            _ = ReadFresh(contentId, retainerName);
-        } catch { }
-    }
+        AutoRetainerPlanOwnershipState ownership) =>
+        core.Restore(contentId, retainerName, expectedAppliedHash, ownership);
 }
 #endif
 

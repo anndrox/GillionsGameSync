@@ -95,6 +95,7 @@ public sealed class Plugin : IDalamudPlugin {
     private bool syncInFlight;
     private bool itemLinkPollInFlight;
     private readonly ItemLinkRequestProcessor itemLinkRequestProcessor = new();
+    private readonly PairedClientHydrationState pairedClientHydration = new();
     private int automaticScopeIndex;
     private readonly object diagnosticsLock = new();
     private readonly List<string> diagnostics = [];
@@ -119,7 +120,7 @@ public sealed class Plugin : IDalamudPlugin {
         "Testing planner: Gillions can deliver only an explicitly synchronized, fixed Retainer venture plan after you opt in.",
         "Plan safety: The original AutoRetainer plan and completion behavior are backed up, verified after every write, and restorable.",
         "Conflict recovery: A new deliberate Sync may adopt only the exact AutoRetainer plan state previously reported to Gillions; another local edit still blocks the write.",
-        "Bounded execution: Gillions accepts at most 24 executions and never creates a local repeat queue.",
+        "Venture planner compatibility: supports up to 500 executions, per-retainer readiness, Quick Venture verification, and AutoRetainer's Restart Plan mode.",
         "Device ownership: The first applying device remains the plan owner; outside changes stop synchronization instead of being overwritten.",
     ];
 #else
@@ -173,6 +174,7 @@ public sealed class Plugin : IDalamudPlugin {
         configuration.AutoRetainerVenturePlanBackups ??= new(StringComparer.Ordinal);
         configuration.AutoRetainerPlanOwnershipStates ??= new(StringComparer.Ordinal);
         if (configuration.UseCompiledDefaultServerUrl(GillionsEndpoints.DefaultServerUrl)) configuration.Save(pluginInterface);
+        pairedClientHydration.PluginStarted(!string.IsNullOrWhiteSpace(configuration.DeviceToken));
         commands.AddHandler(CommandName, new CommandInfo(OnCommand) { HelpMessage = "Pair or sync your selected Gillions data." });
         pluginInterface.UiBuilder.Draw += DrawSettings;
         pluginInterface.UiBuilder.OpenConfigUi += OpenSettings;
@@ -227,8 +229,14 @@ public sealed class Plugin : IDalamudPlugin {
         configuration.PairingCode = "";
         configuration.SyncBlockedCode = "";
         configuration.SyncBlockedMessage = "";
-        await SaveConfigurationAsync();
-        settingsMessage = "Paired successfully. You can now sync your Gillions data.";
+        await framework.RunOnFrameworkThread(() => {
+            pairedClientHydration.PairingSucceeded();
+            presenceFailureCount = 0;
+            nextRetainerPresenceUtc = DateTime.MinValue;
+            ClearRetainerServerAcceptance();
+            configuration.Save(pluginInterface);
+        });
+        settingsMessage = "Paired successfully. Gillions is loading your selected character.";
         log.Information("Gillions Game Sync paired successfully.");
     }
 
@@ -268,6 +276,24 @@ public sealed class Plugin : IDalamudPlugin {
         retainerPlanServerSupported = false;
     }
 
+    private void SendCurrentRetainerPresence(ulong contentId, RetainerVentureLocalState retainerState, DateTime now) {
+        if (string.IsNullOrWhiteSpace(configuration.DeviceToken)) return;
+        var currentName = objects.LocalPlayer?.Name.TextValue ?? "";
+        var currentWorld = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "";
+        var probe = autoRetainerObservationReader.Read(contentId, retainerState.Retainers, configuration.EnableAutoRetainerVenturePlans, now);
+        autoRetainerApiReady = probe.Presence.ApiReady;
+        RetainerVentureSnapshotPolicy.MergeAutoRetainerStats(retainerState, probe.Stats, now);
+        var appliedPlans = RetainerPlanDeliveryPolicy.AppliedPlansForCharacter(configuration.AutoRetainerPlanOwnershipStates, contentId);
+        var presence = new RetainerPresenceDocument(1,
+            new(contentId.ToString(), currentName, currentWorld), now,
+            RetainerClient.ProductName, RetainerClient.Channel, PluginVersion, RetainerClientPolicy.ContractVersion,
+            RetainerCapabilities.Client, probe.Presence, appliedPlans);
+        // The next heartbeat response must renew acceptance. A missing or
+        // malformed response cannot leave a previous server grant active.
+        ClearRetainerServerAcceptance();
+        _ = SendRetainerPresenceAsync(contentId, presence);
+    }
+
     private void OnFrameworkUpdate(IFramework frameworkInstance) {
         var now = DateTime.UtcNow;
         if (!clientState.IsLoggedIn) {
@@ -300,6 +326,19 @@ public sealed class Plugin : IDalamudPlugin {
             nextItemLinkPollUtc = now.AddSeconds(ItemLinkPollIntervalSeconds);
             _ = PollItemLinkRequestsAsync();
         }
+        // A successful pair or an ordinary plugin startup with an existing
+        // device credential hydrates the selected character once instead of
+        // waiting for the rotating background schedule. The paired presence
+        // follows on the next available update. Neither action enables the
+        // recurring automatic-sync loop when the owner has opted out.
+        if (pairedClientHydration.TryBeginCharacterSync(syncInFlight)) {
+            _ = SyncAutomaticallyAsync([PairedClientHydrationState.CharacterResource]);
+            return;
+        }
+        if (pairedClientHydration.TryBeginPresence(presenceInFlight)) {
+            SendCurrentRetainerPresence(contentId, retainerState, now);
+            return;
+        }
         // An unpaired client, or one whose owner has disabled automatic sync,
         // must have no recurring native-memory work. Manual Sync remains
         // available and performs its one explicit collection on demand.
@@ -319,20 +358,7 @@ public sealed class Plugin : IDalamudPlugin {
             return;
         }
         if (!presenceInFlight && now >= nextRetainerPresenceUtc) {
-            var currentName = objects.LocalPlayer?.Name.TextValue ?? "";
-            var currentWorld = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "";
-            var probe = autoRetainerObservationReader.Read(contentId, retainerState.Retainers, configuration.EnableAutoRetainerVenturePlans, now);
-            autoRetainerApiReady = probe.Presence.ApiReady;
-            RetainerVentureSnapshotPolicy.MergeAutoRetainerStats(retainerState, probe.Stats, now);
-            var appliedPlans = RetainerPlanDeliveryPolicy.AppliedPlansForCharacter(configuration.AutoRetainerPlanOwnershipStates, contentId);
-            var presence = new RetainerPresenceDocument(1,
-                new(contentId.ToString(), currentName, currentWorld), now,
-                RetainerClient.ProductName, RetainerClient.Channel, PluginVersion, RetainerClientPolicy.ContractVersion,
-                RetainerCapabilities.Client, probe.Presence, appliedPlans);
-            // The next heartbeat response must renew acceptance. A missing or
-            // malformed response cannot leave a previous server grant active.
-            ClearRetainerServerAcceptance();
-            _ = SendRetainerPresenceAsync(contentId, presence);
+            SendCurrentRetainerPresence(contentId, retainerState, now);
         }
         if (RetainerClientPolicy.ShouldPollPlans(
                 retainerPlanServerSupported,
@@ -1124,7 +1150,7 @@ public sealed class Plugin : IDalamudPlugin {
             nextRetainerPlanPollUtc = DateTime.MinValue;
             configuration.Save(pluginInterface);
         }
-        ImGui.TextDisabled("Off by default. Every plan is bounded to 24 executions, backed up before the first write, and protected against outside changes.");
+        ImGui.TextDisabled("Off by default. Every plan is bounded to 500 executions, backed up before the first write, and protected against outside changes.");
         ImGui.TextDisabled(retainerPlanServerSupported
             ? "Gillions and the AutoRetainer safety gates are ready for an explicitly requested plan."
             : (retainerUploadServerSupported ? "Retainer observation is enabled; plan delivery is not currently ready." : "Retainer observations remain local until Gillions explicitly accepts this client channel."));
