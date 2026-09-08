@@ -43,6 +43,7 @@ public sealed class OwnedCharacterState {
     public Dictionary<string, string> LastInventoryComponentHashes { get; set; } = new(StringComparer.Ordinal);
     public DateTime? LastSyncUtc { get; set; }
     public Dictionary<string, long> RetainerGilBalances { get; set; } = new(StringComparer.Ordinal);
+    public HashSet<string> RetainerGilBaselinesNeedingRefresh { get; set; } = new(StringComparer.Ordinal);
     public RetainerVentureLocalState RetainerState { get; set; } = new();
     public List<GilLedgerEvent> PendingGilLedgerEvents { get; set; } = [];
     public List<GilLedgerEvent> PendingRetainerGilReceipts { get; set; } = [];

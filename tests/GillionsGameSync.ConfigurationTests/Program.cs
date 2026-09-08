@@ -177,6 +177,11 @@ configurationType.GetMethod("Save")!.Invoke(loadedOwned, [savedViaPlugin]);
 File.Copy(pathForFixture, Path.Combine(fixturePath, "owned-configuration-roundtrip.json"), true);
 Console.WriteLine($"Actual owned configuration / re-pair / coverage-gap fixtures passed: {product}; {beforeOwnedBytes.Length} accounted bytes across two character partitions.");
 
+GapBaselineTests.Run(pluginAssembly, config => {
+    configurationType.GetMethod("Save")!.Invoke(config, [savedViaPlugin]);
+    return load.Invoke(configurations, [product])!;
+}, fixturePath);
+
 // These static plugin methods require no plugin instance or native game state.
 var logEvidenceType = pluginAssembly.GetType("GillionsGameSync.GilLedgerLogEvidence", true)!;
 var classifyLedger = pluginType.GetMethod("ClassifyGilLedgerEvent", BindingFlags.Static | BindingFlags.NonPublic)!;

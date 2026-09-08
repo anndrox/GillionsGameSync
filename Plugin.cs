@@ -508,35 +508,7 @@ public sealed class Plugin : IDalamudPlugin {
             retainerBalance = observedRetainerBalance;
         }
 
-        if (retainerBalance is not null && lastObservedRetainerId != retainerBalance.RetainerId) {
-            CurrentState.RetainerGilBalances ??= new Dictionary<string, long>(StringComparer.Ordinal);
-            if (CurrentState.RetainerGilBalances.TryGetValue(retainerBalance.RetainerId, out var priorGil)) {
-                if (priorGil != retainerBalance.Gil) RecordRetainerBalanceChange(retainerBalance, retainerBalance.Gil - priorGil);
-            } else {
-                CurrentState.RetainerGilBalances[retainerBalance.RetainerId] = retainerBalance.Gil;
-                RequestConfigurationSave();
-            }
-            lastObservedRetainerId = retainerBalance.RetainerId;
-            lastObservedRetainerGil = retainerBalance.Gil;
-        }
-        else if (retainerBalance is not null && lastObservedRetainerGil is not null && retainerBalance.Gil > lastObservedRetainerGil.Value) {
-            var retainerDelta = retainerBalance.Gil - lastObservedRetainerGil.Value;
-            lastObservedRetainerGil = retainerBalance.Gil;
-            var confirmedRetainerDeposit = RecordRetainerBalanceChange(retainerBalance, retainerDelta);
-            var confirmedRetainerSales = confirmedRetainerDeposit ? new List<PendingRetainerSale>() : ConfirmPendingRetainerSales(retainerDelta, retainerBalance.RetainerId);
-            if (confirmedRetainerSales.Count > 0) {
-                CurrentState.PendingGilLedgerEvents ??= [];
-                foreach (var sale in confirmedRetainerSales) CurrentState.PendingGilLedgerEvents.Add(CreateGilLedgerEvent(sale.Amount, "retainer_sale", "confirmed", sale.ItemId, sale.ItemQuantity, sale.RetainerId, sale.RetainerName, null, []));
-                RequestConfigurationSave();
-                QueueGilLedgerUpload();
-                RecordDiagnostic($"Retainer gil ledger: +{retainerDelta:#,##0} gil; confirmed/retainer_sale; retainer={retainerBalance.RetainerName}; town={retainerBalance.Town}; items={confirmedRetainerSales.Count}.");
-            }
-        }
-        else if (retainerBalance is not null && lastObservedRetainerGil is not null && retainerBalance.Gil < lastObservedRetainerGil.Value) {
-            var retainerDelta = retainerBalance.Gil - lastObservedRetainerGil.Value;
-            lastObservedRetainerGil = retainerBalance.Gil;
-            RecordRetainerBalanceChange(retainerBalance, retainerDelta);
-        }
+        ObserveStableRetainerBalance(retainerBalance);
         if (FlushExpiredRetainerGilReceipts() || FlushExpiredRetainerGilDeposits()) {
             RequestConfigurationSave();
             QueueGilLedgerUpload();
@@ -590,6 +562,48 @@ public sealed class Plugin : IDalamudPlugin {
         RequestConfigurationSave();
         QueueGilLedgerUpload();
         RecordDiagnostic($"Gil ledger: {delta:+#,##0;-#,##0} gil; {classification.Confidence}/{classification.Kind}{(classification.ItemId is null ? "" : $"; item={classification.ItemId} x{classification.ItemQuantity}")}{(recent is null ? "" : $"; log {recent.LogMessageId}, ints=[{string.Join(",", recent.IntegerParameters)}]")}{(recentChatSale is null ? "" : "; chat=vendor_sale")}.");
+    }
+
+    // Native stabilization stays in CaptureGilLedgerChange; this consumes only the stable read.
+    private void ObserveStableRetainerBalance(RetainerBalanceRead? retainerBalance) {
+        if (retainerBalance is not null
+            && (CurrentState.RetainerGilBaselinesNeedingRefresh ??= new(StringComparer.Ordinal)).Remove(retainerBalance.RetainerId)) {
+            // Retain old values through the gap, but never use them to infer a missed transfer.
+            (CurrentState.RetainerGilBalances ??= new(StringComparer.Ordinal))[retainerBalance.RetainerId] = retainerBalance.Gil;
+            lastObservedRetainerId = retainerBalance.RetainerId;
+            lastObservedRetainerGil = retainerBalance.Gil;
+            RequestConfigurationSave();
+            return;
+        }
+        if (retainerBalance is not null && lastObservedRetainerId != retainerBalance.RetainerId) {
+            CurrentState.RetainerGilBalances ??= new Dictionary<string, long>(StringComparer.Ordinal);
+            if (CurrentState.RetainerGilBalances.TryGetValue(retainerBalance.RetainerId, out var priorGil)) {
+                if (priorGil != retainerBalance.Gil) RecordRetainerBalanceChange(retainerBalance, retainerBalance.Gil - priorGil);
+            } else {
+                CurrentState.RetainerGilBalances[retainerBalance.RetainerId] = retainerBalance.Gil;
+                RequestConfigurationSave();
+            }
+            lastObservedRetainerId = retainerBalance.RetainerId;
+            lastObservedRetainerGil = retainerBalance.Gil;
+        }
+        else if (retainerBalance is not null && lastObservedRetainerGil is not null && retainerBalance.Gil > lastObservedRetainerGil.Value) {
+            var retainerDelta = retainerBalance.Gil - lastObservedRetainerGil.Value;
+            lastObservedRetainerGil = retainerBalance.Gil;
+            var confirmedRetainerDeposit = RecordRetainerBalanceChange(retainerBalance, retainerDelta);
+            var confirmedRetainerSales = confirmedRetainerDeposit ? new List<PendingRetainerSale>() : ConfirmPendingRetainerSales(retainerDelta, retainerBalance.RetainerId);
+            if (confirmedRetainerSales.Count > 0) {
+                CurrentState.PendingGilLedgerEvents ??= [];
+                foreach (var sale in confirmedRetainerSales) CurrentState.PendingGilLedgerEvents.Add(CreateGilLedgerEvent(sale.Amount, "retainer_sale", "confirmed", sale.ItemId, sale.ItemQuantity, sale.RetainerId, sale.RetainerName, null, []));
+                RequestConfigurationSave();
+                QueueGilLedgerUpload();
+                RecordDiagnostic($"Retainer gil ledger: +{retainerDelta:#,##0} gil; confirmed/retainer_sale; retainer={retainerBalance.RetainerName}; town={retainerBalance.Town}; items={confirmedRetainerSales.Count}.");
+            }
+        }
+        else if (retainerBalance is not null && lastObservedRetainerGil is not null && retainerBalance.Gil < lastObservedRetainerGil.Value) {
+            var retainerDelta = retainerBalance.Gil - lastObservedRetainerGil.Value;
+            lastObservedRetainerGil = retainerBalance.Gil;
+            RecordRetainerBalanceChange(retainerBalance, retainerDelta);
+        }
     }
 
     private bool RecordRetainerBalanceChange(RetainerBalanceRead retainer, long delta) {
@@ -1149,6 +1163,13 @@ public sealed class Plugin : IDalamudPlugin {
     }
     private void AfterAcknowledgedDrain(int retiredRecords) {
         if (retiredRecords > 0 && evidenceBudget.ResumeAfterDrain(configuration.OwnedCharacters.Values, configuration.CoverageGap, DateTime.UtcNow)) {
+            // Backpressure affected every partition, including retainers not currently loaded.
+            // Persist invalidation alongside recovery; keep historical values and pending evidence intact.
+            foreach (var state in configuration.OwnedCharacters.Values) {
+                state.RetainerGilBalances ??= new(StringComparer.Ordinal);
+                state.RetainerGilBaselinesNeedingRefresh ??= new(StringComparer.Ordinal);
+                state.RetainerGilBaselinesNeedingRefresh.UnionWith(state.RetainerGilBalances.Keys);
+            }
             ClearTransientState(); DirectGameSnapshotCollector.ResetResultView();
         }
         RequestConfigurationSave();
