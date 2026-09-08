@@ -117,7 +117,6 @@ public sealed record RetainerVentureGearItem(
 public sealed record RetainerVentureRosterEntry(string RetainerId, string Name, byte ClassJobId, byte Level, ushort VentureId, uint VentureCompleteUnix, uint Gil);
 public sealed record RetainerVentureRosterRead(DateTime ObservedAtUtc, bool Complete, RetainerVentureRosterEntry[] Retainers);
 public sealed record RetainerVentureGearRead(string RetainerId, DateTime ObservedAtUtc, RetainerVentureGearItem[] EquippedItems);
-public sealed record AutoRetainerStatsRead(string RetainerId, DateTime ObservedAtUtc, int? ItemLevel, int? Gathering, int? Perception, DateTime? VentureStartedAtUtc);
 public sealed record RetainerInventoryContainerRead(string ContainerId, bool Loaded, int UsedSlots, int MaximumSlots);
 public sealed record RetainerInventorySourceRead(string Source, string? RetainerId, DateTime ObservedAtUtc, RetainerInventoryContainerRead[] Containers);
 
@@ -288,36 +287,28 @@ public static class RetainerVentureSnapshotPolicy {
         return true;
     }
 
-    public static bool MergeAutoRetainerStats(RetainerVentureLocalState state, IEnumerable<AutoRetainerStatsRead>? reads, DateTime observedAtUtc) {
-        var byId = (reads ?? []).Where(read => IsValidRetainerId(read.RetainerId)).ToDictionary(read => read.RetainerId, StringComparer.Ordinal);
-        var touched = false;
+    public static bool RetireCachedStats(RetainerVentureLocalState? state) {
+        if (state is null) return false;
+        var changed = false;
         foreach (var profile in state.Retainers) {
-            if (byId.TryGetValue(profile.RetainerId, out var read) && (read.ItemLevel is not null || read.Gathering is not null || read.Perception is not null)) {
-                var changed = profile.Stats.ItemLevel != read.ItemLevel || profile.Stats.Gathering != read.Gathering || profile.Stats.Perception != read.Perception;
-                var populated = new[] { read.ItemLevel, read.Gathering, read.Perception }.Count(value => value is not null);
-                profile.Stats = new RetainerStatsObservation {
-                    Observation = Evidence(populated == 3 ? RetainerObservationVocabulary.Complete : RetainerObservationVocabulary.Partial,
-                        read.ObservedAtUtc, changed ? read.ObservedAtUtc : profile.Stats.Observation.LastChangedAtUtc ?? read.ObservedAtUtc,
-                        RetainerObservationVocabulary.AutoRetainerCached),
-                    ItemLevel = read.ItemLevel,
-                    Gathering = read.Gathering,
-                    Perception = read.Perception,
+            var observation = profile.Stats.Observation;
+            var retained = profile.Stats.ItemLevel is not null || profile.Stats.Gathering is not null || profile.Stats.Perception is not null;
+            var retired = observation with {
+                Status = RetainerObservationVocabulary.Unavailable,
+                Provenance = retained ? RetainerObservationVocabulary.RetainedHistorical : RetainerObservationVocabulary.AutoRetainerCached,
+                RetainedData = retained,
+            };
+            // Retirement is not a fresh measurement: keep the last observation
+            // and change timestamps, including unknown timestamps, intact.
+            if (retired != observation) { profile.Stats.Observation = retired; changed = true; }
+            if (profile.Venture.Assignment?.BeginAt is { Provenance: RetainerObservationVocabulary.AutoRetainerCached } begin) {
+                profile.Venture.Assignment = profile.Venture.Assignment with {
+                    BeginAt = begin with { Provenance = RetainerObservationVocabulary.RetainedHistorical },
                 };
-                if (read.VentureStartedAtUtc is DateTime started && profile.Venture.Assignment is not null) {
-                    profile.Venture.Assignment = profile.Venture.Assignment with {
-                        BeginAt = new RetainerVentureBeginTimestamp(started, read.ObservedAtUtc, RetainerObservationVocabulary.AutoRetainerCached),
-                    };
-                }
-            } else if (profile.Stats.ItemLevel is not null || profile.Stats.Gathering is not null || profile.Stats.Perception is not null) {
-                profile.Stats.Observation = Evidence(RetainerObservationVocabulary.Unavailable, observedAtUtc,
-                    profile.Stats.Observation.LastChangedAtUtc ?? observedAtUtc, RetainerObservationVocabulary.RetainedHistorical, retained: true);
-            } else {
-                profile.Stats.Observation = Evidence(RetainerObservationVocabulary.Unavailable, observedAtUtc,
-                    profile.Stats.Observation.LastChangedAtUtc ?? observedAtUtc, RetainerObservationVocabulary.AutoRetainerCached);
+                changed = true;
             }
-            touched = true;
         }
-        return touched;
+        return changed;
     }
 
     public static bool MergeInventorySources(RetainerVentureLocalState state, IEnumerable<RetainerInventorySourceRead> reads) {
@@ -462,6 +453,11 @@ public static class RetainerAcknowledgementPolicy {
 }
 
 public static class RetainerPresencePolicy {
+    public static RetainerPresenceDocument CreateNative(RetainerPresenceCharacter character, DateTime now,
+        RetainerClientProfile client, string version) => new(1, character, now,
+            client.ProductName, client.Channel, version, RetainerClientPolicy.ContractVersion,
+            RetainerCapabilities.Client, new(false, false, false, null, null, null, null, [], false, null, null, [], []), []);
+
     public const int NormalIntervalSeconds = 30;
     public const int OnlineWindowSeconds = 90;
     public const int MaximumBackoffSeconds = 300;

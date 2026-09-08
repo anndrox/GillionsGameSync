@@ -28,6 +28,15 @@ public static class DirectGameSnapshotCollector {
     internal static RetainerContext? FindLoadedRetainerItem(uint itemId) => NativeInventoryCollector.FindLoadedRetainerItem(itemId);
     internal static RetainerBalanceRead? ReadActiveRetainerGil() => NativeInventoryCollector.ReadActiveRetainerGil();
 
+    internal static unsafe bool IsRetainerVentureWindowActive() {
+        try {
+            var agent = AgentRetainerTask.Instance();
+            return agent != null && agent->IsAgentActive();
+        } catch {
+            return false;
+        }
+    }
+
     internal static bool CaptureRetainerVentureResultObservation(RetainerVentureLocalState state, out string resultProbeStatus) {
         var now = DateTime.UtcNow;
         // The game can clear the active retainer's completion timestamp while

@@ -26,4 +26,15 @@ $testingOutput = Join-Path $root 'artifacts/verification/testing/'
 dotnet build $project -c Release --no-restore -warnaserror -p:GillionsTestBuild=true -p:Version=0.0.0 -p:OutputPath=$testingOutput
 if ($LASTEXITCODE -ne 0) { throw 'Testing-compatible Release build failed.' }
 
+$configurationTests = Join-Path $root 'tests/GillionsGameSync.ConfigurationTests/GillionsGameSync.ConfigurationTests.csproj'
+$dalamudPath = dotnet msbuild $project -getProperty:DalamudLibPath -nologo
+if ($LASTEXITCODE -ne 0) { throw 'Unable to identify the actual Dalamud serializer libraries.' }
+foreach ($channel in @('stable', 'testing')) {
+    $assemblyName = if ($channel -eq 'stable') { 'GillionsGameSync.dll' } else { 'GillionsGameSyncTest.dll' }
+    $binary = Join-Path $root "artifacts/verification/$channel/$assemblyName"
+    $fixtureDirectory = Join-Path $root "artifacts/verification/configuration-fixtures/$channel"
+    dotnet run --project $configurationTests -c Release -- $binary $dalamudPath $fixtureDirectory
+    if ($LASTEXITCODE -ne 0) { throw "$channel actual-serializer preservation fixtures failed." }
+}
+
 Write-Output 'Gillions Game Sync verification passed.'

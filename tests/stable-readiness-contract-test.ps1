@@ -22,8 +22,8 @@ if ($plugin -notmatch 'EnableAutoRetainerVenturePlans \{ get; set; \} = false;')
 if ($plugin -notmatch 'RetainerClientPolicy\.BuildSyncScopes\(SyncScopes, retainerUploadServerSupported\)') {
     throw 'Ordinary scopes are no longer separated from server-accepted Retainer traffic.'
 }
-if ($plugin -notmatch 'RetainerClientPolicy\.ShouldPollPlans\(') {
-    throw 'Plan polling is no longer guarded by the shared eligibility policy.'
+if ($plugin -match 'ShouldPollPlans|PollRetainerPlansAsync|ApplyRetainerPlanDelivery|GetIpcSubscriber|InstalledPlugins|ActivePluginsChanged') {
+    throw 'Retired plan control or third-party integration remains reachable in the plugin.'
 }
 if ($plugin -notmatch '#if GILLIONS_TEST_BUILD\s*private const string CommandName = "/gillionssynctest";\s*#else\s*private const string CommandName = "/gillionssync";') {
     throw 'Stable and testing builds must use distinct command names.'

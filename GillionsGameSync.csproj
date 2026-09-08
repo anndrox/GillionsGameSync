@@ -9,7 +9,7 @@
     <Author>Gillions</Author>
     <Name>Gillions Game Sync</Name>
     <Punchline>Opt-in account sync for your Gillions profile.</Punchline>
-    <Description>Opt-in character synchronization for Gillions with separately gated Retainer planner integration. Never automates gameplay or sends Square Enix credentials.</Description>
+    <Description>Opt-in character synchronization for Gillions with read-only Retainer observations. Never automates gameplay or sends Square Enix credentials.</Description>
     <ApplicableVersion>any</ApplicableVersion>
     <GillionsPublicBaseUrl Condition="'$(GillionsPublicBaseUrl)' == ''">https://gillions.app</GillionsPublicBaseUrl>
     <GillionsRepositoryUrl Condition="'$(GillionsRepositoryUrl)' == ''">https://github.com/anndrox/GillionsGameSync</GillionsRepositoryUrl>

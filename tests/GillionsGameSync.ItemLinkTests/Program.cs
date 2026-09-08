@@ -136,18 +136,20 @@ Assert(ventureState.Retainers[0].Equipment.Observation.Status == "complete"
     && ventureState.Retainers[0].Equipment.Items!.Select(item => item.SlotIndex).SequenceEqual([1, 5]),
     "observed gear must be sorted and marked complete for that loaded retainer");
 Assert(!RetainerVentureSnapshotPolicy.MergeGear(ventureState, null), "an unloaded gear container must preserve the last observation");
-Assert(RetainerVentureSnapshotPolicy.MergeAutoRetainerStats(ventureState,
-    [new("100", ventureNow.AddMinutes(1), 650, null, null, ventureNow.AddMinutes(-55))], ventureNow.AddMinutes(1)),
-    "AutoRetainer-cached stats must be accepted with explicit provenance");
+var cachedObserved = ventureNow.AddMinutes(1);
+ventureState.Retainers[0].Stats = new() {
+    ItemLevel = 650, Observation = new("partial", cachedObserved, cachedObserved, [], "autoretainer_cached", false),
+};
+ventureState.Retainers[0].Venture.Assignment = ventureState.Retainers[0].Venture.Assignment! with {
+    BeginAt = new(ventureNow.AddMinutes(-55), cachedObserved, "autoretainer_cached"),
+};
+Assert(RetainerVentureSnapshotPolicy.RetireCachedStats(ventureState), "legacy cached stats must be retired");
 Assert(ventureState.Retainers[0].Stats.ItemLevel == 650
-    && ventureState.Retainers[0].Stats.Observation.Provenance == "autoretainer_cached"
-    && ventureState.Retainers[0].Venture.Assignment?.BeginAt?.Provenance == "autoretainer_cached",
-    "cached item level and venture start must not be represented as native-current data");
-RetainerVentureSnapshotPolicy.MergeAutoRetainerStats(ventureState, [], ventureNow.AddMinutes(2));
-Assert(ventureState.Retainers[0].Stats.ItemLevel == 650
-    && ventureState.Retainers[0].Stats.Observation.Provenance == "retained_historical"
-    && ventureState.Retainers[0].Stats.Observation.RetainedData,
-    "unavailable cached stats must retain prior values as historical evidence");
+    && ventureState.Retainers[0].Stats.Observation is { Status: "unavailable", Provenance: "retained_historical", RetainedData: true }
+    && ventureState.Retainers[0].Stats.Observation.LastObservedAtUtc == cachedObserved
+    && ventureState.Retainers[0].Venture.Assignment?.BeginAt is { Provenance: "retained_historical" },
+    "cached values must survive without a fresh observation timestamp or native provenance");
+Assert(!RetainerVentureSnapshotPolicy.RetireCachedStats(ventureState), "retirement must be idempotent");
 Assert(RetainerVentureSnapshotPolicy.MergeInventorySources(ventureState, [
     new("character_inventory", null, ventureNow, [new("Inventory1", true, 2, 35), new("Inventory2", false, 0, 0)]),
     new("retainer_inventory", "100", ventureNow, [new("RetainerPage1", true, 1, 25)]),
@@ -222,312 +224,48 @@ Assert(RetainerPresencePolicy.NextSuccessDelay(5) == TimeSpan.FromSeconds(35)
 var presenceResponse = JsonSerializer.Serialize(new { ok = true, schemaVersion = 1, serverTimeUtc = ventureNow,
     recommendedHeartbeatSeconds = 30, onlineWindowSeconds = 90, maximumBackoffSeconds = 300,
     featureCompatibility = new { observations = "supported", results = "supported", planner = "server_disabled" } });
-Assert(RetainerPresenceResponsePolicy.TryParse(presenceResponse, RetainerClientPolicy.Testing, out var uploadSupported, out var plannerSupported) && uploadSupported && !plannerSupported,
+Assert(RetainerPresenceResponsePolicy.TryParse(presenceResponse, RetainerClientPolicy.Testing, out var uploadSupported) && uploadSupported,
     "a compatible testing presence response must enable only the scoped upload path");
-Assert(!RetainerPresenceResponsePolicy.TryParse(presenceResponse, RetainerClientPolicy.Stable, out _, out _),
+Assert(!RetainerPresenceResponsePolicy.TryParse(presenceResponse, RetainerClientPolicy.Stable, out _),
     "an older server response must not enable stable Retainer traffic without explicit product acceptance");
 var stablePresenceResponse = JsonSerializer.Serialize(new { ok = true, schemaVersion = 1, serverTimeUtc = ventureNow,
     acceptedClientProduct = RetainerClientPolicy.Stable.ProductName,
     acceptedContractVersion = RetainerClientPolicy.ContractVersion,
     recommendedHeartbeatSeconds = 30, onlineWindowSeconds = 90, maximumBackoffSeconds = 300,
     featureCompatibility = new { observations = "supported", results = "supported", planner = "supported" } });
-Assert(RetainerPresenceResponsePolicy.TryParse(stablePresenceResponse, RetainerClientPolicy.Stable, out var stableUploadSupported, out var stablePlannerSupported)
-    && stableUploadSupported && stablePlannerSupported,
+Assert(RetainerPresenceResponsePolicy.TryParse(stablePresenceResponse, RetainerClientPolicy.Stable, out var stableUploadSupported)
+    && stableUploadSupported,
     "stable Retainer behavior must require an exact server product and contract acknowledgement");
 Assert(!RetainerPresenceResponsePolicy.TryParse(stablePresenceResponse.Replace(RetainerClientPolicy.Stable.ProductName, RetainerClientPolicy.Testing.ProductName, StringComparison.Ordinal),
-    RetainerClientPolicy.Stable, out _, out _), "a response for the testing product must not activate the stable product");
+    RetainerClientPolicy.Stable, out _), "a response for the testing product must not activate the stable product");
 Assert(RetainerClientPolicy.Stable.ProductName != RetainerClientPolicy.Testing.ProductName
     && RetainerClientPolicy.Stable.Channel == "stable" && RetainerClientPolicy.Testing.Channel == "testing",
     "stable and testing products must retain distinct identities while sharing contract v1");
-Assert(RetainerCapabilities.Client.Contains("retainer.autoretainer.plan-limit-500.v1")
-    && RetainerCapabilities.Client.Contains("retainer.autoretainer.restart-completion.v1")
-    && RetainerCapabilities.Client.Contains("retainer.autoretainer.per-retainer-readiness.v1")
-    && RetainerCapabilities.Client.Contains("retainer.autoretainer.quick-completion-readback.v1"),
-    "the additive contract-v1 capabilities must let the server gate every new planner behavior from older clients");
+Assert(RetainerCapabilities.Client.SequenceEqual(new[] {
+    "retainer.observations.v1", "retainer.results.v1", "retainer.results.exact-ack.v1", "retainer.presence.v1"
+}), "only read-only Retainer capabilities may be advertised");
+foreach (var client in new[] { RetainerClientPolicy.Stable, RetainerClientPolicy.Testing }) {
+    var nativePresence = RetainerPresencePolicy.CreateNative(new("111", "Fixture", "Test"), ventureNow, client, "0.0.0");
+    using var wire = JsonDocument.Parse(JsonSerializer.Serialize(nativePresence));
+    var auto = wire.RootElement.GetProperty("autoRetainer");
+    Assert(!auto.GetProperty("installed").GetBoolean() && !auto.GetProperty("loaded").GetBoolean()
+        && !auto.GetProperty("apiReady").GetBoolean() && !auto.GetProperty("plannerOptIn").GetBoolean()
+        && auto.GetProperty("version").ValueKind == JsonValueKind.Null
+        && auto.GetProperty("retainerPlannerReadiness").GetArrayLength() == 0
+        && auto.GetProperty("capabilities").GetArrayLength() == 0
+        && wire.RootElement.GetProperty("appliedPlans").GetArrayLength() == 0,
+        "native presence must preserve the inert v1 envelope without planner claims");
+}
+Assert(RetainerPresenceResponsePolicy.TryParse(stablePresenceResponse.Replace("\"planner\":\"supported\"", "\"planner\":\"server_disabled\""),
+    RetainerClientPolicy.Stable, out var retiredUpload) && retiredUpload, "retired planner must not disable ordinary Retainer uploads");
+Assert(!RetainerPresenceResponsePolicy.TryParse("{}", RetainerClientPolicy.Stable, out var malformedUpload) && !malformedUpload,
+    "malformed presence must not retain an upload grant");
 var ordinaryScopes = new[] { "inventory", "collectibles" };
 Assert(RetainerClientPolicy.BuildSyncScopes(ordinaryScopes, false).SequenceEqual(ordinaryScopes),
     "an older server without Retainer support must preserve ordinary Game Sync scopes unchanged");
 Assert(RetainerClientPolicy.BuildSyncScopes(ordinaryScopes, true).SequenceEqual(new[] { "inventory", "collectibles", "retainer_ventures" }),
     "Retainer observation must activate only after the server accepts the client");
-Assert(!RetainerClientPolicy.ShouldPollPlans(false, true, true, true, true), "server plan acceptance is mandatory");
-Assert(!RetainerClientPolicy.ShouldPollPlans(true, false, true, true, true), "planner opt-in must default to disabled");
-Assert(!RetainerClientPolicy.ShouldPollPlans(true, true, false, true, true), "AutoRetainer absence must disable plan polling");
-Assert(!RetainerClientPolicy.ShouldPollPlans(true, true, true, false, true), "an unavailable AutoRetainer API must disable plan polling");
-Assert(RetainerClientPolicy.ShouldPollPlans(true, true, true, true, true), "Multi Mode must not be a prerequisite for an otherwise eligible plan poll");
-Console.WriteLine("retainer venture snapshot and retry tests passed");
-
-var managedPlan = new GillionsVenturePlanSpec("100", "Fixture-retainer", [new(245, 3), new(112, 1)], "do_nothing");
-Assert(VenturePlannerCapabilityPolicy.IsValid(managedPlan), "a bounded Gillions venture plan must be valid");
-Assert(!VenturePlannerCapabilityPolicy.IsValid(managedPlan with { RetainerId = "invalid" }), "a malformed retainer identity must be rejected");
-Assert(!VenturePlannerCapabilityPolicy.IsValid(managedPlan with { Steps = [new(0, 1)] }), "a zero venture ID must be rejected");
-Assert(VenturePlannerCapabilityPolicy.IsValid(managedPlan with { Steps = [new(245, 24)] }), "exactly 24 pending executions must be accepted");
-Assert(VenturePlannerCapabilityPolicy.IsValid(managedPlan with { Steps = [new(245, 24), new(112, 1)] }), "a 25th pending execution must be accepted");
-var fiveHundredSteps = Enumerable.Range(1, 500).Select(id => new GillionsVenturePlanStep((uint)id, 1)).ToArray();
-var fiveHundredOneSteps = Enumerable.Range(1, 501).Select(id => new GillionsVenturePlanStep((uint)id, 1)).ToArray();
-Assert(VenturePlannerCapabilityPolicy.IsValid(managedPlan with { Steps = fiveHundredSteps }), "exactly 500 plan entries must be accepted");
-Assert(!VenturePlannerCapabilityPolicy.IsValid(managedPlan with { Steps = fiveHundredOneSteps }), "a 501st plan entry must be rejected client-side");
-var fiveHundredRoundTrip = JsonSerializer.Deserialize<GillionsVenturePlanStep[]>(JsonSerializer.Serialize(fiveHundredSteps));
-Assert(fiveHundredRoundTrip is not null && fiveHundredRoundTrip.SequenceEqual(fiveHundredSteps),
-    "500 ordered plan entries must survive JSON serialization without truncation");
-Assert(VenturePlannerCapabilityPolicy.IsValid(managedPlan with { Steps = [new(245, 500)] }), "exactly 500 pending executions in one entry must be accepted");
-Assert(!VenturePlannerCapabilityPolicy.IsValid(managedPlan with { Steps = [new(245, 501)] }), "a 501st pending execution must be rejected client-side");
-Assert(VenturePlannerCapabilityPolicy.IsValid(managedPlan with { CompletionBehavior = "restart_plan" }), "AutoRetainer Restart Plan must be accepted");
-Assert(!VenturePlannerCapabilityPolicy.IsValid(managedPlan with { CompletionBehavior = "repeat_last_venture" }), "unbounded completion behavior must be rejected");
-Assert(!VenturePlannerCapabilityPolicy.IsValid(managedPlan with { CompletionBehavior = "unknown" }), "an unknown completion behavior must be rejected");
-Assert(!VenturePlannerCapabilityPolicy.IsValid(managedPlan with { CompletionBehavior = "restart_plan", Steps = [] }),
-    "Restart Plan must reject an empty plan instead of creating a local retry loop");
-Assert(!VenturePlannerCapabilityPolicy.IsAvailable(false, true, true, true, true), "venture planning must remain explicitly opted out by default");
-Assert(!VenturePlannerCapabilityPolicy.IsAvailable(true, false, true, true, true), "AutoRetainer absence must disable venture planning");
-Assert(VenturePlannerCapabilityPolicy.IsAvailable(true, true, true, true, true), "the complete opted-in capability must be available");
-var ownedHash = new string('a', 64);
-var conflictHash = new string('b', 64);
-var changedAgainHash = new string('c', 64);
-Assert(AutoRetainerOwnedPlanPolicy.Decide(ownedHash, ownedHash, ownedHash, false) == AutoRetainerOwnedPlanDecision.Apply,
-    "a normal later revision must compare-and-set from the last owned hash");
-Assert(AutoRetainerOwnedPlanPolicy.Decide(conflictHash, ownedHash, conflictHash, false) == AutoRetainerOwnedPlanDecision.Apply,
-    "a deliberate retry may compare-and-set from the exact server-delivered conflict observation");
-Assert(AutoRetainerOwnedPlanPolicy.Decide(conflictHash, ownedHash, changedAgainHash, false) == AutoRetainerOwnedPlanDecision.Conflict,
-    "another local edit after the conflict observation must fail closed");
-Assert(AutoRetainerOwnedPlanPolicy.Decide(ownedHash, changedAgainHash, changedAgainHash, true) == AutoRetainerOwnedPlanDecision.Idempotent,
-    "an already applied managed plan must remain replay-safe");
-Assert(AutoRetainerOwnedPlanPolicy.CanRestore(ownedHash, ownedHash),
-    "an unchanged Gillions-managed plan must remain eligible for exact restoration");
-Assert(AutoRetainerOwnedPlanPolicy.CanRestore(conflictHash, conflictHash),
-    "a deliberate restoration retry must accept the exact externally changed state acknowledged to Gillions");
-Assert(!AutoRetainerOwnedPlanPolicy.CanRestore(conflictHash, changedAgainHash),
-    "restoration must fail closed if AutoRetainer changes again after the acknowledged retry baseline");
-var fakeAdditionalData = new FakeAdditionalRetainerData();
-fakeAdditionalData.VenturePlan.List.Add(new FakePlannedVenture { ID = 999, Num = 9 });
-var originalPlan = AutoRetainerVenturePlanMutation.Capture(fakeAdditionalData);
-AutoRetainerVenturePlanMutation.Apply(fakeAdditionalData, managedPlan);
-Assert(fakeAdditionalData.EnablePlanner && fakeAdditionalData.LinkedVenturePlan == "" && fakeAdditionalData.VenturePlanIndex == 0, "the embedded planner must be enabled without linking a global plan");
-Assert(fakeAdditionalData.VenturePlan.Name == "Gillions Venture (Fixture-retainer)", "the managed plan must use the Gillions retainer-specific name");
-Assert(fakeAdditionalData.VenturePlan.List.Select(entry => (entry.ID, entry.Num)).SequenceEqual(new[] { (245u, 3), (112u, 1) }), "the managed plan must replace only the embedded venture sequence");
-Assert(fakeAdditionalData.VenturePlan.PlanCompleteBehavior == FakePlanCompleteBehavior.Do_nothing, "the bounded Do Nothing completion behavior must be applied explicitly");
-Assert(fakeAdditionalData.Deposit, "unrelated AutoRetainer settings must be preserved");
-var restartPlan = managedPlan with { CompletionBehavior = "restart_plan", Steps = fiveHundredSteps };
-AutoRetainerVenturePlanMutation.Apply(fakeAdditionalData, restartPlan);
-var restartReadBack = AutoRetainerVenturePlanMutation.Capture(fakeAdditionalData);
-Assert(restartReadBack.PlanCompleteBehavior == "restart_plan"
-    && restartReadBack.Steps.SequenceEqual(fiveHundredSteps),
-    "Restart Plan and all 500 ordered entries must survive exact mutation read-back");
-AutoRetainerVenturePlanMutation.Restore(fakeAdditionalData, originalPlan);
-Assert(!fakeAdditionalData.EnablePlanner && fakeAdditionalData.LinkedVenturePlan == "saved-plan" && fakeAdditionalData.VenturePlanIndex == 7, "the prior planner linkage and enabled state must be restorable");
-Assert(fakeAdditionalData.VenturePlan.Name == "Existing plan" && fakeAdditionalData.VenturePlan.List.Single().ID == 999, "the prior embedded plan must be restorable");
-Assert(fakeAdditionalData.VenturePlan.PlanCompleteBehavior == FakePlanCompleteBehavior.Restart_plan, "the original unbounded completion behavior must be preserved only in the restorable backup");
-Assert(AutoRetainerVenturePlanMutation.Hash(AutoRetainerVenturePlanMutation.Capture(fakeAdditionalData)) == AutoRetainerVenturePlanMutation.Hash(originalPlan), "restoration read-back must match the exact pre-write plan hash");
-Assert(AutoRetainerVenturePlanMutation.Hash(originalPlan) == "3bc8171dd8512db86fe7a8b75ffa5bd8053921e3b64c45e12b6ccd780a261ab4", "client and server must share the canonical prior-plan backup hash");
-
-var writerState = new Dictionary<string, FakeAdditionalRetainerData>(StringComparer.Ordinal) {
-    ["Ready-A"] = ReadyAdditionalData(),
-    ["Disabled-B"] = new FakeAdditionalRetainerData(),
-};
-var writerCore = new AutoRetainerVenturePlanWriterCore(
-    () => true,
-    (_, name) => writerState.TryGetValue(name, out var state) ? state : null,
-    (_, name, data) => writerState[name] = (FakeAdditionalRetainerData)data);
-var quickPlan = new GillionsVenturePlanSpec("100", "Ready-A", [new(395, 1)], "assign_quick_venture");
-var restartOutcome = writerCore.Apply(111, quickPlan with { CompletionBehavior = "restart_plan" }, null, null);
-Assert(restartOutcome.Result == AutoRetainerPlanApplyResult.Applied
-    && AutoRetainerVenturePlanMutation.Capture(writerState["Ready-A"]).PlanCompleteBehavior == "restart_plan",
-    "Restart Plan must be applied through AutoRetainer and verified by exact read-back");
-var quickOutcome = writerCore.Apply(111, quickPlan, null, null);
-Assert(quickOutcome.Result == AutoRetainerPlanApplyResult.Applied
-    && quickOutcome.AppliedHash == quickOutcome.ReadBackHash
-    && AutoRetainerVenturePlanMutation.Capture(writerState["Ready-A"]).PlanCompleteBehavior == "assign_quick_venture",
-    "Quick Venture must be applied to the requested retainer and verified by exact read-back");
-var disabledOutcome = writerCore.Apply(111, quickPlan with { RetainerId = "200", RetainerName = "Disabled-B" }, null, null);
-Assert(disabledOutcome.Result == AutoRetainerPlanApplyResult.PlannerDisabled,
-    "a disabled requested retainer must fail even when another retainer is ready");
-var disabledBackup = AutoRetainerVenturePlanMutation.Capture(writerState["Disabled-B"]);
-var disabledOwnership = new AutoRetainerPlanOwnershipState(
-    "device", "200", Guid.NewGuid().ToString(), 1, Guid.NewGuid().ToString(),
-    AutoRetainerVenturePlanMutation.Hash(disabledBackup), AutoRetainerVenturePlanMutation.Hash(disabledBackup), disabledBackup);
-Assert(writerCore.Apply(111, quickPlan with { RetainerId = "200", RetainerName = "Disabled-B" }, disabledOwnership.AppliedHash, disabledOwnership).Result
-    == AutoRetainerPlanApplyResult.PlannerDisabled,
-    "a previously owned plan must not re-enable a retainer whose planner was disabled locally");
-var missingOutcome = writerCore.Apply(111, quickPlan with { RetainerId = "300", RetainerName = "Missing" }, null, null);
-Assert(missingOutcome.Result == AutoRetainerPlanApplyResult.IpcRejected,
-    "an unresolved requested retainer must fail safely");
-var failedWriteCore = new AutoRetainerVenturePlanWriterCore(
-    () => true,
-    (_, _) => ReadyAdditionalData(),
-    (_, _, _) => throw new InvalidOperationException("fixture write rejection"));
-Assert(failedWriteCore.Apply(111, quickPlan, null, null).Result == AutoRetainerPlanApplyResult.IpcRejected,
-    "a rejected AutoRetainer write must not be reported as success");
-var mismatchedState = ReadyAdditionalData();
-var mismatchedCore = new AutoRetainerVenturePlanWriterCore(
-    () => true,
-    (_, _) => mismatchedState,
-    (_, _, data) => {
-        mismatchedState = (FakeAdditionalRetainerData)data;
-        mismatchedState.VenturePlan.PlanCompleteBehavior = FakePlanCompleteBehavior.Do_nothing;
-    });
-Assert(mismatchedCore.Apply(111, quickPlan, null, null).Result == AutoRetainerPlanApplyResult.ReadBackMismatch,
-    "a Quick Venture state mismatch must be detected by read-back and rejected");
-var unavailableCore = new AutoRetainerVenturePlanWriterCore(() => false, (_, _) => ReadyAdditionalData(), (_, _, _) => { });
-Assert(unavailableCore.Apply(111, quickPlan, null, null).Result == AutoRetainerPlanApplyResult.AutoRetainerUnavailable,
-    "an unavailable AutoRetainer API must reject the apply before mutation");
-
-var readinessNow = new DateTime(2026, 8, 26, 12, 0, 0, DateTimeKind.Utc);
-var mixedReadiness = new[] {
-    RetainerPlannerReadinessPolicy.Observation("100", "Ready-A", true, readinessNow),
-    RetainerPlannerReadinessPolicy.Observation("200", "Disabled-B", false, readinessNow),
-};
-Assert(RetainerPlannerReadinessPolicy.Evaluate(mixedReadiness, "100", readinessNow, TimeSpan.FromMinutes(2)) == RetainerPlannerReadinessResult.Ready
-    && RetainerPlannerReadinessPolicy.Evaluate(mixedReadiness, "200", readinessNow, TimeSpan.FromMinutes(2)) == RetainerPlannerReadinessResult.Disabled,
-    "mixed retainer readiness must remain scoped to each exact retainer");
-var reversedReadiness = new[] {
-    RetainerPlannerReadinessPolicy.Observation("100", "Disabled-A", false, readinessNow),
-    RetainerPlannerReadinessPolicy.Observation("200", "Ready-B", true, readinessNow),
-};
-Assert(RetainerPlannerReadinessPolicy.Evaluate(reversedReadiness, "100", readinessNow, TimeSpan.FromMinutes(2)) == RetainerPlannerReadinessResult.Disabled
-    && RetainerPlannerReadinessPolicy.Evaluate(reversedReadiness, "200", readinessNow, TimeSpan.FromMinutes(2)) == RetainerPlannerReadinessResult.Ready,
-    "readiness from retainer B must never be borrowed by retainer A");
-var bothReady = new[] {
-    RetainerPlannerReadinessPolicy.Observation("100", "Ready-A", true, readinessNow),
-    RetainerPlannerReadinessPolicy.Observation("200", "Ready-B", true, readinessNow),
-};
-Assert(bothReady.All(entry => RetainerPlannerReadinessPolicy.Evaluate(bothReady, entry.RetainerId, readinessNow, TimeSpan.FromMinutes(2)) == RetainerPlannerReadinessResult.Ready),
-    "both ready retainers must be reported ready independently");
-var neitherReady = new[] {
-    RetainerPlannerReadinessPolicy.Observation("100", "Disabled-A", false, readinessNow),
-    RetainerPlannerReadinessPolicy.Observation("200", "Unavailable-B", null, readinessNow),
-};
-Assert(RetainerPlannerReadinessPolicy.Evaluate(neitherReady, "100", readinessNow, TimeSpan.FromMinutes(2)) == RetainerPlannerReadinessResult.Disabled
-    && RetainerPlannerReadinessPolicy.Evaluate(neitherReady, "200", readinessNow, TimeSpan.FromMinutes(2)) == RetainerPlannerReadinessResult.Unavailable,
-    "disabled and unavailable retainers must not be reported ready");
-Assert(RetainerPlannerReadinessPolicy.Evaluate([], "100", readinessNow, TimeSpan.FromMinutes(2)) == RetainerPlannerReadinessResult.Missing,
-    "missing retainer readiness must fail safely");
-Assert(RetainerPlannerReadinessPolicy.Evaluate(mixedReadiness, "", readinessNow, TimeSpan.FromMinutes(2)) == RetainerPlannerReadinessResult.Missing,
-    "an unknown retainer identity must fail safely");
-Assert(RetainerPlannerReadinessPolicy.Evaluate([
-        RetainerPlannerReadinessPolicy.Observation("100", "Stale", true, readinessNow.AddMinutes(-3))
-    ], "100", readinessNow, TimeSpan.FromMinutes(2)) == RetainerPlannerReadinessResult.Stale,
-    "stale retainer readiness must not be treated as ready");
-Assert(RetainerPlannerReadinessPolicy.Evaluate([
-        RetainerPlannerReadinessPolicy.Observation("100", "Duplicate A", true, readinessNow),
-        RetainerPlannerReadinessPolicy.Observation("100", "Duplicate B", true, readinessNow)
-    ], "100", readinessNow, TimeSpan.FromMinutes(2)) == RetainerPlannerReadinessResult.Ambiguous,
-    "ambiguous retainer identity must fail safely");
-var readinessPresence = new AutoRetainerPresenceDocument(
-    true, true, true, false, true, true, null, mixedReadiness, true, "4.6.1.27",
-    VenturePlannerCapabilityPolicy.MaximumPendingExecutions,
-    ["restart_plan", "assign_quick_venture", "do_nothing"], RetainerCapabilities.Client);
-using (var readinessJson = JsonDocument.Parse(JsonSerializer.Serialize(readinessPresence))) {
-    Assert(readinessJson.RootElement.GetProperty("retainerPlannerEnabled").ValueKind == JsonValueKind.Null
-        && readinessJson.RootElement.GetProperty("retainerPlannerReadiness").GetArrayLength() == 2
-        && readinessJson.RootElement.GetProperty("maximumPlanExecutions").GetInt32() == 500,
-        "presence must publish per-retainer readiness and the 500 limit without an unsafe aggregate readiness value");
-}
-Console.WriteLine("AutoRetainer venture-plan policy tests passed");
-
-var deliveryJson = JsonSerializer.Serialize(new {
-    ok = true,
-    schemaVersion = 1,
-    serverTimeUtc = ventureNow,
-    pollAfterSeconds = 15,
-    deliveries = new[] { new {
-        schemaVersion = 1,
-        operation = "apply_projection",
-        deliveryId = Guid.NewGuid().ToString(),
-        leaseToken = new string('a', 43),
-        planId = Guid.NewGuid().ToString(),
-        revisionId = Guid.NewGuid().ToString(),
-        revisionNumber = 1,
-        revisionHash = new string('b', 64),
-        projectionGeneration = 1,
-        retainerId = "100",
-        retainerName = "Fixture-retainer",
-        expectedAppliedHash = (string?)null,
-        completionBehavior = "assign_quick_venture",
-        steps = new[] { new { ventureId = 245u, repetitions = 24 } },
-        priorPlanBackupHash = (string?)null,
-        priorPlanBackup = (object?)null,
-        requiredCapabilities = RetainerCapabilities.Client,
-        createdAtUtc = ventureNow,
-        expiresAtUtc = ventureNow.AddMinutes(1),
-    } }
-});
-Assert(RetainerPlanDeliveryPolicy.TryParse(deliveryJson, ventureNow, out var parsedDelivery)
-    && parsedDelivery?.Deliveries.Single().CompletionBehavior == "assign_quick_venture",
-    "a current, bounded, fully capable testing delivery must parse");
-var fiveHundredDelivery = parsedDelivery! with {
-    Deliveries = [parsedDelivery.Deliveries.Single() with { Steps = fiveHundredSteps }],
-};
-Assert(RetainerPlanDeliveryPolicy.TryParse(JsonSerializer.Serialize(fiveHundredDelivery), ventureNow, out var parsedFiveHundred)
-    && parsedFiveHundred?.Deliveries.Single().Steps?.SequenceEqual(fiveHundredSteps) == true,
-    "a 500-entry delivery must parse without truncation or reordering");
-var fiveHundredOneDelivery = parsedDelivery with {
-    Deliveries = [parsedDelivery.Deliveries.Single() with { Steps = fiveHundredOneSteps }],
-};
-Assert(!RetainerPlanDeliveryPolicy.TryParse(JsonSerializer.Serialize(fiveHundredOneDelivery), ventureNow, out _),
-    "a 501-entry delivery must be rejected before AutoRetainer access");
-var legacyCapabilityDelivery = parsedDelivery with {
-    Deliveries = [parsedDelivery.Deliveries.Single() with {
-        RequiredCapabilities = [
-            "retainer.plan-delivery.v1",
-            "retainer.plan-ack.v1",
-            "retainer.autoretainer.plan-apply.v1",
-            "retainer.autoretainer.quick-completion.v1",
-        ],
-    }],
-};
-Assert(RetainerPlanDeliveryPolicy.TryParse(JsonSerializer.Serialize(legacyCapabilityDelivery), ventureNow, out _),
-    "an older server's bounded Quick Venture delivery must remain compatible with the newer client");
-var twentyFiveDeliveryJson = deliveryJson.Replace("\"repetitions\":24", "\"repetitions\":25", StringComparison.Ordinal);
-Assert(RetainerPlanDeliveryPolicy.TryParse(twentyFiveDeliveryJson, ventureNow, out _), "a 25-execution delivery must be accepted");
-var oversizedDeliveryJson = deliveryJson.Replace("\"repetitions\":24", "\"repetitions\":501", StringComparison.Ordinal);
-Assert(!RetainerPlanDeliveryPolicy.TryParse(oversizedDeliveryJson, ventureNow, out _), "a 501-execution delivery must be rejected before AutoRetainer access");
-Assert(RetainerPlanDeliveryPolicy.TryParse(deliveryJson.Replace("assign_quick_venture", "restart_plan", StringComparison.Ordinal), ventureNow, out var restartDelivery)
-    && restartDelivery?.Deliveries.Single().CompletionBehavior == "restart_plan",
-    "a Restart Plan delivery must parse and preserve its completion behavior");
-Assert(!RetainerPlanDeliveryPolicy.TryParse(deliveryJson.Replace("assign_quick_venture", "unknown", StringComparison.Ordinal), ventureNow, out _),
-    "an unknown completion mode must be rejected before AutoRetainer access");
-Assert(!RetainerPlanDeliveryPolicy.TryParse(deliveryJson, ventureNow.AddMinutes(2), out _), "an expired delivery lease must be rejected before AutoRetainer access");
-Assert(!RetainerPlanDeliveryPolicy.TryParse(deliveryJson.Replace("\"expectedAppliedHash\":null", "\"expectedAppliedHash\":\"bad\"", StringComparison.Ordinal), ventureNow, out _),
-    "a mismatched compare-and-set hash shape must be rejected before AutoRetainer access");
-var duplicateRetainerResponse = parsedDelivery! with {
-    Deliveries = [
-        parsedDelivery.Deliveries.Single(),
-        parsedDelivery.Deliveries.Single() with { DeliveryId = Guid.NewGuid().ToString(), RevisionId = Guid.NewGuid().ToString() },
-    ],
-};
-Assert(!RetainerPlanDeliveryPolicy.TryParse(JsonSerializer.Serialize(duplicateRetainerResponse), ventureNow, out _),
-    "multiple revisions for one Retainer in a poll must be rejected rather than applied sequentially");
-var ownershipFixtures = new Dictionary<string, AutoRetainerPlanOwnershipState>(StringComparer.Ordinal) {
-    [RetainerPlanDeliveryPolicy.OwnershipKey(111, "100")] = new("device", "100", Guid.NewGuid().ToString(), 1, Guid.NewGuid().ToString(), new string('c', 64), AutoRetainerVenturePlanMutation.Hash(originalPlan), originalPlan),
-    [RetainerPlanDeliveryPolicy.OwnershipKey(222, "100")] = new("device", "100", Guid.NewGuid().ToString(), 1, Guid.NewGuid().ToString(), new string('d', 64), AutoRetainerVenturePlanMutation.Hash(originalPlan), originalPlan),
-};
-Assert(RetainerPlanDeliveryPolicy.AppliedPlansForCharacter(ownershipFixtures, 111).Single().RetainerId == "100",
-    "presence must report only the active character's locally applied plan state");
-Assert(RetainerPlanDeliveryPolicy.IsCurrentCharacter(111, 111) && !RetainerPlanDeliveryPolicy.IsCurrentCharacter(111, 222),
-    "a delivery captured for another active character must be rejected");
-Assert(RetainerPlanDeliveryPolicy.ResolveRetainer(ventureState.Retainers, "100")?.Name == "Active"
-    && RetainerPlanDeliveryPolicy.ResolveRetainer(ventureState.Retainers, "999") is null,
-    "a delivery for a foreign Retainer ID must be rejected instead of falling back to a name or list position");
-Assert(RetainerPlanDeliveryPolicy.IsOwnedByDevice(null, "device")
-    && RetainerPlanDeliveryPolicy.IsOwnedByDevice(ownershipFixtures[RetainerPlanDeliveryPolicy.OwnershipKey(111, "100")], "device")
-    && !RetainerPlanDeliveryPolicy.IsOwnedByDevice(ownershipFixtures[RetainerPlanDeliveryPolicy.OwnershipKey(111, "100")], "foreign-device"),
-    "existing Gillions plan ownership must remain pinned to its original device");
-var trackedRevision = ownershipFixtures[RetainerPlanDeliveryPolicy.OwnershipKey(111, "100")] with {
-    RevisionId = Guid.NewGuid().ToString(),
-    RevisionNumber = 2,
-    ProjectionGeneration = 1,
-};
-var deliveryFixture = parsedDelivery.Deliveries.Single();
-Assert(RetainerPlanDeliveryPolicy.IsLatestDelivery(trackedRevision with { RevisionNumber = 0 }, deliveryFixture),
-    "ownership persisted by an older client without a revision number must accept one valid delivery to upgrade its state");
-Assert(!RetainerPlanDeliveryPolicy.IsLatestDelivery(trackedRevision, deliveryFixture with { RevisionNumber = 1 }),
-    "an older immutable revision must be rejected even if it arrives with a valid lease");
-Assert(RetainerPlanDeliveryPolicy.IsLatestDelivery(trackedRevision, deliveryFixture with { RevisionNumber = 3 }),
-    "a newer deliberately requested immutable revision may advance the owned plan");
-Assert(RetainerPlanDeliveryPolicy.IsLatestDelivery(trackedRevision, deliveryFixture with {
-    RevisionId = trackedRevision.RevisionId,
-    RevisionNumber = trackedRevision.RevisionNumber,
-    ProjectionGeneration = trackedRevision.ProjectionGeneration + 1,
-}), "a newer server projection of the current revision may advance without becoming a different revision");
-Console.WriteLine("Retainer plan delivery contract tests passed");
+Console.WriteLine("retainer observation, retirement and exact retry tests passed");
 
 Assert(!NativeItemLinkFactory.IsValidItemId(0), "zero item ID must be rejected");
 Assert(!NativeItemLinkFactory.IsValidItemId(-1), "negative item ID must be rejected");
@@ -597,26 +335,3 @@ var accountIsolation = await new ItemLinkRequestProcessor().ProcessAsync(
 Assert(accountIsolation == ItemLinkDeliveryResult.ConsumeRejected && !isolatedPrinted, "an unauthorized account claim must never print");
 
 Console.WriteLine("Gillions item-link protocol tests passed.");
-
-static FakeAdditionalRetainerData ReadyAdditionalData() => new() { EnablePlanner = true };
-
-public sealed class FakeAdditionalRetainerData {
-    public bool Deposit = true;
-    public FakeVenturePlan VenturePlan = new();
-    public string LinkedVenturePlan = "saved-plan";
-    public uint VenturePlanIndex = 7;
-    public bool EnablePlanner;
-}
-
-public sealed class FakeVenturePlan {
-    public string Name = "Existing plan";
-    public List<FakePlannedVenture> List = [];
-    public FakePlanCompleteBehavior PlanCompleteBehavior = FakePlanCompleteBehavior.Restart_plan;
-}
-
-public enum FakePlanCompleteBehavior { Restart_plan, Assign_Quick_Venture, Do_nothing, Repeat_last_venture }
-
-public sealed class FakePlannedVenture {
-    public uint ID;
-    public int Num = 1;
-}
