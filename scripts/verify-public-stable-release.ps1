@@ -64,5 +64,14 @@ try {
   Write-Output "Public stable release verification passed: v$Version $actualHash"
 }
 finally {
-  if (Test-Path -LiteralPath $tempRoot) { Remove-Item -LiteralPath $tempRoot -Recurse -Force }
+  if (Test-Path -LiteralPath $tempRoot) {
+    $resolvedTempRoot = [IO.Path]::GetFullPath($tempRoot)
+    $expectedParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar)
+    $actualParent = [IO.Path]::GetDirectoryName($resolvedTempRoot).TrimEnd([IO.Path]::DirectorySeparatorChar)
+    if (-not [string]::Equals($actualParent, $expectedParent, [StringComparison]::OrdinalIgnoreCase) -or
+        [IO.Path]::GetFileName($resolvedTempRoot) -notmatch '^gillions-release-verify-[0-9a-f]{32}$') {
+      throw 'Refusing cleanup outside the exact release-verification temporary directory.'
+    }
+    Remove-Item -LiteralPath $resolvedTempRoot -Recurse -Force
+  }
 }
