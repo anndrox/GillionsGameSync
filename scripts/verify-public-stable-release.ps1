@@ -1,6 +1,6 @@
 param(
   [string]$ManifestUrl = 'https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/data/GillionsGameSync.json',
-  [string]$Version = '1.0.29'
+  [string]$Version = '1.0.30'
 )
 
 $ErrorActionPreference = 'Stop'
