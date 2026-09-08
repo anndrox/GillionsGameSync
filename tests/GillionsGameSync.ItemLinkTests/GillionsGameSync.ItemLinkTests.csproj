@@ -17,5 +17,10 @@
     <Compile Include="..\..\RetainerClientPolicy.cs" Link="RetainerClientPolicy.cs" />
     <Compile Include="..\..\RetainerPresence.cs" Link="RetainerPresence.cs" />
     <Compile Include="..\..\PairedClientHydration.cs" Link="PairedClientHydration.cs" />
+    <Compile Include="..\..\SyncTransportPolicy.cs" Link="SyncTransportPolicy.cs" />
+    <Compile Include="..\..\SyncOwnership.cs" Link="SyncOwnership.cs" />
+    <Compile Include="..\..\DurableEvidenceBudget.cs" Link="DurableEvidenceBudget.cs" />
+    <Compile Include="..\..\ObservationMaintenance.cs" Link="ObservationMaintenance.cs" />
+    <Compile Include="..\..\PluginWindowModel.cs" Link="PluginWindowModel.cs" />
   </ItemGroup>
 </Project>

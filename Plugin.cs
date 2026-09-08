@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Game.Chat;
 using Dalamud.Game.Command;
@@ -56,10 +57,31 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly IPluginLog log;
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private readonly PluginConfiguration configuration;
+    private readonly SyncRequestLifetime requestLifetime = new();
+    private readonly DurableEvidenceBudget evidenceBudget = new();
+    private readonly ObservationSavePolicy savePolicy = new();
+    private OwnedCharacterState? activeOwnedState;
+    private string activeGeneration = "";
+    private volatile bool disposed;
+    private bool logoutPending;
+    private volatile PluginUiSnapshot uiState = PluginUiSnapshot.Empty;
+    private volatile bool dataDetailsExpanded;
+    private volatile bool diagnosticsExpanded;
+    private string uiServerAddress = "";
+    private string uiPairingCode = "";
+    private DateTime nextUiDetailsUtc;
+    private EvidenceBudgetUsage? uiBudget;
+    private string uiAvailability = "";
+    private bool pairingInFlight;
+    private bool observedAutomaticSync;
+    private bool observedItemLinks;
+    private DateTime nextRetainerUploadUtc = DateTime.MinValue;
+    private DateTime nextTransientMaintenanceUtc = DateTime.MinValue;
     private string settingsMessage = "";
     // A paired background sync must never interrupt login with its settings
     // window. Open it explicitly from Dalamud configuration when needed.
-    private bool settingsVisible;
+    private volatile bool settingsVisible;
+    private volatile bool showPairingDetails;
     private DateTime nextAutomaticSyncUtc = DateTime.MinValue;
     private DateTime nextRetainerListingCaptureUtc = DateTime.MinValue;
     private DateTime nextGilLedgerPollUtc = DateTime.MinValue;
@@ -84,16 +106,14 @@ public sealed class Plugin : IDalamudPlugin {
     private bool gilLedgerDirty;
     private readonly List<GilLedgerLogEvidence> recentGilLedgerLogs = [];
     private readonly List<GilLedgerChatEvidence> recentGilLedgerChat = [];
-    private readonly HashSet<string> emittedRetainerChatEvidence = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DateTime> emittedRetainerChatEvidence = new(StringComparer.Ordinal);
     private bool syncInFlight;
     private bool itemLinkPollInFlight;
-    private readonly ItemLinkRequestProcessor itemLinkRequestProcessor = new();
+    private ItemLinkRequestProcessor itemLinkRequestProcessor = new();
     private readonly PairedClientHydrationState pairedClientHydration = new();
     private int automaticScopeIndex;
     private readonly object diagnosticsLock = new();
     private readonly List<string> diagnostics = [];
-    private readonly Dictionary<string, string> lastObservedPayloadHashes = new(StringComparer.Ordinal);
-    private Dictionary<string, int> lastInventoryRecords = new(StringComparer.Ordinal);
     private DateTime diagnosticRecordingUntilUtc = DateTime.MinValue;
     private static readonly string PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "1.0.4";
 #if GILLIONS_TEST_BUILD
@@ -110,7 +130,8 @@ public sealed class Plugin : IDalamudPlugin {
     private static readonly string[] CurrentChangelog = [
         "Retainer observations, venture results, inventory, listings and ordinary character sync remain available.",
         "Venture planning and AutoRetainer integration have been removed. Existing stored plans and backups are preserved without further control.",
-        "Previously cached AutoRetainer stats are historical; Gillions no longer refreshes them.",
+        "Pair once after updating so new records belong to the correct connection and character. Older local history stays preserved and inactive.",
+        "Offline storage keeps admitted records and reports a coverage gap if it fills. The main window now focuses on connection and sync controls.",
     ];
     // Automatic work must remain below a visible frame hitch. One resource is
     // collected per cadence; changed inventory gets its own short debounce.
@@ -148,13 +169,19 @@ public sealed class Plugin : IDalamudPlugin {
         this.chatGui = chatGui;
         this.log = log;
         configuration = pluginInterface.GetPluginConfig() as PluginConfiguration ?? new PluginConfiguration();
-        configuration.RetainerVentureStates ??= new(StringComparer.Ordinal);
-        var configurationChanged = configuration.UseCompiledDefaultServerUrl(GillionsEndpoints.DefaultServerUrl);
-        foreach (var state in configuration.RetainerVentureStates.Values)
-            configurationChanged |= RetainerVentureSnapshotPolicy.RetireCachedStats(state);
-        configurationChanged |= RetainerVentureSnapshotPolicy.RetireCachedStats(configuration.RetainerVentureState);
-        if (configurationChanged) configuration.Save(pluginInterface);
-        pairedClientHydration.PluginStarted(!string.IsNullOrWhiteSpace(configuration.DeviceToken));
+        uiServerAddress = configuration.ServerUrl;
+        configuration.OwnedCharacters ??= new(StringComparer.Ordinal);
+        configuration.CoverageGap ??= new();
+        if (configuration.ActiveSession is null || !configuration.ActiveSession.IsValid(configuration.DeviceId, configuration.DeviceToken)) {
+            if (!string.IsNullOrWhiteSpace(configuration.DeviceToken)) { configuration.PairingRequired = true; RequestConfigurationSave(); }
+        }
+        observedAutomaticSync = configuration.AutomaticSync; observedItemLinks = configuration.EnableItemLinkRequests;
+        if (!evidenceBudget.Measure(configuration.OwnedCharacters.Values).Fits && !configuration.CoverageGap.Paused) {
+            configuration.CoverageGap.Reject(DateTime.UtcNow); RequestConfigurationSave();
+        }
+        pairedClientHydration.PluginStarted(HasPairedSession);
+        clientState.Login += OnLogin;
+        clientState.Logout += OnLogout;
         commands.AddHandler(CommandName, new CommandInfo(OnCommand) { HelpMessage = "Pair or sync your selected Gillions data." });
         pluginInterface.UiBuilder.Draw += DrawSettings;
         pluginInterface.UiBuilder.OpenConfigUi += OpenSettings;
@@ -165,7 +192,9 @@ public sealed class Plugin : IDalamudPlugin {
     }
 
     private void OnCommand(string command, string arguments) {
-        _ = arguments.Trim().Equals("pair", StringComparison.OrdinalIgnoreCase) ? PairAsync() : SyncAsync();
+        settingsVisible = true;
+        if (arguments.Trim().Equals("pair", StringComparison.OrdinalIgnoreCase)) showPairingDetails = true;
+        else _ = SyncAsync();
     }
 
     private static unsafe ulong ReadLocalContentId() {
@@ -178,189 +207,166 @@ public sealed class Plugin : IDalamudPlugin {
     // Pairing code is entered locally by the user in the plugin configuration UI.
     // It is single-use; Gillions returns a revocable per-device credential.
     private async Task PairAsync() {
-        if (string.IsNullOrWhiteSpace(configuration.PairingCode)) throw new InvalidOperationException("Enter a one-time pairing code in plugin settings first.");
-        var machineId = GetMachineId();
-        var body = new { name = Environment.MachineName, machineId, version = PluginVersion };
-        using var request = Request("/api/game-sync/enroll", configuration.PairingCode, body);
-        using var response = await http.SendAsync(request);
-        await EnsureSuccessfulResponse(response);
-        var enrolled = await JsonSerializer.DeserializeAsync<EnrollmentResponse>(await response.Content.ReadAsStreamAsync()) ?? throw new InvalidOperationException("Gillions did not return a device credential.");
-        configuration.DeviceToken = enrolled.token;
-        configuration.DeviceId = enrolled.device_id;
-        configuration.PairingCode = "";
-        configuration.SyncBlockedCode = "";
-        configuration.SyncBlockedMessage = "";
-        await framework.RunOnFrameworkThread(() => {
-            pairedClientHydration.PairingSucceeded();
-            presenceFailureCount = 0;
-            nextRetainerPresenceUtc = DateTime.MinValue;
-            ClearRetainerServerAcceptance();
-            configuration.Save(pluginInterface);
-        });
-        settingsMessage = "Paired successfully. Gillions is loading your selected character.";
-        log.Information("Gillions Game Sync paired successfully.");
-    }
-
-    private async Task SendRetainerPresenceAsync(ulong characterContentId, RetainerPresenceDocument presence) {
-        if (string.IsNullOrWhiteSpace(configuration.DeviceToken)) return;
-        presenceInFlight = true;
+        SyncRequestPermit? permit = null;
+        var ownsPairAttempt = false;
         try {
-            using var request = Request("/api/game-sync/presence", configuration.DeviceToken, presence);
-            using var response = await http.SendAsync(request);
-            await EnsureSuccessfulResponse(response);
-            var responseJson = await response.Content.ReadAsStringAsync();
-            if (!RetainerPresenceResponsePolicy.TryParse(responseJson, RetainerClient, out var uploadSupported))
-                throw new InvalidOperationException("Gillions returned an invalid Retainer presence acknowledgement.");
+            permit = await framework.RunOnFrameworkThread(() => {
+                if (disposed || pairingInFlight) throw new OperationCanceledException();
+                if (string.IsNullOrWhiteSpace(configuration.PairingCode) || !SyncOrigin.TryNormalize(configuration.ServerUrl, out var origin))
+                    throw new InvalidOperationException("Enter a pairing code and a valid HTTPS server address.");
+                pairingInFlight = true;
+                ownsPairAttempt = true;
+                configuration.PairingRequired = true;
+                var pairingCode = configuration.PairingCode; configuration.PairingCode = "";
+                ResetSessionContext(); RefreshSessionContext(); RequestConfigurationSave();
+                return requestLifetime.Capture(SyncRequestMode.Pair, activeRetainerCharacterContentId, null, origin, pairingCode);
+            });
+            using var request = Request("/api/game-sync/enroll", permit, new { version = PluginVersion });
+            using var response = await SendAsync(request, permit);
+            await EnsureSuccessfulResponse(response, permit.Cancellation);
+            var enrolled = JsonSerializer.Deserialize<EnrollmentResponse>(await SyncResponsePolicy.ReadAsync(response.Content, permit.Cancellation), SyncResponsePolicy.Options);
+            if (enrolled is null || !enrolled.ok) throw new InvalidOperationException("Invalid pairing response.");
+            var session = PairedSession.Create(permit.Origin, enrolled.device_id, enrolled.token);
             await framework.RunOnFrameworkThread(() => {
-                if (ReadLocalContentId() != characterContentId) return;
-                retainerUploadServerSupported = uploadSupported;
-                presenceFailureCount = 0;
-                nextRetainerPresenceUtc = DateTime.UtcNow.Add(RetainerPresencePolicy.NextSuccessDelay(Random.Shared.Next(-5, 6)));
-                if (uploadSupported) nextAutomaticSyncUtc = DateTime.MinValue;
-                configuration.Save(pluginInterface);
+                RequirePermit(permit);
+                configuration.DeviceToken = enrolled.token; configuration.DeviceId = enrolled.device_id;
+                configuration.ActiveSession = session; configuration.PairingRequired = false; configuration.PairingCode = "";
+                configuration.SyncBlockedCode = ""; configuration.SyncBlockedMessage = "";
+                RefreshSessionContext(); pairedClientHydration.PairingSucceeded();
+                presenceFailureCount = 0; nextRetainerPresenceUtc = DateTime.MinValue;
+                RequestConfigurationSave(); settingsMessage = "Connected. Gillions will load your selected character.";
             });
         } catch (Exception error) {
-            await framework.RunOnFrameworkThread(() => {
-                if (ReadLocalContentId() != characterContentId) return;
-                ClearRetainerServerAcceptance();
-                presenceFailureCount++;
+            if (!disposed) await framework.RunOnFrameworkThread(() => {
+                if (!disposed && (permit is null || PermitIsCurrent(permit))) settingsMessage = OperationFailureMessage(error);
+            });
+            log.Warning("Gillions pairing did not complete ({Type}).", error.GetType().Name);
+        } finally {
+            if (ownsPairAttempt && !disposed) await framework.RunOnFrameworkThread(() => { if (!disposed) pairingInFlight = false; });
+        }
+    }
+
+    private async Task SendRetainerPresenceAsync(SyncRequestPermit permit, RetainerPresenceDocument presence) {
+        try {
+            using var request = Request("/api/game-sync/presence", permit, presence);
+            using var response = await SendAsync(request, permit);
+            await EnsureSuccessfulResponse(response, permit.Cancellation);
+            var responseJson = await SyncResponsePolicy.ReadAsync(response.Content, permit.Cancellation);
+            if (!RetainerPresenceResponsePolicy.TryParse(responseJson, RetainerClient, out var uploadSupported))
+                throw new InvalidOperationException("Invalid presence response.");
+            await CommitAsync(permit, _ => {
+                retainerUploadServerSupported = uploadSupported; presenceFailureCount = 0;
+                nextRetainerPresenceUtc = DateTime.UtcNow.Add(RetainerPresencePolicy.NextSuccessDelay(Random.Shared.Next(-5, 6)));
+            });
+        } catch (Exception error) {
+            if (!disposed) await framework.RunOnFrameworkThread(() => {
+                if (!PermitIsCurrent(permit)) return;
+                ClearRetainerServerAcceptance(); presenceFailureCount++;
                 nextRetainerPresenceUtc = DateTime.UtcNow.Add(RetainerPresencePolicy.NextFailureDelay(presenceFailureCount, Random.Shared.Next(-5, 6)));
             });
-            log.Debug(error, "Gillions Retainer presence failed; the client will retry with bounded backoff.");
-        } finally { presenceInFlight = false; }
+            log.Debug("Gillions presence will retry ({Type}).", error.GetType().Name);
+        } finally {
+            if (!disposed) await framework.RunOnFrameworkThread(() => { if (!disposed) presenceInFlight = false; });
+        }
     }
 
-    private void ClearRetainerServerAcceptance() {
-        retainerUploadServerSupported = false;
-    }
+    private void ClearRetainerServerAcceptance() => retainerUploadServerSupported = false;
 
-    private void SendCurrentRetainerPresence(ulong contentId, DateTime now) {
-        if (string.IsNullOrWhiteSpace(configuration.DeviceToken)) return;
-        var currentName = objects.LocalPlayer?.Name.TextValue ?? "";
-        var currentWorld = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "";
-        var presence = RetainerPresencePolicy.CreateNative(
-            new(contentId.ToString(), currentName, currentWorld), now, RetainerClient, PluginVersion);
-        // The next heartbeat response must renew acceptance. A missing or
-        // malformed response cannot leave a previous server grant active.
-        ClearRetainerServerAcceptance();
-        _ = SendRetainerPresenceAsync(contentId, presence);
+    private void SendCurrentRetainerPresence(ulong contentId, DateTime now, SyncRequestMode mode = SyncRequestMode.Automatic) {
+        if (!HasPairedSession || presenceInFlight) return;
+        var permit = CapturePermit(mode);
+        var presence = RetainerPresencePolicy.CreateNative(new(contentId.ToString(), CurrentState.CharacterName, CurrentState.CharacterWorld), now, RetainerClient, PluginVersion);
+        ClearRetainerServerAcceptance(); presenceInFlight = true;
+        _ = SendRetainerPresenceAsync(permit, presence);
     }
 
     private void OnFrameworkUpdate(IFramework frameworkInstance) {
+        if (disposed) return;
+        try { UpdateOwnedState(); }
+        catch (Exception error) { log.Warning("Gillions background observation paused ({Type}).", error.GetType().Name); }
+        finally { FlushConfigurationSave(); PublishUiState(); }
+    }
+
+    private void UpdateOwnedState() {
         var now = DateTime.UtcNow;
-        if (!clientState.IsLoggedIn) {
-            activeRetainerCharacterContentId = 0;
-            ClearRetainerServerAcceptance();
-            nextRetainerPresenceUtc = DateTime.MinValue;
-            lastObservedGil = null;
-            lastObservedRetainerId = null;
-            lastObservedRetainerGil = null;
-            gilLedgerDirty = false;
-            nextInventorySyncUtc = DateTime.MaxValue;
-            return;
-        }
-        var contentId = ReadLocalContentId();
-        if (contentId == 0) return;
-        if (activeRetainerCharacterContentId != contentId) {
-            activeRetainerCharacterContentId = contentId;
-            ClearRetainerServerAcceptance();
-            presenceFailureCount = 0;
-            nextRetainerPresenceUtc = DateTime.MinValue;
-            nextRetainerVentureResultCaptureUtc = DateTime.MinValue;
-            nextRetainerVentureRosterCaptureUtc = DateTime.MinValue;
-        }
-        var retainerState = RetainerVentureSnapshotPolicy.GetCharacterState(configuration.RetainerVentureStates, contentId);
-        if (ItemLinkPollPolicy.ShouldPoll(configuration.EnableItemLinkRequests, clientState.IsLoggedIn, configuration.DeviceToken, itemLinkPollInFlight, now, nextItemLinkPollUtc)) {
+        RefreshSessionContext(); MaintainTransientState(now);
+        if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;
+        var contentId = activeRetainerCharacterContentId;
+        var state = CurrentState;
+        if (ItemLinkPollPolicy.ShouldPoll(configuration.EnableItemLinkRequests, true, configuration.DeviceToken, itemLinkPollInFlight, now, nextItemLinkPollUtc)) {
             nextItemLinkPollUtc = now.AddSeconds(ItemLinkPollIntervalSeconds);
             _ = PollItemLinkRequestsAsync();
         }
-        // A successful pair or an ordinary plugin startup with an existing
-        // device credential hydrates the selected character once instead of
-        // waiting for the rotating background schedule. The paired presence
-        // follows on the next available update. Neither action enables the
-        // recurring automatic-sync loop when the owner has opted out.
         if (pairedClientHydration.TryBeginCharacterSync(syncInFlight)) {
-            _ = SyncAutomaticallyAsync([PairedClientHydrationState.CharacterResource]);
+            _ = SyncAutomaticallyAsync([PairedClientHydrationState.CharacterResource], SyncRequestMode.Hydration);
             return;
         }
         if (pairedClientHydration.TryBeginPresence(presenceInFlight)) {
-            SendCurrentRetainerPresence(contentId, now);
+            SendCurrentRetainerPresence(contentId, now, SyncRequestMode.Hydration);
             return;
         }
-        // An unpaired client, or one whose owner has disabled automatic sync,
-        // must have no recurring native-memory work. Manual Sync remains
-        // available and performs its one explicit collection on demand.
-        var backgroundSyncEnabled = configuration.AutomaticSync && !string.IsNullOrWhiteSpace(configuration.DeviceToken);
-        if (!backgroundSyncEnabled) {
-            // Resume from a fresh baseline if the owner turns automatic sync
-            // back on; do not turn time spent opted out into one large ledger
-            // transaction.
-            lastObservedGil = null;
-            lastObservedRetainerId = null;
-            lastObservedRetainerGil = null;
-            pendingRetainerBalance = null;
-            pendingRetainerBalanceSinceUtc = DateTime.MinValue;
-            gilLedgerDirty = false;
-            nextInventorySyncUtc = DateTime.MaxValue;
-            ClearRetainerServerAcceptance();
-            return;
-        }
-        if (!presenceInFlight && now >= nextRetainerPresenceUtc) {
-            SendCurrentRetainerPresence(contentId, now);
-        }
-        // Native task-view activity preserves fast transient-result capture
-        // without discovering or invoking any other plugin. Inactive views
-        // retain the ordinary low-frequency observation cadence.
+        if (!configuration.AutomaticSync) return;
+        if (!presenceInFlight && now >= nextRetainerPresenceUtc) SendCurrentRetainerPresence(contentId, now);
         var retainerWindowActive = DirectGameSnapshotCollector.IsRetainerVentureWindowActive();
         var ventureChanged = false;
         if (retainerWindowActive || now >= nextRetainerVentureResultCaptureUtc) {
             nextRetainerVentureResultCaptureUtc = now.AddMilliseconds(NormalVentureResultCaptureIntervalMilliseconds);
-            ventureChanged = DirectGameSnapshotCollector.CaptureRetainerVentureResultObservation(retainerState, out var resultProbeStatus);
+            ventureChanged = CaptureRetainerResult(state, out var resultProbeStatus);
             if (resultProbeStatus != lastRetainerVentureResultProbeStatus) {
-                if (resultProbeStatus != "inactive") RecordDiagnostic($"Retainer venture result probe: {resultProbeStatus}.");
+                if (resultProbeStatus != "inactive") RecordDiagnostic($"Retainer result observation: {resultProbeStatus}.");
                 lastRetainerVentureResultProbeStatus = resultProbeStatus;
             }
+            if (ventureChanged) RequestConfigurationSave();
         }
         if (now >= nextRetainerVentureRosterCaptureUtc) {
             nextRetainerVentureRosterCaptureUtc = now.AddMilliseconds(retainerWindowActive
-                ? ActiveVentureRosterCaptureIntervalMilliseconds
-                : NormalVentureRosterCaptureIntervalMilliseconds);
-            ventureChanged |= DirectGameSnapshotCollector.CaptureRetainerVentureRosterAndGear(retainerState);
+                ? ActiveVentureRosterCaptureIntervalMilliseconds : NormalVentureRosterCaptureIntervalMilliseconds);
+            ventureChanged |= DirectGameSnapshotCollector.CaptureRetainerVentureRosterAndGear(state.RetainerState);
+            savePolicy.Refresh();
         }
-        if (ventureChanged) {
-            configuration.Save(pluginInterface);
-            if (retainerUploadServerSupported) nextAutomaticSyncUtc = now;
-        }
+        if (ventureChanged) { QueueRetainerUpload(now); RequestConfigurationSave(); }
         if (now >= nextGilLedgerPollUtc || (gilLedgerDirty && now >= nextGilLedgerFlushUtc)) {
             nextGilLedgerPollUtc = now.AddMilliseconds(GilLedgerPollIntervalMilliseconds);
-            CaptureGilLedgerChange();
+            CaptureOwnedGilLedgerChange();
         }
         if (now >= nextRetainerListingCaptureUtc) {
             nextRetainerListingCaptureUtc = now.AddSeconds(RetainerCaptureIntervalSeconds);
-            if (DirectGameSnapshotCollector.CaptureLoadedRetainerListings()
-                && backgroundSyncEnabled)
-                nextInventorySyncUtc = now.AddMilliseconds(250);
+            if (DirectGameSnapshotCollector.CaptureLoadedRetainerListings()) nextInventorySyncUtc = now.AddMilliseconds(250);
         }
         if (syncInFlight) return;
-        if (configuration.PendingGilLedgerEvents is { Count: > 0 } && nextGilLedgerUploadUtc == DateTime.MaxValue)
-            nextGilLedgerUploadUtc = now;
-        if (now >= nextGilLedgerUploadUtc) {
-            nextGilLedgerUploadUtc = DateTime.MaxValue;
-            _ = SyncAutomaticallyAsync([]);
+        // A due ordinary resource keeps its cadence even during repeated Retainer
+        // changes. Every sync also drains its captured owner's queued Gil events.
+        if (now >= nextAutomaticSyncUtc) {
+            nextAutomaticSyncUtc = now.AddSeconds(AutomaticSyncIntervalSeconds);
+            _ = SyncAutomaticallyAsync([NextAutomaticScope()]);
             return;
         }
         if (now >= nextInventorySyncUtc) {
             nextInventorySyncUtc = DateTime.MaxValue;
-            nextAutomaticSyncUtc = now.AddSeconds(AutomaticSyncIntervalSeconds);
             _ = SyncAutomaticallyAsync(["inventory"]);
             return;
         }
-        if (now < nextAutomaticSyncUtc) return;
-        nextAutomaticSyncUtc = now.AddSeconds(AutomaticSyncIntervalSeconds);
-        _ = SyncAutomaticallyAsync([NextAutomaticScope()]);
+        if (retainerUploadServerSupported && now >= nextRetainerUploadUtc) {
+            nextRetainerUploadUtc = now.AddSeconds(AutomaticSyncIntervalSeconds);
+            _ = SyncAutomaticallyAsync([RetainerClientPolicy.ResourceType]);
+            return;
+        }
+        if (state.PendingGilLedgerEvents.Count > 0 && nextGilLedgerUploadUtc == DateTime.MaxValue) nextGilLedgerUploadUtc = now;
+        if (now >= nextGilLedgerUploadUtc) {
+            nextGilLedgerUploadUtc = DateTime.MaxValue;
+            _ = SyncAutomaticallyAsync([]);
+        }
+    }
+
+    private void QueueRetainerUpload(DateTime now) {
+        var due = now.AddMilliseconds(250);
+        if (nextRetainerUploadUtc > due) nextRetainerUploadUtc = due;
     }
 
     private void OnInventoryChangedRaw(IReadOnlyCollection<InventoryEventArgs> _) {
+        if (disposed || !framework.IsInFrameworkUpdateThread || !clientState.IsLoggedIn || !configuration.AutomaticSync || !HasPairedSession) return;
+        RefreshSessionContext();
+        if (activeOwnedState is null) return;
         // The event itself is a copied native state notification. We take the
         // balance once the game has finished its short update burst so a single
         // action becomes one ledger row rather than slot-level noise.
@@ -371,61 +377,70 @@ public sealed class Plugin : IDalamudPlugin {
     }
 
     private async Task PollItemLinkRequestsAsync() {
-        if (itemLinkPollInFlight || !clientState.IsLoggedIn || string.IsNullOrWhiteSpace(configuration.DeviceToken)) return;
-        itemLinkPollInFlight = true;
-        var token = configuration.DeviceToken;
+        SyncRequestPermit? permit = null;
+        ItemLinkRequestProcessor? processor = null;
+        var ownsPoll = false;
         try {
-            using var pollRequest = Request("/api/game-sync/item-links/poll", token, new { capability = "native_item_link", pluginVersion = PluginVersion });
-            using var pollResponse = await http.SendAsync(pollRequest);
+            permit = await framework.RunOnFrameworkThread(() => {
+                if (disposed || itemLinkPollInFlight) throw new OperationCanceledException();
+                var result = CapturePermit(SyncRequestMode.ItemLink);
+                itemLinkPollInFlight = true; ownsPoll = true; processor = itemLinkRequestProcessor;
+                return result;
+            });
+            using var pollRequest = Request("/api/game-sync/item-links/poll", permit, new { capability = "native_item_link", pluginVersion = PluginVersion });
+            using var pollResponse = await SendAsync(pollRequest, permit);
             if (pollResponse.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed or HttpStatusCode.NotImplemented) {
-                nextItemLinkPollUtc = DateTime.UtcNow.AddMinutes(UnsupportedItemLinkRetryMinutes);
+                await CommitAsync(permit, _ => nextItemLinkPollUtc = DateTime.UtcNow.AddMinutes(UnsupportedItemLinkRetryMinutes));
                 return;
             }
             if (pollResponse.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden) {
-                nextItemLinkPollUtc = DateTime.UtcNow.AddMinutes(5);
+                await CommitAsync(permit, _ => nextItemLinkPollUtc = DateTime.UtcNow.AddMinutes(5));
                 return;
             }
-            await EnsureSuccessfulResponse(pollResponse);
-            var response = await JsonSerializer.DeserializeAsync<ItemLinkPollResponse>(await pollResponse.Content.ReadAsStreamAsync());
-            if (response?.Ok != true || response.Request is null) return;
-
-            var result = await itemLinkRequestProcessor.ProcessAsync(
-                response.Request,
-                DateTime.UtcNow,
-                ResolveItemNameAsync,
-                request => ConsumeItemLinkRequestAsync(token, request),
-                link => framework.RunOnFrameworkThread(() => chatGui.Print(link, "Gillions")));
-            if (result == ItemLinkDeliveryResult.Delivered) RecordDiagnostic("Delivered one authenticated native item link.");
-            else if (result is not ItemLinkDeliveryResult.AlreadyDelivered) RecordDiagnostic($"Rejected an item-link request safely ({result}).");
+            await EnsureSuccessfulResponse(pollResponse, permit.Cancellation);
+            var response = JsonSerializer.Deserialize<ItemLinkPollResponse>(await SyncResponsePolicy.ReadAsync(pollResponse.Content, permit.Cancellation), SyncResponsePolicy.Options);
+            if (response?.Ok != true) throw new InvalidOperationException("Invalid item-link response.");
+            if (response.Request is null) return;
+            var result = await processor!.ProcessAsync(response.Request, DateTime.UtcNow,
+                itemId => ResolveItemNameAsync(itemId, permit),
+                request => ConsumeItemLinkRequestAsync(permit, request),
+                link => framework.RunOnFrameworkThread(() => {
+                    RequirePermit(permit);
+                    if (DateTime.UtcNow >= response.Request.ExpiresAtUtc) throw new OperationCanceledException();
+                    chatGui.Print(link, "Gillions");
+                }));
+            await CommitAsync(permit, _ => RecordDiagnostic($"Item-link request: {result}."));
         } catch (Exception error) {
-            nextItemLinkPollUtc = DateTime.UtcNow.AddSeconds(30);
-            log.Warning(error, "Gillions item-link polling failed safely.");
+            if (!disposed && permit is not null) await framework.RunOnFrameworkThread(() => {
+                if (PermitIsCurrent(permit)) nextItemLinkPollUtc = DateTime.UtcNow.AddSeconds(30);
+            });
+            log.Debug("Gillions item-link request did not complete ({Type}).", error.GetType().Name);
         } finally {
-            itemLinkPollInFlight = false;
+            if (ownsPoll && !disposed) await framework.RunOnFrameworkThread(() => { if (!disposed) itemLinkPollInFlight = false; });
         }
     }
 
-    private Task<string?> ResolveItemNameAsync(long itemId) => framework.RunOnFrameworkThread(() => {
-        if (!clientState.IsLoggedIn || !NativeItemLinkFactory.IsValidItemId(itemId)) return null;
+    private Task<string?> ResolveItemNameAsync(long itemId, SyncRequestPermit permit) => framework.RunOnFrameworkThread(() => {
+        RequirePermit(permit);
+        if (!NativeItemLinkFactory.IsValidItemId(itemId)) return null;
         var item = dataManager.GetExcelSheet<Item>()?.GetRowOrDefault((uint)itemId);
         return item is { RowId: > 0 } ? item.Value.Name.ExtractText() : null;
     });
 
-    private async Task<bool> ConsumeItemLinkRequestAsync(string token, ItemLinkRequest request) {
-        using var consumeRequest = Request("/api/game-sync/item-links/consume", token, new { requestId = request.RequestId, claimToken = request.ClaimToken });
-        using var consumeResponse = await http.SendAsync(consumeRequest);
-        if (!consumeResponse.IsSuccessStatusCode) {
-            RecordDiagnostic($"Item-link claim rejected by Gillions: HTTP {(int)consumeResponse.StatusCode}.");
-            return false;
-        }
-        using var document = JsonDocument.Parse(await consumeResponse.Content.ReadAsStringAsync());
-        var confirmed = document.RootElement.TryGetProperty("ok", out var ok) && ok.ValueKind == JsonValueKind.True
-            && document.RootElement.TryGetProperty("consumed", out var consumedProperty) && consumedProperty.ValueKind == JsonValueKind.True;
-        if (!confirmed) RecordDiagnostic("Item-link claim response was accepted without a consumed confirmation.");
-        return confirmed;
+    private async Task<bool> ConsumeItemLinkRequestAsync(SyncRequestPermit permit, ItemLinkRequest request) {
+        if (DateTime.UtcNow >= request.ExpiresAtUtc) return false;
+        using var consumeRequest = Request("/api/game-sync/item-links/consume", permit, new { requestId = request.RequestId, claimToken = request.ClaimToken });
+        using var consumeResponse = await SendAsync(consumeRequest, permit);
+        if (!consumeResponse.IsSuccessStatusCode) return false;
+        using var document = JsonDocument.Parse(await SyncResponsePolicy.ReadAsync(consumeResponse.Content, permit.Cancellation));
+        var root = document.RootElement;
+        return root.ValueKind == JsonValueKind.Object && root.TryGetProperty("ok", out var ok) && ok.ValueKind == JsonValueKind.True
+            && root.TryGetProperty("consumed", out var consumed) && consumed.ValueKind == JsonValueKind.True;
     }
 
     private void OnLogMessage(ILogMessage message) {
+        if (!CanCaptureLedgerEvidence() || message.ParameterCount > 8
+            || message.LogMessageId is not (1605 or 952 or 1603 or 1606 or 1607 or 3231 or 10452 or 533 or 732 or 733 or 1385 or 734 or 1687 or 1688 or 736 or 737 or 550)) return;
         // Never retain raw message text, entity names, or string parameters.
         // IDs and integer arguments are sufficient to map known transaction
         // contracts during beta validation without collecting chat content.
@@ -434,26 +449,29 @@ public sealed class Plugin : IDalamudPlugin {
             if (message.TryGetIntParameter(index, out var value)) values.Add(value);
         }
         recentGilLedgerLogs.Add(new GilLedgerLogEvidence(DateTime.UtcNow, message.LogMessageId, values.ToArray()));
-        recentGilLedgerLogs.RemoveAll(entry => entry.ObservedAtUtc < DateTime.UtcNow.AddSeconds(-5));
+        TransientEvidencePolicy.Prune(recentGilLedgerLogs, DateTime.UtcNow, TimeSpan.FromSeconds(5), entry => entry.ObservedAtUtc);
     }
 
     private void OnChatMessage(IHandleableChatMessage message) {
+        if (!CanCaptureLedgerEvidence() || message.LogKind is not (XivChatType.SystemMessage or XivChatType.RetainerSale)) return;
         // Some itemized vendor messages do not arrive with usable LogMessage
         // integer parameters. Keep only the structured sale facts needed to
         // correlate the message with the native gil balance; never retain raw
         // chat text or upload it.
-        var match = VendorSaleChatRegex.Match(message.Message.TextValue);
+        if (message.OriginalMessage.ByteLength > 4096) return;
+        var match = VendorSaleChatRegex.Match(message.OriginalMessage.ExtractText());
         if (!match.Success) return;
         var quantityToken = match.Groups["quantity"].Value;
         var quantity = quantityToken.Equals("a", StringComparison.OrdinalIgnoreCase) || quantityToken.Equals("an", StringComparison.OrdinalIgnoreCase)
             ? 1
             : int.TryParse(quantityToken.Replace(",", ""), out var parsedQuantity) ? parsedQuantity : 0;
-        if (quantity <= 0) return;
-        if (!long.TryParse(match.Groups["amount"].Value.Replace(",", ""), out var amount) || amount <= 0) return;
-        var itemId = message.Message.Payloads.OfType<ItemPayload>().FirstOrDefault()?.ItemId;
-        var retainer = itemId > 0 ? NativeInventoryCollector.FindLoadedRetainerItem(itemId.Value) : null;
+        if (quantity is <= 0 or > 9999) return;
+        if (!long.TryParse(match.Groups["amount"].Value.Replace(",", ""), out var amount) || amount is <= 0 or > 999999999) return;
+        var itemId = SeString.Parse(message.OriginalMessage.Data.Span).Payloads.OfType<ItemPayload>().FirstOrDefault()?.ItemId;
+        if (itemId is null or 0 or > int.MaxValue) return;
+        var retainer = message.LogKind == XivChatType.RetainerSale ? NativeInventoryCollector.FindLoadedRetainerItem(itemId.Value) : null;
         recentGilLedgerChat.Add(new GilLedgerChatEvidence(DateTime.UtcNow, itemId > 0 ? (int)itemId : null, quantity, amount, retainer?.RetainerId, retainer?.RetainerName));
-        recentGilLedgerChat.RemoveAll(entry => entry.ObservedAtUtc < DateTime.UtcNow.AddSeconds(-5));
+        TransientEvidencePolicy.Prune(recentGilLedgerChat, DateTime.UtcNow, TimeSpan.FromSeconds(5), entry => entry.ObservedAtUtc);
     }
 
     private GilLedgerEvent CreateGilLedgerEvent(long gilDelta, string kind, string confidence, int? itemId, int? itemQuantity, string? retainerId, string? retainerName, uint? logMessageId, int[] logIntegerParameters) => new(
@@ -491,12 +509,12 @@ public sealed class Plugin : IDalamudPlugin {
         }
 
         if (retainerBalance is not null && lastObservedRetainerId != retainerBalance.RetainerId) {
-            configuration.RetainerGilBalances ??= new Dictionary<string, long>(StringComparer.Ordinal);
-            if (configuration.RetainerGilBalances.TryGetValue(retainerBalance.RetainerId, out var priorGil) && priorGil != retainerBalance.Gil)
-                RecordRetainerBalanceChange(retainerBalance, retainerBalance.Gil - priorGil);
-            else {
-                configuration.RetainerGilBalances[retainerBalance.RetainerId] = retainerBalance.Gil;
-                configuration.Save(pluginInterface);
+            CurrentState.RetainerGilBalances ??= new Dictionary<string, long>(StringComparer.Ordinal);
+            if (CurrentState.RetainerGilBalances.TryGetValue(retainerBalance.RetainerId, out var priorGil)) {
+                if (priorGil != retainerBalance.Gil) RecordRetainerBalanceChange(retainerBalance, retainerBalance.Gil - priorGil);
+            } else {
+                CurrentState.RetainerGilBalances[retainerBalance.RetainerId] = retainerBalance.Gil;
+                RequestConfigurationSave();
             }
             lastObservedRetainerId = retainerBalance.RetainerId;
             lastObservedRetainerGil = retainerBalance.Gil;
@@ -507,9 +525,9 @@ public sealed class Plugin : IDalamudPlugin {
             var confirmedRetainerDeposit = RecordRetainerBalanceChange(retainerBalance, retainerDelta);
             var confirmedRetainerSales = confirmedRetainerDeposit ? new List<PendingRetainerSale>() : ConfirmPendingRetainerSales(retainerDelta, retainerBalance.RetainerId);
             if (confirmedRetainerSales.Count > 0) {
-                configuration.PendingGilLedgerEvents ??= [];
-                foreach (var sale in confirmedRetainerSales) configuration.PendingGilLedgerEvents.Add(CreateGilLedgerEvent(sale.Amount, "retainer_sale", "confirmed", sale.ItemId, sale.ItemQuantity, sale.RetainerId, sale.RetainerName, null, []));
-                configuration.Save(pluginInterface);
+                CurrentState.PendingGilLedgerEvents ??= [];
+                foreach (var sale in confirmedRetainerSales) CurrentState.PendingGilLedgerEvents.Add(CreateGilLedgerEvent(sale.Amount, "retainer_sale", "confirmed", sale.ItemId, sale.ItemQuantity, sale.RetainerId, sale.RetainerName, null, []));
+                RequestConfigurationSave();
                 QueueGilLedgerUpload();
                 RecordDiagnostic($"Retainer gil ledger: +{retainerDelta:#,##0} gil; confirmed/retainer_sale; retainer={retainerBalance.RetainerName}; town={retainerBalance.Town}; items={confirmedRetainerSales.Count}.");
             }
@@ -520,7 +538,7 @@ public sealed class Plugin : IDalamudPlugin {
             RecordRetainerBalanceChange(retainerBalance, retainerDelta);
         }
         if (FlushExpiredRetainerGilReceipts() || FlushExpiredRetainerGilDeposits()) {
-            configuration.Save(pluginInterface);
+            RequestConfigurationSave();
             QueueGilLedgerUpload();
         }
         var currentGil = NativeInventoryCollector.ReadGil();
@@ -534,7 +552,7 @@ public sealed class Plugin : IDalamudPlugin {
             gilLedgerDirty = true;
             nextGilLedgerFlushUtc = DateTime.UtcNow.AddMilliseconds(750);
         }
-        if (FlushRetainerChatEvidence()) configuration.Save(pluginInterface);
+        if (FlushRetainerChatEvidence()) RequestConfigurationSave();
         if (!gilLedgerDirty || DateTime.UtcNow < nextGilLedgerFlushUtc) return;
         gilLedgerDirty = false;
         var delta = currentGil.Value - lastObservedGil.Value;
@@ -544,96 +562,93 @@ public sealed class Plugin : IDalamudPlugin {
         var recentChatSale = recentGilLedgerChat.LastOrDefault(entry => entry.ObservedAtUtc >= DateTime.UtcNow.AddSeconds(-3));
         if (delta < 0 && recent?.LogMessageId == 737) {
             QueueRetainerGilDeposit(CreateGilLedgerEvent(delta, "unclassified", "inferred", null, null, null, null, recent.LogMessageId, recent.IntegerParameters));
-            configuration.Save(pluginInterface);
+            RequestConfigurationSave();
             RecordDiagnostic($"Pending retainer Gil deposit: {delta:#,##0} gil; awaiting a matching retainer balance increase.");
             return;
         }
-        configuration.PendingGilLedgerEvents ??= [];
+        CurrentState.PendingGilLedgerEvents ??= [];
         if (delta > 0 && recent?.LogMessageId == 736) {
             var confirmedRetainerSales = ConfirmPendingRetainerSales(delta, null);
             if (confirmedRetainerSales.Count > 0) {
-                foreach (var sale in confirmedRetainerSales) configuration.PendingGilLedgerEvents.Add(CreateGilLedgerEvent(
+                foreach (var sale in confirmedRetainerSales) CurrentState.PendingGilLedgerEvents.Add(CreateGilLedgerEvent(
                     sale.Amount, "retainer_sale", "confirmed", sale.ItemId, sale.ItemQuantity, sale.RetainerId, sale.RetainerName, recent.LogMessageId, recent.IntegerParameters));
-                configuration.Save(pluginInterface);
+                RequestConfigurationSave();
                 QueueGilLedgerUpload();
                 RecordDiagnostic($"Gil ledger: +{delta:#,##0} gil; confirmed/retainer_sale; items={confirmedRetainerSales.Count}; retainer={confirmedRetainerSales[0].RetainerName ?? "unknown"}.");
                 return;
             }
             QueueRetainerGilReceipt(CreateGilLedgerEvent(delta, "retainer_gil_receipt", "inferred", null, null, null, null, recent.LogMessageId, recent.IntegerParameters));
-            configuration.Save(pluginInterface);
+            RequestConfigurationSave();
             RecordDiagnostic($"Pending retainer Gil receipt: +{delta:#,##0} gil; awaiting a matching retainer balance withdrawal.");
             return;
         }
         var classification = ClassifyGilLedgerEvent(delta, recent, recentChatSale);
-        configuration.PendingGilLedgerEvents.Add(CreateGilLedgerEvent(
+        CurrentState.PendingGilLedgerEvents.Add(CreateGilLedgerEvent(
             delta, classification.Kind, classification.Confidence, classification.ItemId, classification.ItemQuantity,
             classification.RetainerId, classification.RetainerName, recent?.LogMessageId, recent?.IntegerParameters ?? []));
-        if (recentChatSale?.IsRetainerSale == true) emittedRetainerChatEvidence.Add(recentChatSale.EvidenceId);
-        if (configuration.PendingGilLedgerEvents.Count > 200) configuration.PendingGilLedgerEvents.RemoveRange(0, configuration.PendingGilLedgerEvents.Count - 200);
-        configuration.Save(pluginInterface);
+        if (recentChatSale?.IsRetainerSale == true) emittedRetainerChatEvidence[recentChatSale.EvidenceId] = DateTime.UtcNow;
+        RequestConfigurationSave();
         QueueGilLedgerUpload();
         RecordDiagnostic($"Gil ledger: {delta:+#,##0;-#,##0} gil; {classification.Confidence}/{classification.Kind}{(classification.ItemId is null ? "" : $"; item={classification.ItemId} x{classification.ItemQuantity}")}{(recent is null ? "" : $"; log {recent.LogMessageId}, ints=[{string.Join(",", recent.IntegerParameters)}]")}{(recentChatSale is null ? "" : "; chat=vendor_sale")}.");
     }
 
     private bool RecordRetainerBalanceChange(RetainerBalanceRead retainer, long delta) {
         if (delta == 0) return false;
-        configuration.RetainerGilBalances ??= new Dictionary<string, long>(StringComparer.Ordinal);
-        configuration.RetainerGilBalances[retainer.RetainerId] = retainer.Gil;
+        CurrentState.RetainerGilBalances ??= new Dictionary<string, long>(StringComparer.Ordinal);
+        CurrentState.RetainerGilBalances[retainer.RetainerId] = retainer.Gil;
         var confirmedDeposit = false;
         if (delta > 0) confirmedDeposit = ConfirmPendingRetainerGilDeposits(retainer, delta);
         if (delta < 0) {
             recentRetainerWithdrawals.Add(new RetainerWithdrawalObservation(DateTime.UtcNow, -delta, retainer.RetainerId, retainer.RetainerName));
-            recentRetainerWithdrawals.RemoveAll(entry => entry.ObservedAtUtc < DateTime.UtcNow.AddSeconds(-RetainerReceiptCorrelationSeconds));
+            TransientEvidencePolicy.Prune(recentRetainerWithdrawals, DateTime.UtcNow, TimeSpan.FromSeconds(RetainerReceiptCorrelationSeconds), entry => entry.ObservedAtUtc);
             ConfirmPendingRetainerGilReceipts(retainer, -delta);
         }
-        configuration.Save(pluginInterface);
+        RequestConfigurationSave();
         RecordDiagnostic($"Retainer balance: {delta:+#,##0;-#,##0} gil; retainer={retainer.RetainerName}; current={retainer.Gil:#,##0}; retained locally for receipt correlation.");
         return confirmedDeposit;
     }
 
     private void QueueRetainerGilReceipt(GilLedgerEvent receipt) {
-        configuration.PendingRetainerGilReceipts ??= [];
+        CurrentState.PendingRetainerGilReceipts ??= [];
         var withdrawal = recentRetainerWithdrawals.LastOrDefault(entry => entry.Amount == receipt.GilDelta && entry.ObservedAtUtc >= DateTime.UtcNow.AddSeconds(-RetainerReceiptCorrelationSeconds));
         if (withdrawal is not null) {
             QueueGilLedgerEvent(receipt with { RetainerId = withdrawal.RetainerId, RetainerName = withdrawal.RetainerName });
             QueueGilLedgerUpload();
             return;
         }
-        configuration.PendingRetainerGilReceipts.Add(receipt);
-        if (configuration.PendingRetainerGilReceipts.Count > 20) configuration.PendingRetainerGilReceipts.RemoveRange(0, configuration.PendingRetainerGilReceipts.Count - 20);
+        CurrentState.PendingRetainerGilReceipts.Add(receipt);
     }
 
     private void ConfirmPendingRetainerGilReceipts(RetainerBalanceRead retainer, long amount) {
-        if (configuration.PendingRetainerGilReceipts is not { Count: > 0 }) return;
-        var receipt = configuration.PendingRetainerGilReceipts.LastOrDefault(entry => entry.GilDelta == amount && entry.OccurredAtUtc >= DateTime.UtcNow.AddSeconds(-RetainerReceiptCorrelationSeconds));
+        if (CurrentState.PendingRetainerGilReceipts is not { Count: > 0 }) return;
+        var receipt = CurrentState.PendingRetainerGilReceipts.LastOrDefault(entry => entry.GilDelta == amount && entry.OccurredAtUtc >= DateTime.UtcNow.AddSeconds(-RetainerReceiptCorrelationSeconds));
         if (receipt is null) return;
-        configuration.PendingRetainerGilReceipts.Remove(receipt);
+        CurrentState.PendingRetainerGilReceipts.Remove(receipt);
         QueueGilLedgerEvent(receipt with { RetainerId = retainer.RetainerId, RetainerName = retainer.RetainerName });
         QueueGilLedgerUpload();
         RecordDiagnostic($"Gil ledger: +{amount:#,##0} gil; inferred/retainer_gil_receipt; retainer={retainer.RetainerName}.");
     }
 
     private bool FlushExpiredRetainerGilReceipts() {
-        if (configuration.PendingRetainerGilReceipts is not { Count: > 0 }) return false;
+        if (CurrentState.PendingRetainerGilReceipts is not { Count: > 0 }) return false;
         var cutoff = DateTime.UtcNow.AddSeconds(-RetainerReceiptCorrelationSeconds);
-        var expired = configuration.PendingRetainerGilReceipts.Where(entry => entry.OccurredAtUtc <= cutoff).ToArray();
+        var expired = CurrentState.PendingRetainerGilReceipts.Where(entry => entry.OccurredAtUtc <= cutoff).ToArray();
         if (expired.Length == 0) return false;
-        configuration.PendingRetainerGilReceipts.RemoveAll(entry => entry.OccurredAtUtc <= cutoff);
+        CurrentState.PendingRetainerGilReceipts.RemoveAll(entry => entry.OccurredAtUtc <= cutoff);
         foreach (var receipt in expired) QueueGilLedgerEvent(receipt);
         return true;
     }
 
     private void QueueRetainerGilDeposit(GilLedgerEvent deposit) {
-        configuration.PendingRetainerGilDeposits ??= [];
-        configuration.PendingRetainerGilDeposits.Add(deposit);
-        if (configuration.PendingRetainerGilDeposits.Count > 20) configuration.PendingRetainerGilDeposits.RemoveRange(0, configuration.PendingRetainerGilDeposits.Count - 20);
+        CurrentState.PendingRetainerGilDeposits ??= [];
+        CurrentState.PendingRetainerGilDeposits.Add(deposit);
     }
 
     private bool ConfirmPendingRetainerGilDeposits(RetainerBalanceRead retainer, long amount) {
-        if (configuration.PendingRetainerGilDeposits is not { Count: > 0 }) return false;
-        var deposit = configuration.PendingRetainerGilDeposits.LastOrDefault(entry => -entry.GilDelta == amount && entry.OccurredAtUtc >= DateTime.UtcNow.AddSeconds(-RetainerReceiptCorrelationSeconds));
+        if (CurrentState.PendingRetainerGilDeposits is not { Count: > 0 }) return false;
+        var deposit = CurrentState.PendingRetainerGilDeposits.LastOrDefault(entry => -entry.GilDelta == amount && entry.OccurredAtUtc >= DateTime.UtcNow.AddSeconds(-RetainerReceiptCorrelationSeconds));
         if (deposit is null) return false;
-        configuration.PendingRetainerGilDeposits.Remove(deposit);
+        CurrentState.PendingRetainerGilDeposits.Remove(deposit);
         QueueGilLedgerEvent(deposit with { Kind = "retainer_gil_deposit", RetainerId = retainer.RetainerId, RetainerName = retainer.RetainerName });
         QueueGilLedgerUpload();
         RecordDiagnostic($"Gil ledger: -{amount:#,##0} gil; inferred/retainer_gil_deposit; retainer={retainer.RetainerName}.");
@@ -641,19 +656,18 @@ public sealed class Plugin : IDalamudPlugin {
     }
 
     private bool FlushExpiredRetainerGilDeposits() {
-        if (configuration.PendingRetainerGilDeposits is not { Count: > 0 }) return false;
+        if (CurrentState.PendingRetainerGilDeposits is not { Count: > 0 }) return false;
         var cutoff = DateTime.UtcNow.AddSeconds(-RetainerReceiptCorrelationSeconds);
-        var expired = configuration.PendingRetainerGilDeposits.Where(entry => entry.OccurredAtUtc <= cutoff).ToArray();
+        var expired = CurrentState.PendingRetainerGilDeposits.Where(entry => entry.OccurredAtUtc <= cutoff).ToArray();
         if (expired.Length == 0) return false;
-        configuration.PendingRetainerGilDeposits.RemoveAll(entry => entry.OccurredAtUtc <= cutoff);
+        CurrentState.PendingRetainerGilDeposits.RemoveAll(entry => entry.OccurredAtUtc <= cutoff);
         foreach (var deposit in expired) QueueGilLedgerEvent(deposit);
         return true;
     }
 
     private void QueueGilLedgerEvent(GilLedgerEvent entry) {
-        configuration.PendingGilLedgerEvents ??= [];
-        configuration.PendingGilLedgerEvents.Add(entry);
-        if (configuration.PendingGilLedgerEvents.Count > 200) configuration.PendingGilLedgerEvents.RemoveRange(0, configuration.PendingGilLedgerEvents.Count - 200);
+        CurrentState.PendingGilLedgerEvents ??= [];
+        CurrentState.PendingGilLedgerEvents.Add(entry);
     }
 
     private static GilLedgerClassification ClassifyGilLedgerEvent(long gilDelta, GilLedgerLogEvidence? evidence, GilLedgerChatEvidence? chatSale) {
@@ -661,7 +675,7 @@ public sealed class Plugin : IDalamudPlugin {
         // purchase and sale. Keep the amount comparison so an unrelated log
         // sharing the same ID cannot be promoted solely by its timing.
         if (evidence?.IntegerParameters is { Length: >= 1 } values) {
-            if (evidence.LogMessageId == 1605 && gilDelta == values[0])
+            if (evidence.LogMessageId == 1605 && gilDelta > 0 && gilDelta == values[0])
                 return new GilLedgerClassification("quest_or_leve_reward", "confirmed", null, null);
             if (evidence.LogMessageId == 952 && gilDelta > 0)
                 return new GilLedgerClassification("quest_or_leve_reward", "confirmed", null, null);
@@ -673,20 +687,21 @@ public sealed class Plugin : IDalamudPlugin {
             // confidence rather than claiming the amount came from the message.
             if ((evidence.LogMessageId == 3231 || evidence.LogMessageId == 10452) && gilDelta > 0)
                 return new GilLedgerClassification("quest_or_leve_reward", "inferred", null, null);
-            if ((evidence.LogMessageId == 533 || evidence.LogMessageId == 732 || evidence.LogMessageId == 733) && gilDelta < 0 && values.All(value => value == 0))
+            if ((evidence.LogMessageId == 533 || evidence.LogMessageId == 732 || evidence.LogMessageId == 733) && gilDelta < 0 && values.Length == 3 && values.All(value => value == 0))
                 return new GilLedgerClassification("teleport", "confirmed", null, null);
             if (evidence.LogMessageId == 1385 && gilDelta < 0)
                 return new GilLedgerClassification("repair", "confirmed", null, null);
             if (values.Length < 2) return new GilLedgerClassification("unclassified", "inferred", null, null);
-            var itemId = values[0] > 0 ? NormalizeLedgerItemId(values[0]) : (int?)null;
-            var quantity = values[1] > 0 ? values[1] : (int?)null;
+            var normalizedItemId = NormalizeLedgerItemId(values[0]);
+            var itemId = normalizedItemId > 0 ? normalizedItemId : (int?)null;
+            var quantity = values[1] is > 0 and <= 9999 ? values[1] : (int?)null;
             if (evidence.LogMessageId == 734 && itemId is not null && quantity is not null && gilDelta < 0)
                 return new GilLedgerClassification("market_purchase", "confirmed", itemId, quantity);
             if (values.Length >= 3) {
                 var amount = values[2];
-                if (evidence.LogMessageId == 1687 && itemId is not null && quantity is not null && gilDelta == -amount)
+                if (evidence.LogMessageId == 1687 && amount > 0 && itemId is not null && quantity is not null && gilDelta == -amount)
                     return new GilLedgerClassification("vendor_purchase", "confirmed", itemId, quantity);
-                if (evidence.LogMessageId == 1688 && itemId is not null && quantity is not null && gilDelta == amount)
+                if (evidence.LogMessageId == 1688 && amount > 0 && itemId is not null && quantity is not null && gilDelta == amount)
                     return new GilLedgerClassification("vendor_sale", "confirmed", itemId, quantity);
             }
         }
@@ -700,30 +715,22 @@ public sealed class Plugin : IDalamudPlugin {
     private bool FlushRetainerChatEvidence() {
         var changed = false;
         var cutoff = DateTime.UtcNow.AddSeconds(-1.5);
-        foreach (var evidence in recentGilLedgerChat.Where(entry => entry.IsRetainerSale && entry.ObservedAtUtc <= cutoff && !emittedRetainerChatEvidence.Contains(entry.EvidenceId)).ToArray()) {
-            configuration.PendingRetainerSales ??= [];
-            if (!configuration.PendingRetainerSales.Any(sale => sale.SaleId == evidence.EvidenceId)) {
-                configuration.PendingRetainerSales.Add(new PendingRetainerSale(
+        foreach (var evidence in recentGilLedgerChat.Where(entry => entry.IsRetainerSale && entry.ObservedAtUtc <= cutoff && !emittedRetainerChatEvidence.ContainsKey(entry.EvidenceId)).ToArray()) {
+            CurrentState.PendingRetainerSales ??= [];
+            if (!CurrentState.PendingRetainerSales.Any(sale => sale.SaleId == evidence.EvidenceId)) {
+                CurrentState.PendingRetainerSales.Add(new PendingRetainerSale(
                     evidence.EvidenceId, evidence.ObservedAtUtc, evidence.Amount, evidence.ItemId, evidence.ItemQuantity, evidence.RetainerId, evidence.RetainerName));
                 changed = true;
             }
-            emittedRetainerChatEvidence.Add(evidence.EvidenceId);
+            emittedRetainerChatEvidence[evidence.EvidenceId] = DateTime.UtcNow;
             RecordDiagnostic($"Pending retainer sale: +{evidence.Amount:#,##0} gil{(evidence.ItemId is null ? "" : $"; item={evidence.ItemId} x{evidence.ItemQuantity}")}{(evidence.RetainerName is null ? "" : $"; retainer={evidence.RetainerName}")}.");
-        }
-        if (configuration.PendingGilLedgerEvents?.Count > 200) {
-            configuration.PendingGilLedgerEvents.RemoveRange(0, configuration.PendingGilLedgerEvents.Count - 200);
-            changed = true;
         }
         return changed;
     }
 
     private List<PendingRetainerSale> ConfirmPendingRetainerSales(long withdrawalAmount, string? retainerId) {
-        var pending = configuration.PendingRetainerSales ?? [];
-        if (!string.IsNullOrWhiteSpace(retainerId)) pending = pending.Where(sale => StringComparer.Ordinal.Equals(sale.RetainerId, retainerId)).ToList();
-        var exact = pending.Where(sale => sale.Amount == withdrawalAmount).Take(1).ToList();
-        if (exact.Count == 0 && pending.Sum(sale => sale.Amount) == withdrawalAmount) exact = pending.ToList();
-        if (exact.Count > 0) configuration.PendingRetainerSales = pending.Except(exact).ToList();
-        return exact;
+        CurrentState.PendingRetainerSales ??= [];
+        return GilLedgerPolicy.Confirm(CurrentState.PendingRetainerSales, withdrawalAmount, retainerId);
     }
 
     private static readonly Regex VendorSaleChatRegex = new(
@@ -736,7 +743,7 @@ public sealed class Plugin : IDalamudPlugin {
     private static int NormalizeLedgerItemId(int itemId) => itemId is >= 1_000_000 and < 2_000_000 ? itemId - 1_000_000 : itemId;
 
     private string NextAutomaticScope() {
-        var scopes = RetainerClientPolicy.BuildSyncScopes(SyncScopes, retainerUploadServerSupported);
+        var scopes = SyncScopes;
         if (automaticScopeIndex >= scopes.Length) automaticScopeIndex = 0;
         var scope = scopes[automaticScopeIndex];
         automaticScopeIndex = (automaticScopeIndex + 1) % scopes.Length;
@@ -748,232 +755,413 @@ public sealed class Plugin : IDalamudPlugin {
             nextGilLedgerUploadUtc = DateTime.UtcNow.AddMilliseconds(250);
     }
 
-    private async Task SyncAutomaticallyAsync(IEnumerable<string> scopes) {
-        try { await SyncAsync(force: false, background: true, scopes: scopes); }
-        catch (GillionsSyncRejectedException error) when (IsAccountAccessBlocked(error.Code)) {
-            log.Warning("Gillions automatic sync stopped: {Code}.", error.Code);
-        }
-        catch (Exception error) {
-            if (configuration.PendingGilLedgerEvents is { Count: > 0 }
-                || configuration.RetainerVentureStates.Values.Any(state => state.PendingResultEvents.Count > 0))
-                nextGilLedgerUploadUtc = DateTime.UtcNow.AddSeconds(AutomaticFailureRetrySeconds);
-            log.Warning(error, "Gillions automatic sync failed; it will retry after a short backoff.");
+    private async Task SyncAutomaticallyAsync(IEnumerable<string> scopes, SyncRequestMode mode = SyncRequestMode.Automatic) {
+        await SyncAsync(force: false, background: true, scopes: scopes, mode: mode);
+    }
+
+    private async Task SyncAsync(bool force = true, bool background = false, IEnumerable<string>? scopes = null, SyncRequestMode mode = SyncRequestMode.Manual) {
+        CapturedSnapshotBatch? captured = null;
+        SyncRequestPermit? operationPermit = null;
+        var ownsSync = false;
+        try {
+            captured = await framework.RunOnFrameworkThread(() => {
+                if (disposed || syncInFlight) throw new OperationCanceledException();
+                var permit = CapturePermit(mode);
+                operationPermit = permit;
+                syncInFlight = true; ownsSync = true;
+                var state = CurrentState;
+                var selectedScopes = (scopes ?? RetainerClientPolicy.BuildSyncScopes(SyncScopes, retainerUploadServerSupported))
+                    .Where(scope => retainerUploadServerSupported || scope != RetainerClientPolicy.ResourceType).ToArray();
+                // An empty Gil flush and unrelated resources do no Retainer work.
+                if (selectedScopes.Contains(RetainerClientPolicy.ResourceType, StringComparer.Ordinal)) {
+                    if (CaptureRetainerResult(state, out _)) RequestConfigurationSave();
+                    var now = DateTime.UtcNow;
+                    if (now >= nextRetainerVentureRosterCaptureUtc || !background) {
+                        if (DirectGameSnapshotCollector.CaptureRetainerVentureRosterAndGear(state.RetainerState)) RequestConfigurationSave();
+                        nextRetainerVentureRosterCaptureUtc = now.AddMilliseconds(NormalVentureRosterCaptureIntervalMilliseconds);
+                    }
+                    if (DirectGameSnapshotCollector.CaptureRetainerInventoryCoverage(state.RetainerState)) RequestConfigurationSave();
+                    savePolicy.Refresh();
+                }
+                var snapshots = DirectGameSnapshotCollector.Collect(pluginInterface, clientState, objects, dataManager, unlockState,
+                    state.RetainerGilBalances, state.RetainerState, selectedScopes).ToArray();
+                if (!background && selectedScopes.Contains("shared_fates", StringComparer.Ordinal)) RecordDiagnostic(SharedFateCollector.LastAttemptDiagnostic);
+                return new CapturedSnapshotBatch(state.CharacterName, state.CharacterWorld, permit, snapshots,
+                    state.PendingGilLedgerEvents.Select(entry => entry with { LogIntegerParameters = entry.LogIntegerParameters.ToArray() }).ToArray(),
+                    state.GilLedgerSessionId, new(state.LastPayloadHashes, StringComparer.Ordinal),
+                    new(state.LastInventoryComponentHashes, StringComparer.Ordinal), IsDiagnosticRecording);
+            });
+            var snapshots = captured.Snapshots;
+            // Managed preparation receives only copied data and no live config.
+            var preparedSnapshots = await Task.Run(() => snapshots.Select(snapshot => PrepareSnapshot(snapshot, captured.RecordDiagnostics)).ToArray(), captured.Permit.Cancellation);
+            var submitted = 0;
+            foreach (var snapshot in preparedSnapshots) {
+                if (!force && snapshot.SentResultFingerprints.Count == 0 && captured.PayloadHashes.TryGetValue(snapshot.ResourceType, out var previousHash)
+                    && previousHash == snapshot.PayloadHash) continue;
+                var nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+                using var request = SnapshotRequest("/api/game-sync/sync", captured.Permit, snapshot.ResourceType, nonce, snapshot.PayloadUtf8);
+                using var response = await SendAsync(request, captured.Permit);
+                await EnsureSuccessfulResponse(response, captured.Permit.Cancellation);
+                var receipt = await SyncResponsePolicy.ReadAsync(response.Content, captured.Permit.Cancellation);
+                string[] acceptedEventIds = [];
+                if (snapshot.ResourceType == RetainerClientPolicy.ResourceType) {
+                    if (!RetainerAcknowledgementPolicy.TryParseExact(receipt, snapshot.SentResultFingerprints.Keys, out acceptedEventIds))
+                        throw new InvalidOperationException("Invalid Retainer receipt.");
+                } else if (!SyncResponsePolicy.IsSnapshotReceipt(receipt, snapshot.ResourceType, snapshot.AllowEmptySnapshotReceipt))
+                    throw new InvalidOperationException("Invalid sync receipt.");
+                await CommitAsync(captured.Permit, state => {
+                    var retired = 0;
+                    if (snapshot.ResourceType == RetainerClientPolicy.ResourceType) {
+                        var pendingBefore = state.RetainerState.PendingResultEvents.Count;
+                        RetainerVentureSnapshotPolicy.AcknowledgeResults(state.RetainerState, acceptedEventIds, snapshot.SentResultFingerprints);
+                        retired = pendingBefore - state.RetainerState.PendingResultEvents.Count;
+                        if (state.RetainerState.PendingResultEvents.Count > 0) {
+                            if (acceptedEventIds.Length < snapshot.SentResultFingerprints.Count)
+                                nextRetainerUploadUtc = DateTime.UtcNow.AddSeconds(AutomaticFailureRetrySeconds);
+                            else QueueRetainerUpload(DateTime.UtcNow);
+                        }
+                    }
+                    state.LastPayloadHashes[snapshot.ResourceType] = snapshot.PayloadHash;
+                    if (snapshot.InventoryComponentHashes is not null) state.LastInventoryComponentHashes = snapshot.InventoryComponentHashes;
+                    state.LastSyncUtc = DateTime.UtcNow;
+                    AfterAcknowledgedDrain(retired);
+                    if (captured.RecordDiagnostics) RecordDiagnostic($"Uploaded {snapshot.ResourceType}: HTTP {(int)response.StatusCode}; {snapshot.PayloadUtf8.Length:N0} bytes.");
+                });
+                submitted++;
+            }
+            foreach (var events in captured.GilEvents.Chunk(200)) {
+                var payload = GilLedgerPolicy.PreparePayload(captured.CharacterName, captured.CharacterWorld, captured.GilSessionId, events);
+                var nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+                using var request = SnapshotRequest("/api/game-sync/sync", captured.Permit, "gil_ledger", nonce, payload);
+                using var response = await SendAsync(request, captured.Permit);
+                await EnsureSuccessfulResponse(response, captured.Permit.Cancellation);
+                if (!SyncResponsePolicy.IsSnapshotReceipt(await SyncResponsePolicy.ReadAsync(response.Content, captured.Permit.Cancellation), "gil_ledger"))
+                    throw new InvalidOperationException("Invalid Gil receipt.");
+                await CommitAsync(captured.Permit, state => {
+                    var retired = GilLedgerPolicy.Acknowledge(state.PendingGilLedgerEvents, events);
+                    state.LastSyncUtc = DateTime.UtcNow; AfterAcknowledgedDrain(retired);
+                    RecordDiagnostic($"Uploaded Gil records: {events.Length}; HTTP {(int)response.StatusCode}.");
+                });
+                submitted++;
+            }
+            await CommitAsync(captured.Permit, _ => {
+                if (submitted > 0 && !string.IsNullOrEmpty(configuration.SyncBlockedCode)) {
+                    configuration.SyncBlockedCode = ""; configuration.SyncBlockedMessage = ""; RequestConfigurationSave();
+                }
+                if (!background) settingsMessage = submitted > 0 ? "Sync completed." : "Your supported data is already current.";
+            });
+        } catch (Exception error) {
+            if (!disposed) await framework.RunOnFrameworkThread(() => {
+                if (disposed || operationPermit is not null && !PermitIsCurrent(operationPermit)) return;
+                if (error is GillionsSyncRejectedException rejection && IsAccountAccessBlocked(rejection.Code)) {
+                    configuration.AutomaticSync = false; configuration.SyncBlockedCode = rejection.Code;
+                    configuration.SyncBlockedMessage = OperationFailureMessage(error); RequestConfigurationSave(); RefreshSessionContext();
+                } else if (background && ownsSync) {
+                    if (activeOwnedState?.PendingGilLedgerEvents.Count > 0) nextGilLedgerUploadUtc = DateTime.UtcNow.AddSeconds(AutomaticFailureRetrySeconds);
+                    // A Retainer retry always schedules that resource explicitly.
+                    if (activeOwnedState?.RetainerState.PendingResultEvents.Count > 0 || scopes?.Contains(RetainerClientPolicy.ResourceType) == true)
+                        nextRetainerUploadUtc = DateTime.UtcNow.AddSeconds(AutomaticFailureRetrySeconds);
+                }
+                if (!background || error is GillionsSyncRejectedException) settingsMessage = OperationFailureMessage(error);
+                RecordDiagnostic($"Sync did not complete ({error.GetType().Name}); pending records were preserved.");
+            });
+            log.Debug("Gillions sync did not complete ({Type}).", error.GetType().Name);
+        } finally {
+            if (ownsSync && !disposed) await framework.RunOnFrameworkThread(() => { if (!disposed) syncInFlight = false; });
         }
     }
 
-    private async Task SyncAsync(bool force = true, bool background = false, IEnumerable<string>? scopes = null) {
-        if (string.IsNullOrWhiteSpace(configuration.DeviceToken)) throw new InvalidOperationException("Pair this plugin with Gillions before syncing.");
-        if (syncInFlight) {
-            if (!background) throw new InvalidOperationException("A Gillions sync is already running.");
-            return;
+    private void QueueUiAction(System.Action action) {
+        if (disposed) return;
+        _ = framework.RunOnFrameworkThread(() => { if (!disposed) action(); });
+    }
+
+    private void PublishUiState() {
+        if (disposed || !settingsVisible) return;
+        if (dataDetailsExpanded && DateTime.UtcNow >= nextUiDetailsUtc) {
+            nextUiDetailsUtc = DateTime.UtcNow.AddSeconds(1);
+            uiBudget = evidenceBudget.Measure(configuration.OwnedCharacters.Values);
+            uiAvailability = NativeInventoryCollector.GetAvailabilityStatus();
         }
-        syncInFlight = true;
-        try {
-            configuration.LastPayloadHashes ??= new Dictionary<string, string>(StringComparer.Ordinal);
-            var submitted = 0;
-            var configurationChanged = false;
-            var recordDiagnostics = IsDiagnosticRecording;
-            var collectionStopwatch = recordDiagnostics ? Stopwatch.StartNew() : null;
-            // Every Dalamud service and native pointer access is confined to the
-            // framework thread, including identity for ledger-only uploads.
-            var selectedScopes = (scopes ?? RetainerClientPolicy.BuildSyncScopes(SyncScopes, retainerUploadServerSupported)).ToArray();
-            var captured = await framework.RunOnFrameworkThread(() => {
-                if (!clientState.IsLoggedIn) throw new InvalidOperationException("Log into a character before syncing.");
-                var currentName = objects.LocalPlayer?.Name.TextValue ?? "";
-                var currentWorld = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "";
-                var contentId = ReadLocalContentId();
-                if (contentId == 0) throw new InvalidOperationException("The current character identity is not ready.");
-                var retainerState = RetainerVentureSnapshotPolicy.GetCharacterState(configuration.RetainerVentureStates, contentId);
-                DirectGameSnapshotCollector.CaptureRetainerVentureResultObservation(retainerState, out _);
-                DirectGameSnapshotCollector.CaptureRetainerVentureRosterAndGear(retainerState);
-                selectedScopes = selectedScopes.Where(scope => retainerUploadServerSupported || scope != RetainerClientPolicy.ResourceType).ToArray();
-                if (selectedScopes.Contains("retainer_ventures", StringComparer.Ordinal))
-                    DirectGameSnapshotCollector.CaptureRetainerInventoryCoverage(retainerState);
-                var snapshots = DirectGameSnapshotCollector.Collect(pluginInterface, clientState, objects, dataManager, unlockState, configuration.RetainerGilBalances, retainerState, selectedScopes).ToArray();
-                if (!background && selectedScopes.Contains("shared_fates", StringComparer.Ordinal))
-                    RecordDiagnostic(SharedFateCollector.LastAttemptDiagnostic);
-                return new CapturedSnapshotBatch(currentName, currentWorld, snapshots);
-            });
-            var snapshots = captured.Snapshots;
-            if (collectionStopwatch is not null) {
-                collectionStopwatch.Stop();
-                var collectedLabel = snapshots.Length > 0 ? string.Join(", ", snapshots.Select(snapshot => snapshot.ResourceType)) : "queued ledger data";
-                RecordDiagnostic($"Collected {collectedLabel} in {collectionStopwatch.Elapsed.TotalMilliseconds:N0} ms.");
-            }
-            // All Dalamud and native-memory reads above remain on the framework
-            // thread. The resulting managed snapshots are immutable, so JSON
-            // preparation and hashing can run without blocking game frames.
-            var preparedSnapshots = await Task.Run(() => snapshots.Select(snapshot => PrepareSnapshot(snapshot, recordDiagnostics)).ToArray());
-            if (recordDiagnostics && preparedSnapshots.Length > 0)
-                RecordDiagnostic($"Prepared {string.Join(", ", preparedSnapshots.Select(snapshot => snapshot.ResourceType))} off-thread in {preparedSnapshots.Sum(snapshot => snapshot.PreparationMilliseconds):N0} ms.");
-            foreach (var snapshot in preparedSnapshots) {
-                var payloadHash = snapshot.PayloadHash;
-                var diagnosticPayloadChanged = false;
-                if (recordDiagnostics) lock (diagnosticsLock) {
-                    diagnosticPayloadChanged = !lastObservedPayloadHashes.TryGetValue(snapshot.ResourceType, out var observedHash) || observedHash != payloadHash;
-                    if (diagnosticPayloadChanged) lastObservedPayloadHashes[snapshot.ResourceType] = payloadHash;
-                }
-                if (diagnosticPayloadChanged) {
-                    RecordDiagnostic($"Collected {snapshot.ResourceType}: {snapshot.Description}; hash {payloadHash[..12]}{snapshot.InventoryDelta}");
-                }
-                if (!force && configuration.LastPayloadHashes.TryGetValue(snapshot.ResourceType, out var previousHash) && previousHash == payloadHash) continue;
-                var inventoryComponents = snapshot.InventoryComponentHashes;
-                if (inventoryComponents is not null && !force) {
-                    var changed = inventoryComponents.Where(entry => !configuration.LastInventoryComponentHashes.TryGetValue(entry.Key, out var previous) || previous != entry.Value).Select(entry => entry.Key).ToArray();
-                    log.Information("Gillions inventory fingerprint changed: {Components}.", changed.Length > 0 ? string.Join(", ", changed) : "character identity or inventory metadata");
-                }
-                var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).Replace('+','-').Replace('/','_').TrimEnd('=');
-                using var request = SnapshotRequest("/api/game-sync/sync", configuration.DeviceToken, snapshot.ResourceType, nonce, snapshot.PayloadUtf8);
-                var uploadStopwatch = recordDiagnostics ? Stopwatch.StartNew() : null;
-                using var response = await http.SendAsync(request);
-                await EnsureSuccessfulResponse(response);
-                string[] acceptedEventIds = [];
-                if (snapshot.ResourceType == "retainer_ventures") {
-                    var acknowledgementJson = await response.Content.ReadAsStringAsync();
-                    if (!RetainerAcknowledgementPolicy.TryParseExact(acknowledgementJson, snapshot.AcknowledgedEventIds ?? [], out acceptedEventIds))
-                        throw new InvalidOperationException("Gillions returned an invalid Retainer result acknowledgement; pending events were preserved.");
-                }
-                if (uploadStopwatch is not null) {
-                    uploadStopwatch.Stop();
-                    RecordDiagnostic($"Uploaded {snapshot.ResourceType}: HTTP {(int)response.StatusCode}; hash {payloadHash[..12]}; network {uploadStopwatch.Elapsed.TotalMilliseconds:N0} ms.");
-                }
-                configuration.LastPayloadHashes[snapshot.ResourceType] = payloadHash;
-                if (inventoryComponents is not null) configuration.LastInventoryComponentHashes = inventoryComponents;
-                if (snapshot.ResourceType == "retainer_ventures") {
-                    await framework.RunOnFrameworkThread(() => {
-                        var currentContentId = ReadLocalContentId();
-                        if (currentContentId != activeRetainerCharacterContentId)
-                            throw new InvalidOperationException("The active character changed before the Retainer acknowledgement was applied.");
-                        var state = RetainerVentureSnapshotPolicy.GetCharacterState(configuration.RetainerVentureStates, currentContentId);
-                        RetainerVentureSnapshotPolicy.AcknowledgeResults(state, acceptedEventIds);
-                    });
-                }
-                configuration.LastSyncUtc = DateTime.UtcNow;
-                configurationChanged = true;
-                submitted++;
-            }
-            var pendingGilLedgerEvents = configuration.PendingGilLedgerEvents ?? [];
-            if (pendingGilLedgerEvents.Count > 0) {
-                var currentName = captured.CharacterName;
-                var currentWorld = captured.CharacterWorld;
-                foreach (var characterEvents in pendingGilLedgerEvents.GroupBy(entry => new { Name = string.IsNullOrWhiteSpace(entry.CharacterName) ? currentName : entry.CharacterName, World = string.IsNullOrWhiteSpace(entry.CharacterWorld) ? currentWorld : entry.CharacterWorld }).ToArray()) {
-                    var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).Replace('+','-').Replace('/','_').TrimEnd('=');
-                    var payload = new {
-                        character = new { name = characterEvents.Key.Name, world = characterEvents.Key.World },
-                        sessionId = configuration.GilLedgerSessionId,
-                        events = characterEvents.Select(entry => new { eventId = entry.EventId, occurredAt = entry.OccurredAtUtc, gilDelta = entry.GilDelta, kind = entry.Kind, confidence = entry.Confidence, itemId = entry.ItemId, itemQuantity = entry.ItemQuantity, retainerId = entry.RetainerId, retainerName = entry.RetainerName, logMessageId = entry.LogMessageId, logIntegerParameters = entry.LogIntegerParameters }).ToArray(),
-                    };
-                    using var request = Request("/api/game-sync/sync", configuration.DeviceToken, new { resourceType = "gil_ledger", nonce, payload });
-                    using var response = await http.SendAsync(request);
-                    await EnsureSuccessfulResponse(response);
-                    var uploadedEventIds = characterEvents.Select(entry => entry.EventId).ToHashSet(StringComparer.Ordinal);
-                    configuration.PendingGilLedgerEvents?.RemoveAll(entry => uploadedEventIds.Contains(entry.EventId));
-                    configurationChanged = true;
-                    submitted++;
-                    RecordDiagnostic($"Uploaded gil ledger: HTTP {(int)response.StatusCode}; character={characterEvents.Key.Name}; events={uploadedEventIds.Count}.");
-                }
-            }
-            if (submitted > 0) {
-                if (!string.IsNullOrWhiteSpace(configuration.SyncBlockedCode)) {
-                    configuration.SyncBlockedCode = "";
-                    configuration.SyncBlockedMessage = "";
-                    configurationChanged = true;
-                }
-                var saveStopwatch = recordDiagnostics ? Stopwatch.StartNew() : null;
-                if (configurationChanged) await SaveConfigurationAsync();
-                if (saveStopwatch is not null) {
-                    saveStopwatch.Stop();
-                    RecordDiagnostic($"Saved changed local sync state once in {saveStopwatch.Elapsed.TotalMilliseconds:N0} ms.");
-                }
-                if (!background) settingsMessage = "Sync completed successfully.";
-                log.Information("Gillions Game Sync submitted {Count} changed data category(s) for {Character}.", submitted, string.IsNullOrWhiteSpace(captured.CharacterName) ? "current character" : captured.CharacterName);
-            } else if (!background) settingsMessage = "No changed data was found; Gillions is already current.";
-        } catch (GillionsSyncRejectedException error) when (IsAccountAccessBlocked(error.Code)) {
-            await MarkSyncBlockedAsync(error);
-            RecordDiagnostic($"Sync blocked: {error.Code} — {error.Message}");
-            throw;
-        } catch (Exception error) {
-            log.Debug(error, "Gillions sync failed.");
-            RecordDiagnostic($"Sync failed: {error.GetType().Name} — {error.Message}");
-            throw;
-        } finally { syncInFlight = false; }
+        var usage = dataDetailsExpanded ? uiBudget : null;
+        string[] diagnosticLines = [];
+        if (diagnosticsExpanded) lock (diagnosticsLock) diagnosticLines = diagnostics.ToArray();
+        uiState = new PluginUiSnapshot(
+            PluginWindowModel.Create(HasPairedSession, configuration.PairingRequired, clientState.IsLoggedIn,
+                configuration.AutomaticSync, syncInFlight, configuration.CoverageGap.Paused,
+                configuration.CoverageGap.StartedAtUtc is not null, configuration.SyncBlockedCode),
+            HasPairedSession, pairingInFlight, configuration.AutomaticSync, configuration.EnableItemLinkRequests,
+            configuration.ActiveSession?.Origin ?? "", activeOwnedState?.LastSyncUtc, settingsMessage,
+            configuration.LastReadChangelogVersion, retainerUploadServerSupported,
+            dataDetailsExpanded ? uiAvailability : "", usage,
+            IsDiagnosticRecording, diagnosticRecordingUntilUtc, diagnosticLines);
     }
 
     private void DrawSettings() {
-        if (!settingsVisible) return;
-        ImGui.SetNextWindowSize(new System.Numerics.Vector2(510, 0), ImGuiCond.FirstUseEver);
-        if (!ImGui.Begin("Gillions Game Sync", ref settingsVisible)) { ImGui.End(); return; }
-        ImGui.TextWrapped("Pair this game client with the active character selected in Gillions. Sync reads supported data already available to the game client and keeps your account current.");
+        if (!settingsVisible || disposed) { dataDetailsExpanded = false; diagnosticsExpanded = false; return; }
+        var view = uiState;
+        ImGui.SetNextWindowSize(new System.Numerics.Vector2(470, 0), ImGuiCond.FirstUseEver);
+        var windowOpen = settingsVisible;
+        var contentVisible = ImGui.Begin("Gillions Game Sync", ref windowOpen);
+        settingsVisible = windowOpen;
+        if (!contentVisible) { dataDetailsExpanded = false; diagnosticsExpanded = false; ImGui.End(); return; }
+        ImGui.Text(view.Model.Connection);
+        ImGui.TextWrapped(view.Model.Status);
+        if (view.Model.Warning is not null) { ImGui.PushTextWrapPos(0); ImGui.TextColored(new System.Numerics.Vector4(1f, .7f, .4f, 1f), view.Model.Warning); ImGui.PopTextWrapPos(); }
+        if (!view.Paired) DrawPairingControls(view);
         ImGui.Separator();
-        var hasUnreadChangelog = !string.Equals(configuration.LastReadChangelogVersion, PluginVersion, StringComparison.Ordinal);
-        ImGui.SetNextItemOpen(hasUnreadChangelog, ImGuiCond.Once);
-        if (ImGui.CollapsingHeader($"What’s New — {PluginVersion}")) {
-            if (hasUnreadChangelog) ImGui.TextColored(new System.Numerics.Vector4(.55f, .78f, 1f, 1f), "New since your last installed version.");
-            foreach (var entry in CurrentChangelog) ImGui.BulletText(entry);
-            if (hasUnreadChangelog && ImGui.Button("Mark changelog as read")) {
-                configuration.LastReadChangelogVersion = PluginVersion;
-                configuration.Save(pluginInterface);
+        var automaticSync = view.Automatic;
+        if (ImGui.Checkbox("Automatic sync", ref automaticSync)) QueueUiAction(() => {
+            configuration.AutomaticSync = automaticSync; RefreshSessionContext(); RequestConfigurationSave();
+        });
+        ImGui.BeginDisabled(!view.Model.CanSync);
+        if (ImGui.Button("Sync now")) _ = SyncAsync();
+        ImGui.EndDisabled();
+        var enableItemLinks = view.ItemLinks;
+        if (ImGui.Checkbox("Allow website 'Link in game' requests", ref enableItemLinks)) QueueUiAction(() => {
+            configuration.EnableItemLinkRequests = enableItemLinks; RefreshSessionContext(); RequestConfigurationSave();
+        });
+        if (!string.IsNullOrWhiteSpace(view.Message)) ImGui.TextWrapped(view.Message);
+        if (view.LastSync is { } lastSync) ImGui.TextDisabled($"Last sync: {lastSync.ToLocalTime():g}");
+        if (showPairingDetails) { ImGui.SetNextItemOpen(true, ImGuiCond.Always); showPairingDetails = false; }
+        if (ImGui.CollapsingHeader("Connection details")) {
+            ImGui.TextWrapped("A successful pair connects this plugin to the HTTPS server below. Editing this address takes effect only when you pair again.");
+            if (ImGui.InputText("Server address", ref uiServerAddress, 256)) {
+                var address = uiServerAddress;
+                QueueUiAction(() => { configuration.ServerUrl = address; RequestConfigurationSave(); });
+            }
+            if (view.Paired) {
+                ImGui.TextWrapped($"Connected to {view.Origin}");
+                ImGui.TextWrapped("Pairing again starts a new local record set. Earlier pending records remain saved and inactive; they are not moved to the new account.");
+                DrawPairingControls(view);
+                if (ImGui.Button("Disconnect")) QueueUiAction(() => {
+                    configuration.PairingRequired = true; configuration.ActiveSession = null;
+                    configuration.DeviceToken = ""; configuration.DeviceId = ""; configuration.PairingCode = "";
+                    ResetSessionContext(); RequestConfigurationSave(); settingsMessage = "Disconnected. Saved history remains on this PC.";
+                });
             }
         }
-        ImGui.Separator();
-        var serverUrl = configuration.ServerUrl;
-        if (ImGui.InputText("Gillions URL", ref serverUrl, 256)) configuration.ServerUrl = serverUrl.TrimEnd('/');
-        var pairingCode = configuration.PairingCode;
-        if (ImGui.InputText("One-time pairing code", ref pairingCode, 256)) configuration.PairingCode = pairingCode.Trim();
-        if (ImGui.Button("Pair this device")) _ = RunFromSettings(PairAsync);
-        ImGui.SameLine();
-        if (ImGui.Button("Sync now")) _ = RunFromSettings(() => SyncAsync());
-        ImGui.TextWrapped(NativeInventoryCollector.GetAvailabilityStatus());
-        ImGui.Separator();
-        var automaticSync = configuration.AutomaticSync;
-        if (ImGui.Checkbox($"Automatically sync changed data every {AutomaticSyncIntervalSeconds} seconds", ref automaticSync)) {
-            configuration.AutomaticSync = automaticSync;
-            configuration.Save(pluginInterface);
+        if (ImGui.CollapsingHeader("What changed")) {
+            foreach (var entry in CurrentChangelog) ImGui.BulletText(entry);
+            if (view.ReadChangelogVersion != PluginVersion && ImGui.Button("Mark as read")) QueueUiAction(() => {
+                configuration.LastReadChangelogVersion = PluginVersion; RequestConfigurationSave();
+            });
         }
-        ImGui.TextDisabled($"Automatic sync checks one data category every {AutomaticSyncIntervalSeconds} seconds. Inventory changes are debounced and synced promptly.");
-        var enableItemLinkRequests = configuration.EnableItemLinkRequests;
-        if (ImGui.Checkbox("Allow website 'Link in game' requests", ref enableItemLinkRequests)) {
-            configuration.EnableItemLinkRequests = enableItemLinkRequests;
-            configuration.Save(pluginInterface);
+        dataDetailsExpanded = ImGui.CollapsingHeader("Data and status");
+        if (dataDetailsExpanded) {
+            ImGui.TextWrapped("Automatic sync checks supported data one category at a time every 30 seconds. Inventory changes and queued records upload promptly. Gil checks keep their two-second fallback and short change delay.");
+            ImGui.TextWrapped("Pairing and paired startup load character details and send presence once, even with Automatic sync off. Website item links use their separate switch. No gameplay controls are used.");
+            ImGui.TextWrapped(view.Availability);
+            ImGui.TextWrapped(view.RetainerSupported ? "Retainer observations can upload." : "Retainer observations wait for server compatibility confirmation.");
+            if (view.Budget is { } usage) ImGui.TextWrapped($"Pending records across paired sessions and characters: {usage.Records:N0} / 10,000; {usage.Bytes:N0} / 8,388,608 serialized bytes.");
+            ImGui.TextWrapped("Older records with unknown ownership remain inactive in local configuration and are outside this new storage limit. Do not share your plugin configuration: it includes a credential and private gameplay history.");
         }
-        ImGui.TextDisabled("Uses the paired device connection only to print requested native item links in chat. No gameplay controls are used.");
-        ImGui.Separator();
-        ImGui.TextDisabled(retainerUploadServerSupported
-            ? "Read-only Retainer observations are enabled."
-            : "Retainer observations remain local until Gillions explicitly accepts this client channel.");
-        if (!string.IsNullOrWhiteSpace(configuration.SyncBlockedMessage)) {
-            ImGui.TextColored(new System.Numerics.Vector4(1f, .5f, .5f, 1f), configuration.SyncBlockedMessage);
-        }
-        ImGui.TextDisabled("Gillions syncs all supported data: inventory, currencies, achievements, collections, character progress, reputation, Shared FATE progress, and beta session ledger entries.");
-        ImGui.TextDisabled("Shared FATE progress syncs only after all three in-game Shared FATE tabs have been opened and positively loaded.");
-        ImGui.TextDisabled("Achievements sync after the in-game Achievement list has loaded.");
-        DrawDiagnostics();
-        if (!string.IsNullOrWhiteSpace(settingsMessage)) {
-            ImGui.Separator();
-            ImGui.TextWrapped(settingsMessage);
-        }
-        ImGui.TextDisabled(configuration.LastSyncUtc is null ? "Not synced yet." : $"Last successful sync: {configuration.LastSyncUtc:O}");
+        DrawDiagnostics(view);
         ImGui.End();
     }
 
-    private async Task RunFromSettings(Func<Task> action) {
-        try { await action(); }
-        catch (Exception error) { settingsMessage = error.Message; log.Error(error, "Gillions Game Sync operation failed."); }
+    private void DrawPairingControls(PluginUiSnapshot view) {
+        ImGui.TextWrapped(SyncOrigin.TryNormalize(uiServerAddress, out var pairingOrigin)
+            ? $"Pair with {pairingOrigin}"
+            : "Enter a valid HTTPS server address under Connection details.");
+        ImGui.InputText("Pairing code", ref uiPairingCode, 256, ImGuiInputTextFlags.Password);
+        ImGui.BeginDisabled(view.Pairing || string.IsNullOrWhiteSpace(uiPairingCode) || !SyncOrigin.TryNormalize(uiServerAddress, out _));
+        if (ImGui.Button(view.Pairing ? "Connectingâ€¦" : "Pair this device")) {
+            var code = uiPairingCode.Trim(); var address = uiServerAddress; uiPairingCode = "";
+            QueueUiAction(() => { configuration.PairingCode = code; configuration.ServerUrl = address; _ = PairAsync(); });
+        }
+        ImGui.EndDisabled();
     }
 
-    // HttpClient continuations do not resume on Dalamud's framework thread.
-    // Saving plugin config is a Dalamud operation, so marshal it back before
-    // touching the plugin interface after a pairing or sync response.
-    private Task SaveConfigurationAsync() => framework.RunOnFrameworkThread(() => configuration.Save(pluginInterface));
+    private void DrawDiagnostics(PluginUiSnapshot view) {
+        ImGui.Separator();
+        diagnosticsExpanded = ImGui.CollapsingHeader("Diagnostics");
+        if (!diagnosticsExpanded) return;
+#if GILLIONS_TEST_BUILD
+        ImGui.TextWrapped("Testing diagnostics record automatically. Diagnostic entries stay local and may include gameplay details. Review copied reports before sharing.");
+#else
+        ImGui.TextWrapped("Diagnostic recording is off by default and stays on this PC. It never uploads logs, chat text, credentials, or device identifiers. Start it only when reproducing a sync problem; review copied gameplay details before sharing.");
+        if (!view.Recording) {
+            if (ImGui.Button("Start 10-minute diagnostic recording")) QueueUiAction(() => {
+                lock (diagnosticsLock) diagnostics.Clear();
+                diagnosticRecordingUntilUtc = DateTime.UtcNow.AddMinutes(10);
+                RecordDiagnostic("Manual diagnostic recording started.");
+            });
+        } else {
+            ImGui.TextDisabled($"Recording: {Math.Max(1, (int)Math.Ceiling((view.RecordingUntil - DateTime.UtcNow).TotalMinutes))} minute(s) remaining");
+            if (ImGui.Button("Stop diagnostic recording")) QueueUiAction(() => {
+                RecordDiagnostic("Manual diagnostic recording stopped."); diagnosticRecordingUntilUtc = DateTime.MinValue;
+            });
+        }
+#endif
+        if (view.Diagnostics.Length == 0) { ImGui.TextDisabled("No diagnostic entries recorded."); return; }
+        if (ImGui.Button("Copy diagnostic report")) {
+#if GILLIONS_TEST_BUILD
+            const string channel = "Testing";
+#else
+            const string channel = "Public";
+#endif
+            ImGui.SetClipboardText($"Gillions Game Sync {PluginVersion} ({channel})\n" + string.Join("\n", view.Diagnostics));
+        }
+        ImGui.SameLine();
+        if (ImGui.Button("Clear diagnostics")) QueueUiAction(() => { lock (diagnosticsLock) diagnostics.Clear(); });
+        foreach (var line in view.Diagnostics) ImGui.TextWrapped(line);
+    }
 
-    private HttpRequestMessage Request(string path, string token, object body) {
-        var request = new HttpRequestMessage(HttpMethod.Post, configuration.ServerUrl.TrimEnd('/') + path) { Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json") };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+    private bool HasPairedSession => SyncOwnershipPolicy.IsBoundSession(configuration.ActiveSession,
+        configuration.PairingRequired, configuration.DeviceId, configuration.DeviceToken);
+    private OwnedCharacterState CurrentState => activeOwnedState ?? throw new InvalidOperationException("Pair and log into a character before syncing.");
+
+    private void RequestConfigurationSave() => savePolicy.RequestDurable();
+    private void FlushConfigurationSave() {
+        var now = DateTime.UtcNow;
+        if (!disposed && savePolicy.ShouldSave(now)) {
+            configuration.Save(pluginInterface);
+            savePolicy.Saved(now);
+        }
+    }
+
+    private void ClearTransientState() {
+        lastObservedGil = null; lastObservedRetainerId = null; lastObservedRetainerGil = null;
+        pendingRetainerBalance = null; pendingRetainerBalanceSinceUtc = DateTime.MinValue;
+        recentRetainerWithdrawals.Clear(); recentGilLedgerLogs.Clear(); recentGilLedgerChat.Clear(); emittedRetainerChatEvidence.Clear();
+        DirectGameSnapshotCollector.ClearTransientState(); itemLinkRequestProcessor = new();
+        lock (diagnosticsLock) diagnostics.Clear();
+        uiState = PluginUiSnapshot.Empty; uiBudget = null; uiAvailability = ""; nextUiDetailsUtc = DateTime.MinValue;
+        gilLedgerDirty = false; nextInventorySyncUtc = DateTime.MaxValue; nextGilLedgerUploadUtc = DateTime.MaxValue;
+    }
+
+    private void OnLogin() { logoutPending = false; ResetSessionContext(); }
+    private void OnLogout(int type, int code) { logoutPending = true; ResetSessionContext(); }
+    private void ResetSessionContext() {
+        if (disposed) return;
+        requestLifetime.Invalidate(); ClearTransientState(); ClearRetainerServerAcceptance();
+        activeOwnedState = null; activeRetainerCharacterContentId = 0; activeGeneration = "";
+        nextRetainerPresenceUtc = DateTime.MinValue; nextRetainerUploadUtc = DateTime.MinValue;
+    }
+
+    private void RefreshSessionContext() {
+        if (disposed) return;
+        var contentId = clientState.IsLoggedIn && !logoutPending ? ReadLocalContentId() : 0;
+        var generation = HasPairedSession ? configuration.ActiveSession!.Generation : "";
+        if (contentId != activeRetainerCharacterContentId || generation != activeGeneration) {
+            ResetSessionContext();
+            activeRetainerCharacterContentId = contentId; activeGeneration = generation;
+            nextAutomaticSyncUtc = DateTime.MinValue; nextGilLedgerPollUtc = DateTime.MinValue;
+            nextRetainerListingCaptureUtc = DateTime.MinValue;
+            nextRetainerVentureResultCaptureUtc = DateTime.MinValue; nextRetainerVentureRosterCaptureUtc = DateTime.MinValue;
+            presenceFailureCount = 0;
+        }
+        if (activeOwnedState is null && contentId != 0 && HasPairedSession) {
+            var name = objects.LocalPlayer?.Name.TextValue ?? "";
+            var world = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "";
+            if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(world)) {
+                activeOwnedState = SyncOwnershipPolicy.GetCharacter(configuration.OwnedCharacters, configuration.ActiveSession!, contentId);
+                activeOwnedState.CharacterName = name; activeOwnedState.CharacterWorld = world;
+            }
+        }
+        if (observedAutomaticSync != configuration.AutomaticSync) {
+            observedAutomaticSync = configuration.AutomaticSync;
+            requestLifetime.InvalidateAutomatic(); ClearTransientState();
+            if (observedAutomaticSync) nextAutomaticSyncUtc = DateTime.MinValue;
+        }
+        if (observedItemLinks != configuration.EnableItemLinkRequests) {
+            observedItemLinks = configuration.EnableItemLinkRequests;
+            requestLifetime.InvalidateItemLinks();
+        }
+    }
+
+    private SyncRequestPermit CapturePermit(SyncRequestMode mode) {
+        RefreshSessionContext();
+        if (!HasPairedSession || activeOwnedState is null) throw new InvalidOperationException("Pair and log into a character before syncing.");
+        var permit = requestLifetime.Capture(mode, activeRetainerCharacterContentId, configuration.ActiveSession,
+            configuration.ActiveSession!.Origin, configuration.DeviceToken);
+        RequirePermit(permit);
+        return permit;
+    }
+    private bool PermitIsCurrent(SyncRequestPermit permit) {
+        if (disposed) return false;
+        RefreshSessionContext();
+        return (permit.Mode == SyncRequestMode.Pair || HasPairedSession) && requestLifetime.Accepts(permit,
+            activeRetainerCharacterContentId, configuration.ActiveSession, configuration.DeviceToken,
+            configuration.AutomaticSync, configuration.EnableItemLinkRequests);
+    }
+    private void RequirePermit(SyncRequestPermit permit) {
+        if (!PermitIsCurrent(permit)) throw new OperationCanceledException("The connection or sync settings changed.");
+    }
+    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, SyncRequestPermit permit) {
+        if (disposed) throw new OperationCanceledException();
+        Task<HttpResponseMessage>? pending = null;
+        await framework.RunOnFrameworkThread(() => {
+            RequirePermit(permit);
+            pending = http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, permit.Cancellation);
+        });
+        return await pending!;
+    }
+    private async Task CommitAsync(SyncRequestPermit permit, Action<OwnedCharacterState> change) {
+        if (disposed) throw new OperationCanceledException();
+        await framework.RunOnFrameworkThread(() => { RequirePermit(permit); change(CurrentState); });
+    }
+    private static string OperationFailureMessage(Exception error) => SyncErrorPolicy.Message(error);
+
+    private void MaintainTransientState(DateTime now) {
+        if (now < nextTransientMaintenanceUtc) return;
+        nextTransientMaintenanceUtc = now.AddSeconds(1);
+        TransientEvidencePolicy.Prune(recentGilLedgerLogs, now, TimeSpan.FromSeconds(5), entry => entry.ObservedAtUtc);
+        TransientEvidencePolicy.Prune(recentGilLedgerChat, now, TimeSpan.FromSeconds(5), entry => entry.ObservedAtUtc);
+        TransientEvidencePolicy.Prune(recentRetainerWithdrawals, now, TimeSpan.FromSeconds(5), entry => entry.ObservedAtUtc);
+        TransientEvidencePolicy.Prune(emittedRetainerChatEvidence, now, TimeSpan.FromSeconds(5), entry => entry);
+        NativeInventoryCollector.MaintainTransientState(now);
+    }
+    private bool CanCaptureLedgerEvidence() {
+        if (disposed || !framework.IsInFrameworkUpdateThread || !clientState.IsLoggedIn || !configuration.AutomaticSync || !HasPairedSession) return false;
+        RefreshSessionContext();
+        return activeOwnedState is not null && !configuration.CoverageGap.Paused;
+    }
+
+    private bool CaptureRetainerResult(OwnedCharacterState state, out string status) {
+        if (configuration.CoverageGap.Paused) { status = "recording_paused"; return false; }
+        var result = DirectGameSnapshotCollector.ReadChangedRetainerResult(state.RetainerState, DateTime.UtcNow, out status);
+        if (result is null) return false;
+        var checkpoint = new DurableEvidenceCheckpoint(state);
+        var changed = RetainerVentureSnapshotPolicy.AddPendingResult(state.RetainerState, result);
+        if (changed && !evidenceBudget.AcceptOrRestore(configuration.OwnedCharacters.Values, checkpoint, configuration.CoverageGap, DateTime.UtcNow)) {
+            RequestConfigurationSave(); return false;
+        }
+        return changed;
+    }
+    private void CaptureOwnedGilLedgerChange() {
+        var state = CurrentState;
+        if (configuration.CoverageGap.Paused) {
+            lastObservedGil = NativeInventoryCollector.ReadGil();
+            var balance = DirectGameSnapshotCollector.ReadActiveRetainerGil();
+            lastObservedRetainerId = balance?.RetainerId; lastObservedRetainerGil = balance?.Gil;
+            gilLedgerDirty = false;
+            return;
+        }
+        var checkpoint = new DurableEvidenceCheckpoint(state);
+        CaptureGilLedgerChange();
+        if (!evidenceBudget.AcceptOrRestore(configuration.OwnedCharacters.Values, checkpoint, configuration.CoverageGap, DateTime.UtcNow)) {
+            // Keep observing balances while paused; no fabricated catch-up delta.
+            pendingRetainerBalance = null; recentRetainerWithdrawals.Clear();
+            RequestConfigurationSave();
+        }
+    }
+    private void AfterAcknowledgedDrain(int retiredRecords) {
+        if (retiredRecords > 0 && evidenceBudget.ResumeAfterDrain(configuration.OwnedCharacters.Values, configuration.CoverageGap, DateTime.UtcNow)) {
+            ClearTransientState(); DirectGameSnapshotCollector.ResetResultView();
+        }
+        RequestConfigurationSave();
+    }
+
+    private HttpRequestMessage Request(string path, SyncRequestPermit permit, object body) {
+        var request = new HttpRequestMessage(HttpMethod.Post, permit.Origin + path) { Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json") };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", permit.Token);
         request.Headers.UserAgent.ParseAdd($"{RetainerClient.ProductName}/{PluginVersion}");
         return request;
     }
 
-    private HttpRequestMessage SnapshotRequest(string path, string token, string resourceType, string nonce, byte[] payloadUtf8) {
+    private HttpRequestMessage SnapshotRequest(string path, SyncRequestPermit permit, string resourceType, string nonce, byte[] payloadUtf8) {
         var buffer = new ArrayBufferWriter<byte>(payloadUtf8.Length + 256);
         using (var writer = new Utf8JsonWriter(buffer)) {
             writer.WriteStartObject();
@@ -985,37 +1173,16 @@ public sealed class Plugin : IDalamudPlugin {
         }
         var content = new ByteArrayContent(buffer.WrittenSpan.ToArray());
         content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
-        var request = new HttpRequestMessage(HttpMethod.Post, configuration.ServerUrl.TrimEnd('/') + path) { Content = content };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var request = new HttpRequestMessage(HttpMethod.Post, permit.Origin + path) { Content = content };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", permit.Token);
         request.Headers.UserAgent.ParseAdd($"{RetainerClient.ProductName}/{PluginVersion}");
         return request;
     }
 
-    private async Task MarkSyncBlockedAsync(GillionsSyncRejectedException error) {
-        configuration.AutomaticSync = false;
-        configuration.SyncBlockedCode = error.Code;
-        configuration.SyncBlockedMessage = error.Message;
-        settingsMessage = error.Message;
-        await SaveConfigurationAsync();
-    }
-
     private static bool IsAccountAccessBlocked(string code) => code is "TRIAL_EXPIRED" or "ACCOUNT_DISABLED";
 
-    private static async Task EnsureSuccessfulResponse(HttpResponseMessage response) {
-        if (response.IsSuccessStatusCode) return;
-        var detail = (await response.Content.ReadAsStringAsync()).Trim();
-        var code = ""; var message = "";
-        try { using var document = JsonDocument.Parse(detail); if (document.RootElement.TryGetProperty("code", out var codeProperty)) code = codeProperty.GetString() ?? ""; if (document.RootElement.TryGetProperty("error", out var errorProperty)) message = errorProperty.GetString() ?? ""; } catch (JsonException) { }
-        if (!string.IsNullOrWhiteSpace(code)) throw new GillionsSyncRejectedException(code, string.IsNullOrWhiteSpace(message) ? $"Gillions Sync was rejected ({code})." : message);
-        throw new InvalidOperationException(string.IsNullOrWhiteSpace(detail) ? $"Gillions returned {(int)response.StatusCode} ({response.ReasonPhrase})." : $"Gillions returned {(int)response.StatusCode}: {detail}");
-    }
-
-    private static string GetMachineId() {
-        // The test assembly must not replace the stable device credential for
-        // the same Windows user. Stable builds keep their existing identity.
-        var channel = string.Equals(typeof(Plugin).Assembly.GetName().Name, "GillionsGameSyncTest", StringComparison.Ordinal) ? ":testing" : "";
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Environment.MachineName + Environment.UserDomainName + channel))).ToLowerInvariant();
-    }
+    private static Task EnsureSuccessfulResponse(HttpResponseMessage response, CancellationToken cancellation = default) =>
+        SyncResponsePolicy.EnsureSuccessfulAsync(response, cancellation);
 
     private PreparedSnapshot PrepareSnapshot(GameSnapshot snapshot, bool recordDiagnostics) {
         var stopwatch = Stopwatch.StartNew();
@@ -1024,9 +1191,14 @@ public sealed class Plugin : IDalamudPlugin {
         var payloadHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(CanonicalizeJson(document.RootElement))));
         var inventoryComponents = snapshot.ResourceType == "inventory" ? GetInventoryComponentHashes(document.RootElement) : null;
         var description = recordDiagnostics ? DescribePayload(document.RootElement, payloadUtf8.Length) : "";
-        var inventoryDelta = recordDiagnostics && snapshot.ResourceType == "inventory" ? DescribeInventoryDelta(document.RootElement) : ".";
+        var inventoryDelta = ".";
         stopwatch.Stop();
-        return new PreparedSnapshot(snapshot.ResourceType, payloadUtf8, payloadHash, inventoryComponents, description, inventoryDelta, stopwatch.Elapsed.TotalMilliseconds, snapshot.AcknowledgedEventIds);
+        return new PreparedSnapshot(snapshot.ResourceType, payloadUtf8, payloadHash, inventoryComponents, description, inventoryDelta, stopwatch.Elapsed.TotalMilliseconds,
+            snapshot.ResourceType == "retainer_ventures"
+                ? document.RootElement.GetProperty("resultEvents").EnumerateArray().ToDictionary(entry => entry.GetProperty("eventId").GetString()!, entry => entry.GetProperty("payloadFingerprint").GetString()!, StringComparer.Ordinal)
+                : new Dictionary<string, string>(StringComparer.Ordinal),
+            snapshot.ResourceType == "glamour_plates" && document.RootElement.TryGetProperty("plates", out var plates)
+                && plates.ValueKind == JsonValueKind.Array && plates.GetArrayLength() == 0);
     }
 
     private static Dictionary<string, string> GetInventoryComponentHashes(JsonElement root) {
@@ -1074,58 +1246,11 @@ public sealed class Plugin : IDalamudPlugin {
         return string.Join(", ", parts);
     }
 
-    private string DescribeInventoryDelta(JsonElement root) {
-        if (!root.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array) return ".";
-        var current = items.EnumerateArray().Select(CanonicalizeJson).GroupBy(value => value, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
-        lock (diagnosticsLock) {
-            var added = current.Where(entry => entry.Value > (lastInventoryRecords.TryGetValue(entry.Key, out var previous) ? previous : 0)).Select(entry => entry.Key).Take(3).ToArray();
-            var removed = lastInventoryRecords.Where(entry => entry.Value > (current.TryGetValue(entry.Key, out var next) ? next : 0)).Select(entry => entry.Key).Take(3).ToArray();
-            lastInventoryRecords = current;
-            return added.Length == 0 && removed.Length == 0 ? "." : $"; inventory delta +[{string.Join(" | ", added)}] -[{string.Join(" | ", removed)}].";
-        }
-    }
-
-    private void DrawDiagnostics() {
-        ImGui.Separator();
-        if (!ImGui.CollapsingHeader("Diagnostics")) return;
-#if GILLIONS_TEST_BUILD
-        ImGui.TextWrapped("Testing diagnostics record automatically. Copy this report after reproducing a sync issue or completing a performance test.");
-#else
-        ImGui.TextWrapped("Diagnostic recording is off by default and stays on this PC. It never uploads logs, chat text, credentials, or device identifiers. Start it only when reproducing a sync problem, then copy the report for Gillions support.");
-        if (!IsDiagnosticRecording) {
-            if (ImGui.Button("Start 10-minute diagnostic recording")) {
-                lock (diagnosticsLock) {
-                    diagnostics.Clear();
-                    lastObservedPayloadHashes.Clear();
-                    lastInventoryRecords.Clear();
-                }
-                diagnosticRecordingUntilUtc = DateTime.UtcNow.AddMinutes(10);
-                RecordDiagnostic("Manual diagnostic recording started.");
-            }
-        } else {
-            var remaining = diagnosticRecordingUntilUtc - DateTime.UtcNow;
-            ImGui.TextColored(new System.Numerics.Vector4(.55f, .78f, 1f, 1f), $"Recording — {Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes))} minute(s) remaining");
-            if (ImGui.Button("Stop diagnostic recording")) {
-                RecordDiagnostic("Manual diagnostic recording stopped.");
-                diagnosticRecordingUntilUtc = DateTime.MinValue;
-            }
-        }
-#endif
-        string[] snapshot;
-        lock (diagnosticsLock) snapshot = diagnostics.ToArray();
-        if (snapshot.Length == 0) {
-            ImGui.TextDisabled("No diagnostic entries recorded.");
-            return;
-        }
-        if (ImGui.Button("Copy diagnostic report")) {
-            var channel = string.Equals(typeof(Plugin).Assembly.GetName().Name, "GillionsGameSyncTest", StringComparison.Ordinal) ? "Testing" : "Public";
-            var report = $"Gillions Game Sync {channel} {PluginVersion}\nCharacter: {objects.LocalPlayer?.Name.TextValue ?? "not logged in"}\n{string.Join("\n", snapshot.Reverse())}";
-            ImGui.SetClipboardText(report);
-        }
-        if (ImGui.Button("Clear diagnostics")) lock (diagnosticsLock) diagnostics.Clear();
-        foreach (var line in snapshot) ImGui.TextWrapped(line);
-    }
     public void Dispose() {
+        if (disposed) return;
+        if (framework.IsInFrameworkUpdateThread) FlushConfigurationSave();
+        disposed = true; requestLifetime.Dispose(); ClearTransientState();
+        clientState.Login -= OnLogin; clientState.Logout -= OnLogout;
         chatGui.ChatMessage -= OnChatMessage;
         chatGui.LogMessage -= OnLogMessage;
         gameInventory.InventoryChangedRaw -= OnInventoryChangedRaw;
@@ -1145,13 +1270,20 @@ internal sealed record PreparedSnapshot(
     string Description,
     string InventoryDelta,
     double PreparationMilliseconds,
-    string[]? AcknowledgedEventIds);
+    IReadOnlyDictionary<string, string> SentResultFingerprints,
+    bool AllowEmptySnapshotReceipt);
 
-internal sealed record CapturedSnapshotBatch(string CharacterName, string CharacterWorld, GameSnapshot[] Snapshots);
+internal sealed record CapturedSnapshotBatch(string CharacterName, string CharacterWorld, SyncRequestPermit Permit,
+    GameSnapshot[] Snapshots, GilLedgerEvent[] GilEvents, string GilSessionId, Dictionary<string, string> PayloadHashes,
+    Dictionary<string, string> InventoryHashes, bool RecordDiagnostics);
 
 [Newtonsoft.Json.JsonConverter(typeof(LegacyPlanConfigurationConverter))]
 public sealed class PluginConfiguration : IPluginConfiguration {
     public int Version { get; set; } = 1;
+    public PairedSession? ActiveSession { get; set; }
+    public bool PairingRequired { get; set; }
+    public Dictionary<string, OwnedCharacterState> OwnedCharacters { get; set; } = new(StringComparer.Ordinal);
+    public EvidenceCoverageGap CoverageGap { get; set; } = new();
     public string ServerUrl { get; set; } = GillionsEndpoints.DefaultServerUrl;
     public string PairingCode { get; set; } = "";
     public string DeviceId { get; set; } = "";
@@ -1189,16 +1321,9 @@ public sealed class PluginConfiguration : IPluginConfiguration {
     public void Save(IDalamudPluginInterface pluginInterface) => pluginInterface.SavePluginConfig(this);
 }
 
-public sealed class GillionsSyncRejectedException : InvalidOperationException {
-    public string Code { get; }
-    public GillionsSyncRejectedException(string code, string message) : base(message) => Code = code;
-}
-
 public sealed record EnrollmentResponse(bool ok, string device_id, string token);
 public sealed record GameSnapshot(string ResourceType, object Payload, string[]? AcknowledgedEventIds = null);
-public sealed record GilLedgerEvent(string EventId, DateTime OccurredAtUtc, long GilDelta, string Kind, string Confidence, int? ItemId, int? ItemQuantity, string? RetainerId, string? RetainerName, uint? LogMessageId, int[] LogIntegerParameters, string? CharacterName = null, string? CharacterWorld = null);
 internal sealed record RetainerWithdrawalObservation(DateTime ObservedAtUtc, long Amount, string RetainerId, string RetainerName);
-public sealed record PendingRetainerSale(string SaleId, DateTime OccurredAtUtc, long Amount, int? ItemId, int ItemQuantity, string? RetainerId, string? RetainerName);
 internal sealed record GilLedgerLogEvidence(DateTime ObservedAtUtc, uint LogMessageId, int[] IntegerParameters);
 internal sealed class GilLedgerChatEvidence {
     public GilLedgerChatEvidence(DateTime observedAtUtc, int? itemId, int itemQuantity, long amount, string? retainerId, string? retainerName) { EvidenceId = Guid.NewGuid().ToString("N"); ObservedAtUtc = observedAtUtc; ItemId = itemId; ItemQuantity = itemQuantity; Amount = amount; RetainerId = retainerId; RetainerName = retainerName; }

@@ -2,12 +2,15 @@
 
 ## 1.0.30 - 2026-09-08
 
-- Remove venture plan delivery, apply/restore controls and AutoRetainer discovery/read/write IPC from both products.
-- Preserve native Retainer observations, exact venture-result acknowledgements, inventory, listings and ordinary sync with the existing product/account gates.
-- Preserve legacy plan backups and ownership records as inert local data, without recovery UI/export or automatic third-party changes.
-- Mark old cached stats/start times historical without refreshing their observation timestamps; drive adaptive result sampling from the native task view.
-- Update the public stable release, installation/update guidance, privacy and testing documentation for the retirement.
-- Verify legacy configuration survival through the actual Dalamud serializer against both built product identities, including opaque scalar timestamp strings without offset or precision loss.
+- Remove venture-plan delivery, apply/restore controls and AutoRetainer discovery/read/write IPC from both products. Retain native observations, inventory, listings and venture results under the existing account/product gates.
+- Require one-time pairing for older unbound credentials. Bind new credentials to their issuing HTTPS origin and keep new data in pairing-generation/character partitions. Preserve unverified legacy queues, maps and opaque planner history as inactive data.
+- Retire only exact sent event versions after validated receipts. Preserve newer venture evidence, unrelated sales and equal-value ambiguity. Validate all Gil events before sending batches of at most 200, omitting absent numeric fields.
+- Cancel affected work on character, pairing, consent and lifetime changes; apply mutable state changes on the framework thread. Bound response reads to 64 KiB/depth 16 and replace remote error echoes with local messages.
+- Share a 10,000-record/8 MiB pending-data budget across new generations and characters. Preserve admitted evidence, report a coverage gap at capacity and restart from a fresh balance baseline after acknowledged drainage. Re-pairing does not reset storage.
+- Separate Retainer upload deadlines from ordinary rotation, distinguish semantic changes from freshness, coalesce saves and deduplicate unchanged result views. Keep the two-second Gil fallback and 750 ms dirty handling.
+- Gate system-log/chat evidence before extraction, bound transient matching buffers and remove unused machine identifiers from enrollment.
+- Simplify the opening window around pairing and sync controls. Keep material warnings visible; defer technical history, status and diagnostic work until expanded.
+- Verify both actual product configuration serializers, ownership/re-pair/coverage-gap persistence, opaque scalar timestamp preservation and synthetic request, queue, timing, response and UI-state boundaries. Local checks do not establish live-game or rendered visual acceptance.
 
 ## 1.0.29 - 2026-08-26
 

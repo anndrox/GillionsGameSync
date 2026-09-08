@@ -18,6 +18,9 @@ namespace GillionsGameSync;
 // inspect client state already resident in the game and never automate UI,
 // capture packets, or depend on another plugin.
 public static class DirectGameSnapshotCollector {
+    private static readonly RetainerResultViewCache ResultView = new();
+    internal static void ClearTransientState() { ResultView.Clear(); NativeInventoryCollector.ClearTransientState(); }
+    internal static void ResetResultView() => ResultView.Clear();
     // Capture is local-only. It runs while the player naturally opens a
     // retainer and lets one later manual sync submit every retainer observed in
     // the current session together.
@@ -42,8 +45,12 @@ public static class DirectGameSnapshotCollector {
         // The game can clear the active retainer's completion timestamp while
         // constructing the result view. Capture reward evidence against the
         // prior positive assignment before the fresh roster replaces it.
-        return RetainerVentureSnapshotPolicy.AddPendingResult(state,
-            RetainerVentureSnapshotPolicy.CreateResultEvent(state, RetainerVentureNativeCollector.ReadVisibleResult(now, state, out resultProbeStatus)));
+        return RetainerVentureSnapshotPolicy.AddPendingResult(state, ReadChangedRetainerResult(state, now, out resultProbeStatus));
+    }
+
+    internal static RetainerVentureResultEvent? ReadChangedRetainerResult(RetainerVentureLocalState state, DateTime now, out string resultProbeStatus) {
+        var read = RetainerVentureNativeCollector.ReadVisibleResult(now, state, out resultProbeStatus);
+        return ResultView.Changed(state.CharacterContentId, read) ? RetainerVentureSnapshotPolicy.CreateResultEvent(state, read) : null;
     }
 
     internal static bool CaptureRetainerVentureRosterAndGear(RetainerVentureLocalState state) {
@@ -416,6 +423,12 @@ internal static class NativeInventoryCollector {
     private static readonly object RetainerListingCacheLock = new();
     private static readonly Dictionary<string, RetainerListingRead> RetainerListingCache = new(StringComparer.Ordinal);
     private static readonly Dictionary<uint, (RetainerContext Context, DateTime ObservedAtUtc)> RecentRetainerItems = new();
+    internal static void ClearTransientState() {
+        lock (RetainerListingCacheLock) { RecentRetainerItems.Clear(); RetainerListingCache.Clear(); }
+    }
+    internal static void MaintainTransientState(DateTime now) {
+        lock (RetainerListingCacheLock) TransientEvidencePolicy.Prune(RecentRetainerItems, now, TimeSpan.FromSeconds(10), entry => entry.ObservedAtUtc);
+    }
     // These are player-owned containers resident in normal client state. Retainer
     // bags/listings and specialized storage are intentionally not inferred.
     private static readonly InventoryType[] PlayerContainers = [
@@ -466,7 +479,8 @@ internal static class NativeInventoryCollector {
             }
         }
         lock (RetainerListingCacheLock) {
-            if (RecentRetainerItems.TryGetValue(itemId, out var cached) && cached.ObservedAtUtc >= DateTime.UtcNow.AddSeconds(-10)) return cached.Context;
+            if (RecentRetainerItems.TryGetValue(itemId, out var cached) && cached.ObservedAtUtc >= DateTime.UtcNow.AddSeconds(-10)
+                && cached.Context.RetainerId == activeRetainer->RetainerId.ToString()) return cached.Context;
             RecentRetainerItems.Remove(itemId);
         }
         return null;
@@ -484,7 +498,10 @@ internal static class NativeInventoryCollector {
             for (var index = 0; index < container->Size; index++) {
                 var item = container->Items[index];
                 if (item.ItemId == 0 || item.Quantity <= 0 || item.IsSymbolic) continue;
-                lock (RetainerListingCacheLock) RecentRetainerItems[item.ItemId] = (context, DateTime.UtcNow);
+                lock (RetainerListingCacheLock) {
+                    RecentRetainerItems[item.ItemId] = (context, DateTime.UtcNow);
+                    TransientEvidencePolicy.Prune(RecentRetainerItems, DateTime.UtcNow, TimeSpan.FromSeconds(10), entry => entry.ObservedAtUtc);
+                }
             }
         }
     }

@@ -31,8 +31,12 @@ if ($plugin -notmatch '#if GILLIONS_TEST_BUILD\s*private const string CommandNam
 if ($plugin -notmatch 'commands\.AddHandler\(CommandName' -or $plugin -notmatch 'commands\.RemoveHandler\(CommandName\)') {
     throw 'The channel-specific command must be registered and released symmetrically.'
 }
-if ($plugin -notmatch 'A missing or\s*// malformed response cannot leave a previous server grant active\.\s*ClearRetainerServerAcceptance\(\);') {
-    throw 'Stable Retainer acceptance is not cleared before heartbeat renewal.'
+$presenceStart = $plugin.IndexOf('private void SendCurrentRetainerPresence', [StringComparison]::Ordinal)
+$presenceEnd = $plugin.IndexOf('private void OnFrameworkUpdate', $presenceStart, [StringComparison]::Ordinal)
+$presenceBody = $plugin.Substring($presenceStart, $presenceEnd - $presenceStart)
+if ($presenceBody.IndexOf('ClearRetainerServerAcceptance();', [StringComparison]::Ordinal) -lt 0 -or
+    $presenceBody.IndexOf('ClearRetainerServerAcceptance();', [StringComparison]::Ordinal) -ge $presenceBody.IndexOf('_ = SendRetainerPresenceAsync', [StringComparison]::Ordinal)) {
+    throw 'Stable Retainer acceptance must clear before heartbeat renewal is dispatched.'
 }
 if ($policy -notmatch '"GillionsGameSync",\s*"stable",\s*true' -or
     $policy -notmatch '"GillionsGameSyncTest",\s*"testing",\s*false') {

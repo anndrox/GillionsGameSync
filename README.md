@@ -1,66 +1,63 @@
 # Gillions Game Sync
 
-Gillions Game Sync is the open-source Dalamud plugin for [Gillions](https://gillions.app). Version `1.0.30` lets a player pair one FFXIV character with their Gillions account and synchronize the data categories they explicitly enable. It removes venture planning and AutoRetainer integration. The [stable manifest](data/GillionsGameSync.json) and [GitHub Releases](https://github.com/anndrox/GillionsGameSync/releases) identify the publicly available build.
+Gillions Game Sync is the open-source Dalamud plugin for [Gillions](https://gillions.app). This source targets `1.0.30`, with read-only character and Retainer synchronization, safer pairing and offline records, and a simpler settings window. The [stable manifest](data/GillionsGameSync.json) on `main` and [GitHub Releases](https://github.com/anndrox/GillionsGameSync/releases) identify the publicly available build; a task branch or local package is not a published update.
 
-The complete Collectibles snapshot includes authoritative Master Recipe Book and Regional Folklore tome unlocks. Folklore ownership is read from the game client's unlock state and sent as stable tome item IDs; it is never inferred from inventory, gathering logs, mounts, or other collections.
+Automatic sync is one global control for the supported categories: inventory, currencies, achievements, collectibles, character progress, quest journal, reputation, Shared FATEs and glamour plates. Retainer observations and venture results use a separate server compatibility acknowledgement. There is no per-category chooser. Unavailable game data is preserved or omitted instead of being reported as an intentional deletion.
 
-Version `1.0.30` keeps native Retainer observations, venture results, inventory, listings and ordinary synchronization. It no longer discovers or invokes AutoRetainer, polls for venture plans, or applies/restores plans. Existing local backups and ownership records survive as inert configuration data; no recovery UI or export is added. Previously cached item-level, Gathering, Perception and venture-start information remains historical. Already-installed external plans may continue under AutoRetainer's own settings.
+Collectibles include authoritative Master Recipe Book and Regional Folklore tome unlocks. The plugin reads tome ownership from native unlock state and sends stable tome item IDs; it does not infer ownership from inventory or unrelated collections.
 
-Retainer uploads still require server acceptance of the client product and contract. The plugin does not capture packets, accept inbound network connections, read Square Enix credentials, or depend on another plugin for core synchronization. Historical stable `1.0.29` behavior is recorded in the changelog.
+Version `1.0.30` removes venture planning, AutoRetainer discovery and IPC, plan delivery, and apply/restore controls. Native Retainer observations, inventory, listings and venture results remain. Older local plans, backups, queues and maps stay preserved but inactive when their account ownership cannot be proved. This update does not modify plans already installed in AutoRetainer or add a history recovery/export feature.
 
-## Install
+## Install and update
 
 Add the stable custom repository URL to Dalamud:
 
 `https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/data/GillionsGameSync.json`
 
-The testing feed is intentionally separate and should be installed only when a Gillions test is requested:
+Keep that URL when updating through Dalamud's plugin installer. Existing users must **pair once after updating to `1.0.30`** because older credentials did not record a verified issuing origin. Do not delete the configuration. Confirm the pairing destination shown in the plugin, enter a fresh one-time code from Gillions, and choose **Pair this device**. Website history is unchanged; older local records with unverified ownership will not be assigned to the newly paired account or uploaded automatically.
+
+The testing feed is separate and should be installed only when a Gillions test is requested:
 
 `https://gillions.app/plugins/GillionsGameSyncTesting.json`
 
-## Update from 1.0.29
-
-Keep the same stable repository URL and use Dalamud's plugin installer to update Gillions Game Sync. Verify version `1.0.30` in the installer after the update. Existing pairing and enabled sync categories are retained; no re-pairing or configuration deletion is required. The removed AutoRetainer plan controls will no longer appear.
-
-Updating Gillions Game Sync does not cancel plans already installed in AutoRetainer or guarantee cancellation of callbacks queued by an older loaded plugin. If you need external automation to stop, manage it through AutoRetainer's own controls. Legacy backups remain inert local data; this update provides no automatic restore or cleanup. See the [release notes](docs/releases/v1.0.30.md).
+Updating this plugin does not cancel external AutoRetainer plans or guarantee cancellation of callbacks already queued by an older loaded plugin. Use AutoRetainer's own controls when you need that automation to stop. See the [release notes](docs/releases/v1.0.30.md).
 
 ## Pair and sync
 
-- `/gillionssync pair` pairs the plugin after you enter the one-time code shown by Gillions.
-- `/gillionssync` opens the plugin and can run a manual sync.
-- Automatic sync checks one scheduled category every 30 seconds. Inventory uses a short event-driven debounce, and captured Gil Ledger events are queued promptly.
+- Open the plugin's Dalamud configuration window, or use `/gillionssync pair` to open its pairing controls.
+- `/gillionssync` opens the window and requests a manual sync. **Sync now** also collects the supported data currently available to the logged-in character.
+- **Automatic sync** checks one ordinary category every 30 seconds. Inventory changes, queued Gil records and changed Retainer observations use their own deadlines. The two-second Gil fallback and 750 ms dirty delay are unchanged.
+- Pairing and startup with a valid pairing perform one character sync and presence request even when Automatic sync is off. Recurring collection remains off in that case.
+- **Allow website 'Link in game' requests** is a separate control, on by default. While paired and logged in, it polls for authenticated requests and prints a requested native item link after the server consumes its claim. It does not automate gameplay.
 
-Only enabled categories are sent. Data that is not authoritatively loaded is preserved or omitted rather than reported as empty.
+Connection details, update history, data status and diagnostics are collapsed by default. The pairing destination and actionable account/storage warnings remain visible. Editing the HTTPS server address changes the destination for the next pairing; an existing device credential stays bound to its original origin. Disconnecting clears that credential while preserving local history.
+
+## Offline records
+
+New pending evidence is owned by a pairing generation and authoritative character content ID. Acknowledgements retire only the exact versions sent. Switching characters, pairing again, opting out of a request mode, or unloading the plugin cancels the affected work and prevents stale replies from changing a new session.
+
+Pending data across all new pairing generations and characters shares a limit of **10,000 records or 8 MiB of serialized data**, whichever is reached first. At capacity the plugin keeps admitted records, pauses new event recording and shows a coverage-gap warning. Native Gil observations keep their existing cadence. After acknowledged uploads free space, recording starts from a fresh balance baseline; missed events are not invented or recovered.
+
+Re-pairing does not free storage or authorize uploading another generation's records. Inactive or uncertain records may continue to occupy the limit. Legacy unowned history remains outside this new budget, and the budget does not promise a maximum total configuration-file size. Synthetic fixtures measure storage accounting; they do not establish hours of player coverage. See [Privacy](docs/privacy.md).
 
 ## Build and verify
 
-Requirements:
-
-- Windows
-- .NET 10 SDK
-- Access to the Dalamud NuGet packages used by `Dalamud.NET.Sdk`
-
-Run the complete local verification:
+Requirements are Windows, .NET 10 SDK and the Dalamud dependencies used by `Dalamud.NET.Sdk`.
 
 ```powershell
 ./scripts/verify.ps1
-```
-
-Create a local package without publishing it:
-
-```powershell
 ./scripts/package.ps1 -Channel stable -Version 1.0.30
 ./scripts/package.ps1 -Channel testing -Version 0.0.0
 ```
 
-Packages are written below `artifacts/`, which is ignored by Git. Stable publication uses an immutable GitHub Release asset. The separately identified testing plugin remains on the controlled Gillions testing feed.
+Verification includes synthetic policy tests, source contracts, both product builds and actual Dalamud configuration load/Save/reload fixtures. It does not run a game session. Packages stay under ignored `artifacts/`; building does not publish or install them.
 
 ## Source and releases
 
-`main` is the public stable source line. Experimental and release-candidate work is developed and validated separately before promotion. The reviewed [`data/GillionsGameSync.json`](data/GillionsGameSync.json) on `main` is the canonical stable Dalamud repository manifest. Stable ZIPs are immutable [GitHub Release assets](https://github.com/anndrox/GillionsGameSync/releases), their SHA-256 records live under [`data/releases`](data/releases), and the public icon lives under [`assets`](assets). A stable release updates the manifest in the same reviewed source history and validates the tag, download, checksum, and package before promotion. Public plugin changes must complete the reviewed public release and affected documentation updates; a task-branch push alone is not an installed update. Retained observation uploads continue to require the applicable server product/channel and account/device acceptance.
+`main` is the public stable source line. The reviewed [`data/GillionsGameSync.json`](data/GillionsGameSync.json) is the stable Dalamud manifest. Stable ZIPs are immutable [GitHub Release assets](https://github.com/anndrox/GillionsGameSync/releases), checksums live under [`data/releases`](data/releases), and the icon lives under [`assets`](assets). Candidate preparation, independent review, publication and a user's installed version are separate states. Testing retains its own product identity and publication path.
 
-See [Privacy](docs/privacy.md), [Testing](docs/testing.md), [Releasing](docs/releasing.md), and [Contributing](CONTRIBUTING.md).
+See [Testing](docs/testing.md), [Releasing](docs/releasing.md), [Privacy](docs/privacy.md) and [Contributing](CONTRIBUTING.md).
 
 ## License
 
-Gillions Game Sync is licensed under the [MIT License](LICENSE).
+Gillions Game Sync uses the [MIT License](LICENSE).

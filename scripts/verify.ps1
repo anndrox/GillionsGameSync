@@ -16,6 +16,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Focused fixture executable failed.' }
 & (Join-Path $root 'tests/bardings-collector-contract-test.ps1')
 & (Join-Path $root 'tests/folklore-collector-contract-test.ps1')
 & (Join-Path $root 'tests/performance-contract-test.ps1')
+& (Join-Path $root 'tests/audit-orchestration-contract-test.ps1')
 & (Join-Path $root 'tests/stable-readiness-contract-test.ps1')
 
 $stableOutput = Join-Path $root 'artifacts/verification/stable/'

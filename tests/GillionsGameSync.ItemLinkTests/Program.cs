@@ -107,7 +107,7 @@ var ventureState = RetainerVentureSnapshotPolicy.GetCharacterState(characterStat
 var otherCharacterState = RetainerVentureSnapshotPolicy.GetCharacterState(characterStates, 222);
 Assert(ventureState != otherCharacterState && ventureState.CharacterContentId == "111" && otherCharacterState.CharacterContentId == "222",
     "retainer state must be partitioned by character content ID");
-Assert(RetainerVentureSnapshotPolicy.MergeRoster(ventureState, null, ventureNow)
+Assert(!RetainerVentureSnapshotPolicy.MergeRoster(ventureState, null, ventureNow)
     && ventureState.RosterObservation.Status == "unavailable", "an unavailable roster must be explicit and non-authoritative");
 Assert(RetainerVentureSnapshotPolicy.MergeRoster(ventureState,
     new RetainerVentureRosterRead(ventureNow, true, [
@@ -120,7 +120,7 @@ Assert(ventureState.Retainers[1].ClassJobId is null && ventureState.Retainers[1]
 Assert(ventureState.Retainers[0].Venture.Assignment?.VentureId == 11, "an active venture must retain its stable task ID");
 Assert(ventureState.Retainers[0].Gil.Single().Value == 1000, "native roster gil must carry current provenance");
 var unchangedChangedAt = ventureState.RosterObservation.LastChangedAtUtc;
-Assert(RetainerVentureSnapshotPolicy.MergeRoster(ventureState,
+Assert(!RetainerVentureSnapshotPolicy.MergeRoster(ventureState,
     new RetainerVentureRosterRead(ventureNow.AddSeconds(5), true, [
         new("200", "Ready", 0, 0, 22, readyCompleteUnix, 2000),
         new("100", "Active", 18, 90, 11, activeCompleteUnix, 1000),
@@ -208,7 +208,11 @@ var explicitEmpty = JsonSerializer.Serialize(new { ok = true, resourceType = "re
     acceptedEventIds = Array.Empty<string>(), serverTimeUtc = ventureNow });
 Assert(RetainerAcknowledgementPolicy.TryParseExact(explicitEmpty, [ventureResult.EventId], out var noAccepted) && noAccepted.Length == 0,
     "an empty acknowledgement must preserve every pending event");
-RetainerVentureSnapshotPolicy.AcknowledgeResults(persistedState!, acceptedIds);
+var delayedAckState = new RetainerVentureLocalState { PendingResultEvents = [revisedEvidence!] };
+RetainerVentureSnapshotPolicy.AcknowledgeResults(delayedAckState, acceptedIds, new Dictionary<string, string> { [ventureResult.EventId] = ventureResult.PayloadFingerprint });
+Assert(delayedAckState.PendingResultEvents.Count == 1,
+    "F02 delayed ACK for the original fingerprint must preserve revised evidence");
+RetainerVentureSnapshotPolicy.AcknowledgeResults(persistedState!, acceptedIds, new Dictionary<string, string> { [revisedEvidence!.EventId] = revisedEvidence.PayloadFingerprint });
 Assert(persistedState!.PendingResultEvents.Count == 0, "only an exactly acknowledged result may leave the retry queue");
 var olderVentureState = JsonSerializer.Deserialize<RetainerVentureLocalState>("{}");
 Assert(olderVentureState is not null && olderVentureState.RosterObservation.Status == "unavailable"
@@ -335,3 +339,4 @@ var accountIsolation = await new ItemLinkRequestProcessor().ProcessAsync(
 Assert(accountIsolation == ItemLinkDeliveryResult.ConsumeRejected && !isolatedPrinted, "an unauthorized account claim must never print");
 
 Console.WriteLine("Gillions item-link protocol tests passed.");
+await AuditRegressionTests.RunAsync();

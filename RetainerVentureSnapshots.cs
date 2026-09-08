@@ -252,14 +252,19 @@ public static class RetainerVentureSnapshotPolicy {
             });
         }
         var rosterIdsChanged = !state.Retainers.Select(entry => entry.RetainerId).Order().SequenceEqual(next.Select(entry => entry.RetainerId).Order(), StringComparer.Ordinal);
+        var semanticChanged = rosterIdsChanged || state.Retainers.Count != next.Count
+            || state.RosterObservation.Status != (entries.Length == 0 ? RetainerObservationVocabulary.AuthoritativeEmpty : RetainerObservationVocabulary.Complete)
+            || state.RosterObservation.Provenance != RetainerObservationVocabulary.NativeCurrent || state.RosterObservation.RetainedData
+            || next.Any(entry => !priorById.TryGetValue(entry.RetainerId, out var prior) || !EquivalentProfile(prior, entry));
         state.RosterObservation = Evidence(entries.Length == 0 ? RetainerObservationVocabulary.AuthoritativeEmpty : RetainerObservationVocabulary.Complete,
             read.ObservedAtUtc, rosterIdsChanged || state.RosterObservation.LastChangedAtUtc is null ? read.ObservedAtUtc : state.RosterObservation.LastChangedAtUtc.Value,
             RetainerObservationVocabulary.NativeCurrent);
         state.Retainers = next;
-        return true;
+        return semanticChanged;
     }
 
     public static bool MarkRosterUnavailable(RetainerVentureLocalState state, DateTime observedAtUtc) {
+        var prior = state.RosterObservation;
         if (state.Retainers.Count == 0) {
             state.RosterObservation = Evidence(RetainerObservationVocabulary.Unavailable, observedAtUtc,
                 state.RosterObservation.LastChangedAtUtc ?? observedAtUtc, RetainerObservationVocabulary.NativeCurrent);
@@ -267,7 +272,7 @@ public static class RetainerVentureSnapshotPolicy {
             state.RosterObservation = Evidence(RetainerObservationVocabulary.Unavailable, observedAtUtc,
                 state.RosterObservation.LastChangedAtUtc ?? observedAtUtc, RetainerObservationVocabulary.RetainedHistorical, retained: true);
         }
-        return true;
+        return !EquivalentEvidence(prior, state.RosterObservation);
     }
 
     public static bool MergeGear(RetainerVentureLocalState state, RetainerVentureGearRead? read) {
@@ -277,14 +282,16 @@ public static class RetainerVentureSnapshotPolicy {
         var items = read.EquippedItems.Where(item => item.SlotIndex >= 0 && item.ItemId > 0)
             .GroupBy(item => item.SlotIndex).Select(group => group.First())
             .OrderBy(item => item.SlotIndex).ThenBy(item => item.ItemId).ToList();
-        var changed = profile.Equipment.Items is null || !profile.Equipment.Items.SequenceEqual(items);
+        var changed = profile.Equipment.Items is null || !profile.Equipment.Items.SequenceEqual(items)
+            || profile.Equipment.Observation.Status != (items.Count == 0 ? RetainerObservationVocabulary.AuthoritativeEmpty : RetainerObservationVocabulary.Complete)
+            || profile.Equipment.Observation.Provenance != RetainerObservationVocabulary.LoadedOnly || profile.Equipment.Observation.RetainedData;
         profile.Equipment = new RetainerEquipmentObservation {
             Observation = Evidence(items.Count == 0 ? RetainerObservationVocabulary.AuthoritativeEmpty : RetainerObservationVocabulary.Complete,
                 read.ObservedAtUtc, changed ? read.ObservedAtUtc : profile.Equipment.Observation.LastChangedAtUtc ?? read.ObservedAtUtc,
                 RetainerObservationVocabulary.LoadedOnly),
             Items = items,
         };
-        return true;
+        return changed;
     }
 
     public static bool RetireCachedStats(RetainerVentureLocalState? state) {
@@ -313,6 +320,7 @@ public static class RetainerVentureSnapshotPolicy {
 
     public static bool MergeInventorySources(RetainerVentureLocalState state, IEnumerable<RetainerInventorySourceRead> reads) {
         var next = new List<RetainerInventorySourceObservation>();
+        var semanticChanged = false;
         foreach (var read in reads) {
             var prior = state.InventorySources.FirstOrDefault(entry => entry.Source == read.Source && entry.RetainerId == read.RetainerId);
             var loaded = read.Containers.Where(container => container.Loaded).ToArray();
@@ -323,6 +331,7 @@ public static class RetainerVentureSnapshotPolicy {
                     read.ObservedAtUtc, container.Loaded ? read.ObservedAtUtc : prior?.Observation.LastChangedAtUtc ?? read.ObservedAtUtc,
                     RetainerObservationVocabulary.LoadedOnly))).ToList();
             var changed = prior is null || !EquivalentInventory(prior, read);
+            semanticChanged |= changed;
             next.Add(new RetainerInventorySourceObservation {
                 Source = read.Source,
                 RetainerId = read.RetainerId,
@@ -336,8 +345,9 @@ public static class RetainerVentureSnapshotPolicy {
                     ? new(loaded.Sum(container => container.MaximumSlots), read.ObservedAtUtc, RetainerObservationVocabulary.LoadedOnly, InventorySlotDefinitionVersion) : null,
             });
         }
+        semanticChanged |= state.InventorySources.Count != next.Count;
         state.InventorySources = next;
-        return true;
+        return semanticChanged;
     }
 
     public static RetainerVentureResultEvent? CreateResultEvent(RetainerVentureLocalState state, RetainerVentureResultRead? read) {
@@ -359,11 +369,12 @@ public static class RetainerVentureSnapshotPolicy {
         if (result is null) return false;
         var existing = state.PendingResultEvents.FindIndex(entry => entry.EventId == result.EventId);
         if (existing >= 0) {
+            if (state.PendingResultEvents[existing].PayloadStatus == "complete" && result.PayloadStatus == "partial") return false;
             if (state.PendingResultEvents[existing].PayloadFingerprint == result.PayloadFingerprint) return false;
             state.PendingResultEvents[existing] = result;
         } else state.PendingResultEvents.Add(result);
         state.PendingResultEvents = state.PendingResultEvents.OrderBy(entry => entry.ObservedAtUtc)
-            .ThenBy(entry => entry.EventId, StringComparer.Ordinal).TakeLast(MaxPendingResultEvents).ToList();
+            .ThenBy(entry => entry.EventId, StringComparer.Ordinal).ToList();
         return true;
     }
 
@@ -371,11 +382,12 @@ public static class RetainerVentureSnapshotPolicy {
         state.RosterObservation,
         state.Retainers.OrderBy(entry => entry.RetainerId, StringComparer.Ordinal).Select(CloneProfile).ToArray(),
         state.InventorySources.OrderBy(entry => entry.Source, StringComparer.Ordinal).ThenBy(entry => entry.RetainerId, StringComparer.Ordinal).ToArray(),
-        state.PendingResultEvents.OrderBy(entry => entry.ObservedAtUtc).ThenBy(entry => entry.EventId, StringComparer.Ordinal).ToArray());
+        state.PendingResultEvents.OrderBy(entry => entry.ObservedAtUtc).ThenBy(entry => entry.EventId, StringComparer.Ordinal).Take(MaxPendingResultEvents).ToArray());
 
-    public static void AcknowledgeResults(RetainerVentureLocalState state, IEnumerable<string> eventIds) {
+    public static bool AcknowledgeResults(RetainerVentureLocalState state, IEnumerable<string> eventIds, IReadOnlyDictionary<string, string> sentFingerprints) {
         var acknowledged = eventIds.ToHashSet(StringComparer.Ordinal);
-        state.PendingResultEvents.RemoveAll(entry => acknowledged.Contains(entry.EventId));
+        return state.PendingResultEvents.RemoveAll(entry => acknowledged.Contains(entry.EventId)
+            && sentFingerprints.TryGetValue(entry.EventId, out var sent) && sent == entry.PayloadFingerprint) > 0;
     }
 
     public static RetainerVentureAssignment? BuildVenture(ushort ventureId, uint completeUnix) {
@@ -419,10 +431,24 @@ public static class RetainerVentureSnapshotPolicy {
     private static bool EquivalentVenture(RetainerVentureAssignment left, RetainerVentureAssignment right) =>
         left.VentureId == right.VentureId && left.CompleteAtUtc.ToUniversalTime() == right.CompleteAtUtc.ToUniversalTime();
 
-    private static bool EquivalentInventory(RetainerInventorySourceObservation prior, RetainerInventorySourceRead read) =>
-        prior.Containers.Select(entry => entry.ContainerId).Order().SequenceEqual(read.Containers.Select(entry => entry.ContainerId).Order(), StringComparer.Ordinal)
-        && prior.UsedSlots?.Value == read.Containers.Where(entry => entry.Loaded).Sum(entry => entry.UsedSlots)
-        && prior.MaximumSlots?.Value == read.Containers.Where(entry => entry.Loaded).Sum(entry => entry.MaximumSlots);
+    private static bool EquivalentEvidence(RetainerObservationEvidence left, RetainerObservationEvidence right) =>
+        left.Status == right.Status && left.Provenance == right.Provenance && left.RetainedData == right.RetainedData;
+    private static bool EquivalentProfile(RetainerVentureProfile left, RetainerVentureProfile right) =>
+        left.Name == right.Name && left.ClassJobId == right.ClassJobId && left.Level == right.Level
+        && EquivalentEvidence(left.ProfileObservation, right.ProfileObservation)
+        && EquivalentEvidence(left.Venture.Observation, right.Venture.Observation) && left.Venture.Assignment == right.Venture.Assignment
+        && left.Gil.Count == right.Gil.Count && left.Gil.Zip(right.Gil).All(pair => pair.First.Context == pair.Second.Context
+            && pair.First.Value == pair.Second.Value && EquivalentEvidence(pair.First.Observation, pair.Second.Observation));
+    private static bool EquivalentInventory(RetainerInventorySourceObservation prior, RetainerInventorySourceRead read) {
+        var complete = read.Containers.All(entry => entry.Loaded);
+        var status = !read.Containers.Any(entry => entry.Loaded) ? RetainerObservationVocabulary.Unavailable
+            : complete ? RetainerObservationVocabulary.Complete : RetainerObservationVocabulary.Partial;
+        return prior.Observation.Status == status && prior.Containers.Count == read.Containers.Length
+            && read.Containers.All(entry => prior.Containers.Any(old => old.ContainerId == entry.ContainerId
+                && old.Observation.Status == (entry.Loaded ? RetainerObservationVocabulary.Complete : RetainerObservationVocabulary.Unavailable)))
+            && prior.UsedSlots?.Value == (complete ? read.Containers.Sum(entry => entry.UsedSlots) : (int?)null)
+            && prior.MaximumSlots?.Value == (complete ? read.Containers.Sum(entry => entry.MaximumSlots) : (int?)null);
+    }
 }
 
 public static class RetainerAcknowledgementPolicy {

@@ -118,6 +118,98 @@ foreach (var fixture in cases) {
     var second = Parse(File.ReadAllText(pathForFixture));
     Assert(JToken.DeepEquals(roundTrip, second), "Repeated ordinary saves must not normalize or lose legacy data.");
 }
+// Exercise the actual future configuration schema, not a parallel DTO serializer.
+File.WriteAllText(pathForFixture, original.ToString(Formatting.None));
+var ownedConfig = load.Invoke(configurations, [product])!;
+var pairedSessionType = pluginAssembly.GetType("GillionsGameSync.PairedSession", true)!;
+var ownershipPolicy = pluginAssembly.GetType("GillionsGameSync.SyncOwnershipPolicy", true)!;
+var budgetType = pluginAssembly.GetType("GillionsGameSync.DurableEvidenceBudget", true)!;
+var ledgerType = pluginAssembly.GetType("GillionsGameSync.GilLedgerEvent", true)!;
+var syntheticToken = new string('x', 43);
+var syntheticDeviceId = "11111111-1111-1111-1111-111111111111";
+var pairedSession = pairedSessionType.GetMethod("Create")!.Invoke(null, ["https://example.com", syntheticDeviceId, syntheticToken])!;
+configurationType.GetProperty("DeviceToken")!.SetValue(ownedConfig, syntheticToken);
+configurationType.GetProperty("DeviceId")!.SetValue(ownedConfig, syntheticDeviceId);
+configurationType.GetProperty("ActiveSession")!.SetValue(ownedConfig, pairedSession);
+var ownedStates = configurationType.GetProperty("OwnedCharacters")!.GetValue(ownedConfig)!;
+var getCharacter = ownershipPolicy.GetMethod("GetCharacter")!;
+var ownedA = getCharacter.Invoke(null, [ownedStates, pairedSession, 111UL])!;
+var ownedB = getCharacter.Invoke(null, [ownedStates, pairedSession, 222UL])!;
+var ownedType = ownedA.GetType();
+var ledgerA = (System.Collections.IList)ownedType.GetProperty("PendingGilLedgerEvents")!.GetValue(ownedA)!;
+var ledgerB = (System.Collections.IList)ownedType.GetProperty("PendingGilLedgerEvents")!.GetValue(ownedB)!;
+object MakeLedger(int id) => Activator.CreateInstance(ledgerType, new object?[] {
+    id.ToString("D32"), new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc), 10L, "unclassified", "inferred",
+    null, null, null, null, null, Array.Empty<int>(), "Fixture", "Test",
+})!;
+ledgerA.Add(MakeLedger(1)); ledgerB.Add(MakeLedger(2));
+var legacyLedger = (System.Collections.IList)configurationType.GetProperty("PendingGilLedgerEvents")!.GetValue(ownedConfig)!;
+legacyLedger.Add(MakeLedger(999));
+var gap = configurationType.GetProperty("CoverageGap")!.GetValue(ownedConfig)!;
+gap.GetType().GetProperty("Paused")!.SetValue(gap, true);
+gap.GetType().GetProperty("StartedAtUtc")!.SetValue(gap, new DateTime(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc));
+var accounting = budgetType.GetMethod("SerializeAccountingDocument")!;
+object Values(object dictionary) => dictionary.GetType().GetProperty("Values")!.GetValue(dictionary)!;
+var beforeOwnedBytes = (byte[])accounting.Invoke(null, [Values(ownedStates)])!;
+configurationType.GetMethod("Save")!.Invoke(ownedConfig, [savedViaPlugin]);
+var savedOwned = Parse(File.ReadAllText(pathForFixture));
+var loadedOwned = load.Invoke(configurations, [product])!;
+var restoredSession = configurationType.GetProperty("ActiveSession")!.GetValue(loadedOwned)!;
+Assert((bool)ownershipPolicy.GetMethod("IsBoundSession")!.Invoke(null, [restoredSession, false, syntheticDeviceId, syntheticToken])!,
+    "An internally valid future binding must survive the real config load/save chain.");
+var restoredStates = configurationType.GetProperty("OwnedCharacters")!.GetValue(loadedOwned)!;
+var afterOwnedBytes = (byte[])accounting.Invoke(null, [Values(restoredStates)])!;
+Assert(beforeOwnedBytes.SequenceEqual(afterOwnedBytes), "Actual config serialization must preserve exact managed pending-data accounting.");
+Assert(((System.Collections.IList)configurationType.GetProperty("PendingGilLedgerEvents")!.GetValue(loadedOwned)!).Count == 1,
+    "The unscoped legacy queue must survive separately from active owned data.");
+Assert((bool)gap.GetType().GetProperty("Paused")!.GetValue(configurationType.GetProperty("CoverageGap")!.GetValue(loadedOwned))!,
+    "The visible coverage gap must survive the actual serializer.");
+Assert(JToken.DeepEquals(original["AutoRetainerVenturePlanBackups"], savedOwned["AutoRetainerVenturePlanBackups"])
+    && JToken.DeepEquals(original["AutoRetainerPlanOwnershipStates"], savedOwned["AutoRetainerPlanOwnershipStates"]),
+    "New ownership state must not change opaque legacy history.");
+var secondSession = pairedSessionType.GetMethod("Create")!.Invoke(null, ["https://example.com", syntheticDeviceId, syntheticToken])!;
+configurationType.GetProperty("ActiveSession")!.SetValue(loadedOwned, secondSession);
+var newA = getCharacter.Invoke(null, [restoredStates, secondSession, 111UL])!;
+Assert(((System.Collections.IList)ownedType.GetProperty("PendingGilLedgerEvents")!.GetValue(newA)!).Count == 0
+    && beforeOwnedBytes.SequenceEqual((byte[])accounting.Invoke(null, [Values(restoredStates)])!),
+    "A new pairing cannot adopt, delete or exclude the previous generation's admitted evidence from its budget.");
+configurationType.GetMethod("Save")!.Invoke(loadedOwned, [savedViaPlugin]);
+File.Copy(pathForFixture, Path.Combine(fixturePath, "owned-configuration-roundtrip.json"), true);
+Console.WriteLine($"Actual owned configuration / re-pair / coverage-gap fixtures passed: {product}; {beforeOwnedBytes.Length} accounted bytes across two character partitions.");
+
+// These static plugin methods require no plugin instance or native game state.
+var logEvidenceType = pluginAssembly.GetType("GillionsGameSync.GilLedgerLogEvidence", true)!;
+var classifyLedger = pluginType.GetMethod("ClassifyGilLedgerEvent", BindingFlags.Static | BindingFlags.NonPublic)!;
+object ClassifyVendor(long delta, int item, int quantity, int amount) {
+    var evidence = Activator.CreateInstance(logEvidenceType, [DateTime.UtcNow, 1688U, new[] { item, quantity, amount }])!;
+    return classifyLedger.Invoke(null, [delta, evidence, null])!;
+}
+foreach (var classification in new[] { ClassifyVendor(10, 500, 10000, 10), ClassifyVendor(10, 1000000, 1, 10), ClassifyVendor(-10, 500, 1, -10) }) {
+    Assert((string)classification.GetType().GetProperty("Confidence")!.GetValue(classification)! == "inferred",
+        "Unsupported structured sale parameters must keep native balance evidence inferred and sendable.");
+}
+var validVendor = ClassifyVendor(10, 500, 1, 10);
+Assert((string)validVendor.GetType().GetProperty("Kind")!.GetValue(validVendor)! == "vendor_sale"
+    && (string)validVendor.GetType().GetProperty("Confidence")!.GetValue(validVendor)! == "confirmed",
+    "Authoritative valid structured sale evidence must retain normal classification.");
+var windowModel = pluginAssembly.GetType("GillionsGameSync.PluginWindowModel", true)!.GetMethod("Create")!;
+var views = new JArray();
+foreach (var (name, values) in new (string, object[])[] {
+    ("first_pair", [false, false, true, true, false, false, false, ""]),
+    ("legacy_repair", [false, true, true, true, false, false, false, ""]),
+    ("connected", [true, false, true, true, false, false, false, ""]),
+    ("automatic_off", [true, false, true, false, false, false, false, ""]),
+    ("logged_out", [true, false, false, true, false, false, false, ""]),
+    ("storage_paused", [true, false, true, true, false, true, false, ""]),
+    ("gap_resumed", [true, false, true, true, false, false, true, ""]),
+    ("combined_warnings", [false, true, true, true, false, true, false, "ACCOUNT_DISABLED"]),
+}) views.Add(new JObject { ["scenario"] = name, ["state"] = JObject.FromObject(windowModel.Invoke(null, values)!) });
+File.WriteAllText(Path.Combine(fixturePath, "ui-view-states.json"), new JObject {
+    ["product"] = product, ["renderedInGame"] = false, ["states"] = views,
+    ["diagnosticsDefault"] = product == "GillionsGameSyncTest" ? "automatic" : "manual",
+}.ToString(Formatting.Indented));
+Console.WriteLine($"Actual static ledger classification and 8 deterministic UI view states passed: {product}; no native game state or UI rendering used.");
+
 // Exercise the adapter's exact read boundary with the installed JsonReader.
 // Nested lookalike names remain ordinary date tokens; only root legacy values
 // receive the scoped string policy. Settings and state must always be restored.
