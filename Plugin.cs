@@ -1149,6 +1149,7 @@ internal sealed record PreparedSnapshot(
 
 internal sealed record CapturedSnapshotBatch(string CharacterName, string CharacterWorld, GameSnapshot[] Snapshots);
 
+[Newtonsoft.Json.JsonConverter(typeof(LegacyPlanConfigurationConverter))]
 public sealed class PluginConfiguration : IPluginConfiguration {
     public int Version { get; set; } = 1;
     public string ServerUrl { get; set; } = GillionsEndpoints.DefaultServerUrl;

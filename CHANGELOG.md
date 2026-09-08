@@ -6,7 +6,7 @@
 - Preserve native Retainer observations, exact venture-result acknowledgements, inventory, listings and ordinary sync with the existing product/account gates.
 - Preserve legacy plan backups and ownership records as inert local data, without recovery UI/export or automatic third-party changes.
 - Mark old cached stats/start times historical without refreshing their observation timestamps; drive adaptive result sampling from the native task view.
-- Verify legacy configuration survival through the actual Dalamud serializer against both built product identities.
+- Verify legacy configuration survival through the actual Dalamud serializer against both built product identities, including opaque scalar timestamp strings without offset or precision loss.
 
 ## 1.0.29 - 2026-08-26
 

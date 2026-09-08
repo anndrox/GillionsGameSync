@@ -40,7 +40,10 @@ var original = Parse("""
   "Version": 1,
   "DeviceToken": "SYNTHETIC-DEVICE-TOKEN",
   "DeviceId": "SYNTHETIC-DEVICE",
-  "PairingCode": "SYNTHETIC-PAIRING",
+  "PairingCode": "2024-01-01T12:34:56.000+02:00",
+  "LastPayloadHashes": {"synthetic": "2024-01-01T12:34:56.1234567+02:00"},
+  "LastSyncUtc": "2024-01-01T12:34:56.1234567+02:00",
+  "UnrecognizedOrdinary": {"AutoRetainerVenturePlanBackups": "2024-01-01T12:34:56.000+02:00", "$type": "Unavailable.Ignored.Type"},
   "AutomaticSync": false,
   "EnableAutoRetainerVenturePlans": true,
   "AutoRetainerVenturePlanBackups": {
@@ -69,6 +72,17 @@ foreach (var value in new[] { "null", "[]", "17", "false", "\"malformed-containe
     malformed["AutoRetainerPlanOwnershipStates"] = ParseToken(value);
     cases.Add(malformed);
 }
+// The date-like scalar root is read before the property converter runs.
+// Both keys must retain the literal string, offset and fractional precision.
+foreach (var timestamp in new[] { "2024-01-01T12:34:56.000+02:00", "2024-01-01T12:34:56.1234567-03:30" }) {
+    var scalar = (JObject)original.DeepClone();
+    scalar["AutoRetainerVenturePlanBackups"] = timestamp;
+    scalar["AutoRetainerPlanOwnershipStates"] = timestamp;
+    cases.Add(scalar);
+}
+var unknownRootType = (JObject)original.DeepClone();
+unknownRootType["$type"] = "Unavailable.Root.Type, NoSuchAssembly";
+cases.Add(unknownRootType);
 var older = (JObject)original.DeepClone();
 older.Remove("AutoRetainerVenturePlanBackups");
 older.Remove("AutoRetainerPlanOwnershipStates");
@@ -86,6 +100,15 @@ foreach (var fixture in cases) {
         if (fixture.TryGetValue(name, out var expected))
             Assert(JToken.DeepEquals(expected, roundTrip[name]), $"{product}: {name} lost legacy data.");
     }
+    Assert(roundTrip.Value<string>("PairingCode") == "2024-01-01T12:34:56.000+02:00"
+        && roundTrip["LastPayloadHashes"]!.Value<string>("synthetic") == "2024-01-01T12:34:56.1234567+02:00",
+        "Ordinary string fields and dictionaries must retain their usual string handling.");
+    var ordinaryDate = (DateTime)configurationType.GetProperty("LastSyncUtc")!.GetValue(config)!;
+    var expectedDate = JsonConvert.DeserializeObject<DateTime>("\"2024-01-01T12:34:56.1234567+02:00\"");
+    Assert(ordinaryDate.Ticks == expectedDate.Ticks && ordinaryDate.Kind == expectedDate.Kind,
+        "Ordinary typed dates must retain the default serializer's value and Kind.");
+    Assert(roundTrip["UnrecognizedOrdinary"] is null,
+        "Unknown ordinary fields must retain the default ignored-field behavior.");
     Assert(roundTrip.Value<string>("DeviceToken") == "SYNTHETIC-DEVICE-TOKEN"
         && roundTrip.Value<bool>("AutomaticSync") == false, "Unrelated config fields must survive normal save.");
     Assert(roundTrip.Value<bool>("EnableAutoRetainerVenturePlans") == fixture.Value<bool>("EnableAutoRetainerVenturePlans"),
@@ -94,6 +117,40 @@ foreach (var fixture in cases) {
     configurationType.GetMethod("Save")!.Invoke(restarted, [savedViaPlugin]);
     var second = Parse(File.ReadAllText(pathForFixture));
     Assert(JToken.DeepEquals(roundTrip, second), "Repeated ordinary saves must not normalize or lose legacy data.");
+}
+// Exercise the adapter's exact read boundary with the installed JsonReader.
+// Nested lookalike names remain ordinary date tokens; only root legacy values
+// receive the scoped string policy. Settings and state must always be restored.
+var adapterType = pluginAssembly.GetType("GillionsGameSync.LegacyPlanPropertyReader", throwOnError: true)!;
+using (var inner = new JsonTextReader(new StringReader("""
+{"ordinary":{"AutoRetainerVenturePlanBackups":"2024-01-01T12:34:56.000+02:00"},
+ "unknown":"2024-01-01T12:34:56.000+02:00",
+ "AutoRetainerVenturePlanBackups":"2024-01-01T12:34:56.000+02:00",
+ "AutoRetainerPlanOwnershipStates":"2024-01-01T12:34:56.1234567-03:30"}
+""")) { DateParseHandling = DateParseHandling.DateTime }) {
+    Assert(inner.Read(), "Reader fixture root is missing.");
+    using var adapter = (JsonReader)Activator.CreateInstance(adapterType, [inner])!;
+    var values = new Dictionary<string, JsonToken>();
+    while (adapter.Read()) {
+        Assert(adapter.Depth == inner.Depth && adapter.Path == inner.Path && adapter.TokenType == inner.TokenType,
+            "Adapter depth/path/token state diverged from the actual reader.");
+        Assert(inner.DateParseHandling == DateParseHandling.DateTime, "Date setting leaked after a successful read.");
+        if (adapter.TokenType is JsonToken.Date or JsonToken.String) values[adapter.Path] = adapter.TokenType;
+    }
+    Assert(values["ordinary.AutoRetainerVenturePlanBackups"] == JsonToken.Date && values["unknown"] == JsonToken.Date,
+        "Nested lookalikes and unknown ordinary fields must retain ordinary date inference.");
+    Assert(values["AutoRetainerVenturePlanBackups"] == JsonToken.String && values["AutoRetainerPlanOwnershipStates"] == JsonToken.String,
+        "Only the top-level legacy values must bypass date inference.");
+}
+using (var inner = new JsonTextReader(new StringReader("{\"AutoRetainerVenturePlanBackups\":\"unfinished")) {
+    DateParseHandling = DateParseHandling.DateTimeOffset,
+}) {
+    Assert(inner.Read(), "Failure fixture root is missing.");
+    using var adapter = (JsonReader)Activator.CreateInstance(adapterType, [inner])!;
+    var rejected = false;
+    try { while (adapter.Read()) { } } catch (JsonReaderException) { rejected = true; }
+    Assert(rejected && inner.DateParseHandling == DateParseHandling.DateTimeOffset,
+        "Malformed legacy input must fail and restore the reader's original date policy.");
 }
 Console.WriteLine($"Actual Dalamud config load / plugin Save / serializer: {product}, {cases.Count} fixtures passed.");
 
