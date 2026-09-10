@@ -47,4 +47,16 @@
     <RepoUrl>$(GillionsPublicBaseUrl)</RepoUrl>
     <IconUrl>$(GillionsPublicBaseUrl)/downloads/plugins/GillionsGameSync-icon-v4.png</IconUrl>
   </PropertyGroup>
+  <!-- Local-only diagnostic has its own entry point and never starts the sync plugin. -->
+  <PropertyGroup Condition="'$(GillionsBeastmasterDiagnostic)' == 'true'">
+    <AssemblyName>GillionsBeastmasterDiagnostic</AssemblyName>
+    <Name>Gillions Beastmaster Local Diagnostic</Name>
+    <Punchline>Temporary local read-only Beastmaster test.</Punchline>
+    <Description>Manual Beastmaster loading and ownership diagnostics. No pairing, uploads, or saved observations.</Description>
+    <DefineConstants>$(DefineConstants);GILLIONS_BEASTMASTER_DIAGNOSTIC</DefineConstants>
+  </PropertyGroup>
+  <Target Name="RequireDiagnosticTestingIdentity" BeforeTargets="BeforeBuild"
+          Condition="'$(GillionsBeastmasterDiagnostic)' == 'true' And '$(GillionsTestBuild)' != 'true'">
+    <Error Text="Beastmaster diagnostic requires GillionsTestBuild=true." />
+  </Target>
 </Project>

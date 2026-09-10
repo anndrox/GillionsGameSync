@@ -10,6 +10,23 @@ static void Assert(bool condition, string message) {
 static ItemLinkRequest Request(string id = "request-1", long itemId = 4555, DateTime? expires = null, string claim = "claim-1") =>
     new(id, itemId, expires ?? DateTime.UtcNow.AddMinutes(1), claim);
 
+var beastmasterReadiness = new BeastmasterReadiness();
+Assert(!beastmasterReadiness.Observe(1, false, true), "already-loaded state at startup must not claim character ownership");
+Assert(!beastmasterReadiness.Observe(1, true, false), "not-loaded state is unknown, not an empty collection");
+Assert(beastmasterReadiness.Observe(1, false, true), "fresh loading followed by received admits this character");
+Assert(beastmasterReadiness.Observe(1, false, true), "current-character received state remains usable for capture changes");
+Assert(!beastmasterReadiness.Observe(2, false, true), "character switch must reject a previous character's received list");
+Assert(!beastmasterReadiness.Observe(2, true, false), "new character loading remains unknown");
+Assert(beastmasterReadiness.Observe(2, false, true), "new character's fresh load admits its list");
+Assert(!beastmasterReadiness.Observe(0, false, false), "logout clears freshness");
+Assert(!beastmasterReadiness.Observe(2, false, true), "same-character relog cannot reuse freshness");
+beastmasterReadiness.Observe(2, true, false);
+beastmasterReadiness.Reset();
+Assert(!beastmasterReadiness.Observe(2, false, true), "disabled or closed diagnostic cannot reuse freshness");
+beastmasterReadiness.Observe(2, true, false);
+Assert(!beastmasterReadiness.Observe(2, false, false), "unrecognized loading state must fail closed");
+Assert(!beastmasterReadiness.Observe(2, false, true), "unrecognized state invalidates prior freshness");
+Console.WriteLine("Beastmaster session freshness tests passed");
 const string currentPublicOrigin = "https://gillions.app";
 Assert(PublicUrlConfiguration.TryUseCompiledDefault("", currentPublicOrigin, out var initialOrigin)
     && initialOrigin == currentPublicOrigin, "a new configuration must use the compiled public origin");

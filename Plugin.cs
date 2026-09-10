@@ -43,7 +43,11 @@ internal static class GillionsEndpoints {
     }
 }
 
+#if GILLIONS_BEASTMASTER_DIAGNOSTIC
+public sealed class Plugin {
+#else
 public sealed class Plugin : IDalamudPlugin {
+#endif
     public string Name => "Gillions Game Sync";
     private readonly IDalamudPluginInterface pluginInterface;
     private readonly ICommandManager commands;
