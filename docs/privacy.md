@@ -31,3 +31,12 @@ Routine freshness-only saves are coalesced with other changes and occur no more 
 Version `1.0.30` removes AutoRetainer discovery, IPC, plan polling and apply/restore paths. Neutral legacy presence fields preserve old-server parsing without inspecting other plugins or advertising planner readiness. Existing plan backups and ownership records remain inert, including unknown fields and scalar timestamp strings. Prior AutoRetainer-derived stats/start times remain historical and are not projected into a new owned session. No automatic restore, purge or history recovery/export is added. Older installed plugins and external plans retain their own behavior until separately changed.
 
 Stable diagnostic recording is off by default and can be started for ten minutes. Testing builds record diagnostics automatically. The in-memory display holds at most 40 lines; entries also use normal local Dalamud logging, whose retention is separate. Reports can contain gameplay details such as balances, Retainer names and structured item facts. Review copied reports before sharing. Remote error bodies and arbitrary server error messages are not echoed into diagnostics or the window; recognized errors use local text. Control responses are limited to 64 KiB and JSON depth 16 before receipt processing.
+
+## Unreleased testing candidate: Beastmaster
+
+The testing-only Beastmaster view requires explicit local sampling opt-in after
+each plugin load. Closing its window stops sampling and clears results. Pet names
+and ownership stay in memory; character identity is used only internally to
+invalidate stale results. No Beastmaster data is saved, logged or uploaded.
+An explicit copy action places the displayed pet results on the local clipboard.
+Ordinary paired Game Sync behavior remains governed by the controls above.

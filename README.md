@@ -40,6 +40,13 @@ Pending data across all new pairing generations and characters shares a limit of
 
 Re-pairing does not free storage or authorize uploading another generation's records. Inactive or uncertain records may continue to occupy the limit. Legacy unowned history remains outside this new budget, and the budget does not promise a maximum total configuration-file size. Synthetic fixtures measure storage accounting; they do not establish hours of player coverage. See [Privacy](docs/privacy.md).
 
+## Testing candidate: Beastmaster local read
+
+The task-branch testing candidate includes an opt-in Beastmaster view, disabled
+by default. Open **Beastmaster local test** in testing settings or use /gillionsbst.
+Results stay in memory and are not uploaded. This is not a published update;
+see [local test instructions](docs/beastmaster-local-test.md).
+
 ## Build and verify
 
 Requirements are Windows, .NET 10 SDK and the Dalamud dependencies used by `Dalamud.NET.Sdk`.

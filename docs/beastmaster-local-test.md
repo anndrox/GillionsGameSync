@@ -1,56 +1,68 @@
-# Beastmaster local diagnostic
+# Beastmaster local test in Game Sync Testing
 
-Temporary, owner-run read-only test. No pairing, upload, configuration persistence,
-page, or automatic gameplay. This is not a stable collector or release.
+This task-branch candidate incorporates the proven read-only Beastmaster reader
+into **Gillions Game Sync Testing**. It is off by default on every plugin load.
+The stable plugin excludes the reader. Source push is not a plugin/feed release.
 
-Build from this task branch with the installed Dalamud API 15 SDK:
+## Build and load
 
 ```powershell
-dotnet build GillionsGameSync.csproj -c Release -warnaserror -p:GillionsTestBuild=true -p:GillionsBeastmasterDiagnostic=true -p:Version=0.0.2 -p:OutputPath=artifacts/beastmaster-local/
+dotnet build GillionsGameSync.csproj -c Release -warnaserror -p:GillionsTestBuild=true -p:Version=0.0.3 -p:OutputPath=artifacts/beastmaster-testing/
 ```
 
-The DLL and adjacent JSON are in `artifacts/beastmaster-local/`.
-The distinct identity is `GillionsBeastmasterDiagnostic`; its only plugin entry
-point is the diagnostic. The ordinary sync plugin is not started.
+The DLL and adjacent JSON are in `artifacts/beastmaster-testing/`.
+The identity is the existing `GillionsGameSyncTest`, version `0.0.3.0`.
 
-## Load and check
+1. Disable the earlier **Gillions Beastmaster Local Diagnostic** and remove its
+   Dev Plugin Location to avoid two handlers for `/gillionsbst`.
+2. If an existing **Gillions Game Sync Testing** is enabled, disable it first.
+   Keep its configuration; do not run two copies of that same plugin identity.
+3. In Dalamud settings (`/xlsettings`), Experimental, enable Developer Mode.
+   Under Dev Plugin Locations, select this candidate's `GillionsGameSyncTest.dll`,
+   save, then enable the development copy of **Gillions Game Sync Testing**.
+4. Open its settings and choose **Beastmaster local test**, or run `/gillionsbst`.
+   The window initially says sampling is off; enable it explicitly.
 
-1. Open Dalamud settings (`/xlsettings`), Experimental, enable Developer Mode.
-2. Under Dev Plugin Locations, select the built `GillionsBeastmasterDiagnostic.dll`,
-   then save. Enable **Gillions Beastmaster Local Diagnostic** in the plugin installer.
-3. Run `/gillionsbst`; enable local sampling. No pairing is needed.
-4. Check the loading state, then open the bestiary manually. If the list was
-   already received before sampling started, ownership remains unknown. Keep the
-   diagnostic open and sampling enabled, log out/in, then open the bestiary.
-5. Compare names, owned/unowned entries, and total with the bestiary. After a manual
-   capture, check that the appropriate entry and total change. Repeat logout/login
-   and, if available, a character switch: the old character's list must disappear.
-6. Copy the diagnostic text if useful. This explicit clipboard action includes pet
-   results, not account or character identifiers. Report the action taken and
-   whether the game and diagnostic agree. Close the window to stop sampling.
-7. Disable the diagnostic and remove its Dev Plugin Location when finished.
+No pairing is needed for the Beastmaster view. Existing Game Sync features retain
+normal behavior and may synchronize ordinary data if this testing identity was
+already paired. Beastmaster results never enter those uploads or saved records.
 
-## Evidence and limits
+## Owner-run checks
 
-The installed SDK's typed `XBMManager` supplies loading state and `IsPetUnlocked`.
-The installed experimental `XBMPet.Pet` reference supplies pet names. The SDK marks
-that catalog experimental; its warning is suppressed only inside this diagnostic.
-No offsets, packet hooks, load requests or native writes are introduced.
+- Confirm no Beastmaster sampling occurs until enabled. Reloading the plugin or
+  closing its Beastmaster window must leave sampling off.
+- Observe loading before/after manually opening the bestiary. If the native list
+  was already received, leave the window open with sampling on, log out/in, and
+  open the bestiary again. Unknown is not an empty collection.
+- Compare pet names, owned/unowned entries and total against the bestiary.
+- After a manual capture, confirm the appropriate entry and count update.
+- Log out and switch to a different character. The prior list must disappear;
+  admit the new character's results only after fresh loading and compare again.
+- If useful, copy the current diagnostic text and report the action and agreement.
+  The explicit clipboard action includes pet results and version, not character
+  or account identifiers. Do not share normal plugin configuration or credentials.
 
-Unknown/not-loaded is never represented as an empty collection. Fresh loading
-must be observed for the current character; a received list at startup is not
-sufficient. Native-count/catalog mismatch also remains unknown. A missed loading
-transition may therefore leave the diagnostic unknown; report that observation.
-The loading transition is a conservative test guard, not proof that the game's
-native state is correctly associated with the character.
+Disable the development copy and remove its Dev Plugin Location when finished;
+then re-enable the installed testing copy if desired. No feed was updated.
 
-Verification: diagnostic warning-as-error build and `scripts/verify.ps1` passed,
-including freshness fixtures for startup, loading, character switch, logout,
-reset and unexpected state. Initial compilation identified the absent stable name
-field; installed metadata resolved the experimental pet reference. Stable and
-ordinary testing builds remain separate. In-game loading, bestiary comparison,
-capture updates and session transitions are **not yet validated**.
+## Evidence and remaining uncertainty
 
-Source references:
-- [Native manager](https://github.com/aers/FFXIVClientStructs/blob/f0741b7604bdd537b62467c07ad82fdf584e0abb/FFXIVClientStructs/FFXIV/Client/Game/XBMManager.cs)
-- [Dalamud developer DLL locations](https://github.com/goatcorp/Dalamud/blob/master/Dalamud/Interface/Internal/Windows/Settings/Widgets/DevPluginsSettingsEntry.cs)
+The prior standalone reader passed an owner-run fresh-load and bestiary ownership
+comparison. That acceptance belongs to diagnostic commit `cdbd87a`; it is supporting
+evidence, not live acceptance of this integrated candidate. Capture changes and a
+different character remain untested in-game. The candidate's test results are
+reported with its exact commit/build identity.
+
+The installed SDK supplies typed `XBMManager` loading state and `IsPetUnlocked`.
+Its experimental `XBMPet.Pet` reference supplies names. That SDK evaluation opt-in
+is confined to the testing-only view. No offsets, packet hooks, load requests or
+native writes are introduced. A missing loading transition, unavailable catalog,
+read failure or native-count/catalog disagreement leaves ownership unknown.
+
+The view is owned/disposed by the existing testing plugin. Sampling, freshness and
+results stay in memory. Required verification includes freshness fixtures, actual
+stable/testing assembly isolation and the existing repository checks. The stable
+build has neither the local view nor its readiness policy. There are no upload,
+server, page, persisted-contract or production changes in this candidate.
+
+[Official developer DLL-location controls](https://github.com/goatcorp/Dalamud/blob/master/Dalamud/Interface/Internal/Windows/Settings/Widgets/DevPluginsSettingsEntry.cs)

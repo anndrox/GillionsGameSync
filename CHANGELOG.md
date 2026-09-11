@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased testing candidate
+
+- Add an opt-in, local-only Beastmaster ownership view to the existing testing plugin. Sampling defaults off; results are not persisted or uploaded. Stable behavior is unchanged. See [testing instructions](docs/beastmaster-local-test.md).
+
+
 ## 1.0.30 - 2026-09-08
 
 - Remove venture-plan delivery, apply/restore controls and AutoRetainer discovery/read/write IPC from both products. Retain native observations, inventory, listings and venture results under the existing account/product gates.

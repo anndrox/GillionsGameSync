@@ -27,6 +27,25 @@ var serialize = typeof(PluginConfigurations).GetMethod("SerializeConfig", Bindin
 var load = typeof(PluginConfigurations).GetMethod("LoadForType")!.MakeGenericMethod(configurationType);
 var configurations = new PluginConfigurations(fixturePath);
 var product = pluginAssembly.GetName().Name!;
+var beastmasterView = pluginAssembly.GetType("GillionsGameSync.BeastmasterLocalView");
+var beastmasterReadiness = pluginAssembly.GetType("GillionsGameSync.BeastmasterReadiness");
+Assert(pluginAssembly.GetType("GillionsGameSync.BeastmasterDiagnostic") is null,
+    "Standalone diagnostic entry point must not survive testing integration.");
+Assert(typeof(IDalamudPlugin).IsAssignableFrom(pluginType), "Existing Plugin must retain its Dalamud entry point.");
+if (product == "GillionsGameSyncTest") {
+    Assert(beastmasterView is not null && beastmasterReadiness is not null,
+        "Testing product must contain the local Beastmaster reader and freshness policy.");
+    Assert(!typeof(IDalamudPlugin).IsAssignableFrom(beastmasterView!),
+        "Local Beastmaster reader must not create a second plugin entry point.");
+    Assert(pluginType.GetField("beastmasterLocal", BindingFlags.Instance | BindingFlags.NonPublic)?.FieldType == beastmasterView,
+        "Existing testing Plugin must own the local Beastmaster lifecycle.");
+} else {
+    Assert(beastmasterView is null && beastmasterReadiness is null,
+        "Stable product must not contain experimental Beastmaster collection.");
+}
+Assert(!configurationType.GetProperties().Any(property => property.Name.Contains("Beastmaster", StringComparison.OrdinalIgnoreCase)),
+    "Local Beastmaster test must not add persisted configuration or observations.");
+Console.WriteLine($"Actual Beastmaster testing-only assembly boundary passed: {product}.");
 var pathForFixture = configurations.GetConfigFile(product).FullName;
 var savedViaPlugin = DispatchProxy.Create<IDalamudPluginInterface, ConfigurationSaveProxy>();
 var saveProxy = (ConfigurationSaveProxy)savedViaPlugin;

@@ -1,4 +1,4 @@
-#if GILLIONS_BEASTMASTER_DIAGNOSTIC
+#if GILLIONS_TEST_BUILD
 // The installed SDK labels this typed sheet experimental; this local test exists
 // to evaluate it. Do not carry this opt-in into the stable collector.
 #pragma warning disable PendingExcelSchema
@@ -15,9 +15,8 @@ using XBMPet = Lumina.Excel.Sheets.Experimental.XBMPet;
 
 namespace GillionsGameSync;
 
-// This is the only IDalamudPlugin entry point in the diagnostic build.
-// It never constructs Plugin or reads/writes plugin configuration.
-public sealed class BeastmasterDiagnostic : IDalamudPlugin {
+// Owned by the testing Plugin lifecycle; never reads/writes configuration or transport.
+internal sealed class BeastmasterLocalView : IDisposable {
     private readonly IDalamudPluginInterface ui;
     private readonly ICommandManager commands;
     private readonly IFramework framework;
@@ -25,7 +24,7 @@ public sealed class BeastmasterDiagnostic : IDalamudPlugin {
     private readonly IDataManager data;
     private readonly BeastmasterReadiness readiness = new();
     private bool visible;
-    private bool enabled;
+    private bool enabled = false;
     private bool disposed;
     private bool resetPending;
     private ulong sampledCharacter;
@@ -37,20 +36,20 @@ public sealed class BeastmasterDiagnostic : IDalamudPlugin {
     private string counts = "Ownership unknown";
     private (uint Id, string Name)[]? catalog;
 
-    public BeastmasterDiagnostic(IDalamudPluginInterface pluginInterface, ICommandManager commands,
+    public BeastmasterLocalView(IDalamudPluginInterface pluginInterface, ICommandManager commands,
         IFramework framework, IClientState clientState, IDataManager dataManager) {
         ui = pluginInterface; this.commands = commands; this.framework = framework;
         client = clientState; data = dataManager;
         commands.AddHandler("/gillionsbst", new CommandInfo(Open) { HelpMessage = "Open the local Beastmaster diagnostic (no uploads)." });
         ui.UiBuilder.Draw += Draw;
-        ui.UiBuilder.OpenConfigUi += OpenConfig;
+
         framework.Update += Update;
         client.Login += OnLogin;
         client.Logout += OnLogout;
     }
 
     private void Open(string command, string arguments) => visible = true;
-    private void OpenConfig() => visible = true;
+    public void Show() => visible = true;
     private void OnLogin() => resetPending = true;
     private void OnLogout(int type, int code) => resetPending = true;
     private void Clear(string reason) {
@@ -112,9 +111,9 @@ public sealed class BeastmasterDiagnostic : IDalamudPlugin {
     private void Draw() {
         if (!visible || disposed) return;
         ImGui.SetNextWindowSize(new Vector2(680, 520), ImGuiCond.FirstUseEver);
-        var draw = ImGui.Begin("Beastmaster local diagnostic###GillionsBeastmasterDiagnostic", ref visible);
+        var draw = ImGui.Begin("Beastmaster local test###GillionsBeastmasterLocalView", ref visible);
         if (draw) {
-            ImGui.TextWrapped("Local read-only test. No pairing, uploads or saved observations. Sampling stops when this window closes.");
+            ImGui.TextWrapped("Beastmaster reads stay local and are not saved or uploaded. No pairing is needed for this test. Sampling stops when this window closes.");
             if (ImGui.Checkbox("Enable local sampling", ref enabled)) {
                 Clear(enabled ? "Waiting for sample..." : "Sampling off."); nextSample = DateTime.MinValue;
             }
@@ -122,7 +121,7 @@ public sealed class BeastmasterDiagnostic : IDalamudPlugin {
             ImGui.TextWrapped(status);
             ImGui.TextWrapped(counts);
             if (ImGui.Button("Copy current diagnostic text")) {
-                ImGui.SetClipboardText($"Beastmaster local diagnostic\nState: {state}\nSample: {sampledAt}\n{status}\n{counts}\n" + string.Join("\n", rows));
+                ImGui.SetClipboardText($"Gillions Game Sync Testing {typeof(Plugin).Assembly.GetName().Version}\nBeastmaster local read\nState: {state}\nSample: {sampledAt}\n{status}\n{counts}\n" + string.Join("\n", rows));
             }
             ImGui.Separator();
             ImGui.TextWrapped("Check: before/after bestiary opening; known owned and unowned pets; a manual capture; logout/login; a different character. No character identifiers are displayed or copied.");
@@ -137,7 +136,7 @@ public sealed class BeastmasterDiagnostic : IDalamudPlugin {
     public void Dispose() {
         disposed = true;
         framework.Update -= Update; client.Login -= OnLogin; client.Logout -= OnLogout;
-        ui.UiBuilder.Draw -= Draw; ui.UiBuilder.OpenConfigUi -= OpenConfig;
+        ui.UiBuilder.Draw -= Draw;
         commands.RemoveHandler("/gillionsbst"); Clear("Disposed.");
     }
 }

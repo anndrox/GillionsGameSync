@@ -1,4 +1,4 @@
-#if GILLIONS_BEASTMASTER_DIAGNOSTIC || GILLIONS_POLICY_TESTS
+#if GILLIONS_TEST_BUILD || GILLIONS_POLICY_TESTS
 namespace GillionsGameSync;
 
 // A loaded native list has no owner identifier. Admit ownership only after an
