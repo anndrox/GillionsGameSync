@@ -42,8 +42,12 @@ already paired. Beastmaster results never enter those uploads or saved records.
   The explicit clipboard action includes pet results and version, not character
   or account identifiers. Do not share normal plugin configuration or credentials.
 
-Disable the development copy and remove its Dev Plugin Location when finished;
-then re-enable the installed testing copy if desired. No feed was updated.
+When finished, disable the development copy and preserve its configuration.
+Keep older testing copies disabled. Re-enable only the approved 0.0.63 replacement
+or a specifically reviewed compatible successor. Returning to 0.0.62 requires an
+explicit Native/Compatibility recovery decision; prefer a forward correction.
+Remove the development location only when the approved replacement is ready.
+No feed was updated by these local test steps.
 
 ## Evidence and remaining uncertainty
 

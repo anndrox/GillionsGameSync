@@ -39,8 +39,9 @@ Website item links have a separate switch. Retainer uploads require server
 compatibility acceptance. No pairing is needed just to view Beastmaster locally.
 
 Pending records share a 10,000-record / 8 MiB budget. Admitted records are kept;
-new event recording pauses with a gap warning at capacity. Old inactive records
-still count, re-pairing does not clear them, and missed events are not recovered.
+new event recording pauses with a gap warning at capacity. Records from earlier
+owned pairing generations still count; legacy unowned history is preserved outside
+that budget. Re-pairing does not clear old records, and missed events are not recovered.
 
 ## Verification and recovery
 
