@@ -20,9 +20,11 @@ $testingOrigin = 'https://testing.invalid'
 & (Join-Path $root 'scripts/package.ps1') -Channel testing -Version 0.0.0 -PublicBaseUrl $testingOrigin -PublishedAt 1
 if ($LASTEXITCODE -ne 0) { throw 'Testing package fixture failed.' }
 $testing = @([IO.File]::ReadAllText((Join-Path $root 'artifacts/package/testing/0.0.0/GillionsGameSyncTesting.json')) | ConvertFrom-Json -AsHashtable)[0]
+$embeddedTesting = [IO.File]::ReadAllText((Join-Path $root 'artifacts/package/testing/0.0.0/build/GillionsGameSyncTest.json')) | ConvertFrom-Json
+Assert-Condition ($embeddedTesting.IconUrl -ceq $testing.IconUrl) 'Embedded testing manifest and feed must agree on the canonical icon.'
 $testingUrl = "$testingOrigin/downloads/plugins/GillionsGameSyncTesting-0.0.0.zip"
 Assert-Condition ($testing.InternalName -ceq 'GillionsGameSyncTest') 'Testing packaging changed the separate plugin identity.'
-Assert-Condition ($testing.IconUrl -ceq "$testingOrigin/downloads/plugins/GillionsGameSync-icon-v4.png") 'Testing packaging changed its existing icon host.'
+Assert-Condition ($testing.IconUrl -ceq 'https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png') 'Testing packaging must satisfy the hosted publisher canonical-icon contract.'
 foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate', 'DownloadLinkTesting')) {
   Assert-Condition ($testing[$field] -ceq $testingUrl) "Testing packaging changed the existing $field behavior."
 }

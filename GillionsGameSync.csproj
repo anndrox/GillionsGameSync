@@ -37,7 +37,7 @@
   <!-- A separate Dalamud identity keeps the test repository from updating or
        sharing configuration with the stable member plugin. -->
   <PropertyGroup Condition="'$(GillionsTestBuild)' == 'true'">
-    <Version>0.0.1</Version>
+    <Version>0.0.63</Version>
     <AssemblyName>GillionsGameSyncTest</AssemblyName>
     <Name>Gillions Game Sync Testing</Name>
     <Punchline>Unreleased Gillions sync test build.</Punchline>
@@ -45,6 +45,6 @@
     <!-- The separately installed testing product remains on the private Gillions
          testing feed. Stable GitHub distribution does not publish test builds. -->
     <RepoUrl>$(GillionsPublicBaseUrl)</RepoUrl>
-    <IconUrl>$(GillionsPublicBaseUrl)/downloads/plugins/GillionsGameSync-icon-v4.png</IconUrl>
+    <IconUrl>$(GillionsStableIconUrl)</IconUrl>
   </PropertyGroup>
 </Project>

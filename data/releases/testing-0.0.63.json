@@ -1,0 +1,23 @@
+{
+  "channel": "testing",
+  "version": "0.0.63",
+  "status": "prepared-unpublished",
+  "internalName": "GillionsGameSyncTest",
+  "dalamudApiLevel": 15,
+  "publishedAtInput": 1789085847,
+  "archive": "GillionsGameSyncTesting-0.0.63.zip",
+  "archiveSha256": "0ef5d9e34a6f280802b7811648d7d9d2a1526be2bfd97b15769357e00d992036",
+  "manifestSha256": "300d71f59c6701fdc6a0aa5a83e3be4d44370c68b1c3012c880fdd23c2b7bd28",
+  "assemblySha256": "3aaec5f8329fa46a9254d7f752a37eb4a4c7e72ca501043f3ed836ade62b2070",
+  "feed": "https://gillions.app/plugins/GillionsGameSyncTesting.json",
+  "download": "https://gillions.app/downloads/plugins/GillionsGameSyncTesting-0.0.63.zip",
+  "previousVersion": "0.0.62",
+  "previousArchiveSha256": "8b1cb6c9e864a0c99f25e9604e1d40875815016d197f0feb51c0b12faca202d4",
+  "notes": "docs/releases/testing-0.0.63.md",
+  "requiredBeforePublication": [
+    "Exact-candidate independent release reviews",
+    "Owner-run integrated loading/default-off, capture and different-character checks",
+    "Explicit owner approval of the concrete testing publication action"
+  ],
+  "rollback": "Disable sampling/plugin and preserve configuration; no automatic downgrade to planner-capable 0.0.62."
+}

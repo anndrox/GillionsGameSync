@@ -7,11 +7,11 @@ The stable plugin excludes the reader. Source push is not a plugin/feed release.
 ## Build and load
 
 ```powershell
-dotnet build GillionsGameSync.csproj -c Release -warnaserror -p:GillionsTestBuild=true -p:Version=0.0.3 -p:OutputPath=artifacts/beastmaster-testing/
+./scripts/package.ps1 -Channel testing -Version 0.0.63 -PublishedAt 1789085847
 ```
 
-The DLL and adjacent JSON are in `artifacts/beastmaster-testing/`.
-The identity is the existing `GillionsGameSyncTest`, version `0.0.3.0`.
+The DLL and adjacent JSON are in `artifacts/package/testing/0.0.63/build/`.
+The identity is the existing `GillionsGameSyncTest`, version `0.0.63.0`.
 
 1. Disable the earlier **Gillions Beastmaster Local Diagnostic** and remove its
    Dev Plugin Location to avoid two handlers for `/gillionsbst`.

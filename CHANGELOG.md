@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased testing candidate
+## 0.0.63 - release candidate (testing, unpublished)
 
 - Add an opt-in, local-only Beastmaster ownership view to the existing testing plugin. Sampling defaults off; results are not persisted or uploaded. Stable behavior is unchanged. See [testing instructions](docs/beastmaster-local-test.md).
 
+
+- Replaces the published `0.0.62` testing baseline with current Game Sync behavior, including one-time legacy re-pairing, preserved inactive history, bounded pending storage and retired AutoRetainer control. See [replacement notes](docs/releases/testing-0.0.63.md).
 
 ## 1.0.30 - 2026-09-08
 
