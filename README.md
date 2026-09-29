@@ -24,6 +24,12 @@ The testing feed is intentionally separate and should be installed only when a G
 
 Only enabled categories are sent. Data that is not authoritatively loaded is preserved or omitted rather than reported as empty.
 
+## Optional Party Finder contribution
+
+The Party Finder contribution setting is off by default and independent from Gillions account pairing. When a player enables it, the plugin batches only the public listings already delivered to the in-game Party Finder and sends them directly to [xivpf.com](https://xivpf.com). Gillions does not proxy or retain those contributed listings. Uploads wait ten seconds after the newest listing and are limited to at most six requests per minute.
+
+Stable builds use xivpf's HTTPS contribution endpoint. Testing builds default to the loopback Remote Party Finder server at `http://127.0.0.1:8000`, so development traffic cannot reach the production service accidentally.
+
 ## Build and verify
 
 Requirements:

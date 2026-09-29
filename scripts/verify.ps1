@@ -17,6 +17,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Focused fixture executable failed.' }
 & (Join-Path $root 'tests/folklore-collector-contract-test.ps1')
 & (Join-Path $root 'tests/performance-contract-test.ps1')
 & (Join-Path $root 'tests/stable-readiness-contract-test.ps1')
+& (Join-Path $root 'tests/party-finder-contribution-contract-test.ps1')
 
 $stableOutput = Join-Path $root 'artifacts/verification/stable/'
 dotnet build $project -c Release --no-restore -warnaserror -p:Version=0.0.0 -p:OutputPath=$stableOutput

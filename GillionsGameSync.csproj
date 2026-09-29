@@ -14,6 +14,8 @@
     <GillionsPublicBaseUrl Condition="'$(GillionsPublicBaseUrl)' == ''">https://gillions.app</GillionsPublicBaseUrl>
     <GillionsRepositoryUrl Condition="'$(GillionsRepositoryUrl)' == ''">https://github.com/anndrox/GillionsGameSync</GillionsRepositoryUrl>
     <GillionsStableIconUrl Condition="'$(GillionsStableIconUrl)' == ''">https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png</GillionsStableIconUrl>
+    <XivpfContributionUrl Condition="'$(XivpfContributionUrl)' == '' and '$(GillionsTestBuild)' != 'true'">https://xivpf.com/contribute/multiple</XivpfContributionUrl>
+    <XivpfContributionUrl Condition="'$(XivpfContributionUrl)' == '' and '$(GillionsTestBuild)' == 'true'">http://127.0.0.1:8000/contribute/multiple</XivpfContributionUrl>
     <RepositoryUrl>$(GillionsRepositoryUrl)</RepositoryUrl>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <RepoUrl>$(GillionsRepositoryUrl)</RepoUrl>
@@ -32,6 +34,10 @@
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
       <_Parameter1>GillionsPublicBaseUrl</_Parameter1>
       <_Parameter2>$(GillionsPublicBaseUrl)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>XivpfContributionUrl</_Parameter1>
+      <_Parameter2>$(XivpfContributionUrl)</_Parameter2>
     </AssemblyAttribute>
   </ItemGroup>
   <!-- A separate Dalamud identity keeps the test repository from updating or

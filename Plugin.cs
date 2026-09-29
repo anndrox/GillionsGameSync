@@ -56,6 +56,7 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly IPluginLog log;
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private readonly PluginConfiguration configuration;
+    private readonly PartyFinderContributor partyFinderContributor;
     private string settingsMessage = "";
     // A paired background sync must never interrupt login with its settings
     // window. Open it explicitly from Dalamud configuration when needed.
@@ -156,7 +157,7 @@ public sealed class Plugin : IDalamudPlugin {
     private const int NormalVentureRosterCaptureIntervalMilliseconds = 30000;
     private const int AutomatedVentureRosterCaptureIntervalMilliseconds = 1000;
 
-    public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commands, IClientState clientState, IObjectTable objects, IFramework framework, IDataManager dataManager, IUnlockState unlockState, IGameInventory gameInventory, IChatGui chatGui, IPluginLog log) {
+    public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commands, IClientState clientState, IObjectTable objects, IFramework framework, IDataManager dataManager, IUnlockState unlockState, IGameInventory gameInventory, IPartyFinderGui partyFinderGui, IChatGui chatGui, IPluginLog log) {
         this.pluginInterface = pluginInterface;
         this.commands = commands;
         this.clientState = clientState;
@@ -170,6 +171,7 @@ public sealed class Plugin : IDalamudPlugin {
         autoRetainerObservationReader = new AutoRetainerObservationReader(pluginInterface);
         autoRetainerPlanWriter = new AutoRetainerVenturePlanWriter(pluginInterface);
         configuration = pluginInterface.GetPluginConfig() as PluginConfiguration ?? new PluginConfiguration();
+        partyFinderContributor = new PartyFinderContributor(partyFinderGui, http, log, () => configuration.EnablePartyFinderContributions, XivpfEndpoints.ContributionUrl);
         configuration.RetainerVentureStates ??= new(StringComparer.Ordinal);
         configuration.AutoRetainerVenturePlanBackups ??= new(StringComparer.Ordinal);
         configuration.AutoRetainerPlanOwnershipStates ??= new(StringComparer.Ordinal);
@@ -296,6 +298,7 @@ public sealed class Plugin : IDalamudPlugin {
 
     private void OnFrameworkUpdate(IFramework frameworkInstance) {
         var now = DateTime.UtcNow;
+        partyFinderContributor.Tick(now);
         if (!clientState.IsLoggedIn) {
             activeRetainerCharacterContentId = 0;
             autoRetainerApiReady = false;
@@ -1139,6 +1142,14 @@ public sealed class Plugin : IDalamudPlugin {
         }
         ImGui.TextDisabled("Uses the paired device connection only to print requested native item links in chat. No gameplay controls are used.");
         ImGui.Separator();
+        var enablePartyFinderContributions = configuration.EnablePartyFinderContributions;
+        if (ImGui.Checkbox("Contribute public Party Finder listings to xivpf.com", ref enablePartyFinderContributions)) {
+            configuration.EnablePartyFinderContributions = enablePartyFinderContributions;
+            configuration.Save(pluginInterface);
+        }
+        ImGui.TextDisabled("Off by default. When enabled, listings already visible in Party Finder are sent directly to xivpf.com in batches. They never pass through Gillions.");
+        ImGui.TextDisabled("No Square Enix credentials, chat text, Gillions account data, or private local files are included.");
+        ImGui.Separator();
         var enableAutoRetainerVenturePlans = configuration.EnableAutoRetainerVenturePlans;
         var plannerOptInLabel = RetainerClient.Channel == "testing"
             ? "Allow testing Gillions plans to update AutoRetainer"
@@ -1347,6 +1358,7 @@ public sealed class Plugin : IDalamudPlugin {
         pluginInterface.UiBuilder.OpenConfigUi -= OpenSettings;
         pluginInterface.ActivePluginsChanged -= OnActivePluginsChanged;
         commands.RemoveHandler(CommandName);
+        partyFinderContributor.Dispose();
         http.Dispose();
     }
 }
@@ -1371,6 +1383,7 @@ public sealed class PluginConfiguration : IPluginConfiguration {
     public string DeviceToken { get; set; } = "";
     public bool AutomaticSync { get; set; } = true;
     public bool EnableItemLinkRequests { get; set; } = true;
+    public bool EnablePartyFinderContributions { get; set; } = false;
     public bool EnableAutoRetainerVenturePlans { get; set; } = false;
     public Dictionary<string, AutoRetainerVenturePlanBackup> AutoRetainerVenturePlanBackups { get; set; } = new(StringComparer.Ordinal);
     public Dictionary<string, AutoRetainerPlanOwnershipState> AutoRetainerPlanOwnershipStates { get; set; } = new(StringComparer.Ordinal);

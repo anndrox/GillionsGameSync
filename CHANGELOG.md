@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added an off-by-default Party Finder contribution setting that sends only public listings directly to xivpf.com, never through Gillions.
+- Batch contributions ten seconds after the newest listing and enforce no more than six direct requests per minute. Testing builds default to the local Remote Party Finder server.
+
 ## 1.0.29 - 2026-08-26
 
 - Hydrate the selected character and refresh paired presence once after pairing or an ordinary plugin update/reload, without requiring another pairing or enabling recurring automatic sync.
