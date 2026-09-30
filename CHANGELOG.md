@@ -8,11 +8,11 @@
 - Stop permission failures until a fresh pairing; honor server retry delays with jitter and a rolling six-request ceiling. Logout, re-pair, character changes, opt-out and disposal cancel and clear old-session observations.
 - Keep serialization and HTTP startup off the game thread. Diagnostics disclose aggregate results only. Beastmaster remains local-only; no new game queries, map flags or Hunt features.
 
-## Unreleased - HTTPS main-site testing
+## Earlier 0.0.64 preparation - HTTPS main-site testing
 
 - The owner selected the main HTTPS site for ordinary testing-client synchronization. The existing published `0.0.64` package already supports this; no successor is needed to pair with the main site.
 - Withdraw the unpublished private-HTTP pairing exception and its transport override. Both products remain HTTPS-only and preserve their established pairing and transport behavior.
-- Add actual-product HTTPS acceptance and HTTP refusal checks. Party Finder still has its separate loopback-only testing endpoint; Beastmaster results remain local-only.
+- Add actual-product HTTPS acceptance and HTTP refusal checks. In `0.0.64`, Party Finder retained its separate loopback-only testing endpoint; `0.0.65` supersedes that recipient with authenticated Gillions HTTPS. Beastmaster results remain local-only.
 
 ## 0.0.64 - combined testing performance update
 

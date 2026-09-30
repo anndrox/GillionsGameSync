@@ -40,6 +40,13 @@ Assert(testingProduct
         ? endpoint == new Uri("https://gillions.app/api/game-sync/party-finder/contribute")
         : endpoint == new Uri("https://xivpf.com/contribute/multiple"),
     "Built product resolved an unsafe or unexpected xivpf contribution endpoint.");
+var changelog = (string[])pluginType.GetField("CurrentChangelog", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+Assert(testingProduct
+    ? changelog.Any(line => line.Contains("Public listings go to Gillions HTTPS, not directly to xivpf.com or localhost."))
+        && changelog.Any(line => line.Contains("runtime current-listing cache") && line.Contains("Authorization"))
+        && !changelog.Any(line => line.Contains("listings directly to xivpf.com") || line.Contains("loopback-only"))
+    : changelog.Any(line => line.Contains("listings directly to xivpf.com")),
+    "Built-product recipient/custody changelog disclosure is incorrect.");
 Assert(pluginAssembly.GetType("GillionsGameSync.AutoRetainerVenturePlanWriter") is null
     && pluginAssembly.GetType("GillionsGameSync.AutoRetainerIpc") is null
     && pluginAssembly.GetType("GillionsGameSync.RetainerPlanDeliveryPolicy") is null
@@ -74,6 +81,17 @@ var pathForFixture = configurations.GetConfigFile(product).FullName;
 var savedViaPlugin = DispatchProxy.Create<IDalamudPluginInterface, ConfigurationSaveProxy>();
 var saveProxy = (ConfigurationSaveProxy)savedViaPlugin;
 saveProxy.Save = config => File.WriteAllText(pathForFixture, (string)serialize.Invoke(null, [config])!);
+var blockedGeneration = configurationType.GetProperty("GillionsPartyFinderBlockedGeneration")!;
+var deniedConfig = Activator.CreateInstance(configurationType)!;
+blockedGeneration.SetValue(deniedConfig, "synthetic-denied-enrollment");
+configurationType.GetMethod("Save")!.Invoke(deniedConfig, [savedViaPlugin]);
+var deniedReload = load.Invoke(configurations, [product])!;
+Assert((string)blockedGeneration.GetValue(deniedReload)! == "synthetic-denied-enrollment",
+    "Authorization stop must survive actual Dalamud configuration Save/load.");
+blockedGeneration.SetValue(deniedReload, "");
+configurationType.GetMethod("Save")!.Invoke(deniedReload, [savedViaPlugin]);
+Assert((string)blockedGeneration.GetValue(load.Invoke(configurations, [product]))! == "",
+    "A new/default authorization-stop marker must round-trip without listing data.");
 
 // Type metadata deliberately names retired types. Dalamud LoadForType and the
 // inert backup reader must not resolve or construct them. All data is synthetic.

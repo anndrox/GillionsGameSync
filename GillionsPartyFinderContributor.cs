@@ -13,10 +13,14 @@ namespace GillionsGameSync;
 
 // Holds an opaque session epoch and a credential-bearing dispatch closure, not
 // a printable credential record. Created and validated by Plugin on its framework.
-internal sealed class GillionsPartyFinderSession(string key, CancellationToken cancellation,
+internal sealed class GillionsPartyFinderSession(string key, string authorizationKey, bool authorizationBlocked,
+    CancellationToken cancellation, Func<Task> recordAuthorizationDenial,
     Func<byte[], CancellationToken, Task<HttpResponseMessage>> send) {
     internal string Key { get; } = key;
+    internal string AuthorizationKey { get; } = authorizationKey;
+    internal bool AuthorizationBlocked { get; } = authorizationBlocked;
     internal CancellationToken Cancellation { get; } = cancellation;
+    internal Task RecordAuthorizationDenial() => recordAuthorizationDenial();
     internal Task<HttpResponseMessage> Send(byte[] body, CancellationToken token) => send(body, token);
 }
 
@@ -37,7 +41,8 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
     private CancellationTokenSource? activeCancellation;
     private Task active = Task.CompletedTask;
     private DateTime due = DateTime.MaxValue;
-    private string? blockedSession;
+    private string? blockedAuthorization;
+    private bool endpointStopped;
     private string status = "Off. Pair a Testing client with site-side Party Finder permission, then opt in here.";
     private bool enabledState;
     private bool disposed;
@@ -76,16 +81,22 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
             if (current?.Key != session?.Key || current?.Cancellation.IsCancellationRequested == true) {
                 pending.Clear(); due = DateTime.MaxValue; generation++; cancel = activeCancellation;
                 session = current?.Cancellation.IsCancellationRequested == true ? null : current;
-                blockedSession = null; failures = 0; batchLimit = 100;
+                failures = 0; batchLimit = 100;
             }
+            // Refresh the persistent authorization flag even without a runtime-key change.
+            if (session is not null && current?.Key == session.Key) session = current;
+            if (session?.AuthorizationBlocked == true) blockedAuthorization = session.AuthorizationKey;
             if (enabledState && session is null) status = "Waiting for a logged-in, paired Testing client on https://gillions.app.";
+            if (session is not null && blockedAuthorization == session.AuthorizationKey)
+                status = "Stopped for this pairing; correct account/permission and pair again. Logout or reload will not reset this stop.";
+            if (endpointStopped) status = "Party Finder endpoint unavailable or redirected; contribution stopped for this load. Site must correct deployment before reload.";
         }
         PartyFinderContributor.CancelSafely(cancel);
     }
     private void OnListing(PartyFinderContributionListing listing) {
         RefreshSession();
         lock (gate) {
-            if (disposed || !enabledState || session is null || blockedSession == session.Key || !Valid(listing)) return;
+            if (disposed || !enabledState || session is null || blockedAuthorization == session.AuthorizationKey || endpointStopped || !Valid(listing)) return;
             var now = utcNow();
             // A native listing burst shares a conservative 100-ms observation
             // bucket. Never regenerate this timestamp at dispatch or retry.
@@ -107,7 +118,7 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
     public void Tick(DateTime now) {
         RefreshSession();
         lock (gate) {
-            if (disposed || !enabledState || session is null || blockedSession == session.Key || inFlight) return;
+            if (disposed || !enabledState || session is null || blockedAuthorization == session.AuthorizationKey || endpointStopped || inFlight) return;
             foreach (var row in pending.Where(pair => !Fresh(pair.Value, now)).ToArray()) pending.Remove(row.Key);
             if (pending.Count == 0 || now < due) return;
             while (attempts.TryPeek(out var attempt) && attempt <= now.AddMinutes(-1)) attempts.Dequeue();
@@ -154,6 +165,17 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
             deadline.CancelAfter(TimeSpan.FromSeconds(30)); // Includes response-body reads, not only headers.
             using var response = await captured.Send(body, deadline.Token);
+            // Record authorization denial immediately, before response reads or any
+            // runtime-current test. Logout/opt-out must not erase a received denial.
+            var denied = response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
+            if (denied) {
+                stop = true;
+                lock (gate) {
+                    if (session is null || session.AuthorizationKey == captured.AuthorizationKey) blockedAuthorization = captured.AuthorizationKey;
+                    if (session?.AuthorizationKey == captured.AuthorizationKey) pending.Clear();
+                }
+                await captured.RecordAuthorizationDenial();
+            }
             if (response.StatusCode == HttpStatusCode.OK) {
                 var bytes = await ReadBounded(response.Content, deadline.Token);
                 ValidateAcknowledgement(bytes, batch);
@@ -161,8 +183,8 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
                 outcome = $"Gillions Party Finder accepted {batch.Length} observations (current cache only; not xivpf delivery).";
             } else {
                 retry = response.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.ServiceUnavailable;
-                stop = response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
-                    || (int)response.StatusCode is >= 300 and < 400 || response.StatusCode == HttpStatusCode.NotFound;
+                stop = denied || (int)response.StatusCode is >= 300 and < 400 || response.StatusCode == HttpStatusCode.NotFound;
+                if (stop && !denied) lock (gate) { endpointStopped = true; pending.Clear(); }
                 if (response.StatusCode == HttpStatusCode.RequestEntityTooLarge && batch.Length > 1) {
                     lock (gate) batchLimit = Math.Max(1, batch.Length / 2);
                     retry = true;
@@ -174,19 +196,23 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
                 var code = ErrorCode(bytes);
                 wait = Math.Max(Backoff(), RetryAfter(response, bytes));
                 outcome = $"Gillions Party Finder: HTTP {(int)response.StatusCode}; {code}; "
-                    + (stop ? "stopped for this pairing; correct account/permission and pair again." : retry ? "bounded retry queued." : "batch discarded; not retrying unchanged invalid data.");
+                    + (denied ? "stopped for this pairing; correct account/permission and pair again."
+                        : stop ? "endpoint failure; stopped for this load until Site corrects deployment and the plugin is reloaded."
+                        : retry ? "bounded retry queued." : "batch discarded; not retrying unchanged invalid data.");
             }
         } catch (OperationCanceledException) when (cancellation.IsCancellationRequested) {
             // Opt-out, logout, re-pair and disposal discard old-session work.
         } catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException) {
-            retry = true; wait = Backoff(); outcome = "Gillions Party Finder transport failed; bounded retry queued.";
+            retry = !stop; wait = Backoff(); outcome = stop
+                ? "Gillions Party Finder authorization denied; contribution stopped. Persistent stop could not be confirmed; check local configuration storage before reload."
+                : "Gillions Party Finder transport failed; bounded retry queued.";
         } catch (Exception error) when (error is JsonException or InvalidDataException or FormatException or InvalidOperationException or KeyNotFoundException) {
             retry = true; wait = Backoff(); outcome = "Gillions Party Finder acknowledgement invalid; no acceptance claimed; bounded retry queued.";
         } finally {
             bool publish = false;
             lock (gate) {
                 if (Current(captured, epoch)) {
-                    if (stop) { blockedSession = captured.Key; pending.Clear(); }
+                    if (stop) pending.Clear();
                     else if (retry) foreach (var row in batch) Requeue(row);
                     var now = utcNow();
                     var delay = Math.Max(10, wait) + (retry ? Math.Clamp(jitter(), 1, 3) : 0);

@@ -69,7 +69,7 @@ internal sealed class DalamudPartyFinderContributionSource : IPartyFinderContrib
                 listing.RawJobsPresent.ToArray());
             ListingReceived?.Invoke(new PartyFinderContributionListing(snapshot));
         } catch (Exception error) {
-            log.Warning(error, "Unable to prepare a public Party Finder listing for xivpf.");
+            log.Warning(error, "Unable to prepare a public Party Finder contribution listing.");
         }
     }
 

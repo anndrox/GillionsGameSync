@@ -7,6 +7,11 @@ internal static class Program {
     private static readonly DateTime Epoch = new(2026, 9, 30, 12, 0, 0, DateTimeKind.Utc);
 
     private static async Task Main(string[] args) {
+        if (args is ["--contract-fixture", var fixturePath]) {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(fixturePath))!);
+            await File.WriteAllBytesAsync(fixturePath, GillionsPartyFinderTests.ContractFixture());
+            return;
+        }
         TestExactPayloadSerialization();
         TestEndpointPolicy();
         TestDedicatedClientRejectsRedirects();

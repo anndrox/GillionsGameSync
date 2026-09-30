@@ -135,7 +135,12 @@ public sealed class Plugin : IDalamudPlugin {
     private static readonly RetainerClientProfile RetainerClient = RetainerClientPolicy.Stable;
 #endif
     private static readonly string[] CurrentChangelog = [
+#if GILLIONS_TEST_BUILD
+        "Testing Party Finder contribution requires fresh Testing pairing with site permission and a separate local opt-in. Public listings go to Gillions HTTPS, not directly to xivpf.com or localhost.",
+        "Gillions keeps only an expiring, runtime current-listing cache; the paired token is used only for Gillions Authorization, never listing data. Permission denials stay stopped across logout/reload until fresh pairing.",
+#else
         "Party Finder contribution is available as a separate off-by-default choice that sends only public listings directly to xivpf.com.",
+#endif
         "Retainer observations, venture results, inventory, listings and ordinary character sync remain available.",
         "Venture planning and AutoRetainer integration have been removed. Existing stored plans and backups are preserved without further control.",
         "Pair once after updating so new records belong to the correct connection and character. Older local history stays preserved and inactive.",
@@ -1075,9 +1080,9 @@ public sealed class Plugin : IDalamudPlugin {
     private OwnedCharacterState CurrentState => activeOwnedState ?? throw new InvalidOperationException("Pair and log into a character before syncing.");
 
     private void RequestConfigurationSave() => savePolicy.RequestDurable();
-    private void FlushConfigurationSave() {
+    private void FlushConfigurationSave(bool receivedAuthorizationDenial = false) {
         var now = DateTime.UtcNow;
-        if (!disposed && savePolicy.ShouldSave(now)) {
+        if ((!disposed || receivedAuthorizationDenial) && savePolicy.ShouldSave(now)) {
             configuration.Save(pluginInterface);
             savePolicy.Saved(now);
         }
@@ -1157,7 +1162,18 @@ public sealed class Plugin : IDalamudPlugin {
         RefreshSessionContext();
         if (!HasPairedSession || activeOwnedState is null || configuration.ActiveSession!.Origin != "https://gillions.app") return null;
         var permit = CapturePermit(SyncRequestMode.Manual);
-        return new GillionsPartyFinderSession($"{permit.Session!.Generation}:{permit.Epoch}:{permit.ContentId}", permit.Cancellation,
+        var authorizationGeneration = permit.Session!.Generation;
+        return new GillionsPartyFinderSession($"{authorizationGeneration}:{permit.Epoch}:{permit.ContentId}", authorizationGeneration,
+            configuration.GillionsPartyFinderBlockedGeneration == authorizationGeneration, permit.Cancellation,
+            () => framework.RunOnFrameworkThread(() => {
+                // A denial belongs to the captured enrollment, not its character or
+                // request epoch. Never apply an old enrollment's denial to a new one.
+                if (configuration.ActiveSession?.Generation != authorizationGeneration) return;
+                configuration.GillionsPartyFinderBlockedGeneration = authorizationGeneration;
+                // Security state must survive an immediate reload; do not coalesce.
+                RequestConfigurationSave();
+                FlushConfigurationSave(receivedAuthorizationDenial: true);
+            }),
             async (body, cancellation) => {
                 using var request = new HttpRequestMessage(HttpMethod.Post, GillionsPartyFinderContributor.Endpoint) {
                     Content = new ByteArrayContent(body)
@@ -1401,6 +1417,8 @@ public sealed class PluginConfiguration : IPluginConfiguration {
     public bool EnableItemLinkRequests { get; set; } = true;
     public bool EnablePartyFinderContributions { get; set; } = false;
     public bool EnableGillionsPartyFinderContributions { get; set; } = false;
+    // Non-secret enrollment metadata only; no listing, response, or credential.
+    public string GillionsPartyFinderBlockedGeneration { get; set; } = "";
     public bool EnableAutoRetainerVenturePlans { get; set; } = false;
     // Legacy records are inert JSON so unknown or malformed members survive
     // Dalamud's normal config load/save without retaining executable plan types.

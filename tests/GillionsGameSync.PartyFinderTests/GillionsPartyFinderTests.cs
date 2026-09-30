@@ -4,6 +4,9 @@ using System.Text.Json;
 using GillionsGameSync;
 
 internal static class GillionsPartyFinderTests {
+    internal static byte[] ContractFixture() => JsonSerializer.SerializeToUtf8Bytes(new {
+        schemaVersion = 1, observedAtUtc = "2026-09-30T12:00:00.000Z", listings = new[] { Listing(101, 120, true) }
+    });
     private static void Check(bool value, string message) { if (!value) throw new Exception(message); }
     private sealed class Source : IPartyFinderContributionSource {
         public event Action<PartyFinderContributionListing>? ListingReceived;
@@ -18,18 +21,27 @@ internal static class GillionsPartyFinderTests {
         internal DateTime Now = new(2026, 9, 30, 12, 0, 0, DateTimeKind.Utc);
         internal bool Enabled;
         internal string? Key = "session-a";
+        internal string AuthorizationKey = "pair-a";
+        internal string BlockedGeneration = "";
         internal CancellationTokenSource Lifetime = new();
         internal readonly Source Source = new();
         internal readonly List<byte[]> Requests = [];
         internal readonly List<DateTime> RequestTimes = [];
         internal readonly List<string> Reports = [];
         internal Func<byte[], CancellationToken, Task<HttpResponseMessage>>? Handler;
-        internal readonly GillionsPartyFinderContributor Contributor;
-        internal Harness() {
-            Contributor = new(Source, () => Key is null ? null : new(Key, Lifetime.Token, async (body, token) => {
+        internal GillionsPartyFinderContributor Contributor;
+        internal Harness() { Contributor = Create(); }
+        internal void Reload() { Contributor.Dispose(); Contributor = Create(); }
+        private GillionsPartyFinderContributor Create() => new(Source, () => Key is null ? null : Capture(), () => Enabled, Reports.Add, () => Now, () => 1);
+        private GillionsPartyFinderSession Capture() {
+            var capturedAuthorization = AuthorizationKey;
+            return new(Key!, capturedAuthorization, BlockedGeneration == capturedAuthorization, Lifetime.Token, () => {
+                if (AuthorizationKey == capturedAuthorization) BlockedGeneration = capturedAuthorization;
+                return Task.CompletedTask;
+            }, async (body, token) => {
                 token.ThrowIfCancellationRequested(); Requests.Add(body); RequestTimes.Add(Now);
                 return Handler is null ? Ack(body) : await Handler(body, token);
-            }), () => Enabled, Reports.Add, () => Now, () => 1);
+            });
         }
         internal async Task Flush(int seconds = 10) { Now = Now.AddSeconds(seconds); Contributor.Tick(Now); await Contributor.WhenIdleAsync(); }
         public void Dispose() { Contributor.Dispose(); Lifetime.Dispose(); }
@@ -83,7 +95,33 @@ internal static class GillionsPartyFinderTests {
             h.Handler = (_, _) => Task.FromResult(Error(failure, "PARTY_FINDER_PERMISSION_REQUIRED"));
             h.Source.Emit(); await h.Flush(); h.Source.Emit(2); await h.Flush(60);
             Check(h.Requests.Count == 1 && h.Contributor.PendingCount == 0, "Permanent permission/redirect failure did not stop.");
-            h.Key = "new-explicit-pair"; h.Source.Emit(3); await h.Flush(); Check(h.Requests.Count == 2, "Fresh pairing did not reset stopped session.");
+            h.Key = "epoch-and-character-b"; h.Source.Emit(3); await h.Flush(); Check(h.Requests.Count == 1, "Runtime epoch or character reset a stop.");
+            h.Key = null; await h.Flush(); h.Key = "login-c"; h.Source.Emit(4); await h.Flush(); Check(h.Requests.Count == 1, "Logout/login reset a stop.");
+            h.Enabled = false; h.Contributor.SetEnabled(false); h.Key = null; await h.Flush();
+            h.Enabled = true; h.Key = "login-d"; h.Source.Emit(5); await h.Flush(); Check(h.Requests.Count == 1, "Local off/on reset a stop.");
+            h.AuthorizationKey = "new-explicit-pair"; h.Key = "new-runtime"; h.Source.Emit(6); await h.Flush();
+            bool authorizationFailure = failure is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
+            Check(h.Requests.Count == (authorizationFailure ? 2 : 1), "Fresh pairing reset an endpoint stop or failed to reset an authorization stop.");
+            if (authorizationFailure) {
+                h.Reload(); h.Source.Emit(7); await h.Flush(); Check(h.Requests.Count == 2, "Reload forgot persistent authorization stop.");
+                h.AuthorizationKey = "fresh-after-reload"; h.Key = "fresh-runtime"; h.Handler = null;
+                h.Source.Emit(8); await h.Flush(); Check(h.Requests.Count == 3, "Fresh enrollment failed after reload.");
+            }
+        }
+        foreach (bool newPair in new[] { false, true }) {
+            using var h = new Harness { Enabled = true };
+            var started = new TaskCompletionSource();
+            var response = new TaskCompletionSource<HttpResponseMessage>();
+            h.Handler = (_, _) => { started.SetResult(); return response.Task; };
+            h.Source.Emit(); h.Now = h.Now.AddSeconds(10); h.Contributor.Tick(h.Now); await started.Task;
+            h.Key = null; h.Contributor.Tick(h.Now); h.Enabled = false; h.Contributor.SetEnabled(false);
+            if (newPair) h.AuthorizationKey = "pair-b";
+            response.SetResult(Error(HttpStatusCode.Forbidden, "PARTY_FINDER_PERMISSION_REQUIRED"));
+            await h.Contributor.WhenIdleAsync();
+            Check(h.BlockedGeneration == (newPair ? "" : "pair-a"), "Concurrent invalidation lost denial or applied it to a fresh enrollment.");
+            h.Reload(); h.Enabled = true; h.Key = "new-epoch-character"; h.Handler = null;
+            h.Source.Emit(2); await h.Flush();
+            Check(h.Requests.Count == (newPair ? 2 : 1), "Reload did not preserve concurrent-denial isolation.");
         }
         using (var h = new Harness { Enabled = true }) {
             h.Handler = (_, _) => throw new HttpRequestException();

@@ -39,7 +39,10 @@ Site confirms production activation; a plugin release is not server deployment.
 - Disable contribution; unsent listings must clear and active requests cancel.
   Logout/character changes/re-pair must not carry observations into another session.
 - Without site permission, expect a 403 stop. Correct permission by fresh explicit
-  pairing. Revoked devices/account denial must stop contributions too. Ordinary
+  pairing. Logout/login, character changes, local off/on and plugin reload must
+  not reset the denied pairing's stop. A fresh enrollment should recover after
+  correcting permission. A redirect/404 instead requires Site deployment correction
+  and plugin reload, not re-pairing. Revoked devices/account denial must stop contributions too. Ordinary
   supported sync retains its independent behavior.
 - On 429/503, expect bounded retry/backoff, not per-frame requests. Lost-response
   retries preserve original timestamps; expired data is dropped, not refreshed.

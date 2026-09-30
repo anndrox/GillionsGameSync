@@ -31,10 +31,10 @@ foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate'
 }
 
 $manualTesting = @([IO.File]::ReadAllText((Join-Path $root 'data/GillionsGameSyncTesting.json')) | ConvertFrom-Json -AsHashtable)[0]
-$manualTestingUrl = 'https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting-0.0.64.zip'
-Assert-Condition ($manualTesting.InternalName -ceq 'GillionsGameSyncTest' -and $manualTesting.AssemblyVersion -ceq '0.0.64.0') 'Manual testing repository must retain the separate 0.0.64 testing identity.'
+$manualTestingUrl = 'https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.65-testing/GillionsGameSyncTesting-0.0.65.zip'
+Assert-Condition ($manualTesting.InternalName -ceq 'GillionsGameSyncTest' -and $manualTesting.AssemblyVersion -ceq '0.0.65.0') 'Manual testing repository must retain the separate 0.0.65 testing identity.'
 foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate', 'DownloadLinkTesting')) {
-  Assert-Condition ($manualTesting[$field] -ceq $manualTestingUrl) "Manual testing repository $field must resolve to the immutable 0.0.64 GitHub prerelease asset."
+  Assert-Condition ($manualTesting[$field] -ceq $manualTestingUrl) "Manual testing repository $field must resolve to the immutable 0.0.65 GitHub prerelease asset."
 }
 
 $publisher = [IO.File]::ReadAllText((Join-Path $root 'scripts/publish-stable-github-release.ps1'))

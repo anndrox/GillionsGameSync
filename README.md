@@ -44,11 +44,13 @@ Re-pairing does not free storage or authorize uploading another generation's rec
 
 ## Optional Party Finder contribution
 
-The Party Finder contribution setting is off by default, stays off after upgrading and is independent from Gillions account pairing or sync. When a player enables it, the plugin listens to Dalamud's authoritative Party Finder event, batches and deduplicates only listings already public in the game client, and sends the Remote Party Finder `UploadableListing` payload directly to [xivpf.com](https://xivpf.com). Gillions does not proxy or retain those contributed listings. Uploads wait ten seconds after the newest listing and begin at most six requests in any rolling minute, including failed attempts. Failed batches retry no sooner than ten seconds later.
+Both channels use separate off-by-default contribution choices and listen only to Dalamud's authoritative Party Finder event: no automatic game queries. Public-listing payload/source attribution is [Remote Party Finder / xivpf](https://xivpf.com); attribution is not the testing recipient. Uploads wait ten seconds after the newest listing and begin at most six requests in any rolling minute per load, including failed attempts.
 
-Pending contributions are memory-only and deduplicated by listing identity. At most 1,000 identities can be queued while one in-flight batch can retain at most 1,000 more until that request completes. Disabling the setting immediately stops collection, clears queued data and cancels an active request where possible. Contributions contain only the public listing contract: no Gillions account/device credential, Square Enix credential, chat, diagnostic, or unrelated local data is added.
+Stable builds send the `UploadableListing` payload directly to xivpf's HTTPS receiver, independently of Gillions pairing. Gillions does not proxy or retain stable contributions, and no Gillions credential accompanies them. Stable pending and in-flight batches each retain at most 1,000 listings.
 
-Stable-compatible builds use xivpf's HTTPS contribution endpoint. Testing builds require a loopback destination and default to the local Remote Party Finder server at `http://127.0.0.1:8000`, so testing traffic cannot reach the production service accidentally.
+Testing `0.0.65` sends only to `https://gillions.app/api/game-sync/party-finder/contribute`, not xivpf or localhost. It requires a valid main-site Testing pairing, separate site-recorded public Party Finder permission, and the new local contribution opt-in. Legacy xivpf consent is not transferred. The paired-device token is used only in Gillions Authorization, never the listing body. Gillions holds an expiring, runtime current-listing cache, not durable history; a successful acknowledgement is not xivpf delivery. Site production activation is separate from plugin publication.
+
+Testing keeps at most 1,000 pending identities and 100 in-flight listings, with requests at most 256 KiB. Retry timestamps are immutable; stale/expired observations are discarded. Disabling contribution clears unsent memory and cancels active work where possible. A 401/403 persists only a non-secret blocked enrollment-generation marker: logout, character changes, off/on and reload do not reset it. Correct account/permission and enroll again. Redirect/404 endpoint failures instead stop the load until deployment is corrected and the plugin reloaded. No Square Enix credential, private chat, diagnostic or unrelated local data is contributed.
 
 ## Testing candidate: Beastmaster local read
 
@@ -59,13 +61,11 @@ Results stay in memory and are not uploaded. See [local test instructions](docs/
 For the combined Beastmaster and Party Finder test, add this URL to Dalamud's
 custom plugin repositories:
 
-`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
+`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.65-testing/GillionsGameSyncTesting.json`
 
 This installs the separate **Gillions Game Sync Testing** identity. It does not
 replace the stable plugin or update the existing `gillions.app` testing feed.
-Testing `0.0.64` includes both features and the performance corrections. Replace
-the previous manual `0.0.63` repository entry, update to `0.0.64.0`, and follow
-the [in-game checklist and diagnostic-copy instructions](docs/releases/testing-0.0.64.md).
+Testing `0.0.65` includes both features, the performance corrections and authenticated Gillions Party Finder intake. Replace the previous manual repository entry, update to `0.0.65.0`, and follow the [pairing, in-game checklist and diagnostic-copy instructions](docs/releases/testing-0.0.65.md). Leave contribution off until Site confirms activation.
 
 ## Build and verify
 
