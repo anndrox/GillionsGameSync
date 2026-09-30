@@ -1,7 +1,7 @@
 # Gillions Game Sync Testing 0.0.63
 
-Combined replacement for testing 0.0.62 using the same
-`GillionsGameSyncTest` identity. For this candidate, add the GitHub-hosted
+Published as a testing-only GitHub prerelease replacing testing 0.0.62 and using
+the same `GillionsGameSyncTest` identity. Add the GitHub-hosted
 repository JSON manually in Dalamud:
 
 `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.63-testing/GillionsGameSyncTesting.json`
