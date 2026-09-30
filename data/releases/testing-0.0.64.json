@@ -1,0 +1,32 @@
+{
+  "channel": "testing",
+  "version": "0.0.64",
+  "status": "published-github-prerelease",
+  "internalName": "GillionsGameSyncTest",
+  "dalamudApiLevel": 15,
+  "sourceCommit": "6c53c62b425c11208c6332a182e574c982f7bfb7",
+  "performanceCommit": "6737c749dcb958872f57baa7ccf7a66218efd475",
+  "publishedAtInput": 1790762540,
+  "publishedAt": "2026-09-30T10:12:39Z",
+  "publicDownloadsVerifiedAt": "2026-09-30T10:13:46Z",
+  "archive": "GillionsGameSyncTesting-0.0.64.zip",
+  "archiveSha256": "527cd81c08cf40369951c4cbf77103d29918df053e739c524081c74e09350ef3",
+  "manifestSha256": "c9ad962e06c387628d908cc1348294542bdbf8c6c351e4605dc3ad24dbab37bd",
+  "assemblySha256": "45cbba9916b74df2847fb9f69392a6857b4221200a6ea74d7676d76b549c9834",
+  "feed": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json",
+  "download": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting-0.0.64.zip",
+  "release": "https://github.com/anndrox/GillionsGameSync/releases/tag/v0.0.64-testing",
+  "previousVersion": "0.0.63",
+  "previousArchiveSha256": "afbce587f9140fc20906625edddc9138d5f131a4673ce0f6a3b8859378a041db",
+  "notes": "docs/releases/testing-0.0.64.md",
+  "completedValidation": [
+    "Full repository verification: stable/testing builds, policy/contract and configuration fixtures passed",
+    "Actual 0.0.64 testing DLL configuration and isolation fixtures passed",
+    "Repeat exact-candidate package build reproduced archive checksum",
+    "Anonymous public feed, archive and assembly checksum equality passed",
+    "Public feed identity, API level and version verified"
+  ],
+  "runtimeValidation": "Pending installed-game checks and official loopback Remote Party Finder acceptance/database evidence.",
+  "productionEffects": "GitHub testing prerelease only; main, stable feed, Gillions-hosted feed and server deployment unchanged.",
+  "rollback": "Disable optional sampling/contribution or the testing plugin and preserve configuration; use a forward correction."
+}
