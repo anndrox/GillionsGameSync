@@ -1,5 +1,24 @@
 # Testing
 
+## Isolated LAN pairing preparation (unreleased)
+
+An explicitly packaged testing build may use its exact compiled private IPv4
+HTTP origin. The editable server field cannot broaden that exception. Saved
+production sessions remain unchanged but inactive in such a build; the user
+must deliberately pair with a code from the test site. Stable builds remain
+HTTPS-only. Testing transport rejects redirects and system proxies.
+
+HTTP does not authenticate the server or encrypt pairing codes, device tokens,
+character identity or synced gameplay data. Publication of this testing
+successor requires explicit owner acceptance of trusted-LAN plaintext risk
+or an approved HTTPS test endpoint. Use test accounts/data only.
+
+The published `0.0.64` package does not include this correction: its editable
+connection field still rejects HTTP. Its separate XIVPF endpoint remains
+loopback-only and cannot target a server-hosted receiver through the Gillions
+connection field. Server-hosted XIVPF testing also requires the receiver's
+verified client-facing URL and a reviewed plugin endpoint successor.
+
 This document describes the `1.0.30` source and its synthetic verification. The stable feed and GitHub Release identify the published package. Testing builds retain their separate product identity and publication path.
 
 Run `./scripts/verify.ps1`. It executes the linked-production policy suite, source integration contracts, packaging fixtures, stable/testing builds and actual Dalamud configuration round-trips. Fixtures stay under ignored `artifacts/verification`; they do not use a game session, installed user configuration, server or database.

@@ -8,6 +8,21 @@ Manual Dalamud custom repository URL:
 
 `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
 
+## Server-hosted testing limitation
+
+This published package predates the owner's server-hosted testing direction.
+Its editable Gillions connection field accepts HTTPS only, so it cannot pair
+with the existing HTTP LAN test gateway. A testing-only successor is prepared
+in source, but plaintext test credential risk acceptance or an HTTPS endpoint
+is required before publication. Do not use production pairing to work around
+that limitation.
+
+The Gillions connection field does not change the separate XIVPF contribution
+endpoint. This package remains loopback-only. Leave contribution disabled for
+server-hosted testing until Site Operations supplies an isolated receiver on the
+owner-selected test server and a plugin successor targets its verified URL.
+Do not create a gaming-PC service or send testing traffic to production.
+
 ## Install
 
 1. Open Dalamud settings (`/xlsettings`), Experimental, Custom Plugin Repositories.

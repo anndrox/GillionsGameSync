@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased - isolated LAN test pairing preparation
+
+- A testing product explicitly packaged for an owner-approved private IPv4 HTTP origin can pair only to that exact compiled origin. Other saved sessions remain preserved but inactive until deliberate test pairing; stable clients remain HTTPS-only.
+- Testing sync transport rejects redirects and bypasses system proxies. Pairing controls disclose plaintext trusted-LAN transport and test-only credentials/data.
+- Added actual-product origin, stale-session and transport-handler checks. This source preparation is not a published successor; plaintext credential risk acceptance is still required before release.
+
 ## 0.0.64 - combined testing performance update
 
 - Refresh the visible settings view four times per second instead of every frame; queued settings changes and session resets remain eligible for an immediate refresh.
