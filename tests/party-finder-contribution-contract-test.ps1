@@ -6,6 +6,7 @@ $adapter = [IO.File]::ReadAllText((Join-Path $root 'PartyFinderContribution.cs')
 $core = [IO.File]::ReadAllText((Join-Path $root 'PartyFinderContributionCore.cs'))
 $plugin = [IO.File]::ReadAllText((Join-Path $root 'Plugin.cs'))
 $project = [IO.File]::ReadAllText((Join-Path $root 'GillionsGameSync.csproj'))
+$behavior = [IO.File]::ReadAllText((Join-Path $root 'tests/GillionsGameSync.PartyFinderTests/Program.cs'))
 
 function Require([bool]$Condition, [string]$Message) {
   if (-not $Condition) { throw $Message }
@@ -37,6 +38,7 @@ Require ($core.Contains('TimeSpan.FromSeconds(10)') -and $core.Contains('Maximum
 Require $core.Contains('MaximumPendingListings = 1000') 'Pending Party Finder data must retain a fixed bound.'
 Require ($core.Contains('pending.Clear();') -and $core.Contains('CancelSafely(cancel);')) 'Opt-out must clear unsent data and cancel active work without racing request completion.'
 Require ($core.Contains('AllowAutoRedirect = false') -and $plugin.Contains('PartyFinderHttp.CreateClient()')) 'Contribution HTTP must use a dedicated client that cannot follow redirects.'
+Require ($behavior.Contains('XivpfEndpointPolicy.RequireSafe(endpoint, true)') -and $behavior.Contains('using var http = PartyFinderHttp.CreateClient();')) 'The optional integration harness must require loopback and reject redirects.'
 Require ($adapter.Contains('partyFinderGui.ReceiveListing += OnListing') -and $adapter.Contains('partyFinderGui.ReceiveListing -= OnListing')) 'Dalamud Party Finder event lifecycle is incomplete.'
 Require $adapter.Contains('if (disposed || !enabled()) return;') 'Disabled contribution must reject the authoritative event before mapping or copying listing data.'
 Require ($adapter.Contains('XivpfEndpointPolicy.RequireBuildSafe(endpoint, true)') -and $core.Contains('endpoint != ProductionEndpoint')) 'Built products must enforce loopback testing and the official stable remote endpoint at runtime.'

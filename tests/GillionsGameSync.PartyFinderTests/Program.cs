@@ -275,11 +275,12 @@ internal static class Program {
     }
 
     private static async Task TestLocalIntegration(Uri endpoint) {
+        endpoint = XivpfEndpointPolicy.RequireSafe(endpoint, true);
         var enabled = true;
         var clock = new ManualClock(Epoch);
         var source = new FakeSource();
         var log = new FakeLog();
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        using var http = PartyFinderHttp.CreateClient();
         using var contributor = new PartyFinderContributor(source, http, log, () => enabled, endpoint,
             "GillionsGameSync/local-integration", () => clock.Now, TimeSpan.Zero);
         source.Emit(IntegrationListing());
