@@ -1027,7 +1027,7 @@ public sealed class Plugin : IDalamudPlugin {
 #endif
         ImGui.TextWrapped(SyncOrigin.TryNormalize(uiServerAddress, out var pairingOrigin)
             ? $"Pair with {pairingOrigin}"
-            : "Enter a valid HTTPS server address under Connection details.");
+            : "Enter a valid approved server address under Connection details.");
         ImGui.InputText("Pairing code", ref uiPairingCode, 256, ImGuiInputTextFlags.Password);
         ImGui.BeginDisabled(view.Pairing || string.IsNullOrWhiteSpace(uiPairingCode) || !SyncOrigin.TryNormalize(uiServerAddress, out _));
         if (ImGui.Button(view.Pairing ? "Connectingâ€¦" : "Pair this device")) {

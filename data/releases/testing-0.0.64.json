@@ -20,13 +20,14 @@
   "previousArchiveSha256": "afbce587f9140fc20906625edddc9138d5f131a4673ce0f6a3b8859378a041db",
   "notes": "docs/releases/testing-0.0.64.md",
   "completedValidation": [
-    "Full repository verification: stable/testing builds, policy/contract and configuration fixtures passed",
+    "Full performance-source verification passed before the 0.0.64 feed update",
     "Actual 0.0.64 testing DLL configuration and isolation fixtures passed",
     "Repeat exact-candidate package build reproduced archive checksum",
     "Anonymous public feed, archive and assembly checksum equality passed",
     "Public feed identity, API level and version verified"
   ],
-  "runtimeValidation": "Pending installed-game checks and official loopback Remote Party Finder acceptance/database evidence.",
+  "verificationCorrection": "The manual feed contract fixture still expected 0.0.63 at the release source commit. It was corrected to 0.0.64 in 21da31912ab17bf7aa9fef702a6238ce30deeae8, where full repository verification passed. Published 0.0.64 assembly and download validation remain separate evidence; no exact-source full-suite pass is claimed after its feed update.",
+  "runtimeValidation": "Pending installed-game checks. Published 0.0.64 cannot pair with the HTTP LAN test gateway or target a server-hosted XIVPF receiver; a reviewed successor and test-server receiver are required for that workflow.",
   "productionEffects": "GitHub testing prerelease only; main, stable feed, Gillions-hosted feed and server deployment unchanged.",
   "rollback": "Disable optional sampling/contribution or the testing plugin and preserve configuration; use a forward correction."
 }
