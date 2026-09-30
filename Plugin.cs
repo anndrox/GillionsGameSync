@@ -56,6 +56,9 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly IGameInventory gameInventory;
     private readonly IChatGui chatGui;
     private readonly IPluginLog log;
+#if GILLIONS_TEST_BUILD
+    private readonly BeastmasterLocalView beastmasterLocal;
+#endif
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private readonly HttpClient partyFinderHttp = PartyFinderHttp.CreateClient();
     private readonly PluginConfiguration configuration;
@@ -194,6 +197,9 @@ public sealed class Plugin : IDalamudPlugin {
         gameInventory.InventoryChangedRaw += OnInventoryChangedRaw;
         chatGui.LogMessage += OnLogMessage;
         chatGui.ChatMessage += OnChatMessage;
+#if GILLIONS_TEST_BUILD
+        beastmasterLocal = new BeastmasterLocalView(pluginInterface, commands, framework, clientState, dataManager);
+#endif
     }
 
     private void OnCommand(string command, string arguments) {
@@ -989,6 +995,9 @@ public sealed class Plugin : IDalamudPlugin {
             if (view.Budget is { } usage) ImGui.TextWrapped($"Pending records across paired sessions and characters: {usage.Records:N0} / 10,000; {usage.Bytes:N0} / 8,388,608 serialized bytes.");
             ImGui.TextWrapped("Older records with unknown ownership remain inactive in local configuration and are outside this new storage limit. Do not share your plugin configuration: it includes a credential and private gameplay history.");
         }
+#if GILLIONS_TEST_BUILD
+        if (ImGui.Button("Beastmaster local test")) beastmasterLocal.Show();
+#endif
         DrawDiagnostics(view);
         ImGui.End();
     }
@@ -1288,6 +1297,9 @@ public sealed class Plugin : IDalamudPlugin {
 
     public void Dispose() {
         if (disposed) return;
+#if GILLIONS_TEST_BUILD
+        beastmasterLocal.Dispose();
+#endif
         if (framework.IsInFrameworkUpdateThread) FlushConfigurationSave();
         disposed = true; requestLifetime.Dispose(); ClearTransientState();
         clientState.Login -= OnLogin; clientState.Logout -= OnLogout;

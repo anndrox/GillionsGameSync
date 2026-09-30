@@ -9,6 +9,7 @@
     <DefineConstants>$(DefineConstants);GILLIONS_POLICY_TESTS</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\..\BeastmasterReadiness.cs" Link="BeastmasterReadiness.cs" />
     <Compile Include="..\..\ItemLinkRequests.cs" Link="ItemLinkRequests.cs" />
     <Compile Include="..\..\PublicUrlConfiguration.cs" Link="PublicUrlConfiguration.cs" />
     <Compile Include="..\..\ProgressionSnapshots.cs" Link="ProgressionSnapshots.cs" />

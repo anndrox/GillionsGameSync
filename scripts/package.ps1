@@ -96,11 +96,7 @@ $downloadUrl = if ($isTesting) {
 } else {
   "$StableReleaseBaseUrl/v$Version/$zipBase-$Version.zip"
 }
-$iconUrl = if ($isTesting) {
-  "$PublicBaseUrl/downloads/plugins/GillionsGameSync-icon-v4.png"
-} else {
-  $StableIconUrl
-}
+$iconUrl = $StableIconUrl
 
 $manifest = @([ordered]@{
   Author = 'Gillions'

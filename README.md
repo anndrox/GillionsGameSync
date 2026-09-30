@@ -48,6 +48,13 @@ Pending contributions are memory-only and deduplicated by listing identity. At m
 
 Stable-compatible builds use xivpf's HTTPS contribution endpoint. Testing builds require a loopback destination and default to the local Remote Party Finder server at `http://127.0.0.1:8000`, so testing traffic cannot reach the production service accidentally.
 
+## Testing candidate: Beastmaster local read
+
+The task-branch testing candidate includes an opt-in Beastmaster view, disabled
+by default. Open **Beastmaster local test** in testing settings or use /gillionsbst.
+Results stay in memory and are not uploaded. This is not a published update;
+see [local test instructions](docs/beastmaster-local-test.md).
+
 ## Build and verify
 
 Requirements are Windows, .NET 10 SDK and the Dalamud dependencies used by `Dalamud.NET.Sdk`.
