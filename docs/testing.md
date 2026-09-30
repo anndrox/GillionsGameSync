@@ -1,23 +1,26 @@
 # Testing
 
-## Isolated LAN pairing preparation (unreleased)
+## Main-site HTTPS testing
 
-An explicitly packaged testing build may use its exact compiled private IPv4
-HTTP origin. The editable server field cannot broaden that exception. Saved
-production sessions remain unchanged but inactive in such a build; the user
-must deliberately pair with a code from the test site. Stable builds remain
-HTTPS-only. Testing transport rejects redirects and system proxies.
+The owner selected `https://gillions.app` for ordinary testing-client sync.
+The published `0.0.64` package already supports that HTTPS origin. Use a normal
+single-use pairing code from the main site. Open `/gillionssynctest pair`, set
+the server address under **Connection details**, enter the code and choose
+**Pair this device**. Confirm **Connected to https://gillions.app** before sync.
+Editing the address alone does not retarget an existing bound session.
 
-HTTP does not authenticate the server or encrypt pairing codes, device tokens,
-character identity or synced gameplay data. Publication of this testing
-successor requires explicit owner acceptance of trusted-LAN plaintext risk
-or an approved HTTPS test endpoint. Use test accounts/data only.
+These are real main-site data writes, not an isolated test-database run. Disable
+the stable copy while comparing/testing ordinary sync to avoid duplicate
+collectors; preserve both configurations. No credentials or existing records
+are transferred between the stable and testing product identities.
 
-The published `0.0.64` package does not include this correction: its editable
-connection field still rejects HTTP. Its separate XIVPF endpoint remains
-loopback-only and cannot target a server-hosted receiver through the Gillions
-connection field. Server-hosted XIVPF testing also requires the receiver's
-verified client-facing URL and a reviewed plugin endpoint successor.
+The previously prepared private-HTTP pairing exception was never published and
+has been withdrawn. Both products retain HTTPS-only pairing.
+
+The separate XIVPF testing endpoint remains loopback-only. The Gillions address
+does not change it. Leave contribution disabled until the server-hosted test
+receiver and its exact client-facing URL are verified and a reviewed successor
+targets that receiver. Beastmaster results remain local-only and unuploaded.
 
 This document describes the `1.0.30` source and its synthetic verification. The stable feed and GitHub Release identify the published package. Testing builds retain their separate product identity and publication path.
 

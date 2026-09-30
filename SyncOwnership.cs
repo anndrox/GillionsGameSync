@@ -23,47 +23,14 @@ public sealed record PairedSession(int SchemaVersion, string Origin, string Devi
 }
 
 public static class SyncOrigin {
-#if GILLIONS_TEST_BUILD
-    private static readonly Uri? TestingHttpOrigin = ReadTestingHttpOrigin();
-#endif
     public static bool TryNormalize(string? input, out string origin) {
         origin = "";
-        if (!Uri.TryCreate(input, UriKind.Absolute, out var uri)
+        if (!Uri.TryCreate(input, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps
             || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment)
             || uri.AbsolutePath != "/" || string.IsNullOrEmpty(uri.Host)) return false;
-#if GILLIONS_TEST_BUILD
-        if (TestingHttpOrigin is { } allowed) {
-            if (uri.Scheme != Uri.UriSchemeHttp
-                || uri.GetLeftPart(UriPartial.Authority) != allowed.GetLeftPart(UriPartial.Authority)) return false;
-        } else
-#endif
-        if (uri.Scheme != Uri.UriSchemeHttps) return false;
         origin = uri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
         return true;
     }
-
-#if GILLIONS_TEST_BUILD
-    private static Uri? ReadTestingHttpOrigin() {
-        // The owner-approved LAN origin is supplied by established packaging,
-        // not by the editable pairing field. Never broaden HTTP to arbitrary
-        // private hosts or reuse a production credential at a new destination.
-        var configured = typeof(SyncOrigin).Assembly
-            .GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
-            .Cast<System.Reflection.AssemblyMetadataAttribute>()
-            .FirstOrDefault(attribute => attribute.Key == "GillionsPublicBaseUrl")?.Value;
-        if (!Uri.TryCreate(configured, UriKind.Absolute, out var allowed) || allowed.Scheme != Uri.UriSchemeHttp) return null;
-        if (!string.IsNullOrEmpty(allowed.UserInfo)
-            || !string.IsNullOrEmpty(allowed.Query) || !string.IsNullOrEmpty(allowed.Fragment)
-            || allowed.AbsolutePath != "/" || !System.Net.IPAddress.TryParse(allowed.Host, out var address))
-            throw new InvalidOperationException("Testing HTTP pairing requires an exact compiled private IPv4 origin.");
-        var bytes = address.GetAddressBytes();
-        var privateIpv4 = bytes.Length == 4 && (bytes[0] == 10
-            || (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31)
-            || (bytes[0] == 192 && bytes[1] == 168));
-        return privateIpv4 ? allowed
-            : throw new InvalidOperationException("Testing HTTP pairing requires an exact compiled private IPv4 origin.");
-    }
-#endif
 }
 
 public sealed class OwnedCharacterState {

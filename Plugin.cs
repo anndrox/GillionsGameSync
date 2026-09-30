@@ -31,15 +31,6 @@ using Lumina.Excel.Sheets;
 namespace GillionsGameSync;
 
 internal static class GillionsEndpoints {
-    internal static HttpClientHandler CreateGameSyncHandler() => new() {
-#if GILLIONS_TEST_BUILD
-        // Isolated test traffic must not be redirected or routed through a
-        // machine-wide proxy outside the owner-selected server boundary.
-        AllowAutoRedirect = false,
-        UseProxy = false,
-#endif
-    };
-
     public static string DefaultServerUrl {
         get {
             var configured = typeof(Plugin).Assembly
@@ -68,7 +59,7 @@ public sealed class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
     private readonly BeastmasterLocalView beastmasterLocal;
 #endif
-    private readonly HttpClient http = new(GillionsEndpoints.CreateGameSyncHandler()) { Timeout = TimeSpan.FromSeconds(30) };
+    private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private readonly HttpClient partyFinderHttp = PartyFinderHttp.CreateClient();
     private readonly PluginConfiguration configuration;
     private readonly IPartyFinderContributor partyFinderContributor;
@@ -234,7 +225,7 @@ public sealed class Plugin : IDalamudPlugin {
             permit = await framework.RunOnFrameworkThread(() => {
                 if (disposed || pairingInFlight) throw new OperationCanceledException();
                 if (string.IsNullOrWhiteSpace(configuration.PairingCode) || !SyncOrigin.TryNormalize(configuration.ServerUrl, out var origin))
-                    throw new InvalidOperationException("Enter a pairing code and a valid approved server address.");
+                    throw new InvalidOperationException("Enter a pairing code and a valid HTTPS server address.");
                 pairingInFlight = true;
                 ownsPairAttempt = true;
                 configuration.PairingRequired = true;
@@ -982,7 +973,7 @@ public sealed class Plugin : IDalamudPlugin {
         if (view.LastSync is { } lastSync) ImGui.TextDisabled($"Last sync: {lastSync.ToLocalTime():g}");
         if (showPairingDetails) { ImGui.SetNextItemOpen(true, ImGuiCond.Always); showPairingDetails = false; }
         if (ImGui.CollapsingHeader("Connection details")) {
-            ImGui.TextWrapped("A successful pair connects this plugin to the approved server below. Editing this address takes effect only when you pair again.");
+            ImGui.TextWrapped("A successful pair connects this plugin to the HTTPS server below. Editing this address takes effect only when you pair again.");
             if (ImGui.InputText("Server address", ref uiServerAddress, 256)) {
                 var address = uiServerAddress;
                 QueueUiAction(() => { configuration.ServerUrl = address; RequestConfigurationSave(); });
@@ -1021,13 +1012,9 @@ public sealed class Plugin : IDalamudPlugin {
     }
 
     private void DrawPairingControls(PluginUiSnapshot view) {
-#if GILLIONS_TEST_BUILD
-        if (GillionsEndpoints.DefaultServerUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
-            ImGui.TextWrapped("Trusted-LAN testing only: this build uses unencrypted HTTP. Pairing codes, device tokens and synced data can be intercepted. Use only test accounts/data; production pairings cannot resume in this build.");
-#endif
         ImGui.TextWrapped(SyncOrigin.TryNormalize(uiServerAddress, out var pairingOrigin)
             ? $"Pair with {pairingOrigin}"
-            : "Enter a valid approved server address under Connection details.");
+            : "Enter a valid HTTPS server address under Connection details.");
         ImGui.InputText("Pairing code", ref uiPairingCode, 256, ImGuiInputTextFlags.Password);
         ImGui.BeginDisabled(view.Pairing || string.IsNullOrWhiteSpace(uiPairingCode) || !SyncOrigin.TryNormalize(uiServerAddress, out _));
         if (ImGui.Button(view.Pairing ? "Connectingâ€¦" : "Pair this device")) {

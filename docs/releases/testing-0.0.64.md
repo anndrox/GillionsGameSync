@@ -8,14 +8,18 @@ Manual Dalamud custom repository URL:
 
 `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
 
-## Server-hosted testing limitation
+## Main-site HTTPS testing and separate XIVPF limitation
 
-This published package predates the owner's server-hosted testing direction.
-Its editable Gillions connection field accepts HTTPS only, so it cannot pair
-with the existing HTTP LAN test gateway. A testing-only successor is prepared
-in source, but plaintext test credential risk acceptance or an HTTPS endpoint
-is required before publication. Do not use production pairing to work around
-that limitation.
+The owner selected the main site for ordinary testing-client synchronization.
+This package already supports `https://gillions.app`; no update is needed for
+that connection. Open `/gillionssynctest pair`, set **Server address** under
+**Connection details** to `https://gillions.app`, enter a fresh pairing code from
+the main site and choose **Pair this device**. Confirm the connected origin
+before choosing **Sync now**. These uploads affect real main-site data.
+
+The unpublished private-HTTP pairing preparation was withdrawn. Pairing remains
+HTTPS-only. Keep the stable collector disabled while testing this copy and
+preserve configuration; testing does not inherit stable credentials/history.
 
 The Gillions connection field does not change the separate XIVPF contribution
 endpoint. This package remains loopback-only. Leave contribution disabled for
@@ -79,14 +83,13 @@ collection and website-to-game map requests are not implemented in this package.
    or switching character. Require fresh loading for the next character and
    compare again. Reloading the plugin leaves Beastmaster sampling off and
    preserves existing configuration.
-9. **Party Finder:** with the official Remote Party Finder service running
-   locally at `http://127.0.0.1:8000`, enable contribution and browse/refresh
-   Party Finder. Expect batching after about ten seconds without a serialization
-   hitch. Confirm local acceptance; disabling contribution stops further work.
-   Without that local service, leave contribution off or report the expected
-   connection failure separately: this testing package cannot contribute to
-   production xivpf.com. Inspect Dalamud's plugin log for contribution success
-   or failure messages; those messages are separate from the copied sync report.
+9. **Party Finder:** leave contribution off for the owner's server-hosted
+   testing workflow. This package targets `http://127.0.0.1:8000`, not the test
+   server; do not create a gaming-PC service as a workaround. After the test
+   receiver and a reviewed endpoint successor are ready, browse/refresh Party
+   Finder, confirm receiver acceptance and verify that disabling contribution
+   stops further work. Contribution log messages are separate from the copied
+   sync report. This package cannot contribute to production xivpf.com.
 
 ## Copy diagnostics back
 

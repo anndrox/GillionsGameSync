@@ -27,7 +27,8 @@
     "Public feed identity, API level and version verified"
   ],
   "verificationCorrection": "The manual feed contract fixture still expected 0.0.63 at the release source commit. It was corrected to 0.0.64 in 21da31912ab17bf7aa9fef702a6238ce30deeae8, where full repository verification passed. Published 0.0.64 assembly and download validation remain separate evidence; no exact-source full-suite pass is claimed after its feed update.",
-  "runtimeValidation": "Pending installed-game checks. Published 0.0.64 cannot pair with the HTTP LAN test gateway or target a server-hosted XIVPF receiver; a reviewed successor and test-server receiver are required for that workflow.",
-  "productionEffects": "GitHub testing prerelease only; main, stable feed, Gillions-hosted feed and server deployment unchanged.",
+  "runtimeValidation": "Installed-game validation is in progress. Owner-supplied gameplay results and diagnostics remain outside source history. Website display/persistence, no-logout Beastmaster freshness and character-switch isolation still require validation. Beastmaster is local-only; XIVPF remains loopback-only pending a server receiver and endpoint successor.",
+  "testingDestinationDecision": "Owner selected the main HTTPS site for ordinary testing-client sync. Published 0.0.64 already supports it. Unpublished LAN HTTP pairing preparation was withdrawn; no plaintext-risk acceptance is needed for the selected HTTPS workflow.",
+  "productionEffects": "Agent publication changed the GitHub testing prerelease only; main, stable feed, Gillions-hosted feed and server deployment unchanged. The owner-selected main-site testing workflow writes real site data; no server-side validation is claimed.",
   "rollback": "Disable optional sampling/contribution or the testing plugin and preserve configuration; use a forward correction."
 }

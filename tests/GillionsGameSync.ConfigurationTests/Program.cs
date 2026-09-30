@@ -22,31 +22,13 @@ Assert(!(bool)partyFinderOptIn.GetValue(Activator.CreateInstance(configurationTy
 var endpoint = (Uri)pluginAssembly.GetType("GillionsGameSync.XivpfEndpoints", true)!
     .GetProperty("ContributionUrl", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
 var testingProduct = pluginAssembly.GetName().Name == "GillionsGameSyncTest";
-var compiledOrigin = pluginAssembly.GetCustomAttributes<AssemblyMetadataAttribute>()
-    .Single(attribute => attribute.Key == "GillionsPublicBaseUrl").Value!;
-using (var handler = (HttpClientHandler)pluginAssembly.GetType("GillionsGameSync.GillionsEndpoints", true)!
-    .GetMethod("CreateGameSyncHandler", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, null)!) {
-    Assert(testingProduct ? !handler.AllowAutoRedirect && !handler.UseProxy : handler.AllowAutoRedirect && handler.UseProxy,
-        "Testing sync transport must reject redirects/system proxies without changing stable transport.");
-}
 var normalizeOrigin = pluginAssembly.GetType("GillionsGameSync.SyncOrigin", true)!
     .GetMethod("TryNormalize", BindingFlags.Static | BindingFlags.Public)!;
 bool AcceptsOrigin(string value) => (bool)normalizeOrigin.Invoke(null, [value, ""])!;
-Assert(!AcceptsOrigin("http://example.com") && !AcceptsOrigin("http://127.0.0.1:3301")
-    && !AcceptsOrigin("http://192.168.254.254:3301"),
-    "Product must not accept arbitrary HTTP, loopback or private pairing origins.");
-if (new Uri(compiledOrigin).Scheme == Uri.UriSchemeHttp) {
-    Assert(AcceptsOrigin(compiledOrigin) == testingProduct,
-        "Only a testing product may pair to its exact compiled private HTTP origin.");
-    Assert(!AcceptsOrigin(compiledOrigin + "/api") && !AcceptsOrigin(compiledOrigin + "?x=1")
-        && !AcceptsOrigin(compiledOrigin + "#x")
-        && !AcceptsOrigin(new UriBuilder(compiledOrigin) { Port = new Uri(compiledOrigin).Port + 1 }.Uri.ToString())
-        && !AcceptsOrigin(new UriBuilder(compiledOrigin) { UserName = "synthetic", Password = "synthetic" }.Uri.ToString()),
-        "Testing HTTP exception must retain exact origin, port and credential-free address constraints.");
-    Assert(!AcceptsOrigin("https://gillions.app"),
-        "A LAN-targeted testing product must not resume a production pairing or accept production enrollment.");
-}
-Console.WriteLine($"Actual exact-compiled-origin transport boundary passed: {pluginAssembly.GetName().Name}.");
+Assert(AcceptsOrigin("https://gillions.app") && !AcceptsOrigin("http://example.com")
+    && !AcceptsOrigin("http://127.0.0.1:3301") && !AcceptsOrigin("http://192.168.254.254:3301"),
+    "Both products must support the main HTTPS origin and reject all plaintext pairing origins.");
+Console.WriteLine($"Actual HTTPS-only pairing boundary passed: {pluginAssembly.GetName().Name}.");
 Assert(testingProduct
         ? endpoint == new Uri("http://127.0.0.1:8000/contribute/multiple")
         : endpoint == new Uri("https://xivpf.com/contribute/multiple"),
@@ -186,17 +168,7 @@ var budgetType = pluginAssembly.GetType("GillionsGameSync.DurableEvidenceBudget"
 var ledgerType = pluginAssembly.GetType("GillionsGameSync.GilLedgerEvent", true)!;
 var syntheticToken = new string('x', 43);
 var syntheticDeviceId = "11111111-1111-1111-1111-111111111111";
-var fixtureOrigin = testingProduct && new Uri(compiledOrigin).Scheme == Uri.UriSchemeHttp ? compiledOrigin : "https://example.com";
-var pairedSession = pairedSessionType.GetMethod("Create")!.Invoke(null, [fixtureOrigin, syntheticDeviceId, syntheticToken])!;
-if (testingProduct && new Uri(compiledOrigin).Scheme == Uri.UriSchemeHttp) {
-    var oldSession = JObject.FromObject(pairedSession);
-    oldSession["Origin"] = "https://gillions.app";
-    var preservedSession = oldSession.ToObject(pairedSessionType)!;
-    Assert(!(bool)pairedSessionType.GetMethod("IsValid")!.Invoke(preservedSession, [syntheticDeviceId, syntheticToken])!,
-        "A saved production session must remain invalid in the LAN-targeted testing product.");
-    Assert((string)pairedSessionType.GetProperty("Origin")!.GetValue(preservedSession)! == "https://gillions.app",
-        "Saved production session must not be silently retargeted to the testing server.");
-}
+var pairedSession = pairedSessionType.GetMethod("Create")!.Invoke(null, ["https://example.com", syntheticDeviceId, syntheticToken])!;
 configurationType.GetProperty("DeviceToken")!.SetValue(ownedConfig, syntheticToken);
 configurationType.GetProperty("DeviceId")!.SetValue(ownedConfig, syntheticDeviceId);
 configurationType.GetProperty("ActiveSession")!.SetValue(ownedConfig, pairedSession);
@@ -236,7 +208,7 @@ Assert((bool)gap.GetType().GetProperty("Paused")!.GetValue(configurationType.Get
 Assert(JToken.DeepEquals(original["AutoRetainerVenturePlanBackups"], savedOwned["AutoRetainerVenturePlanBackups"])
     && JToken.DeepEquals(original["AutoRetainerPlanOwnershipStates"], savedOwned["AutoRetainerPlanOwnershipStates"]),
     "New ownership state must not change opaque legacy history.");
-var secondSession = pairedSessionType.GetMethod("Create")!.Invoke(null, [fixtureOrigin, syntheticDeviceId, syntheticToken])!;
+var secondSession = pairedSessionType.GetMethod("Create")!.Invoke(null, ["https://example.com", syntheticDeviceId, syntheticToken])!;
 configurationType.GetProperty("ActiveSession")!.SetValue(loadedOwned, secondSession);
 var newA = getCharacter.Invoke(null, [restoredStates, secondSession, 111UL])!;
 Assert(((System.Collections.IList)ownedType.GetProperty("PendingGilLedgerEvents")!.GetValue(newA)!).Count == 0

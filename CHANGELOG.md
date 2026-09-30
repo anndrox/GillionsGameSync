@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased - isolated LAN test pairing preparation
+## Unreleased - HTTPS main-site testing
 
-- A testing product explicitly packaged for an owner-approved private IPv4 HTTP origin can pair only to that exact compiled origin. Other saved sessions remain preserved but inactive until deliberate test pairing; stable clients remain HTTPS-only.
-- Testing sync transport rejects redirects and bypasses system proxies. Pairing controls disclose plaintext trusted-LAN transport and test-only credentials/data.
-- Added actual-product origin, stale-session and transport-handler checks. This source preparation is not a published successor; plaintext credential risk acceptance is still required before release.
+- The owner selected the main HTTPS site for ordinary testing-client synchronization. The existing published `0.0.64` package already supports this; no successor is needed to pair with the main site.
+- Withdraw the unpublished private-HTTP pairing exception and its transport override. Both products remain HTTPS-only and preserve their established pairing and transport behavior.
+- Add actual-product HTTPS acceptance and HTTP refusal checks. Party Finder still has its separate loopback-only testing endpoint; Beastmaster results remain local-only.
 
 ## 0.0.64 - combined testing performance update
 
