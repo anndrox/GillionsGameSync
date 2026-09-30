@@ -50,10 +50,17 @@ Stable-compatible builds use xivpf's HTTPS contribution endpoint. Testing builds
 
 ## Testing candidate: Beastmaster local read
 
-The task-branch testing candidate includes an opt-in Beastmaster view, disabled
+The combined testing candidate includes an opt-in Beastmaster view, disabled
 by default. Open **Beastmaster local test** in testing settings or use /gillionsbst.
-Results stay in memory and are not uploaded. This is not a published update;
-see [local test instructions](docs/beastmaster-local-test.md).
+Results stay in memory and are not uploaded. See [local test instructions](docs/beastmaster-local-test.md).
+
+For the combined Beastmaster and Party Finder test, add this URL to Dalamud's
+custom plugin repositories:
+
+`https://raw.githubusercontent.com/anndrox/GillionsGameSync/codex/game-sync/beastmaster-party-finder-testing/data/GillionsGameSyncTesting.json`
+
+This installs the separate **Gillions Game Sync Testing** identity. It does not
+replace the stable plugin or update the existing `gillions.app` testing feed.
 
 ## Build and verify
 

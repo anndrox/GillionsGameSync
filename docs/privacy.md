@@ -40,7 +40,7 @@ Version `1.0.30` removes AutoRetainer discovery, IPC, plan polling and apply/res
 
 Stable diagnostic recording is off by default and can be started for ten minutes. Testing builds record diagnostics automatically. The in-memory display holds at most 40 lines; entries also use normal local Dalamud logging, whose retention is separate. Reports can contain gameplay details such as balances, Retainer names and structured item facts. Review copied reports before sharing. Remote error bodies and arbitrary server error messages are not echoed into diagnostics or the window; recognized errors use local text. Control responses are limited to 64 KiB and JSON depth 16 before receipt processing.
 
-## Unreleased testing candidate: Beastmaster
+## Combined testing candidate: Beastmaster
 
 The testing-only Beastmaster view requires explicit local sampling opt-in after
 each plugin load. Closing its window stops sampling and clears results. Pet names

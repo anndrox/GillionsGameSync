@@ -1,9 +1,10 @@
 # Gillions Game Sync Testing 0.0.63
 
-Prepared replacement for testing 0.0.62; **not published**. Uses the same
-`GillionsGameSyncTest` identity and existing testing repository URL:
+Combined replacement for testing 0.0.62 using the same
+`GillionsGameSyncTest` identity. For this candidate, add the GitHub-hosted
+repository JSON manually in Dalamud:
 
-`https://gillions.app/plugins/GillionsGameSyncTesting.json`
+`https://raw.githubusercontent.com/anndrox/GillionsGameSync/codex/game-sync/beastmaster-party-finder-testing/data/GillionsGameSyncTesting.json`
 
 ## What changes
 
@@ -13,6 +14,10 @@ Prepared replacement for testing 0.0.62; **not published**. Uses the same
 - Shows loaded pet names and owned/unowned status. Unloaded or unverified data
   stays unknown; logout and character changes clear prior results. Beastmaster
   observations are not saved, logged or uploaded. The website page is deferred.
+- Adds the independent, off-by-default Party Finder contribution setting. The
+  testing product accepts only a loopback XIVPF endpoint and never follows
+  redirects, so it cannot post the testing payload to production. Run the
+  official Remote Party Finder service locally before enabling contribution.
 - Includes current Game Sync corrections since testing 0.0.62: origin-bound
   pairing, character-owned records, preserved inactive legacy history, exact
   acknowledgements and bounded pending storage. Ordinary character and Retainer
@@ -22,8 +27,8 @@ Prepared replacement for testing 0.0.62; **not published**. Uses the same
 
 ## Upgrade
 
-Keep the existing testing repository URL. Once publication is approved and
-completed, update **Gillions Game Sync Testing** through Dalamud's installer.
+Add the manual GitHub repository URL above, then install or update
+**Gillions Game Sync Testing** through Dalamud's installer.
 Do not install this as the stable plugin or run a development copy alongside it.
 Disable/remove the earlier standalone Beastmaster diagnostic to avoid duplicate
 `/gillionsbst` handlers.
@@ -56,6 +61,6 @@ planner-capable code and configuration saving require a specific compatibility
 review. A forward correction is preferred. A feed withdrawal only prevents new
 updates; it does not undo packages already installed by users.
 
-Publication, recovery execution and installed-user acceptance are separate gates.
-No feed, stable package, server behavior or website page changes are authorized
-by preparing this candidate.
+The existing `gillions.app` feed, stable package, server behavior and website
+remain unchanged. Installed-user acceptance is still required before either
+feature is integrated to `main`.

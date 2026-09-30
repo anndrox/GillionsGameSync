@@ -1,6 +1,6 @@
 # Beastmaster local test in Game Sync Testing
 
-This task-branch candidate incorporates the proven read-only Beastmaster reader
+This combined testing candidate incorporates the proven read-only Beastmaster reader
 into **Gillions Game Sync Testing**. It is off by default on every plugin load.
 The stable plugin excludes the reader. Source push is not a plugin/feed release.
 
@@ -12,6 +12,10 @@ The stable plugin excludes the reader. Source push is not a plugin/feed release.
 
 The DLL and adjacent JSON are in `artifacts/package/testing/0.0.63/build/`.
 The identity is the existing `GillionsGameSyncTest`, version `0.0.63.0`.
+
+For the GitHub testing prerelease, add the repository URL documented in
+[`testing-0.0.63.md`](releases/testing-0.0.63.md) instead of loading the DLL
+directly. For a local development build:
 
 1. Disable the earlier **Gillions Beastmaster Local Diagnostic** and remove its
    Dev Plugin Location to avoid two handlers for `/gillionsbst`.

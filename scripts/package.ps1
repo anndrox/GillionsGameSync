@@ -10,6 +10,7 @@ param(
   [string]$PublicBaseUrl = 'https://gillions.app',
   [string]$RepositoryUrl = 'https://github.com/anndrox/GillionsGameSync',
   [string]$StableReleaseBaseUrl = 'https://github.com/anndrox/GillionsGameSync/releases/download',
+  [string]$TestingReleaseBaseUrl = '',
   [string]$StableIconUrl = 'https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png',
   [long]$PublishedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 )
@@ -21,6 +22,7 @@ $parsedOrigin = $null
 $PublicBaseUrl = $PublicBaseUrl.Trim().TrimEnd('/')
 $RepositoryUrl = $RepositoryUrl.Trim().TrimEnd('/')
 $StableReleaseBaseUrl = $StableReleaseBaseUrl.Trim().TrimEnd('/')
+$TestingReleaseBaseUrl = $TestingReleaseBaseUrl.Trim().TrimEnd('/')
 $StableIconUrl = $StableIconUrl.Trim()
 $allowedSchemes = if ($Channel -eq 'testing') { @('http', 'https') } else { @('https') }
 if (-not [Uri]::TryCreate($PublicBaseUrl, [UriKind]::Absolute, [ref]$parsedOrigin) -or
@@ -40,6 +42,17 @@ if (-not [Uri]::TryCreate($StableReleaseBaseUrl, [UriKind]::Absolute, [ref]$pars
     $parsedReleaseBase.Host -ne 'github.com' -or
     $parsedReleaseBase.AbsolutePath -ne '/anndrox/GillionsGameSync/releases/download') {
   throw 'StableReleaseBaseUrl must be the canonical GillionsGameSync GitHub Releases download path.'
+}
+if ($TestingReleaseBaseUrl) {
+  $parsedTestingReleaseBase = $null
+  if ($Channel -ne 'testing' -or
+      -not [Uri]::TryCreate($TestingReleaseBaseUrl, [UriKind]::Absolute, [ref]$parsedTestingReleaseBase) -or
+      $parsedTestingReleaseBase.Scheme -ne 'https' -or
+      $parsedTestingReleaseBase.Host -ne 'github.com' -or
+      $parsedTestingReleaseBase.AbsolutePath -ne '/anndrox/GillionsGameSync/releases/download' -or
+      $parsedTestingReleaseBase.Query -or $parsedTestingReleaseBase.UserInfo) {
+    throw 'TestingReleaseBaseUrl is testing-only and must be the canonical GillionsGameSync GitHub Releases download path.'
+  }
 }
 $parsedIcon = $null
 if (-not [Uri]::TryCreate($StableIconUrl, [UriKind]::Absolute, [ref]$parsedIcon) -or
@@ -92,7 +105,11 @@ try {
 } finally { $archive.Dispose() }
 $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $downloadUrl = if ($isTesting) {
-  "$PublicBaseUrl/downloads/plugins/$zipBase-$Version.zip"
+  if ($TestingReleaseBaseUrl) {
+    "$TestingReleaseBaseUrl/v$Version-testing/$zipBase-$Version.zip"
+  } else {
+    "$PublicBaseUrl/downloads/plugins/$zipBase-$Version.zip"
+  }
 } else {
   "$StableReleaseBaseUrl/v$Version/$zipBase-$Version.zip"
 }

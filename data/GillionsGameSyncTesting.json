@@ -1,0 +1,30 @@
+[
+  {
+    "Author": "Gillions",
+    "Name": "Gillions Game Sync Testing",
+    "InternalName": "GillionsGameSyncTest",
+    "AssemblyVersion": "0.0.63.0",
+    "Description": "Unreleased, opt-in test build for Gillions Game Sync. Install only when directed for in-game verification.",
+    "ApplicableVersion": "any",
+    "RepoUrl": "https://github.com/anndrox/GillionsGameSync",
+    "Tags": [
+      "inventory",
+      "collection",
+      "testing"
+    ],
+    "DalamudApiLevel": 15,
+    "LoadRequiredState": 0,
+    "LoadSync": false,
+    "CanUnloadAsync": false,
+    "LoadPriority": 0,
+    "Punchline": "Unreleased Gillions sync test build.",
+    "AcceptsFeedback": true,
+    "IconUrl": "https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png",
+    "DownloadLink": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.63-testing/GillionsGameSyncTesting-0.0.63.zip",
+    "DownloadLinkInstall": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.63-testing/GillionsGameSyncTesting-0.0.63.zip",
+    "DownloadLinkUpdate": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.63-testing/GillionsGameSyncTesting-0.0.63.zip",
+    "DownloadLinkTesting": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.63-testing/GillionsGameSyncTesting-0.0.63.zip",
+    "DownloadCount": 0,
+    "LastUpdate": 1790757874
+  }
+]

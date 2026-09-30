@@ -1,9 +1,10 @@
 # Changelog
 
-## 0.0.63 - release candidate (testing, unpublished)
+## 0.0.63 - combined testing candidate
 
 - Add an opt-in, local-only Beastmaster ownership view to the existing testing plugin. Sampling defaults off; results are not persisted or uploaded. Stable behavior is unchanged. See [testing instructions](docs/beastmaster-local-test.md).
-
+- Add the separate, off-by-default XIVPF Party Finder contribution path with direct loopback-only testing traffic, exact public-listing payloads, bounded batching/retries and redirect refusal.
+- Provide a GitHub-hosted testing repository JSON and immutable prerelease package for manual Dalamud installation without changing the existing Gillions testing feed.
 
 - Replaces the published `0.0.62` testing baseline with current Game Sync behavior, including one-time legacy re-pairing, preserved inactive history, bounded pending storage and retired AutoRetainer control. See [replacement notes](docs/releases/testing-0.0.63.md).
 
