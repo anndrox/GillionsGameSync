@@ -4,7 +4,7 @@ Combined replacement for testing 0.0.62 using the same
 `GillionsGameSyncTest` identity. For this candidate, add the GitHub-hosted
 repository JSON manually in Dalamud:
 
-`https://raw.githubusercontent.com/anndrox/GillionsGameSync/codex/game-sync/beastmaster-party-finder-testing/data/GillionsGameSyncTesting.json`
+`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.63-testing/GillionsGameSyncTesting.json`
 
 ## What changes
 
