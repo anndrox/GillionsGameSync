@@ -57,6 +57,7 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly IChatGui chatGui;
     private readonly IPluginLog log;
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    private readonly HttpClient partyFinderHttp = PartyFinderHttp.CreateClient();
     private readonly PluginConfiguration configuration;
     private readonly IPartyFinderContributor partyFinderContributor;
     private readonly SyncRequestLifetime requestLifetime = new();
@@ -172,7 +173,7 @@ public sealed class Plugin : IDalamudPlugin {
         this.chatGui = chatGui;
         this.log = log;
         configuration = pluginInterface.GetPluginConfig() as PluginConfiguration ?? new PluginConfiguration();
-        partyFinderContributor = PartyFinderContributorFactory.Create(partyFinderGui, http, log, () => configuration.EnablePartyFinderContributions);
+        partyFinderContributor = PartyFinderContributorFactory.Create(partyFinderGui, partyFinderHttp, log, () => configuration.EnablePartyFinderContributions);
         uiServerAddress = configuration.ServerUrl;
         configuration.OwnedCharacters ??= new(StringComparer.Ordinal);
         configuration.CoverageGap ??= new();
@@ -945,10 +946,10 @@ public sealed class Plugin : IDalamudPlugin {
         var enablePartyFinderContributions = view.PartyFinderContributions;
         if (ImGui.Checkbox("Contribute public Party Finder listings", ref enablePartyFinderContributions)) QueueUiAction(() => {
             configuration.EnablePartyFinderContributions = enablePartyFinderContributions;
-            partyFinderContributor.SetEnabled(enablePartyFinderContributions);
             RequestConfigurationSave();
+            partyFinderContributor.SetEnabled(enablePartyFinderContributions);
         });
-        ImGui.TextWrapped("Off by default and independent of Gillions pairing or sync. When enabled, only listings already public in the in-game Party Finder are batched and sent directly to xivpf.com. They never pass through Gillions.");
+        ImGui.TextWrapped("Off by default and independent of Gillions pairing or sync. When enabled, public listing names and descriptions, owner ID lower bits, worlds, duty/settings, jobs and slots are batched and sent directly to xivpf.com. They never pass through Gillions.");
         ImGui.TextWrapped("No chat, Gillions account or device credential, Square Enix credential, diagnostic, or unrelated local data is included.");
         ImGui.TextWrapped("Powered by xivpf.com — https://xivpf.com");
         if (ImGui.Button("Open xivpf.com")) Util.OpenLink("https://xivpf.com");
@@ -1298,6 +1299,7 @@ public sealed class Plugin : IDalamudPlugin {
         pluginInterface.UiBuilder.OpenConfigUi -= OpenSettings;
         commands.RemoveHandler(CommandName);
         partyFinderContributor.Dispose();
+        partyFinderHttp.Dispose();
         http.Dispose();
     }
 }

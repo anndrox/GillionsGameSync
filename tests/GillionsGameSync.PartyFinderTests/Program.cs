@@ -9,12 +9,17 @@ internal static class Program {
     private static async Task Main(string[] args) {
         TestExactPayloadSerialization();
         TestEndpointPolicy();
+        TestDedicatedClientRejectsRedirects();
         await TestOffByDefaultAndNoCaptureWhileDisabled();
         await TestBatchingDeduplicationAndDirectRequest();
+        await TestRedirectResponseIsOneFailedAttempt();
         await TestFailedRequestRetryDelay();
         await TestRollingRequestCeiling();
         TestBoundedPendingData();
         await TestDisableCancelsAndClearsImmediately();
+        await TestCompletionRacingDisableIsSafe();
+        await TestCompletionRacingDisposeIsSafe();
+        TestDisposedCancellationIsSafe();
         TestDisposalUnsubscribes();
         if (args is ["--integration", var endpoint]) await TestLocalIntegration(new Uri(endpoint));
         Console.WriteLine("Party Finder contribution behavior verification passed.");
@@ -77,6 +82,11 @@ internal static class Program {
             "Stable-compatible builds must reject non-official remote HTTPS endpoints.");
         Assert(XivpfEndpointPolicy.RequireBuildSafe(new("http://localhost:8000/contribute/multiple"), false).IsLoopback,
             "Stable-compatible local validation must retain loopback HTTP support.");
+    }
+
+    private static void TestDedicatedClientRejectsRedirects() {
+        using var handler = PartyFinderHttp.CreateHandler();
+        Assert(!handler.AllowAutoRedirect, "The dedicated contribution client must never follow endpoint redirects.");
     }
 
     private static async Task TestOffByDefaultAndNoCaptureWhileDisabled() {
@@ -144,6 +154,23 @@ internal static class Program {
         Assert(handler.Requests.Count == 2 && contributor.PendingCount == 0, "Bounded retry did not complete normally.");
     }
 
+    private static async Task TestRedirectResponseIsOneFailedAttempt() {
+        var enabled = true;
+        var clock = new ManualClock(Epoch);
+        var source = new FakeSource();
+        var handler = new RecordingHandler((_, _, _) => {
+            var response = new HttpResponseMessage(HttpStatusCode.TemporaryRedirect);
+            response.Headers.Location = XivpfEndpointPolicy.ProductionEndpoint;
+            return Task.FromResult(response);
+        });
+        using var contributor = Contributor(source, handler, () => enabled, clock, TimeSpan.Zero);
+        source.Emit(Listing(1));
+        contributor.Tick(clock.Now);
+        await contributor.WhenIdleAsync();
+        Assert(handler.Requests.Count == 1 && contributor.PendingCount == 1,
+            "A redirect response must be one failed, bounded attempt with no follow-up request.");
+    }
+
     private static async Task TestRollingRequestCeiling() {
         var enabled = true;
         var clock = new ManualClock(Epoch);
@@ -199,6 +226,44 @@ internal static class Program {
         contributor.Tick(clock.Now.AddHours(1));
         Assert(contributor.PendingCount == 0 && handler.Requests.Count == 1,
             "Disabling did not cancel active work, clear unsent data and stop collection immediately.");
+    }
+
+    private static async Task TestCompletionRacingDisableIsSafe() {
+        var enabled = true;
+        var clock = new ManualClock(Epoch);
+        var source = new FakeSource();
+        var complete = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new RecordingHandler((_, _, _) => complete.Task);
+        using var contributor = Contributor(source, handler, () => enabled, clock, TimeSpan.Zero);
+        source.Emit(Listing(1));
+        contributor.Tick(clock.Now);
+        var upload = contributor.WhenIdleAsync();
+        enabled = false;
+        var disable = Task.Run(() => contributor.SetEnabled(false));
+        complete.TrySetResult(new HttpResponseMessage(HttpStatusCode.OK));
+        await Task.WhenAll(upload, disable);
+        Assert(contributor.PendingCount == 0, "Completion racing opt-out threw or retained unsent data.");
+    }
+
+    private static async Task TestCompletionRacingDisposeIsSafe() {
+        var clock = new ManualClock(Epoch);
+        var source = new FakeSource();
+        var complete = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new RecordingHandler((_, _, _) => complete.Task);
+        var contributor = Contributor(source, handler, () => true, clock, TimeSpan.Zero);
+        source.Emit(Listing(1));
+        contributor.Tick(clock.Now);
+        var upload = contributor.WhenIdleAsync();
+        var dispose = Task.Run(contributor.Dispose);
+        complete.TrySetResult(new HttpResponseMessage(HttpStatusCode.OK));
+        await Task.WhenAll(upload, dispose);
+        Assert(source.SubscriberCount == 0 && source.Disposed, "Completion racing disposal threw or retained the event source.");
+    }
+
+    private static void TestDisposedCancellationIsSafe() {
+        var cancellation = new CancellationTokenSource();
+        cancellation.Dispose();
+        PartyFinderContributor.CancelSafely(cancellation);
     }
 
     private static void TestDisposalUnsubscribes() {

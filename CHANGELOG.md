@@ -13,8 +13,8 @@
 - Verify both actual product configuration serializers, ownership/re-pair/coverage-gap persistence, opaque scalar timestamp preservation and synthetic request, queue, timing, response and UI-state boundaries. Local checks do not establish live-game or rendered visual acceptance.
 
 - Added an off-by-default Party Finder contribution setting that sends only public listings directly to xivpf.com, never through Gillions.
-- Match the Remote Party Finder `UploadableListing` byte and numeric contract, deduplicate identities, cap memory-only pending data at 1,000 listings, and clear/cancel unsent work immediately on opt-out.
-- Batch contributions ten seconds after the newest listing, retry failures after at least ten seconds, and enforce no more than six attempted direct requests in any rolling minute. Testing builds require the loopback Remote Party Finder server.
+- Match the Remote Party Finder `UploadableListing` byte and numeric contract, deduplicate identities, cap memory-only queued data at 1,000 listings plus one in-flight batch of at most 1,000, and clear/cancel unsent work immediately on opt-out.
+- Batch contributions ten seconds after the newest listing, retry failures after at least ten seconds, reject redirects, and enforce no more than six attempted direct requests in any rolling minute during one plugin load. Testing builds require the loopback Remote Party Finder server.
 
 ## 1.0.29 - 2026-08-26
 

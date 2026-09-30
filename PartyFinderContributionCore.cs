@@ -32,6 +32,12 @@ internal static class XivpfEndpointPolicy {
     }
 }
 
+internal static class PartyFinderHttp {
+    internal static HttpClientHandler CreateHandler() => new() { AllowAutoRedirect = false };
+
+    internal static HttpClient CreateClient() => new(CreateHandler()) { Timeout = TimeSpan.FromSeconds(30) };
+}
+
 internal sealed record PartyFinderListingSnapshot(
     uint Id,
     uint ContentIdLower,
@@ -203,7 +209,7 @@ internal sealed class PartyFinderContributor : IPartyFinderContributor {
                 cancel = activeRequestCancellation;
             }
         }
-        cancel?.Cancel();
+        CancelSafely(cancel);
     }
 
     private void OnListing(PartyFinderContributionListing listing) {
@@ -284,6 +290,15 @@ internal sealed class PartyFinderContributor : IPartyFinderContributor {
         while (requestAttempts.Count > 0 && requestAttempts.Peek() <= cutoff) requestAttempts.Dequeue();
     }
 
+    internal static void CancelSafely(CancellationTokenSource? cancellation) {
+        if (cancellation is null) return;
+        try {
+            cancellation.Cancel();
+        } catch (ObjectDisposedException) {
+            // Upload completion may dispose the source after it was captured for opt-out or disposal.
+        }
+    }
+
     public void Dispose() {
         CancellationTokenSource? cancel;
         lock (gate) {
@@ -297,6 +312,6 @@ internal sealed class PartyFinderContributor : IPartyFinderContributor {
         }
         source.ListingReceived -= OnListing;
         source.Dispose();
-        cancel?.Cancel();
+        CancelSafely(cancel);
     }
 }

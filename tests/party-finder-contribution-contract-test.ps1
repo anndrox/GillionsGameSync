@@ -35,13 +35,15 @@ foreach ($mapping in @(
 
 Require ($core.Contains('TimeSpan.FromSeconds(10)') -and $core.Contains('MaximumRequestsPerMinute = 6')) 'Batch/retry timing and rolling request ceiling must remain explicit.'
 Require $core.Contains('MaximumPendingListings = 1000') 'Pending Party Finder data must retain a fixed bound.'
-Require ($core.Contains('pending.Clear();') -and $core.Contains('cancel?.Cancel();')) 'Opt-out must clear unsent data and cancel active work.'
+Require ($core.Contains('pending.Clear();') -and $core.Contains('CancelSafely(cancel);')) 'Opt-out must clear unsent data and cancel active work without racing request completion.'
+Require ($core.Contains('AllowAutoRedirect = false') -and $plugin.Contains('PartyFinderHttp.CreateClient()')) 'Contribution HTTP must use a dedicated client that cannot follow redirects.'
 Require ($adapter.Contains('partyFinderGui.ReceiveListing += OnListing') -and $adapter.Contains('partyFinderGui.ReceiveListing -= OnListing')) 'Dalamud Party Finder event lifecycle is incomplete.'
 Require $adapter.Contains('if (disposed || !enabled()) return;') 'Disabled contribution must reject the authoritative event before mapping or copying listing data.'
 Require ($adapter.Contains('XivpfEndpointPolicy.RequireBuildSafe(endpoint, true)') -and $core.Contains('endpoint != ProductionEndpoint')) 'Built products must enforce loopback testing and the official stable remote endpoint at runtime.'
 Require ($adapter.Contains('ordinary Gillions Game Sync remains active') -and $adapter.Contains('new DisabledPartyFinderContributor()')) 'Unsafe contribution configuration must fail closed without disabling ordinary Game Sync.'
 Require $plugin.Contains('EnablePartyFinderContributions { get; set; } = false') 'Party Finder contribution must be off by default.'
 Require $plugin.Contains('partyFinderContributor.SetEnabled(enablePartyFinderContributions)') 'The setting must apply opt-out clearing immediately.'
+Require ($plugin.IndexOf('RequestConfigurationSave();', $plugin.IndexOf('configuration.EnablePartyFinderContributions = enablePartyFinderContributions;', [StringComparison]::Ordinal), [StringComparison]::Ordinal) -lt $plugin.IndexOf('partyFinderContributor.SetEnabled(enablePartyFinderContributions)', [StringComparison]::Ordinal)) 'Opt-out persistence must be requested before cancellation is applied.'
 Require $plugin.Contains('Util.OpenLink("https://xivpf.com")') 'The settings disclosure must visibly link to xivpf.com.'
 $tick = $plugin.IndexOf('partyFinderContributor.Tick(now)', [StringComparison]::Ordinal)
 $pairingGate = $plugin.IndexOf('if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;', [StringComparison]::Ordinal)
