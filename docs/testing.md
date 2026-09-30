@@ -29,3 +29,15 @@ Recovery fixtures invoke the actual built plugin's managed acknowledged-drain, s
 Eight deterministic UI model states are exported per product, including initial pairing, legacy re-pairing, connected, automatic-off, logged-out, storage-paused, resumed-gap and combined warnings. Technical details and diagnostic rows are constructed only when their sections are expanded; their data is projected on the framework thread and rendered through immutable view snapshots.
 
 These are source/model fixtures, not rendered ImGui frames or live-game acceptance. They do not establish game-version compatibility, actual channel behavior in every locale, visual layout in an installed client, or cancellation of callbacks queued by an older plugin. Required independent UX, Security and Compatibility reviews remain separate gates. Local verification and packaging do not publish or install a plugin.
+
+## Performance validation
+
+The performance candidate follows the combined Beastmaster/Party Finder source. It adds no polling loop and preserves item-link polling, ordinary category rotation, the Gil fallback/change delay, transient Retainer result capture, and Beastmaster sampling intervals.
+
+Synthetic fixtures exercise 7,200 visible-window frames over 60 seconds at 120 FPS: the refresh policy admits 240 publications instead of one per frame. Closed windows admit none; reopening, session resets and queued UI actions can refresh immediately. This verifies cadence, not rendered frame-time improvement. Empty-owner storage fixtures verify exact accounting remains the two-byte `[]` document without serializing unused queue headers. Existing exact-capacity, overflow, acknowledgement and reload checks still apply.
+
+The Party Finder fixture deliberately blocks synchronous HTTP startup on its worker and verifies that the Tick caller returns before it is released. The full suite retains exact payloads, deduplication, retries, the rolling request ceiling and cancellation/disposal races. Synthetic handlers do not contact the production contribution service.
+
+For in-game validation, compare the installed baseline and candidate under matching conditions: normal play with settings closed; settings with Data status/Diagnostics expanded; inventory changes; Retainer result views; Beastmaster sampling; and receiving a full Party Finder listing batch. Record frame times as well as FPS. While diagnostics are active, `Native collection [...]` records elapsed framework-thread capture time (native reads plus copied snapshot/queue state). It excludes background JSON preparation and network response time. Stable diagnostic recording remains opt-in; testing recording follows the existing testing behavior.
+
+Full character, quest and collectibles scans remain on the framework thread because their unlock reads access game state. Their actual cost has not been measured in a live game here. Use the per-category timing evidence before changing their cadence or splitting capture across frames. These source changes are not included in the immutable `0.0.63` package until a successor testing release is published.

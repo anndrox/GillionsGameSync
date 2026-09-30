@@ -26,7 +26,7 @@ internal static class GapBaselineTests {
             // No constructor, subscriptions, HTTP, native readers or game services run.
             // Only managed production recovery/observation/correlation methods are invoked.
             var plugin = RuntimeHelpers.GetUninitializedObject(pluginType);
-            foreach (var name in new[] { "evidenceBudget", "savePolicy", "recentRetainerWithdrawals", "recentGilLedgerLogs",
+            foreach (var name in new[] { "evidenceBudget", "savePolicy", "uiRefreshPolicy", "recentRetainerWithdrawals", "recentGilLedgerLogs",
                 "recentGilLedgerChat", "emittedRetainerChatEvidence", "diagnosticsLock", "diagnostics" }) {
                 var field = pluginType.GetField(name, PrivateInstance)!;
                 field.SetValue(plugin, Activator.CreateInstance(field.FieldType));

@@ -2,6 +2,18 @@ using System;
 
 namespace GillionsGameSync;
 
+public sealed class PluginUiRefreshPolicy {
+    public static readonly TimeSpan Interval = TimeSpan.FromMilliseconds(250);
+    private DateTime nextRefresh;
+    public bool ShouldRefresh(bool visible, DateTime now) {
+        if (!visible) { nextRefresh = DateTime.MinValue; return false; }
+        if (now < nextRefresh) return false;
+        nextRefresh = now.Add(Interval);
+        return true;
+    }
+    public void Reset() => nextRefresh = DateTime.MinValue;
+}
+
 public sealed record PluginWindowModel(string Connection, string Status, string? Warning, bool CanSync) {
     public static PluginWindowModel Create(bool paired, bool needsPairing, bool loggedIn, bool automatic, bool busy, bool storagePaused, bool hadGap, string blockedCode) {
         var warnings = new System.Collections.Generic.List<string>();

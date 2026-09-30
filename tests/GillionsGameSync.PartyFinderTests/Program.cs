@@ -12,6 +12,7 @@ internal static class Program {
         TestDedicatedClientRejectsRedirects();
         await TestOffByDefaultAndNoCaptureWhileDisabled();
         await TestBatchingDeduplicationAndDirectRequest();
+        await TestUploadStartupDoesNotBlockTick();
         await TestRedirectResponseIsOneFailedAttempt();
         await TestFailedRequestRetryDelay();
         await TestRollingRequestCeiling();
@@ -131,6 +132,41 @@ internal static class Program {
             && !request.Body.Contains("device", StringComparison.OrdinalIgnoreCase)
             && !request.Body.Contains("account", StringComparison.OrdinalIgnoreCase),
             "Contribution body contains unrelated Gillions identity data.");
+    }
+
+    private static async Task TestUploadStartupDoesNotBlockTick() {
+        var source = new FakeSource();
+        using var started = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        using var returned = new ManualResetEventSlim();
+        var requestThread = 0;
+        var callerThread = 0;
+        var handler = new RecordingHandler((_, _, _) => {
+            requestThread = Environment.CurrentManagedThreadId;
+            started.Set();
+            release.Wait(TimeSpan.FromSeconds(5));
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+        });
+        using var contributor = Contributor(source, handler, () => true, new ManualClock(Epoch), TimeSpan.Zero);
+        source.Emit(Listing(1));
+        var caller = new Thread(() => {
+            callerThread = Environment.CurrentManagedThreadId;
+            contributor.Tick(Epoch);
+            returned.Set();
+        });
+        caller.Start();
+        bool startupObserved;
+        bool returnedBeforeRelease;
+        try {
+            startupObserved = started.Wait(TimeSpan.FromSeconds(5));
+            returnedBeforeRelease = returned.Wait(TimeSpan.FromSeconds(1));
+        } finally { release.Set(); }
+        caller.Join();
+        await contributor.WhenIdleAsync();
+        Assert(startupObserved && returnedBeforeRelease && requestThread != callerThread,
+            "Synchronous HTTP startup must not block the framework Tick caller.");
+        Assert(handler.Requests.Count == 1 && contributor.PendingCount == 0,
+            "Off-thread upload must preserve one successful batch.");
     }
 
     private static async Task TestFailedRequestRetryDelay() {

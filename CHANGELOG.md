@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased - performance improvements
+
+- Refresh the visible settings view four times per second instead of every frame; queued settings changes and session resets remain eligible for an immediate refresh.
+- Move Party Finder batch sorting, JSON serialization and HTTP startup to a worker while preserving existing batching, retry, cancellation and request limits.
+- Reuse the static Armoire catalog projection and skip JSON header serialization for empty pending-record queues.
+- Include framework-thread collection duration in local diagnostic recording. These changes have synthetic validation; live-game FPS and frame-time improvement still require in-game testing.
+
 ## 0.0.63 - combined testing candidate
 
 - Add an opt-in, local-only Beastmaster ownership view to the existing testing plugin. Sampling defaults off; results are not persisted or uploaded. Stable behavior is unchanged. See [testing instructions](docs/beastmaster-local-test.md).

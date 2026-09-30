@@ -66,6 +66,7 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly SyncRequestLifetime requestLifetime = new();
     private readonly DurableEvidenceBudget evidenceBudget = new();
     private readonly ObservationSavePolicy savePolicy = new();
+    private readonly PluginUiRefreshPolicy uiRefreshPolicy = new();
     private OwnedCharacterState? activeOwnedState;
     private string activeGeneration = "";
     private volatile bool disposed;
@@ -791,6 +792,7 @@ public sealed class Plugin : IDalamudPlugin {
         var ownsSync = false;
         try {
             captured = await framework.RunOnFrameworkThread(() => {
+                var captureStopwatch = Stopwatch.StartNew();
                 if (disposed || syncInFlight) throw new OperationCanceledException();
                 var permit = CapturePermit(mode);
                 operationPermit = permit;
@@ -812,10 +814,13 @@ public sealed class Plugin : IDalamudPlugin {
                 var snapshots = DirectGameSnapshotCollector.Collect(pluginInterface, clientState, objects, dataManager, unlockState,
                     state.RetainerGilBalances, state.RetainerState, selectedScopes).ToArray();
                 if (!background && selectedScopes.Contains("shared_fates", StringComparer.Ordinal)) RecordDiagnostic(SharedFateCollector.LastAttemptDiagnostic);
-                return new CapturedSnapshotBatch(state.CharacterName, state.CharacterWorld, permit, snapshots,
+                var batch = new CapturedSnapshotBatch(state.CharacterName, state.CharacterWorld, permit, snapshots,
                     state.PendingGilLedgerEvents.Select(entry => entry with { LogIntegerParameters = entry.LogIntegerParameters.ToArray() }).ToArray(),
                     state.GilLedgerSessionId, new(state.LastPayloadHashes, StringComparer.Ordinal),
                     new(state.LastInventoryComponentHashes, StringComparer.Ordinal), IsDiagnosticRecording);
+                captureStopwatch.Stop();
+                if (batch.RecordDiagnostics) RecordDiagnostic($"Native collection [{string.Join(",", selectedScopes)}]: {captureStopwatch.Elapsed.TotalMilliseconds:N2} ms on framework thread; {snapshots.Length} snapshots.");
+                return batch;
             });
             var snapshots = captured.Snapshots;
             // Managed preparation receives only copied data and no live config.
@@ -899,13 +904,17 @@ public sealed class Plugin : IDalamudPlugin {
 
     private void QueueUiAction(System.Action action) {
         if (disposed) return;
-        _ = framework.RunOnFrameworkThread(() => { if (!disposed) action(); });
+        _ = framework.RunOnFrameworkThread(() => {
+            if (!disposed) { action(); uiRefreshPolicy.Reset(); }
+        });
     }
 
     private void PublishUiState() {
-        if (disposed || !settingsVisible) return;
-        if (dataDetailsExpanded && DateTime.UtcNow >= nextUiDetailsUtc) {
-            nextUiDetailsUtc = DateTime.UtcNow.AddSeconds(1);
+        if (disposed) return;
+        var now = DateTime.UtcNow;
+        if (!uiRefreshPolicy.ShouldRefresh(settingsVisible, now)) return;
+        if (dataDetailsExpanded && now >= nextUiDetailsUtc) {
+            nextUiDetailsUtc = now.AddSeconds(1);
             uiBudget = evidenceBudget.Measure(configuration.OwnedCharacters.Values);
             uiAvailability = NativeInventoryCollector.GetAvailabilityStatus();
         }
@@ -1070,6 +1079,7 @@ public sealed class Plugin : IDalamudPlugin {
         DirectGameSnapshotCollector.ClearTransientState(); itemLinkRequestProcessor = new();
         lock (diagnosticsLock) diagnostics.Clear();
         uiState = PluginUiSnapshot.Empty; uiBudget = null; uiAvailability = ""; nextUiDetailsUtc = DateTime.MinValue;
+        uiRefreshPolicy.Reset();
         gilLedgerDirty = false; nextInventorySyncUtc = DateTime.MaxValue; nextGilLedgerUploadUtc = DateTime.MaxValue;
     }
 

@@ -230,19 +230,24 @@ internal sealed class PartyFinderContributor : IPartyFinderContributor {
                 nextUploadUtc = requestAttempts.Peek().AddMinutes(1);
                 return;
             }
-            var batch = pending.Values.OrderBy(value => value.Sequence).Select(value => value.Listing).ToList();
+            var batch = pending.Values.ToArray();
             pending.Clear();
             requestAttempts.Enqueue(now);
             uploadInFlight = true;
             var generation = enabledGeneration;
             var cancellation = new CancellationTokenSource();
             activeRequestCancellation = cancellation;
-            activeUpload = UploadAsync(batch, generation, cancellation);
+            // Tick runs on the game thread. Sorting, serialization and HTTP
+            // startup must not execute there or while holding the queue lock.
+            activeUpload = Task.Run(() => UploadAsync(batch, generation, cancellation));
         }
     }
 
-    private async Task UploadAsync(List<PartyFinderContributionListing> batch, int generation, CancellationTokenSource cancellation) {
+    private async Task UploadAsync(PendingListing[] pendingBatch, int generation, CancellationTokenSource cancellation) {
+        List<PartyFinderContributionListing> batch = [];
         try {
+            cancellation.Token.ThrowIfCancellationRequested();
+            batch = pendingBatch.OrderBy(value => value.Sequence).Select(value => value.Listing).ToList();
             using var request = new HttpRequestMessage(HttpMethod.Post, endpoint) {
                 Content = new StringContent(JsonSerializer.Serialize(batch), Encoding.UTF8, "application/json"),
             };

@@ -26,6 +26,8 @@ Assert-NotContains $collectorSource "JsonSerializer.Serialize(prior) == JsonSeri
 Assert-Contains $collectorSource "prior.Items.SequenceEqual(read.Items)" "Retainer listing changes must use typed structural comparison."
 Assert-Contains $collectorSource 'JsonPropertyName("retainerId")' "Typed retainer rows must preserve the existing camel-case wire contract."
 Assert-Contains $collectorSource "SheetRowCache<T>.Get(dataManager)" "Static Lumina row catalogs must be cached."
+Assert-Contains $collectorSource "var catalog = GetCatalog(dataManager);" "Armoire catalog projection must be reused while live ownership is reread."
+Assert-Contains $pluginSource "uiRefreshPolicy.ShouldRefresh(settingsVisible, now)" "Settings publication must use the bounded visible-window cadence."
 
 $ventureResultCadenceIndex = $pluginSource.IndexOf("if (retainerWindowActive || now >= nextRetainerVentureResultCaptureUtc)", [StringComparison]::Ordinal)
 $ventureResultIndex = $pluginSource.IndexOf("CaptureRetainerResult", $ventureResultCadenceIndex, [StringComparison]::Ordinal)

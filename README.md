@@ -32,6 +32,8 @@ Updating this plugin does not cancel external AutoRetainer plans or guarantee ca
 
 Connection details, update history, data status and diagnostics are collapsed by default. The pairing destination and actionable account/storage warnings remain visible. Editing the HTTPS server address changes the destination for the next pairing; an existing device credential stays bound to its original origin. Disconnecting clears that credential while preserving local history.
 
+The visible settings view refreshes at most four times per second during ordinary updates, with immediate refresh eligibility after queued settings changes or session resets. Closed settings windows skip publication. Static Armoire catalog definitions are reused while current ownership is checked on each inventory sync. Party Finder batch sorting, serialization and HTTP startup run on a worker. Diagnostic recording includes framework-thread collection time so in-game performance can be checked separately from network time; see [performance testing](docs/testing.md#performance-validation).
+
 ## Offline records
 
 New pending evidence is owned by a pairing generation and authoritative character content ID. Acknowledgements retire only the exact versions sent. Switching characters, pairing again, opting out of a request mode, or unloading the plugin cancels the affected work and prevents stale replies from changing a new session.
