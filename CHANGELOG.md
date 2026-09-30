@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.65 - authenticated testing Party Finder intake
+
+- Testing contribution now uses the fixed Gillions HTTPS v1 receiver with a current paired-device credential. Stable direct-xivpf behavior is unchanged.
+- Require explicit site-side Testing/Party Finder permission and a new local opt-in; legacy third-party contribution consent is not transferred.
+- Bound requests to 100 listings and 256 KiB, validate exact acknowledgement identities/statuses, preserve observation timestamps on retries, and discard stale or expired observations.
+- Stop permission failures until a fresh pairing; honor server retry delays with jitter and a rolling six-request ceiling. Logout, re-pair, character changes, opt-out and disposal cancel and clear old-session observations.
+- Keep serialization and HTTP startup off the game thread. Diagnostics disclose aggregate results only. Beastmaster remains local-only; no new game queries, map flags or Hunt features.
+
 ## Unreleased - HTTPS main-site testing
 
 - The owner selected the main HTTPS site for ordinary testing-client synchronization. The existing published `0.0.64` package already supports this; no successor is needed to pair with the main site.

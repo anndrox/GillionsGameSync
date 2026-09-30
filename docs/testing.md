@@ -17,18 +17,21 @@ are transferred between the stable and testing product identities.
 The previously prepared private-HTTP pairing exception was never published and
 has been withdrawn. Both products retain HTTPS-only pairing.
 
-The separate XIVPF testing endpoint remains loopback-only. The Gillions address
-does not change it. Leave contribution disabled until the server-hosted test
-receiver and its exact client-facing URL are verified and a reviewed successor
-targets that receiver. Beastmaster results remain local-only and unuploaded.
+Testing `0.0.65` uses the fixed authenticated Gillions HTTPS Party Finder intake.
+It requires a new pairing created with Testing selected, real-data acknowledgement
+and separate site-side public Party Finder permission, plus a new local opt-in.
+Old `0.0.64` contribution settings do not enable this recipient. Leave contribution
+off until Site confirms production activation. The editable server field cannot
+retarget Party Finder or send its credential to another origin. Beastmaster remains
+local-only. See [0.0.65 testing checks](releases/testing-0.0.65.md).
 
 This document describes the `1.0.30` source and its synthetic verification. The stable feed and GitHub Release identify the published package. Testing builds retain their separate product identity and publication path.
 
 Run `./scripts/verify.ps1`. It executes the linked-production policy suite, source integration contracts, packaging fixtures, stable/testing builds and actual Dalamud configuration round-trips. Fixtures stay under ignored `artifacts/verification`; they do not use a game session, installed user configuration, server or database.
 
-The Party Finder fixture executes exact `UploadableListing` serialization, ten-second newest-listing batching, identity deduplication, the rolling six-attempt ceiling, failed-request backoff, the queued 1,000-identity bound, opt-out cancellation/clearing, completion races with disable/disposal, redirect rejection, endpoint policy and event-source disposal. Actual built-product configuration tests verify that absent settings remain off, explicit opt-in persists, the stable-compatible assembly resolves `https://xivpf.com/contribute/multiple`, and the testing assembly resolves only the default loopback endpoint. Synthetic HTTP handlers never contact xivpf.com.
+Party Finder fixtures cover legacy direct-xivpf behavior and the testing Gillions v1 wrapper: bounded batches/bodies, exact acknowledgements, immutable retry timestamps, stale drops, permission stops, retry delays, request ceilings and session/opt-out cancellation. Actual built-product configuration tests verify separate consent and fixed product endpoints. Synthetic handlers never contact live services.
 
-An end-to-end contribution check is separate: run the official Remote Party Finder server with its MongoDB dependency on loopback, build the testing product, and submit a fixture to its local `/contribute/multiple` route. Record the accepted server response and database result. Never substitute the production endpoint when the official local runtime is unavailable.
+End-to-end validation is separate: pair the testing successor through the owner-authorized HTTPS site, enable both site permission and local consent, and manually browse Party Finder. Compare exact server acknowledgements with current read results and expiration. Do not make testers host a local service, relax TLS or send credentials to xivpf.com. The legacy loopback integration harness is synthetic/disposable tooling, not the installed testing product's route.
 
 ## Corrected boundaries
 

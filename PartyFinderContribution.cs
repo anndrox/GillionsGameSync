@@ -86,14 +86,21 @@ internal sealed class DalamudPartyFinderContributionLog(IPluginLog log) : IParty
 }
 
 internal static class PartyFinderContributorFactory {
-    internal static IPartyFinderContributor Create(IPartyFinderGui partyFinderGui, HttpClient http, IPluginLog log, Func<bool> enabled) {
+    internal static IPartyFinderContributor Create(IPartyFinderGui partyFinderGui, HttpClient http, IPluginLog log, Func<bool> enabled,
+        Func<GillionsPartyFinderSession?> captureSession, Action<string> report) {
         DalamudPartyFinderContributionSource? source = null;
         try {
             var endpoint = XivpfEndpoints.ContributionUrl;
             var version = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "unknown";
             source = new DalamudPartyFinderContributionSource(partyFinderGui, log, enabled);
+#if GILLIONS_TEST_BUILD
+            return new GillionsPartyFinderContributor(source, captureSession, enabled, message => {
+                log.Information("{PartyFinderStatus}", message); report(message);
+            });
+#else
             return new PartyFinderContributor(source, http, new DalamudPartyFinderContributionLog(log), enabled, endpoint,
                 $"GillionsGameSync/{version}");
+#endif
         } catch (Exception error) {
             source?.Dispose();
             log.Error(error, "Party Finder contribution is unavailable; ordinary Gillions Game Sync remains active.");

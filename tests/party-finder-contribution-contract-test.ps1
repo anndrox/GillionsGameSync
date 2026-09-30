@@ -4,6 +4,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $adapter = [IO.File]::ReadAllText((Join-Path $root 'PartyFinderContribution.cs'))
 $core = [IO.File]::ReadAllText((Join-Path $root 'PartyFinderContributionCore.cs'))
+$intake = [IO.File]::ReadAllText((Join-Path $root 'GillionsPartyFinderContributor.cs'))
 $plugin = [IO.File]::ReadAllText((Join-Path $root 'Plugin.cs'))
 $project = [IO.File]::ReadAllText((Join-Path $root 'GillionsGameSync.csproj'))
 $behavior = [IO.File]::ReadAllText((Join-Path $root 'tests/GillionsGameSync.PartyFinderTests/Program.cs'))
@@ -41,7 +42,7 @@ Require ($core.Contains('AllowAutoRedirect = false') -and $plugin.Contains('Part
 Require ($behavior.Contains('XivpfEndpointPolicy.RequireSafe(endpoint, true)') -and $behavior.Contains('using var http = PartyFinderHttp.CreateClient();')) 'The optional integration harness must require loopback and reject redirects.'
 Require ($adapter.Contains('partyFinderGui.ReceiveListing += OnListing') -and $adapter.Contains('partyFinderGui.ReceiveListing -= OnListing')) 'Dalamud Party Finder event lifecycle is incomplete.'
 Require $adapter.Contains('if (disposed || !enabled()) return;') 'Disabled contribution must reject the authoritative event before mapping or copying listing data.'
-Require ($adapter.Contains('XivpfEndpointPolicy.RequireBuildSafe(endpoint, true)') -and $core.Contains('endpoint != ProductionEndpoint')) 'Built products must enforce loopback testing and the official stable remote endpoint at runtime.'
+Require ($adapter.Contains('XivpfEndpointPolicy.RequireBuildSafe(endpoint, true)') -and $core.Contains('endpoint != ProductionEndpoint') -and $core.Contains('endpoint != GillionsPartyFinderContributor.Endpoint')) 'Built products must enforce fixed Gillions testing intake and the official stable remote endpoint.'
 Require ($adapter.Contains('ordinary Gillions Game Sync remains active') -and $adapter.Contains('new DisabledPartyFinderContributor()')) 'Unsafe contribution configuration must fail closed without disabling ordinary Game Sync.'
 Require $plugin.Contains('EnablePartyFinderContributions { get; set; } = false') 'Party Finder contribution must be off by default.'
 Require $plugin.Contains('partyFinderContributor.SetEnabled(enablePartyFinderContributions)') 'The setting must apply opt-out clearing immediately.'
@@ -50,6 +51,10 @@ Require $plugin.Contains('Util.OpenLink("https://xivpf.com")') 'The settings dis
 $tick = $plugin.IndexOf('partyFinderContributor.Tick(now)', [StringComparison]::Ordinal)
 $pairingGate = $plugin.IndexOf('if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;', [StringComparison]::Ordinal)
 Require ($tick -ge 0 -and $pairingGate -gt $tick) 'Party Finder contribution must remain independent from Gillions pairing and login sync gates.'
-Require ($project.Contains('https://xivpf.com/contribute/multiple') -and $project.Contains('http://127.0.0.1:8000/contribute/multiple')) 'Stable and testing endpoint defaults are incomplete.'
+Require ($project.Contains('https://xivpf.com/contribute/multiple') -and $project.Contains('https://gillions.app/api/game-sync/party-finder/contribute')) 'Stable and authenticated testing endpoint defaults are incomplete.'
+Require $plugin.Contains('EnableGillionsPartyFinderContributions { get; set; } = false') 'New recipient must require a separate local opt-in.'
+Require ($plugin.Contains('CapturePartyFinderSession') -and $plugin.Contains('configuration.ActiveSession!.Origin != "https://gillions.app"') -and $plugin.Contains('RequirePermit(permit);')) 'Authenticated intake must remain bound to the current main-site paired session.'
+Require ($adapter.Contains('new GillionsPartyFinderContributor') -and $intake.Contains('MaximumBodyBytes = 262144') -and $intake.Contains('Take(batchLimit)') -and $intake.Contains('batchLimit = 100')) 'Testing transport must implement bounded contract batches.'
+Require ($intake.Contains('ValidateAcknowledgement(bytes, batch)') -and $intake.Contains('blockedSession = captured.Key') -and $intake.Contains('Requeue(row)')) 'Acknowledgement, permission stop and immutable retry boundaries must remain explicit.'
 
 Write-Output 'Party Finder contribution integration contract verification passed.'

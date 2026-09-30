@@ -22,6 +22,7 @@ internal static class Program {
         await TestCompletionRacingDisposeIsSafe();
         TestDisposedCancellationIsSafe();
         TestDisposalUnsubscribes();
+        await GillionsPartyFinderTests.Run();
         if (args is ["--integration", var endpoint]) await TestLocalIntegration(new Uri(endpoint));
         Console.WriteLine("Party Finder contribution behavior verification passed.");
     }

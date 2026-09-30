@@ -25,6 +25,12 @@ internal static class XivpfEndpointPolicy {
     }
 
     internal static Uri RequireBuildSafe(Uri endpoint, bool testingBuild) {
+        if (testingBuild) {
+            if (endpoint != GillionsPartyFinderContributor.Endpoint || !string.IsNullOrEmpty(endpoint.UserInfo)
+                || !string.IsNullOrEmpty(endpoint.Query) || !string.IsNullOrEmpty(endpoint.Fragment))
+                throw new InvalidOperationException("Testing builds require the fixed authenticated Gillions HTTPS intake.");
+            return endpoint;
+        }
         endpoint = RequireSafe(endpoint, testingBuild);
         if (!testingBuild && !endpoint.IsLoopback && endpoint != ProductionEndpoint)
             throw new InvalidOperationException("Stable-compatible builds may contribute only to the official xivpf endpoint or a loopback test server.");

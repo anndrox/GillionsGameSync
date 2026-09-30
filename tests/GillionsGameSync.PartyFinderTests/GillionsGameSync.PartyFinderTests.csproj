@@ -8,5 +8,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\PartyFinderContributionCore.cs" Link="PartyFinderContributionCore.cs" />
+    <Compile Include="..\..\GillionsPartyFinderContributor.cs" Link="GillionsPartyFinderContributor.cs" />
   </ItemGroup>
 </Project>

@@ -22,6 +22,13 @@ Assert(!(bool)partyFinderOptIn.GetValue(Activator.CreateInstance(configurationTy
 var endpoint = (Uri)pluginAssembly.GetType("GillionsGameSync.XivpfEndpoints", true)!
     .GetProperty("ContributionUrl", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
 var testingProduct = pluginAssembly.GetName().Name == "GillionsGameSyncTest";
+var intakeOptIn = configurationType.GetProperty("EnableGillionsPartyFinderContributions")!;
+var legacyOptedIn = Activator.CreateInstance(configurationType)!;
+partyFinderOptIn.SetValue(legacyOptedIn, true);
+Assert(!(bool)intakeOptIn.GetValue(legacyOptedIn)!, "Legacy xivpf opt-in must never grant consent to the new Gillions recipient.");
+intakeOptIn.SetValue(legacyOptedIn, true);
+var intakeRoundTrip = JsonConvert.DeserializeObject(JsonConvert.SerializeObject(legacyOptedIn), configurationType)!;
+Assert((bool)intakeOptIn.GetValue(intakeRoundTrip)!, "New Gillions opt-in must survive actual Newtonsoft serialization.");
 var normalizeOrigin = pluginAssembly.GetType("GillionsGameSync.SyncOrigin", true)!
     .GetMethod("TryNormalize", BindingFlags.Static | BindingFlags.Public)!;
 bool AcceptsOrigin(string value) => (bool)normalizeOrigin.Invoke(null, [value, ""])!;
@@ -30,7 +37,7 @@ Assert(AcceptsOrigin("https://gillions.app") && !AcceptsOrigin("http://example.c
     "Both products must support the main HTTPS origin and reject all plaintext pairing origins.");
 Console.WriteLine($"Actual HTTPS-only pairing boundary passed: {pluginAssembly.GetName().Name}.");
 Assert(testingProduct
-        ? endpoint == new Uri("http://127.0.0.1:8000/contribute/multiple")
+        ? endpoint == new Uri("https://gillions.app/api/game-sync/party-finder/contribute")
         : endpoint == new Uri("https://xivpf.com/contribute/multiple"),
     "Built product resolved an unsafe or unexpected xivpf contribution endpoint.");
 Assert(pluginAssembly.GetType("GillionsGameSync.AutoRetainerVenturePlanWriter") is null

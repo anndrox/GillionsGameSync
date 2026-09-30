@@ -177,7 +177,8 @@ public sealed class Plugin : IDalamudPlugin {
         this.chatGui = chatGui;
         this.log = log;
         configuration = pluginInterface.GetPluginConfig() as PluginConfiguration ?? new PluginConfiguration();
-        partyFinderContributor = PartyFinderContributorFactory.Create(partyFinderGui, partyFinderHttp, log, () => configuration.EnablePartyFinderContributions);
+        partyFinderContributor = PartyFinderContributorFactory.Create(partyFinderGui, partyFinderHttp, log,
+            () => PartyFinderContributionEnabled, CapturePartyFinderSession, RecordDiagnostic);
         uiServerAddress = configuration.ServerUrl;
         configuration.OwnedCharacters ??= new(StringComparer.Ordinal);
         configuration.CoverageGap ??= new();
@@ -301,8 +302,8 @@ public sealed class Plugin : IDalamudPlugin {
 
     private void UpdateOwnedState() {
         var now = DateTime.UtcNow;
-        partyFinderContributor.Tick(now);
         RefreshSessionContext(); MaintainTransientState(now);
+        partyFinderContributor.Tick(now);
         if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;
         var contentId = activeRetainerCharacterContentId;
         var state = CurrentState;
@@ -926,7 +927,7 @@ public sealed class Plugin : IDalamudPlugin {
                 configuration.AutomaticSync, syncInFlight, configuration.CoverageGap.Paused,
                 configuration.CoverageGap.StartedAtUtc is not null, configuration.SyncBlockedCode),
             HasPairedSession, pairingInFlight, configuration.AutomaticSync, configuration.EnableItemLinkRequests,
-            configuration.EnablePartyFinderContributions,
+            PartyFinderContributionEnabled,
             configuration.ActiveSession?.Origin ?? "", activeOwnedState?.LastSyncUtc, settingsMessage,
             configuration.LastReadChangelogVersion, retainerUploadServerSupported,
             dataDetailsExpanded ? uiAvailability : "", usage,
@@ -960,12 +961,22 @@ public sealed class Plugin : IDalamudPlugin {
         ImGui.Separator();
         var enablePartyFinderContributions = view.PartyFinderContributions;
         if (ImGui.Checkbox("Contribute public Party Finder listings", ref enablePartyFinderContributions)) QueueUiAction(() => {
+#if GILLIONS_TEST_BUILD
+            configuration.EnableGillionsPartyFinderContributions = enablePartyFinderContributions;
+#else
             configuration.EnablePartyFinderContributions = enablePartyFinderContributions;
+#endif
             RequestConfigurationSave();
             partyFinderContributor.SetEnabled(enablePartyFinderContributions);
         });
+#if GILLIONS_TEST_BUILD
+        ImGui.TextWrapped("Off by default. Pair on https://gillions.app as Testing and explicitly grant public Party Finder contribution permission, then opt in here. Public listing names/descriptions, owner ID lower bits, worlds, duties, jobs and slots go to Gillions HTTPS—not xivpf.com. Automatic sync is independent. No active game queries are made.");
+        ImGui.TextWrapped("The paired-device credential authenticates only to Gillions. No chat, Square Enix credentials, diagnostics or unrelated local data is submitted. Reporter identity is private; listing owners may be other players. Disable to cancel and clear unsent observations.");
+        if (partyFinderContributor is GillionsPartyFinderContributor intake) ImGui.TextWrapped(intake.Status);
+#else
         ImGui.TextWrapped("Off by default and independent of Gillions pairing or sync. When enabled, public listing names and descriptions, owner ID lower bits, worlds, duty/settings, jobs and slots are batched and sent directly to xivpf.com. They never pass through Gillions.");
         ImGui.TextWrapped("No chat, Gillions account or device credential, Square Enix credential, diagnostic, or unrelated local data is included.");
+#endif
         ImGui.TextWrapped("Powered by xivpf.com — https://xivpf.com");
         if (ImGui.Button("Open xivpf.com")) Util.OpenLink("https://xivpf.com");
         ImGui.Separator();
@@ -1130,6 +1141,40 @@ public sealed class Plugin : IDalamudPlugin {
             configuration.ActiveSession!.Origin, configuration.DeviceToken);
         RequirePermit(permit);
         return permit;
+    }
+    private bool PartyFinderContributionEnabled {
+        get {
+#if GILLIONS_TEST_BUILD
+            return configuration.EnableGillionsPartyFinderContributions;
+#else
+            return configuration.EnablePartyFinderContributions;
+#endif
+        }
+    }
+    private GillionsPartyFinderSession? CapturePartyFinderSession() {
+#if GILLIONS_TEST_BUILD
+        if (disposed || !framework.IsInFrameworkUpdateThread || !PartyFinderContributionEnabled || !clientState.IsLoggedIn) return null;
+        RefreshSessionContext();
+        if (!HasPairedSession || activeOwnedState is null || configuration.ActiveSession!.Origin != "https://gillions.app") return null;
+        var permit = CapturePermit(SyncRequestMode.Manual);
+        return new GillionsPartyFinderSession($"{permit.Session!.Generation}:{permit.Epoch}:{permit.ContentId}", permit.Cancellation,
+            async (body, cancellation) => {
+                using var request = new HttpRequestMessage(HttpMethod.Post, GillionsPartyFinderContributor.Endpoint) {
+                    Content = new ByteArrayContent(body)
+                };
+                request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", permit.Token);
+                request.Headers.UserAgent.ParseAdd($"{RetainerClient.ProductName}/{PluginVersion}");
+                await framework.RunOnFrameworkThread(() => {
+                    RequirePermit(permit);
+                    if (!PartyFinderContributionEnabled) throw new OperationCanceledException();
+                });
+                cancellation.ThrowIfCancellationRequested();
+                return await partyFinderHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation);
+            });
+#else
+        return null;
+#endif
     }
     private bool PermitIsCurrent(SyncRequestPermit permit) {
         if (disposed) return false;
@@ -1355,6 +1400,7 @@ public sealed class PluginConfiguration : IPluginConfiguration {
     public bool AutomaticSync { get; set; } = true;
     public bool EnableItemLinkRequests { get; set; } = true;
     public bool EnablePartyFinderContributions { get; set; } = false;
+    public bool EnableGillionsPartyFinderContributions { get; set; } = false;
     public bool EnableAutoRetainerVenturePlans { get; set; } = false;
     // Legacy records are inert JSON so unknown or malformed members survive
     // Dalamud's normal config load/save without retaining executable plan types.
