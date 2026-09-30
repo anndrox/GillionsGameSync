@@ -4,8 +4,8 @@ $project = Get-Content -LiteralPath (Join-Path $root 'GillionsGameSync.csproj') 
 $plugin = Get-Content -LiteralPath (Join-Path $root 'Plugin.cs') -Raw
 $policy = Get-Content -LiteralPath (Join-Path $root 'RetainerClientPolicy.cs') -Raw
 
-if ($project -notmatch '<Version>1\.0\.29</Version>') {
-    throw 'The stable release-candidate version is not 1.0.29.'
+if ($project -notmatch '<Version>1\.0\.30</Version>') {
+    throw 'The stable release-candidate version is not 1.0.30.'
 }
 if ($project -notmatch '<PathMap>\$\(MSBuildProjectDirectory\)=/_/GillionsGameSync</PathMap>') {
     throw 'Release diagnostics no longer sanitize the local source root.'
@@ -22,8 +22,8 @@ if ($plugin -notmatch 'EnableAutoRetainerVenturePlans \{ get; set; \} = false;')
 if ($plugin -notmatch 'RetainerClientPolicy\.BuildSyncScopes\(SyncScopes, retainerUploadServerSupported\)') {
     throw 'Ordinary scopes are no longer separated from server-accepted Retainer traffic.'
 }
-if ($plugin -notmatch 'RetainerClientPolicy\.ShouldPollPlans\(') {
-    throw 'Plan polling is no longer guarded by the shared eligibility policy.'
+if ($plugin -match 'ShouldPollPlans|PollRetainerPlansAsync|ApplyRetainerPlanDelivery|GetIpcSubscriber|InstalledPlugins|ActivePluginsChanged') {
+    throw 'Retired plan control or third-party integration remains reachable in the plugin.'
 }
 if ($plugin -notmatch '#if GILLIONS_TEST_BUILD\s*private const string CommandName = "/gillionssynctest";\s*#else\s*private const string CommandName = "/gillionssync";') {
     throw 'Stable and testing builds must use distinct command names.'
@@ -31,8 +31,12 @@ if ($plugin -notmatch '#if GILLIONS_TEST_BUILD\s*private const string CommandNam
 if ($plugin -notmatch 'commands\.AddHandler\(CommandName' -or $plugin -notmatch 'commands\.RemoveHandler\(CommandName\)') {
     throw 'The channel-specific command must be registered and released symmetrically.'
 }
-if ($plugin -notmatch 'A missing or\s*// malformed response cannot leave a previous server grant active\.\s*ClearRetainerServerAcceptance\(\);') {
-    throw 'Stable Retainer acceptance is not cleared before heartbeat renewal.'
+$presenceStart = $plugin.IndexOf('private void SendCurrentRetainerPresence', [StringComparison]::Ordinal)
+$presenceEnd = $plugin.IndexOf('private void OnFrameworkUpdate', $presenceStart, [StringComparison]::Ordinal)
+$presenceBody = $plugin.Substring($presenceStart, $presenceEnd - $presenceStart)
+if ($presenceBody.IndexOf('ClearRetainerServerAcceptance();', [StringComparison]::Ordinal) -lt 0 -or
+    $presenceBody.IndexOf('ClearRetainerServerAcceptance();', [StringComparison]::Ordinal) -ge $presenceBody.IndexOf('_ = SendRetainerPresenceAsync', [StringComparison]::Ordinal)) {
+    throw 'Stable Retainer acceptance must clear before heartbeat renewal is dispatched.'
 }
 if ($policy -notmatch '"GillionsGameSync",\s*"stable",\s*true' -or
     $policy -notmatch '"GillionsGameSyncTest",\s*"testing",\s*false') {

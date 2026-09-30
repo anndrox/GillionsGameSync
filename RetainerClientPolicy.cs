@@ -28,14 +28,4 @@ public static class RetainerClientPolicy {
         return serverAccepted ? scopes.Append(ResourceType).ToArray() : scopes;
     }
 
-    public static bool ShouldPollPlans(
-        bool serverAccepted,
-        bool explicitOptIn,
-        bool autoRetainerLoaded,
-        bool autoRetainerApiReady,
-        bool paired) => serverAccepted
-            && explicitOptIn
-            && autoRetainerLoaded
-            && autoRetainerApiReady
-            && paired;
 }

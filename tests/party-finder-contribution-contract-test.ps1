@@ -2,12 +2,13 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$source = [IO.File]::ReadAllText((Join-Path $root 'PartyFinderContribution.cs'))
+$adapter = [IO.File]::ReadAllText((Join-Path $root 'PartyFinderContribution.cs'))
+$core = [IO.File]::ReadAllText((Join-Path $root 'PartyFinderContributionCore.cs'))
 $plugin = [IO.File]::ReadAllText((Join-Path $root 'Plugin.cs'))
 $project = [IO.File]::ReadAllText((Join-Path $root 'GillionsGameSync.csproj'))
 
-function Assert-Contains([string]$Needle, [string]$Message) {
-  if (-not $source.Contains($Needle)) { throw $Message }
+function Require([bool]$Condition, [string]$Message) {
+  if (-not $Condition) { throw $Message }
 }
 
 foreach ($field in @(
@@ -17,18 +18,34 @@ foreach ($field in @(
   'last_server_restart','objective','conditions','duty_finder_settings',
   'loot_rules','search_area','slots','jobs_present','accepting'
 )) {
-  Assert-Contains "[JsonPropertyName(`"$field`")]" "Party Finder contribution is missing the official $field payload field."
+  Require $core.Contains("[JsonPropertyName(`"$field`")]") "Party Finder contribution is missing the official $field payload field."
 }
 
-Assert-Contains 'TimeSpan.FromSeconds(10)' 'Party Finder contribution must retain the ten-second batching and request-rate floor.'
-Assert-Contains 'if (disposed || !enabled()) return;' 'Party Finder collection must remain disabled unless the player opts in.'
-Assert-Contains 'batches.Clear();' 'Disabling or disposing Party Finder contribution must clear pending listings.'
-Assert-Contains 'new HttpRequestMessage(HttpMethod.Post, endpoint)' 'Party Finder listings must post directly to the configured xivpf endpoint.'
-Assert-Contains 'GroupBy(listing => (listing.LastServerRestart, listing.CreatedWorld, listing.Id))' 'Party Finder batches must deduplicate official listing identities.'
+foreach ($mapping in @(
+  '(uint)listing.Id', '(uint)listing.ContentId', 'listing.Name.Encode()', 'listing.Description.Encode()',
+  '(ushort)listing.World.Value.RowId', '(ushort)listing.HomeWorld.Value.RowId', '(ushort)listing.CurrentWorld.Value.RowId',
+  '(uint)listing.Category', 'listing.RawDuty', '(byte)listing.DutyType', 'listing.BeginnersWelcome',
+  'listing.SecondsRemaining', 'listing.MinimumItemLevel', 'listing.Parties', 'listing.SlotsAvailable',
+  '(uint)listing.LastPatchHotfixTimestamp', '(uint)listing.Objective', '(uint)listing.Conditions',
+  '(uint)listing.DutyFinderSettings', '(uint)listing.LootRules', '(uint)listing.SearchArea',
+  'slot.Accepting.Aggregate(0u', 'listing.RawJobsPresent.ToArray()'
+)) {
+  Require $adapter.Contains($mapping) "Dalamud Party Finder mapping is missing: $mapping"
+}
 
-if (-not $plugin.Contains('EnablePartyFinderContributions { get; set; } = false')) { throw 'Party Finder contribution must be off by default.' }
-if (-not $plugin.Contains('They never pass through Gillions.')) { throw 'The settings disclosure must identify the direct contribution boundary.' }
-if (-not $project.Contains('https://xivpf.com/contribute/multiple')) { throw 'Stable builds must retain the official xivpf contribution endpoint.' }
-if (-not $project.Contains('http://127.0.0.1:8000/contribute/multiple')) { throw 'Testing builds must default to the loopback Remote Party Finder endpoint.' }
+Require ($core.Contains('TimeSpan.FromSeconds(10)') -and $core.Contains('MaximumRequestsPerMinute = 6')) 'Batch/retry timing and rolling request ceiling must remain explicit.'
+Require $core.Contains('MaximumPendingListings = 1000') 'Pending Party Finder data must retain a fixed bound.'
+Require ($core.Contains('pending.Clear();') -and $core.Contains('cancel?.Cancel();')) 'Opt-out must clear unsent data and cancel active work.'
+Require ($adapter.Contains('partyFinderGui.ReceiveListing += OnListing') -and $adapter.Contains('partyFinderGui.ReceiveListing -= OnListing')) 'Dalamud Party Finder event lifecycle is incomplete.'
+Require $adapter.Contains('if (disposed || !enabled()) return;') 'Disabled contribution must reject the authoritative event before mapping or copying listing data.'
+Require ($adapter.Contains('XivpfEndpointPolicy.RequireBuildSafe(endpoint, true)') -and $core.Contains('endpoint != ProductionEndpoint')) 'Built products must enforce loopback testing and the official stable remote endpoint at runtime.'
+Require ($adapter.Contains('ordinary Gillions Game Sync remains active') -and $adapter.Contains('new DisabledPartyFinderContributor()')) 'Unsafe contribution configuration must fail closed without disabling ordinary Game Sync.'
+Require $plugin.Contains('EnablePartyFinderContributions { get; set; } = false') 'Party Finder contribution must be off by default.'
+Require $plugin.Contains('partyFinderContributor.SetEnabled(enablePartyFinderContributions)') 'The setting must apply opt-out clearing immediately.'
+Require $plugin.Contains('Util.OpenLink("https://xivpf.com")') 'The settings disclosure must visibly link to xivpf.com.'
+$tick = $plugin.IndexOf('partyFinderContributor.Tick(now)', [StringComparison]::Ordinal)
+$pairingGate = $plugin.IndexOf('if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;', [StringComparison]::Ordinal)
+Require ($tick -ge 0 -and $pairingGate -gt $tick) 'Party Finder contribution must remain independent from Gillions pairing and login sync gates.'
+Require ($project.Contains('https://xivpf.com/contribute/multiple') -and $project.Contains('http://127.0.0.1:8000/contribute/multiple')) 'Stable and testing endpoint defaults are incomplete.'
 
-Write-Output 'Party Finder contribution contract verification passed.'
+Write-Output 'Party Finder contribution integration contract verification passed.'

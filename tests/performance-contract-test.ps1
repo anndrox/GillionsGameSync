@@ -27,29 +27,36 @@ Assert-Contains $collectorSource "prior.Items.SequenceEqual(read.Items)" "Retain
 Assert-Contains $collectorSource 'JsonPropertyName("retainerId")' "Typed retainer rows must preserve the existing camel-case wire contract."
 Assert-Contains $collectorSource "SheetRowCache<T>.Get(dataManager)" "Static Lumina row catalogs must be cached."
 
-$ventureResultCadenceIndex = $pluginSource.IndexOf("if (autoRetainerLoaded || now >= nextRetainerVentureResultCaptureUtc)", [StringComparison]::Ordinal)
-$ventureResultIndex = $pluginSource.IndexOf("CaptureRetainerVentureResultObservation", $ventureResultCadenceIndex, [StringComparison]::Ordinal)
+$ventureResultCadenceIndex = $pluginSource.IndexOf("if (retainerWindowActive || now >= nextRetainerVentureResultCaptureUtc)", [StringComparison]::Ordinal)
+$ventureResultIndex = $pluginSource.IndexOf("CaptureRetainerResult", $ventureResultCadenceIndex, [StringComparison]::Ordinal)
 $ventureCadenceIndex = $pluginSource.IndexOf("if (now >= nextRetainerVentureRosterCaptureUtc)", [StringComparison]::Ordinal)
 $ventureRosterIndex = $pluginSource.IndexOf("CaptureRetainerVentureRosterAndGear", [StringComparison]::Ordinal)
 if (($ventureResultCadenceIndex -lt 0) -or ($ventureResultIndex -le $ventureResultCadenceIndex) -or ($ventureCadenceIndex -le $ventureResultIndex) -or ($ventureRosterIndex -le $ventureCadenceIndex)) {
   throw "Transient Venture result and roster evidence must retain their separate adaptive cadences."
 }
-Assert-Contains $pluginSource "pluginInterface.InstalledPlugins.Any" "AutoRetainer compatibility mode must use Dalamud's public installed-plugin state."
-Assert-Contains $pluginSource "pluginInterface.ActivePluginsChanged += OnActivePluginsChanged" "AutoRetainer state must be event-driven rather than polled every frame."
-Assert-Contains $pluginSource "pluginInterface.ActivePluginsChanged -= OnActivePluginsChanged" "The loaded-plugin event must be released on disposal."
-Assert-Contains $pluginSource "AutomatedVentureRosterCaptureIntervalMilliseconds" "AutoRetainer clients must receive a bounded faster roster and gear cadence."
-Assert-Contains $pluginSource 'automatedRetainerWindowActive = autoRetainerLoaded && resultProbeStatus != "inactive"' "The faster roster cadence must be limited to an active AutoRetainer venture window."
+Assert-Contains $pluginSource "DirectGameSnapshotCollector.IsRetainerVentureWindowActive()" "Fast cadence must follow native task-view activity."
+Assert-Contains $collectorSource "agent != null && agent->IsAgentActive()" "Native activity must be checked before transient-result capture."
+Assert-Contains $pluginSource "ActiveVentureRosterCaptureIntervalMilliseconds" "Active native task views must retain a bounded faster roster cadence."
+Assert-NotContains $pluginSource "InstalledPlugins" "Native observation must not discover third-party plugins."
+Assert-NotContains $pluginSource "GetIpcSubscriber" "Native observation must not invoke third-party IPC."
 
 $syncStart = $pluginSource.IndexOf("private async Task SyncAsync", [StringComparison]::Ordinal)
-$syncEnd = $pluginSource.IndexOf("private void DrawSettings", $syncStart, [StringComparison]::Ordinal)
+$syncEnd = $pluginSource.IndexOf("private void QueueUiAction", $syncStart, [StringComparison]::Ordinal)
 if ($syncStart -lt 0 -or $syncEnd -le $syncStart) { throw "Unable to inspect SyncAsync." }
 $syncBody = $pluginSource.Substring($syncStart, $syncEnd - $syncStart)
 $syncWorkerIndex = $syncBody.IndexOf("Task.Run(() => snapshots.Select(snapshot => PrepareSnapshot", [StringComparison]::Ordinal)
 $afterWorker = $syncBody.Substring($syncWorkerIndex)
 Assert-NotContains $afterWorker "objects.LocalPlayer" "Worker continuations must use the captured character identity, not Dalamud object state."
 Assert-Contains $pluginSource "AutomaticFailureRetrySeconds" "Automatic failures must use bounded retry backoff instead of retrying every frame."
-$saveCount = ([regex]::Matches($syncBody, "SaveConfigurationAsync\(\)")).Count
-if ($saveCount -ne 1) { throw "SyncAsync must batch successful sync-state persistence into exactly one save; found $saveCount." }
+Assert-NotContains $syncBody "configuration.Save(pluginInterface)" "Sync completions must request coalesced framework persistence."
+Assert-Contains $syncBody "AfterAcknowledgedDrain(retired)" "Acknowledged durable removal must request prompt persistence."
+Assert-Contains $syncBody 'if (selectedScopes.Contains(RetainerClientPolicy.ResourceType, StringComparer.Ordinal))' "Empty Gil flushes must not force Retainer collection."
+$presenceStart = $pluginSource.IndexOf("private async Task SendRetainerPresenceAsync", [StringComparison]::Ordinal)
+$presenceEnd = $pluginSource.IndexOf("private void OnFrameworkUpdate", $presenceStart, [StringComparison]::Ordinal)
+$presenceBody = $pluginSource.Substring($presenceStart, $presenceEnd - $presenceStart)
+Assert-NotContains $presenceBody "nextAutomaticSyncUtc" "Presence must not reset ordinary resource rotation."
+Assert-NotContains $presenceBody "RequestConfigurationSave" "Unchanged presence acceptance must not save configuration."
+Assert-Contains $pluginSource "nextRetainerUploadUtc" "Retainer uploads must have an independent due deadline."
 
 Assert-Contains $pluginSource "Start 10-minute diagnostic recording" "Public diagnostics must be explicitly started by the user."
 Assert-Contains $pluginSource "if (!IsDiagnosticRecording) return;" "Public diagnostics must remain idle by default."

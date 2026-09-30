@@ -1,9 +1,20 @@
 # Changelog
 
-## Unreleased
+## 1.0.30 - 2026-09-08
+
+- Remove venture-plan delivery, apply/restore controls and AutoRetainer discovery/read/write IPC from both products. Retain native observations, inventory, listings and venture results under the existing account/product gates.
+- Require one-time pairing for older unbound credentials. Bind new credentials to their issuing HTTPS origin and keep new data in pairing-generation/character partitions. Preserve unverified legacy queues, maps and opaque planner history as inactive data.
+- Retire only exact sent event versions after validated receipts. Preserve newer venture evidence, unrelated sales and equal-value ambiguity. Validate all Gil events before sending batches of at most 200, omitting absent numeric fields.
+- Cancel affected work on character, pairing, consent and lifetime changes; apply mutable state changes on the framework thread. Bound response reads to 64 KiB/depth 16 and replace remote error echoes with local messages.
+- Share a 10,000-record/8 MiB pending-data budget across new generations and characters. Preserve admitted evidence, report a coverage gap at capacity and restart from a fresh balance baseline after acknowledged drainage. Re-pairing does not reset storage.
+- Separate Retainer upload deadlines from ordinary rotation, distinguish semantic changes from freshness, coalesce saves and deduplicate unchanged result views. Keep the two-second Gil fallback and 750 ms dirty handling.
+- Gate system-log/chat evidence before extraction, bound transient matching buffers and remove unused machine identifiers from enrollment.
+- Simplify the opening window around pairing and sync controls. Keep material warnings visible; defer technical history, status and diagnostic work until expanded.
+- Verify both actual product configuration serializers, ownership/re-pair/coverage-gap persistence, opaque scalar timestamp preservation and synthetic request, queue, timing, response and UI-state boundaries. Local checks do not establish live-game or rendered visual acceptance.
 
 - Added an off-by-default Party Finder contribution setting that sends only public listings directly to xivpf.com, never through Gillions.
-- Batch contributions ten seconds after the newest listing and enforce no more than six direct requests per minute. Testing builds default to the local Remote Party Finder server.
+- Match the Remote Party Finder `UploadableListing` byte and numeric contract, deduplicate identities, cap memory-only pending data at 1,000 listings, and clear/cancel unsent work immediately on opt-out.
+- Batch contributions ten seconds after the newest listing, retry failures after at least ten seconds, and enforce no more than six attempted direct requests in any rolling minute. Testing builds require the loopback Remote Party Finder server.
 
 ## 1.0.29 - 2026-08-26
 

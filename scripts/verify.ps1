@@ -11,11 +11,16 @@ if ($LASTEXITCODE -ne 0) { throw 'Plugin restore failed.' }
 dotnet run --project $tests -c Release
 if ($LASTEXITCODE -ne 0) { throw 'Focused fixture executable failed.' }
 
+$partyFinderTests = Join-Path $root 'tests/GillionsGameSync.PartyFinderTests/GillionsGameSync.PartyFinderTests.csproj'
+dotnet run --project $partyFinderTests -c Release
+if ($LASTEXITCODE -ne 0) { throw 'Party Finder contribution behavior fixture failed.' }
+
 & (Join-Path $root 'tests/dalamud-manifest-contract-test.ps1')
 & (Join-Path $root 'tests/package-manifest-contract-test.ps1')
 & (Join-Path $root 'tests/bardings-collector-contract-test.ps1')
 & (Join-Path $root 'tests/folklore-collector-contract-test.ps1')
 & (Join-Path $root 'tests/performance-contract-test.ps1')
+& (Join-Path $root 'tests/audit-orchestration-contract-test.ps1')
 & (Join-Path $root 'tests/stable-readiness-contract-test.ps1')
 & (Join-Path $root 'tests/party-finder-contribution-contract-test.ps1')
 
@@ -26,5 +31,16 @@ if ($LASTEXITCODE -ne 0) { throw 'Stable-compatible Release build failed.' }
 $testingOutput = Join-Path $root 'artifacts/verification/testing/'
 dotnet build $project -c Release --no-restore -warnaserror -p:GillionsTestBuild=true -p:Version=0.0.0 -p:OutputPath=$testingOutput
 if ($LASTEXITCODE -ne 0) { throw 'Testing-compatible Release build failed.' }
+
+$configurationTests = Join-Path $root 'tests/GillionsGameSync.ConfigurationTests/GillionsGameSync.ConfigurationTests.csproj'
+$dalamudPath = dotnet msbuild $project -getProperty:DalamudLibPath -nologo
+if ($LASTEXITCODE -ne 0) { throw 'Unable to identify the actual Dalamud serializer libraries.' }
+foreach ($channel in @('stable', 'testing')) {
+    $assemblyName = if ($channel -eq 'stable') { 'GillionsGameSync.dll' } else { 'GillionsGameSyncTest.dll' }
+    $binary = Join-Path $root "artifacts/verification/$channel/$assemblyName"
+    $fixtureDirectory = Join-Path $root "artifacts/verification/configuration-fixtures/$channel"
+    dotnet run --project $configurationTests -c Release -- $binary $dalamudPath $fixtureDirectory
+    if ($LASTEXITCODE -ne 0) { throw "$channel actual-serializer preservation fixtures failed." }
+}
 
 Write-Output 'Gillions Game Sync verification passed.'
