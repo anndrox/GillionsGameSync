@@ -59,10 +59,13 @@ Results stay in memory and are not uploaded. See [local test instructions](docs/
 For the combined Beastmaster and Party Finder test, add this URL to Dalamud's
 custom plugin repositories:
 
-`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.63-testing/GillionsGameSyncTesting.json`
+`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
 
 This installs the separate **Gillions Game Sync Testing** identity. It does not
 replace the stable plugin or update the existing `gillions.app` testing feed.
+Testing `0.0.64` includes both features and the performance corrections. Replace
+the previous manual `0.0.63` repository entry, update to `0.0.64.0`, and follow
+the [in-game checklist and diagnostic-copy instructions](docs/releases/testing-0.0.64.md).
 
 ## Build and verify
 

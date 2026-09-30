@@ -7,14 +7,14 @@ The stable plugin excludes the reader. Source push is not a plugin/feed release.
 ## Build and load
 
 ```powershell
-./scripts/package.ps1 -Channel testing -Version 0.0.63 -PublishedAt 1789085847
+./scripts/package.ps1 -Channel testing -Version 0.0.64 -PublishedAt 1790762540
 ```
 
-The DLL and adjacent JSON are in `artifacts/package/testing/0.0.63/build/`.
-The identity is the existing `GillionsGameSyncTest`, version `0.0.63.0`.
+The DLL and adjacent JSON are in `artifacts/package/testing/0.0.64/build/`.
+The identity is the existing `GillionsGameSyncTest`, version `0.0.64.0`.
 
 For the GitHub testing prerelease, add the repository URL documented in
-[`testing-0.0.63.md`](releases/testing-0.0.63.md) instead of loading the DLL
+[`testing-0.0.64.md`](releases/testing-0.0.64.md) instead of loading the DLL
 directly. For a local development build:
 
 1. Disable the earlier **Gillions Beastmaster Local Diagnostic** and remove its
@@ -47,7 +47,7 @@ already paired. Beastmaster results never enter those uploads or saved records.
   or account identifiers. Do not share normal plugin configuration or credentials.
 
 When finished, disable the development copy and preserve its configuration.
-Keep older testing copies disabled. Re-enable only the approved 0.0.63 replacement
+Keep older testing copies disabled. Re-enable only the approved 0.0.64 replacement
 or a specifically reviewed compatible successor. Returning to 0.0.62 requires an
 explicit Native/Compatibility recovery decision; prefer a forward correction.
 Remove the development location only when the approved replacement is ready.

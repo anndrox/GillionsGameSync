@@ -1,11 +1,12 @@
 # Changelog
 
-## Unreleased - performance improvements
+## 0.0.64 - combined testing performance update
 
 - Refresh the visible settings view four times per second instead of every frame; queued settings changes and session resets remain eligible for an immediate refresh.
 - Move Party Finder batch sorting, JSON serialization and HTTP startup to a worker while preserving existing batching, retry, cancellation and request limits.
 - Reuse the static Armoire catalog projection and skip JSON header serialization for empty pending-record queues.
 - Include framework-thread collection duration in local diagnostic recording. These changes have synthetic validation; live-game FPS and frame-time improvement still require in-game testing.
+- Retain the opt-in local Beastmaster ownership view and loopback-only XIVPF contribution integration from testing `0.0.63`. Publish this successor under the same testing product identity with a new manual repository JSON.
 
 ## 0.0.63 - combined testing candidate
 
