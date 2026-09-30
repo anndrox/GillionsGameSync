@@ -1,6 +1,6 @@
 # Gillions Game Sync Testing 0.0.65
 
-Manual Dalamud custom repository URL (available after publication):
+Published manual Dalamud custom repository URL:
 
 `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.65-testing/GillionsGameSyncTesting.json`
 
@@ -13,8 +13,10 @@ added.
 
 The new testing Party Finder recipient is Gillions, not xivpf.com or localhost.
 It uses only `https://gillions.app/api/game-sync/party-finder/contribute`. The
-editable Gillions address cannot retarget it. Leave contribution disabled until
-Site confirms production activation; a plugin release is not server deployment.
+editable Gillions address cannot retarget it. Site separately recorded production
+activation on 2026-09-30. Anonymous HTTPS read rejection was observed; a real
+consented native upload/readback is still needed. Plugin publication did not
+deploy the server.
 
 1. Replace the old custom repository URL with the URL above and refresh Dalamud.
    Confirm **Gillions Game Sync Testing 0.0.65.0**. Preserve configuration and
@@ -57,8 +59,16 @@ counts/statuses, not public listing text or reporter credentials.
 
 ## Validation boundary
 
-Managed fixtures and actual-product builds/configuration checks validate request
-bounds, consent, session lifetime, exact acknowledgements, retries and compatibility.
-Independent Security & Privacy review is required for the changed authenticated
-recipient. Installed-game acceptance and server deployment/runtime validation are
-separate evidence; this release does not deploy the server or merge main.
+Source candidate `cd75d0726a1adebbfcb3affa8ee0fa9c9e925ce4` passed full repository
+verification, actual 0.0.65 DLL/configuration checks and independent Security &
+Privacy review with no remaining findings. Managed fixtures validate request
+bounds, consent, durable denial stops, session lifetime, exact acknowledgements,
+retries and compatibility. Synthetic C# payloads matched the deployed server's
+unchanged intake module in disposable tests; this is not production upload proof.
+
+The GitHub prerelease was published on 2026-09-30. Anonymous JSON/ZIP downloads,
+manifest identity/version/API and embedded assembly checksum were verified.
+Archive SHA-256: `4527af286d9c273e0406d93f05cb30679d9aaf89a2efd7e3f542d0004d04725b`.
+See [publication record](../../data/releases/testing-0.0.65.json).
+Installed-game acceptance and authenticated production native upload/readback are
+still unverified. This release does not deploy the server or merge main.
