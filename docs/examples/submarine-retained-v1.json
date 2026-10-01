@@ -1,0 +1,159 @@
+{
+  "SchemaVersion": 1,
+  "LocalRetentionEnabled": true,
+  "CommunityContributionEnabled": true,
+  "Current": [
+    {
+      "Snapshot": {
+        "LocalSubmarineKey": "a3c17e321165c9f96431350d8c209f2f8b33b5f26dc3ee84520d2af2b2283ba3",
+        "Slot": 0,
+        "Name": "LOCAL-NAME-ONLY",
+        "RegisteredAtUnix": 1790683200,
+        "Build": {
+          "Rank": 41,
+          "Parts": {
+            "Hull": 7,
+            "Stern": 8,
+            "Bow": 5,
+            "Bridge": 6
+          },
+          "Stats": {
+            "SurveillanceBase": 50,
+            "RetrievalBase": 60,
+            "SpeedBase": 70,
+            "RangeBase": 80,
+            "FavorBase": 90,
+            "SurveillanceBonus": 1,
+            "RetrievalBonus": 2,
+            "SpeedBonus": 3,
+            "RangeBonus": 4,
+            "FavorBonus": 5,
+            "LogSpeed": 73
+          }
+        },
+        "CurrentExperience": 100,
+        "NextRankExperience": 200,
+        "ExpectedReturnUnix": 0,
+        "CurrentRoute": "",
+        "PlannedRoute": null,
+        "ObservedAtUtc": "2026-09-30T12:01:41Z",
+        "GameVersion": "synthetic-game",
+        "CollectorVersion": "0.0.66.0"
+      },
+      "AnchoredVoyageKey": "61fdf778ab888b384d5826bf007f7b541308ef4e46ed8eb29d53ef53753c4199"
+    }
+  ],
+  "Voyages": [
+    {
+      "LocalVoyageKey": "61fdf778ab888b384d5826bf007f7b541308ef4e46ed8eb29d53ef53753c4199",
+      "ObservationId": "303d667648fc4b4c866813ee70edaff6",
+      "LocalSubmarineKey": "a3c17e321165c9f96431350d8c209f2f8b33b5f26dc3ee84520d2af2b2283ba3",
+      "ExpectedReturnUnix": 1790769700,
+      "OrderedRoute": "AQI=",
+      "VoyageBuild": {
+        "Rank": 40,
+        "Parts": {
+          "Hull": 3,
+          "Stern": 4,
+          "Bow": 1,
+          "Bridge": 2
+        },
+        "Stats": {
+          "SurveillanceBase": 50,
+          "RetrievalBase": 60,
+          "SpeedBase": 70,
+          "RangeBase": 80,
+          "FavorBase": 90,
+          "SurveillanceBonus": 1,
+          "RetrievalBonus": 2,
+          "SpeedBonus": 3,
+          "RangeBonus": 4,
+          "FavorBonus": 5,
+          "LogSpeed": 73
+        }
+      },
+      "BuildEvidence": "observed-while-in-flight-not-dispatch-proof",
+      "ResultTimeBuild": {
+        "Rank": 41,
+        "Parts": {
+          "Hull": 7,
+          "Stern": 8,
+          "Bow": 5,
+          "Bridge": 6
+        },
+        "Stats": {
+          "SurveillanceBase": 50,
+          "RetrievalBase": 60,
+          "SpeedBase": 70,
+          "RangeBase": 80,
+          "FavorBase": 90,
+          "SurveillanceBonus": 1,
+          "RetrievalBonus": 2,
+          "SpeedBonus": 3,
+          "RangeBonus": 4,
+          "FavorBonus": 5,
+          "LogSpeed": 73
+        }
+      },
+      "FirstObservedAtUtc": "2026-09-30T12:00:00Z",
+      "ResultsObservedAtUtc": "2026-09-30T12:01:41Z",
+      "GameVersion": "synthetic-game",
+      "CollectorVersion": "0.0.66.0",
+      "ResultGameVersion": "synthetic-result-game",
+      "ResultCollectorVersion": "0.0.66.0",
+      "Result": {
+        "RewardAssociation": "per-sector",
+        "Sectors": [
+          {
+            "SectorId": 1,
+            "Experience": 100,
+            "UnlockedSectorId": 3,
+            "FirstExploration": true,
+            "AdditionalSubmarineUnlocked": false,
+            "DoubleDip": false,
+            "Rewards": [
+              {
+                "ItemId": 1000,
+                "Quantity": 2,
+                "Hq": true
+              }
+            ]
+          },
+          {
+            "SectorId": 2,
+            "Experience": 200,
+            "UnlockedSectorId": null,
+            "FirstExploration": false,
+            "AdditionalSubmarineUnlocked": true,
+            "DoubleDip": true,
+            "Rewards": [
+              {
+                "ItemId": 1001,
+                "Quantity": 4,
+                "Hq": false
+              }
+            ]
+          }
+        ],
+        "VoyageRewards": [
+          {
+            "ItemId": 1000,
+            "Quantity": 2,
+            "Hq": null
+          },
+          {
+            "ItemId": 1001,
+            "Quantity": 4,
+            "Hq": null
+          }
+        ],
+        "TotalExperience": 300,
+        "Limitations": []
+      },
+      "LinkedToVoyage": true,
+      "ConflictingObservation": false,
+      "ContributionConsentAtResult": true
+    }
+  ],
+  "CapacityReached": false
+}

@@ -61,11 +61,19 @@ Results stay in memory and are not uploaded. See [local test instructions](docs/
 For the combined Beastmaster and Party Finder test, add this URL to Dalamud's
 custom plugin repositories:
 
-`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.65-testing/GillionsGameSyncTesting.json`
+`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.66-testing/GillionsGameSyncTesting.json`
 
 This installs the separate **Gillions Game Sync Testing** identity. It does not
 replace the stable plugin or update the existing `gillions.app` testing feed.
-Testing `0.0.65` includes both features, the performance corrections and authenticated Gillions Party Finder intake. Replace the previous manual repository entry, update to `0.0.65.0`, and follow the [pairing, in-game checklist and diagnostic-copy instructions](docs/releases/testing-0.0.65.md). Leave contribution off until Site confirms activation.
+Testing `0.0.66` retains both features, performance corrections and authenticated Gillions Party Finder intake, and adds off-by-default read-only local submarine retention. Replace the previous manual repository entry, update to `0.0.66.0`, and follow the [in-game checklist and diagnostic-copy instructions](docs/releases/testing-0.0.66.md). Ordinary HTTPS/PF pairing and consent are unchanged.
+
+Open `/gillionssubs` or **Submarine voyage retention**. Use workshop interfaces
+manually; no submarine control, polling or third-party plugin is involved. Local
+history retains at most 400 voyage anchors/results and 32 snapshots below 4 MiB,
+with visible overflow and no silent eviction. A second community-preparation
+opt-in and explicit sanitized copy exclude names/FC/account/credential data; no
+submarine server endpoint or upload exists. Departure and missing producing-time
+build/sector evidence remain unavailable. See [schema, examples and Site requirements](docs/contracts/submarine-voyages-v1.md).
 
 ## Build and verify
 

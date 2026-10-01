@@ -1,5 +1,16 @@
 # Testing
 
+## Submarine local retention — Testing 0.0.66
+
+Use [Testing66 in-game checks](releases/testing-0.0.66.md) and the
+[local retained/export draft](contracts/submarine-voyages-v1.md). The collector is
+Testing-only, event-driven, read-only and off by default. Community preparation is
+an independent opt-in/manual copy, not an upload. No server or third-party plugin
+is required. Fixtures cover partial data, identity/duplicates, successive voyages,
+route/build conflicts, sector/voyage reward limitations, restart persistence,
+reservation/overflow, consent, sanitation and Stable exclusion. Actual config tests
+use Dalamud Save/load; none establishes live native collection or frame times.
+
 ## Main-site HTTPS testing
 
 The owner selected `https://gillions.app` for ordinary testing-client sync.

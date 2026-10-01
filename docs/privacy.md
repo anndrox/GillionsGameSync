@@ -20,6 +20,35 @@ Testing requests contain at most 100 listings / 256 KiB. Native events share con
 
 ## Data and temporary observations
 
+### Testing-only submarine local retention
+
+Testing `0.0.66` adds a separate off-by-default local-retention control and a second
+off-by-default community-preparation control. Reads occur only on naturally opened
+workshop/voyage interface events, not polling or game-server requests. No voyage
+actions, third-party IPC or other players' account identifiers are collected.
+Names, local slots/registration and private hashed workshop scope are saved locally
+with numeric builds/routes/results and observation/version evidence in the existing
+Testing configuration. Raw house identity is transient, not retained. That
+configuration already contains a credential: never share it as a support bundle.
+
+Community opt-in allows only future completed results to enter an explicitly
+prepared/copied sanitized dataset. There is **no upload endpoint or automatic
+sharing**. Export excludes names, local hashes, house/FC, slot/registration,
+reporter/account identifiers, credentials and raw logs. Routes/builds/rewards/times
+can still reveal FC activity; share only information you are allowed to contribute.
+Current opt-out disables export and clears prepared data, but preserves local
+history and cannot retract a copy already shared externally. Only aggregate
+diagnostics are offered for support. No new credentials or pairing scopes exist.
+
+Retained component reserves fewer than 4 MiB for at most 400 voyage anchors/results
+and 32 snapshots. Overflow preserves all admitted history, warns and refuses new
+identities; existing anchors can still receive results. No pruning/eviction,
+automatic ACK, contribution deletion or server history is invented. Unsupported
+retained versions are preserved and fail closed. Producing build/departure and
+sector attribution remain explicitly unavailable when not verified; unlinked or
+conflicting results are excluded from countable exports. See the
+[local schema and limitations](contracts/submarine-voyages-v1.md).
+
 Supported synchronization includes character name/world, character and Retainer identifiers, inventory/items, Gil and currencies, progression/unlocks, loaded Retainer listings and venture evidence. Presence includes character identity and client product/channel/version for compatibility checks. Ledger records can include numeric game-event IDs and up to eight integer arguments. The plugin does not send Square Enix credentials, player chat text, arbitrary local files, diagnostic recordings automatically, or unrelated accounts' retained records. It has no inbound listener, packet capture or gameplay controls.
 
 While recurring collection is authorized, callbacks inspect only relevant system log IDs and original system-sale channels. Player-channel text is rejected before extraction. Selected sale text is used transiently to derive structured facts; raw text is not retained or uploaded. Unsupported locale or parameter evidence stays unclassified or inferred while normal native balance observation remains available.

@@ -92,6 +92,35 @@ blockedGeneration.SetValue(deniedReload, "");
 configurationType.GetMethod("Save")!.Invoke(deniedReload, [savedViaPlugin]);
 Assert((string)blockedGeneration.GetValue(load.Invoke(configurations, [product]))! == "",
     "A new/default authorization-stop marker must round-trip without listing data.");
+var submarineProperty = configurationType.GetProperty("SubmarineVoyages");
+var submarineViewType = pluginAssembly.GetType("GillionsGameSync.SubmarineLocalView");
+if (testingProduct) {
+    Assert(submarineProperty is not null && submarineViewType is not null,
+        "Testing product must own the local submarine view and retained format.");
+    var defaults = submarineProperty!.GetValue(Activator.CreateInstance(configurationType))!;
+    Assert(!(bool)defaults.GetType().GetProperty("LocalRetentionEnabled")!.GetValue(defaults)!
+        && !(bool)defaults.GetType().GetProperty("CommunityContributionEnabled")!.GetValue(defaults)!,
+        "Submarine local retention and community preparation must be separate off-by-default controls.");
+    var syntheticRetention = File.ReadAllText(Path.GetFullPath("artifacts/verification/submarine-policy/retained-fixture.json"));
+    var syntheticConfig = Activator.CreateInstance(configurationType)!;
+    submarineProperty.SetValue(syntheticConfig, JsonConvert.DeserializeObject(syntheticRetention, submarineProperty.PropertyType));
+    configurationType.GetMethod("Save")!.Invoke(syntheticConfig, [savedViaPlugin]);
+    var reloadedRetention = submarineProperty.GetValue(load.Invoke(configurations, [product]))!;
+    Assert(JToken.DeepEquals(ParseToken(syntheticRetention), ParseToken(JsonConvert.SerializeObject(reloadedRetention))),
+        "Actual Dalamud Save/reload must preserve voyage anchor, build, per-sector results, consent and public observation identity.");
+    var policyType = pluginAssembly.GetType("GillionsGameSync.SubmarineVoyageRetentionPolicy", true)!;
+    var retentionPolicy = Activator.CreateInstance(policyType, [reloadedRetention])!;
+    Assert((bool)policyType.GetProperty("Supported", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(retentionPolicy)!,
+        "Actual reloaded retained format must remain valid for policy use.");
+    var sanitized = (string)policyType.GetMethod("PrepareExport", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(retentionPolicy, null)!;
+    Assert(Parse(sanitized)["voyages"] is JArray { Count: 1 } && !sanitized.Contains("LOCAL-NAME-ONLY"),
+        "Actual saved/reloaded retained results must produce only the consented sanitized dataset.");
+    Console.WriteLine("Actual submarine configuration Save/load and sanitized export passed; no native collection performed.");
+} else {
+    Assert(submarineProperty is null && submarineViewType is null
+        && pluginAssembly.GetType("GillionsGameSync.SubmarineVoyageRetention") is null,
+        "Stable product must not gain submarine collection or persisted format.");
+}
 
 // Type metadata deliberately names retired types. Dalamud LoadForType and the
 // inert backup reader must not resolve or construct them. All data is synthetic.

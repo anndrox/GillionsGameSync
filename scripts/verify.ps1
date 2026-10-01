@@ -15,6 +15,12 @@ $partyFinderTests = Join-Path $root 'tests/GillionsGameSync.PartyFinderTests/Gil
 dotnet run --project $partyFinderTests -c Release
 if ($LASTEXITCODE -ne 0) { throw 'Party Finder contribution behavior fixture failed.' }
 
+$submarineTests = Join-Path $root 'tests/GillionsGameSync.SubmarineTests/GillionsGameSync.SubmarineTests.csproj'
+dotnet run --project $submarineTests -c Release -- --fixture (Join-Path $root 'artifacts/verification/submarine-policy/retained-fixture.json')
+if ($LASTEXITCODE -ne 0) { throw 'Submarine retention/consent fixtures failed.' }
+python (Join-Path $root 'tests/submarine-contract-test.py')
+if ($LASTEXITCODE -ne 0) { throw 'Submarine source-boundary fixtures failed.' }
+
 & (Join-Path $root 'tests/dalamud-manifest-contract-test.ps1')
 & (Join-Path $root 'tests/package-manifest-contract-test.ps1')
 & (Join-Path $root 'tests/bardings-collector-contract-test.ps1')

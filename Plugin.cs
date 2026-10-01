@@ -58,6 +58,7 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly IPluginLog log;
 #if GILLIONS_TEST_BUILD
     private readonly BeastmasterLocalView beastmasterLocal;
+    private readonly SubmarineLocalView submarineLocal;
 #endif
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private readonly HttpClient partyFinderHttp = PartyFinderHttp.CreateClient();
@@ -136,6 +137,7 @@ public sealed class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Submarine voyage retention is a separate off-by-default local read-only test. Community preparation needs a second opt-in and explicit sanitized export; no submarine upload endpoint exists.",
         "Testing Party Finder contribution requires fresh Testing pairing with site permission and a separate local opt-in. Public listings go to Gillions HTTPS, not directly to xivpf.com or localhost.",
         "Gillions keeps only an expiring, runtime current-listing cache; the paired token is used only for Gillions Authorization, never listing data. Permission denials stay stopped across logout/reload until fresh pairing.",
 #else
@@ -170,7 +172,11 @@ public sealed class Plugin : IDalamudPlugin {
     private const int NormalVentureRosterCaptureIntervalMilliseconds = 30000;
     private const int ActiveVentureRosterCaptureIntervalMilliseconds = 1000;
 
-    public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commands, IClientState clientState, IObjectTable objects, IFramework framework, IDataManager dataManager, IUnlockState unlockState, IGameInventory gameInventory, IPartyFinderGui partyFinderGui, IChatGui chatGui, IPluginLog log) {
+    public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commands, IClientState clientState, IObjectTable objects, IFramework framework, IDataManager dataManager, IUnlockState unlockState, IGameInventory gameInventory, IPartyFinderGui partyFinderGui, IChatGui chatGui, IPluginLog log
+#if GILLIONS_TEST_BUILD
+        , IAddonLifecycle addonLifecycle
+#endif
+    ) {
         this.pluginInterface = pluginInterface;
         this.commands = commands;
         this.clientState = clientState;
@@ -206,6 +212,9 @@ public sealed class Plugin : IDalamudPlugin {
         chatGui.ChatMessage += OnChatMessage;
 #if GILLIONS_TEST_BUILD
         beastmasterLocal = new BeastmasterLocalView(pluginInterface, commands, framework, clientState, dataManager);
+        configuration.SubmarineVoyages ??= new();
+        submarineLocal = new SubmarineLocalView(pluginInterface, commands, framework, clientState, dataManager,
+            addonLifecycle, configuration.SubmarineVoyages, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
 #endif
     }
 
@@ -1022,6 +1031,7 @@ public sealed class Plugin : IDalamudPlugin {
         }
 #if GILLIONS_TEST_BUILD
         if (ImGui.Button("Beastmaster local test")) beastmasterLocal.Show();
+        if (ImGui.Button("Submarine voyage retention")) submarineLocal.Show();
 #endif
         DrawDiagnostics(view);
         ImGui.End();
@@ -1370,6 +1380,7 @@ public sealed class Plugin : IDalamudPlugin {
         if (disposed) return;
 #if GILLIONS_TEST_BUILD
         beastmasterLocal.Dispose();
+        submarineLocal.Dispose();
 #endif
         if (framework.IsInFrameworkUpdateThread) FlushConfigurationSave();
         disposed = true; requestLifetime.Dispose(); ClearTransientState();
@@ -1404,6 +1415,9 @@ internal sealed record CapturedSnapshotBatch(string CharacterName, string Charac
 
 [Newtonsoft.Json.JsonConverter(typeof(LegacyPlanConfigurationConverter))]
 public sealed class PluginConfiguration : IPluginConfiguration {
+#if GILLIONS_TEST_BUILD
+    public SubmarineVoyageRetention SubmarineVoyages { get; set; } = new();
+#endif
     public int Version { get; set; } = 1;
     public PairedSession? ActiveSession { get; set; }
     public bool PairingRequired { get; set; }

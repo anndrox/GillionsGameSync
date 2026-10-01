@@ -1,5 +1,15 @@
 # Releasing
 
+## Testing 0.0.66 submarine addition
+
+Use the existing separate GitHub Testing prerelease/manual JSON path, not the
+Stable publication script or Stable feed. Preserve previous immutable artifacts.
+The addition is local-only and requires independent privacy judgment for the
+new retained history/community-export boundary; packaging/review is not live-game
+validation or an authenticated submarine server contract. Keep source, package,
+schema/examples, consent/overflow/downgrade notes and installed-game limitations
+bound in [Testing66 notes](releases/testing-0.0.66.md).
+
 GitHub is the source-history, stable Dalamud manifest, icon, tag, and immutable stable ZIP authority. Gillions infrastructure is not part of the stable distribution chain.
 
 The stable custom-repository URL is:

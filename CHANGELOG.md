@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.66 - Testing local submarine voyage retention
+
+- Add separate off-by-default local retention of naturally loaded workshop/voyage observations; no polling, game actions, requests or third-party plugin dependency.
+- Preserve bounded voyage anchors and observed results across ordinary plugin configuration saves/reloads. Separate current/planned routes, expected returns, producing-time versus result-time builds, and linked versus unlinked results; departure stays unavailable.
+- Retain verified per-sector rewards/HQ/experience/unlock observations or explicitly limited voyage-level rewards, with duplicate/conflict rules and no later-build substitution.
+- Require a second off-by-default community-preparation opt-in plus explicit sanitized export. No server endpoint or automatic sharing; names, scoped local identities, FC/account/reporter identifiers and credentials are excluded.
+- Bound this component to 400 records/32 current snapshots below 4 MiB, preserving admitted history and reporting overflow without eviction. Existing ordinary sync, Party Finder and Beastmaster behavior remains.
+- Managed/actual-serializer validation does not claim successful in-game collection. See Testing66 checks and the local export draft.
+
 ## 0.0.65 - authenticated testing Party Finder intake
 
 - Testing contribution now uses the fixed Gillions HTTPS v1 receiver with a current paired-device credential. Stable direct-xivpf behavior is unchanged.
