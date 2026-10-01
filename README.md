@@ -77,6 +77,22 @@ build/sector evidence remain unavailable. See [schema, examples and Site require
 
 ## Build and verify
 
+### Testing 0.0.67 market candidate
+
+The same 0.0.66 Testing lineage now prepares passive market contribution; it does
+not replace the published 0.0.66 assets or create another plugin identity. Version
+0.0.67 is a **candidate**, not a published/installed update. Keep the published
+0.0.66 repository above until successor publication is explicitly confirmed.
+
+"Contribute observed market data to Gillions" is independently **on by default**,
+including older Testing configurations without that field. It has a persistent
+off switch. Supported receive events supply only naturally encountered partial
+listings and recent sales, never automatic searches. Uploads require an exact
+authenticated server compatibility acknowledgment; the existing server has no
+market intake yet. Ordinary sync, Party Finder and Dalamud's own contribution
+preference remain independent. Read the [contract/Site handoff](docs/contracts/market-observations-v1.md)
+and [candidate checks](docs/releases/testing-0.0.67.md).
+
 Requirements are Windows, .NET 10 SDK and the Dalamud dependencies used by `Dalamud.NET.Sdk`.
 
 ```powershell

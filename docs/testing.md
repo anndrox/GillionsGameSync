@@ -1,5 +1,17 @@
 # Testing
 
+## Passive market candidate — Testing 0.0.67
+
+Same-lineage successor to published 0.0.66, not yet published. Use the
+[candidate checklist](releases/testing-0.0.67.md) and [intake contract/Site handoff](contracts/market-observations-v1.md).
+Public-interface adapter fixtures use identity getters that throw if accessed.
+Managed fixtures test sanitation, partial/empty/malformed data, source timestamps,
+duplicate packets, bounded queues/rate/retries, Retry-After, auth/endpoint stops,
+cancelled in-flight requests, session changes and compatibility fail-closed behavior.
+Actual Dalamud Save/load verifies default ON for new/older config, persistent OFF,
+ordinary-sync isolation and denied-enrollment persistence. Stable excludes all
+new runtime/setting types. No live market traffic is used by these fixtures.
+
 ## Submarine local retention — Testing 0.0.66
 
 Use [Testing66 in-game checks](releases/testing-0.0.66.md) and the

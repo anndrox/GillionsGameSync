@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.67 - Testing passive Gillions market contribution candidate
+
+- Continue the published 0.0.66 Testing ancestry, preserving Party Finder, local Beastmaster, performance corrections and submarine retention. Stable unchanged.
+- Add an independent default-ON "Contribute observed market data to Gillions" setting. Existing configurations receive that default; saved opt-out persists and stops new sends, clears transient work and leaves ordinary sync available.
+- Observe only supported Dalamud listing/history receive events. Keep packet listings explicitly partial, current-world context explicit, and actual sale timestamps separate from observation/server receipt time. Empty/unavailable data never clears a market.
+- Exclude buyer/retainer/artisan/player identifiers and names; retain only market listing IDs, item/world, numeric prices/quantities/HQ/location and raw recent-sale facts. Existing paired transport remains authenticated, not anonymous to the server.
+- Prepare versioned intake behind exact server compatibility acknowledgment; no endpoint deployment, production traffic, Universalis uploader/preference access, automated searches or crawler.
+- Bound transient queues/retries/rate/body/response sizes; serialize and start HTTP on a worker. No market journal or persistent payloads.
+- Candidate/build/fixtures are not publication, installed-game collection or server cache validation. See Testing67 notes and the Site contract handoff.
+
 ## 0.0.66 - Testing local submarine voyage retention
 
 - Add separate off-by-default local retention of naturally loaded workshop/voyage observations; no polling, game actions, requests or third-party plugin dependency.

@@ -21,6 +21,11 @@ if ($LASTEXITCODE -ne 0) { throw 'Submarine retention/consent fixtures failed.' 
 python (Join-Path $root 'tests/submarine-contract-test.py')
 if ($LASTEXITCODE -ne 0) { throw 'Submarine source-boundary fixtures failed.' }
 
+dotnet run --project (Join-Path $root 'tests/GillionsGameSync.MarketTests/GillionsGameSync.MarketTests.csproj') -c Release
+if ($LASTEXITCODE -ne 0) { throw 'Passive market event/transport fixtures failed.' }
+python (Join-Path $root 'tests/market-contribution-contract-test.py')
+if ($LASTEXITCODE -ne 0) { throw 'Passive market source boundaries failed.' }
+
 & (Join-Path $root 'tests/dalamud-manifest-contract-test.ps1')
 & (Join-Path $root 'tests/package-manifest-contract-test.ps1')
 & (Join-Path $root 'tests/bardings-collector-contract-test.ps1')

@@ -81,6 +81,29 @@ var pathForFixture = configurations.GetConfigFile(product).FullName;
 var savedViaPlugin = DispatchProxy.Create<IDalamudPluginInterface, ConfigurationSaveProxy>();
 var saveProxy = (ConfigurationSaveProxy)savedViaPlugin;
 saveProxy.Save = config => File.WriteAllText(pathForFixture, (string)serialize.Invoke(null, [config])!);
+var marketSetting = configurationType.GetProperty("ContributeObservedMarketData");
+if (testingProduct) {
+    Assert(marketSetting is not null && (bool)marketSetting.GetValue(Activator.CreateInstance(configurationType))!,
+        "New Testing configuration must default market contribution ON.");
+    var olderTesting = JsonConvert.DeserializeObject("{\"AutomaticSync\":false}", configurationType)!;
+    Assert((bool)marketSetting!.GetValue(olderTesting)!, "Older config missing market choice must get the owner-selected ON default.");
+    marketSetting.SetValue(olderTesting, false);
+    configurationType.GetMethod("Save")!.Invoke(olderTesting, [savedViaPlugin]);
+    var marketReload = load.Invoke(configurations, [product])!;
+    Assert(!(bool)marketSetting.GetValue(marketReload)! && !(bool)configurationType.GetProperty("AutomaticSync")!.GetValue(marketReload)!,
+        "Actual Dalamud Save/load must preserve market opt-out without modifying ordinary sync.");
+    var marketStop = configurationType.GetProperty("GillionsMarketBlockedGeneration")!;
+    marketStop.SetValue(marketReload, "synthetic-market-denied");
+    configurationType.GetMethod("Save")!.Invoke(marketReload, [savedViaPlugin]);
+    Assert((string)marketStop.GetValue(load.Invoke(configurations, [product]))! == "synthetic-market-denied",
+        "Market enrollment-denial stop must survive actual configuration Save/load.");
+    Assert(pluginAssembly.GetType("GillionsGameSync.MarketContributionSource") is not null, "Existing Testing Plugin must contain passive market adapter.");
+    Console.WriteLine("Actual Testing market default/older-config/opt-out/ordinary isolation/enrollment-stop Save/load passed.");
+} else {
+    Assert(marketSetting is null && pluginAssembly.GetType("GillionsGameSync.MarketContributor") is null
+        && pluginAssembly.GetType("GillionsGameSync.MarketContributionSource") is null,
+        "Stable must not gain market contribution.");
+}
 var blockedGeneration = configurationType.GetProperty("GillionsPartyFinderBlockedGeneration")!;
 var deniedConfig = Activator.CreateInstance(configurationType)!;
 blockedGeneration.SetValue(deniedConfig, "synthetic-denied-enrollment");

@@ -59,6 +59,12 @@ public sealed class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
     private readonly BeastmasterLocalView beastmasterLocal;
     private readonly SubmarineLocalView submarineLocal;
+    private readonly ICondition marketConditions;
+    private readonly MarketContributor marketContributor;
+    private readonly MarketContributionSource marketSource;
+    private readonly HttpClient marketHttp = PartyFinderHttp.CreateClient();
+    private string marketAcceptedGeneration = "";
+    private DateTime nextMarketMaintenanceUtc;
 #endif
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private readonly HttpClient partyFinderHttp = PartyFinderHttp.CreateClient();
@@ -137,6 +143,7 @@ public sealed class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Observed market contribution is on by default and has its own off switch. Only naturally received partial listings/recent sales go to compatible Gillions intake; no scanning or buyer/retainer identities. Existing pairing is authentication, not anonymous transport.",
         "Submarine voyage retention is a separate off-by-default local read-only test. Community preparation needs a second opt-in and explicit sanitized export; no submarine upload endpoint exists.",
         "Testing Party Finder contribution requires fresh Testing pairing with site permission and a separate local opt-in. Public listings go to Gillions HTTPS, not directly to xivpf.com or localhost.",
         "Gillions keeps only an expiring, runtime current-listing cache; the paired token is used only for Gillions Authorization, never listing data. Permission denials stay stopped across logout/reload until fresh pairing.",
@@ -174,7 +181,7 @@ public sealed class Plugin : IDalamudPlugin {
 
     public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commands, IClientState clientState, IObjectTable objects, IFramework framework, IDataManager dataManager, IUnlockState unlockState, IGameInventory gameInventory, IPartyFinderGui partyFinderGui, IChatGui chatGui, IPluginLog log
 #if GILLIONS_TEST_BUILD
-        , IAddonLifecycle addonLifecycle
+        , IAddonLifecycle addonLifecycle, IMarketBoard marketBoard, ICondition marketConditions
 #endif
     ) {
         this.pluginInterface = pluginInterface;
@@ -215,6 +222,10 @@ public sealed class Plugin : IDalamudPlugin {
         configuration.SubmarineVoyages ??= new();
         submarineLocal = new SubmarineLocalView(pluginInterface, commands, framework, clientState, dataManager,
             addonLifecycle, configuration.SubmarineVoyages, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
+        this.marketConditions = marketConditions;
+        marketContributor = new MarketContributor(RecordDiagnostic);
+        marketContributor.SetEnabled(configuration.ContributeObservedMarketData);
+        marketSource = new MarketContributionSource(marketBoard, marketContributor, CaptureMarketSession);
 #endif
     }
 
@@ -276,6 +287,9 @@ public sealed class Plugin : IDalamudPlugin {
     private async Task SendRetainerPresenceAsync(SyncRequestPermit permit, RetainerPresenceDocument presence) {
         try {
             using var request = Request("/api/game-sync/presence", permit, presence);
+#if GILLIONS_TEST_BUILD
+            request.Headers.Add("X-Gillions-Market-Contract", "1"); // Optional capability; existing body/identity unchanged.
+#endif
             using var response = await SendAsync(request, permit);
             await EnsureSuccessfulResponse(response, permit.Cancellation);
             var responseJson = await SyncResponsePolicy.ReadAsync(response.Content, permit.Cancellation);
@@ -283,6 +297,9 @@ public sealed class Plugin : IDalamudPlugin {
                 throw new InvalidOperationException("Invalid presence response.");
             await CommitAsync(permit, _ => {
                 retainerUploadServerSupported = uploadSupported; presenceFailureCount = 0;
+#if GILLIONS_TEST_BUILD
+                marketAcceptedGeneration = MarketContributor.Compatible(responseJson) ? permit.Session!.Generation : "";
+#endif
                 nextRetainerPresenceUtc = DateTime.UtcNow.Add(RetainerPresencePolicy.NextSuccessDelay(Random.Shared.Next(-5, 6)));
             });
         } catch (Exception error) {
@@ -318,6 +335,13 @@ public sealed class Plugin : IDalamudPlugin {
         var now = DateTime.UtcNow;
         RefreshSessionContext(); MaintainTransientState(now);
         partyFinderContributor.Tick(now);
+#if GILLIONS_TEST_BUILD
+        if (now >= nextMarketMaintenanceUtc) {
+            nextMarketMaintenanceUtc = now.AddMilliseconds(250);
+            marketContributor.RefreshSession(CaptureMarketSession());
+            marketContributor.Tick(now); // Managed upload maintenance only, not market searches.
+        }
+#endif
         if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;
         var contentId = activeRetainerCharacterContentId;
         var state = CurrentState;
@@ -1032,6 +1056,14 @@ public sealed class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         if (ImGui.Button("Beastmaster local test")) beastmasterLocal.Show();
         if (ImGui.Button("Submarine voyage retention")) submarineLocal.Show();
+        ImGui.Separator();
+        var marketEnabled = marketContributor.Enabled;
+        if (ImGui.Checkbox("Contribute observed market data to Gillions", ref marketEnabled)) QueueUiAction(() => {
+            configuration.ContributeObservedMarketData = marketEnabled;
+            marketContributor.SetEnabled(marketEnabled); RequestConfigurationSave();
+        });
+        ImGui.TextWrapped("On by default. Gillions may use market listings and recent sales you naturally view to improve shared market information, without names or player/retainer identities in those observations. No active scanning. Existing pairing authenticates transport; this is not anonymous to the server. Independent of Automatic sync and Dalamud's own contribution setting.");
+        ImGui.TextWrapped(marketContributor.Status);
 #endif
         DrawDiagnostics(view);
         ImGui.End();
@@ -1202,6 +1234,43 @@ public sealed class Plugin : IDalamudPlugin {
         return null;
 #endif
     }
+#if GILLIONS_TEST_BUILD
+    private MarketContributionSession? CaptureMarketSession() {
+        if (disposed || !framework.IsInFrameworkUpdateThread || !configuration.ContributeObservedMarketData
+            || !clientState.IsLoggedIn || marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas]
+            || marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas51]) return null;
+        RefreshSessionContext();
+        if (!HasPairedSession || activeOwnedState is null || marketAcceptedGeneration != configuration.ActiveSession!.Generation) return null;
+        var world = objects.LocalPlayer?.CurrentWorld.RowId ?? 0;
+        if (world is 0 or > ushort.MaxValue) return null;
+        var permit = CapturePermit(SyncRequestMode.Manual);
+        var generation = permit.Session!.Generation;
+        return new MarketContributionSession($"{generation}:{permit.Epoch}:{world}", generation,
+            configuration.GillionsMarketBlockedGeneration == generation, (ushort)world, permit.Cancellation,
+            () => framework.RunOnFrameworkThread(() => {
+                if (configuration.ActiveSession?.Generation != generation) return;
+                configuration.GillionsMarketBlockedGeneration = generation;
+                RequestConfigurationSave(); FlushConfigurationSave(receivedAuthorizationDenial: true);
+            }),
+            async (body, cancellation) => {
+                using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(permit.Origin), MarketContributor.Path)) {
+                    Content = new ByteArrayContent(body)
+                };
+                request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", permit.Token);
+                request.Headers.UserAgent.ParseAdd($"{RetainerClient.ProductName}/{PluginVersion}");
+                await framework.RunOnFrameworkThread(() => {
+                    RequirePermit(permit);
+                    if (!configuration.ContributeObservedMarketData || marketAcceptedGeneration != generation
+                        || marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas]
+                        || marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas51]
+                        || objects.LocalPlayer?.CurrentWorld.RowId != world) throw new OperationCanceledException();
+                });
+                cancellation.ThrowIfCancellationRequested();
+                return await marketHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation);
+            });
+    }
+#endif
     private bool PermitIsCurrent(SyncRequestPermit permit) {
         if (disposed) return false;
         RefreshSessionContext();
@@ -1381,6 +1450,7 @@ public sealed class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         beastmasterLocal.Dispose();
         submarineLocal.Dispose();
+        marketSource.Dispose(); marketContributor.Dispose(); marketHttp.Dispose();
 #endif
         if (framework.IsInFrameworkUpdateThread) FlushConfigurationSave();
         disposed = true; requestLifetime.Dispose(); ClearTransientState();
@@ -1417,6 +1487,9 @@ internal sealed record CapturedSnapshotBatch(string CharacterName, string Charac
 public sealed class PluginConfiguration : IPluginConfiguration {
 #if GILLIONS_TEST_BUILD
     public SubmarineVoyageRetention SubmarineVoyages { get; set; } = new();
+    public bool ContributeObservedMarketData { get; set; } = true;
+    // Enrollment stop only, never market payload or reporter identity.
+    public string GillionsMarketBlockedGeneration { get; set; } = "";
 #endif
     public int Version { get; set; } = 1;
     public PairedSession? ActiveSession { get; set; }

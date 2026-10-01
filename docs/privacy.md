@@ -20,6 +20,41 @@ Testing requests contain at most 100 listings / 256 KiB. Native events share con
 
 ## Data and temporary observations
 
+### Testing 0.0.67 passive market candidate
+
+The owner-selected plugin setting defaults ON, including older Testing configs
+with no saved choice. This differs from the other experimental opt-ins. Disable
+"Contribute observed market data to Gillions" to prevent new market sends; unsent
+transient work clears and active requests are cancelled where possible. Ordinary
+sync/PF and Dalamud's own uploader/preference are unaffected. The website does not
+change this choice; server compatibility/authentication is availability, not consent.
+
+The market payload excludes player/character/account/Content IDs, buyer/retainer/
+artisan names and identities. It includes public market listing IDs (not reporter
+IDs), item/world, HQ/quantity/unit price and available retainer city; recent sales
+include raw sale price, quantity, HQ, mannequin flag and source purchase UTC time.
+No listing creation/review time or complete-listing count is exposed by the
+supported interface; none is fabricated. World is guarded current-world context,
+not a field supplied by the response. Every observation remains partial.
+
+Authentication uses the existing origin-bound bearer solely in Authorization;
+existing presence still contains its established character/device relationship.
+The presence body is unchanged, with an optional non-identifying capability
+header. User-Agent gives the existing product/version. TLS/network service and
+existing authentication can associate transport with its device/account/IP, so
+the transport is **not anonymous**. The required shared market dataset must not
+persist reporter/account/device linkage; Site must implement and verify that
+separation before admitting contributions. Authentication does not attest game truth.
+
+No market payload or receipt is persisted in plugin configuration. Only the ON/OFF
+choice and non-secret denied-enrollment generation are saved. At most 64 pending
+packets plus one in flight and 64 short-lived dedup fingerprints live in memory.
+They expire after two minutes and clear on session/world changes, opt-out or
+disposal. Drops are acceptable cache contributions, not financial/durable custody.
+Body cap 32 KiB, response cap 8 KiB, 15-second deadline, at most three attempts
+per observation and six starts/minute per load. No Universalis path is added.
+See [exact fields, limitations and Site requirements](contracts/market-observations-v1.md).
+
 ### Testing-only submarine local retention
 
 Testing `0.0.66` adds a separate off-by-default local-retention control and a second
