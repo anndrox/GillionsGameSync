@@ -1,6 +1,6 @@
 # Gillions Game Sync Testing 0.0.66
 
-Manual Dalamud custom repository URL (available after publication):
+Published GitHub Testing prerelease. Manual Dalamud custom repository URL:
 
 `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.66-testing/GillionsGameSyncTesting.json`
 
@@ -66,8 +66,32 @@ Departure is unavailable. Producing build is recorded only when observed in flig
 otherwise null. Sector rewards require coherent native sector and displayed
 aggregate evidence; voyage-only fallback has no inferred sector/HQ/experience.
 Result event timing, pointer membership, live correctness and performance still
-need in-game evidence. [Schema, examples and Site requirements](../contracts/submarine-voyages-v1.md).
+need in-game evidence. [Schema, examples and Site requirements](https://github.com/anndrox/GillionsGameSync/blob/v0.0.66-testing/docs/contracts/submarine-voyages-v1.md).
 
 Managed checks, actual SDK compilation and configuration Save/reload are validation
 evidence, not successful live collection. Existing Party Finder deployment is
 separate from this local-only addition. No submarine production upload is claimed.
+
+## Verified publication and automated evidence
+
+Reviewed/tagged source: `70cf56516770189ccb7ae831e7c22107f524036a` on
+`codex/game-sync/beastmaster-party-finder-testing`. Independent Security & Privacy
+review and affected-surface corrections ended with no remaining findings.
+
+Full verification passed: 474 submarine managed checks, 268 existing regression
+checks, Party Finder/source contracts, zero-warning/error Stable and Testing
+builds, actual Dalamud configuration Save/load and sanitized-export fixtures.
+Actual packaged 0.0.66 DLL fixtures also passed. Duplicate planning refreshes
+request no semantic save; invalid loaded UTC fields fail closed.
+
+The exact candidate package was reproduced. Anonymous public JSON/ZIP downloads,
+three-file package contents, embedded assembly identity/checksum, all immutable
+download links and API level 15 were verified on 2026-10-01 at 04:02:19 UTC.
+
+ZIP SHA-256:
+`89103fc4f75b5acb706c19e426da35357929e3aa379edd15780c4d21d553fc64`
+
+Public publication is not installed-game validation. Stable/main, previous
+immutable Testing assets and all server deployments remain unchanged by this
+addition. Next acceptance step is the manual in-game checklist above; use
+aggregate diagnostics, never the credential-bearing configuration.
