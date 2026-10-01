@@ -39,6 +39,7 @@ Require ($core.Contains('TimeSpan.FromSeconds(10)') -and $core.Contains('Maximum
 Require $core.Contains('MaximumPendingListings = 1000') 'Pending Party Finder data must retain a fixed bound.'
 Require ($core.Contains('pending.Clear();') -and $core.Contains('CancelSafely(cancel);')) 'Opt-out must clear unsent data and cancel active work without racing request completion.'
 Require ($core.Contains('AllowAutoRedirect = false') -and $plugin.Contains('PartyFinderHttp.CreateClient()')) 'Contribution HTTP must use a dedicated client that cannot follow redirects.'
+Require $core.Contains('UseCookies = false') 'Contribution HTTP must not accept/replay cookies across enrollments.'
 Require ($behavior.Contains('XivpfEndpointPolicy.RequireSafe(endpoint, true)') -and $behavior.Contains('using var http = PartyFinderHttp.CreateClient();')) 'The optional integration harness must require loopback and reject redirects.'
 Require ($adapter.Contains('partyFinderGui.ReceiveListing += OnListing') -and $adapter.Contains('partyFinderGui.ReceiveListing -= OnListing')) 'Dalamud Party Finder event lifecycle is incomplete.'
 Require $adapter.Contains('if (disposed || !enabled()) return;') 'Disabled contribution must reject the authoritative event before mapping or copying listing data.'

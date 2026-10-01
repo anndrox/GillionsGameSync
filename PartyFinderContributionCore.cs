@@ -39,7 +39,7 @@ internal static class XivpfEndpointPolicy {
 }
 
 internal static class PartyFinderHttp {
-    internal static HttpClientHandler CreateHandler() => new() { AllowAutoRedirect = false };
+    internal static HttpClientHandler CreateHandler() => new() { AllowAutoRedirect = false, UseCookies = false };
 
     internal static HttpClient CreateClient() => new(CreateHandler()) { Timeout = TimeSpan.FromSeconds(30) };
 }

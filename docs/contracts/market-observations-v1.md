@@ -43,10 +43,16 @@ late replies across transitions and live event-thread behavior need game testing
 ## Setting, pairing and compatibility
 
 `ContributeObservedMarketData` defaults **true**, including old Testing config
-without the property. Saved false remains false across reload. The checkbox is
+without the property. Saved false remains false across supported candidate reloads. The checkbox is
 authoritative; website/Dalamud choices do not modify it. OFF stops new sends,
 clears transient work and cancels active work where possible; a server-accepted
 request cannot be recalled. Ordinary sync, PF and other local features are independent.
+
+Unsupported downgrade is not consent-preserving: a 0.0.66 configuration save can
+discard both the saved market OFF choice and denied-enrollment marker. Returning
+to 0.0.67 then sees no choice and defaults ON. Preserve configuration and do not
+downgrade; after any older-binary save, re-check/disable contribution before
+browsing if desired. This does not claim downgrade-safe authorization stops.
 
 Reuse existing paired HTTPS origin, bearer and request lifetime. No new identity,
 credential, session framework or pairing scope. The ordinary presence body remains
@@ -69,6 +75,9 @@ derive allowed Testing product from the existing enrolled device, not User-Agent
 `POST /api/game-sync/market-observations` on the credential's issuing HTTPS origin.
 Use the existing Bearer Authorization and product/version User-Agent. No redirect
 following, alternate receiver, anonymous fallback or cross-origin credential transfer.
+The contribution handler disables cookies as well as redirects. Market intake
+must not establish cookie authentication or tracking; only the existing bearer
+authorizes requests, including after fresh enrollment at the same origin.
 Content-Type `application/json`, maximum 32768 request bytes; strict version 1.
 
 Listing example (synthetic, partial):

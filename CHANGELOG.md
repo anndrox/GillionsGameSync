@@ -8,6 +8,8 @@
 - Exclude buyer/retainer/artisan/player identifiers and names; retain only market listing IDs, item/world, numeric prices/quantities/HQ/location and raw recent-sale facts. Existing paired transport remains authenticated, not anonymous to the server.
 - Prepare versioned intake behind exact server compatibility acknowledgment; no endpoint deployment, production traffic, Universalis uploader/preference access, automated searches or crawler.
 - Bound transient queues/retries/rate/body/response sizes; serialize and start HTTP on a worker. No market journal or persistent payloads.
+- Correct compatible-intake readiness status and preserve later upload outcomes across unchanged refreshes. Make common listing/history validation structurally explicit and cover malformed history events. Disable cookies as well as redirects on contribution transport.
+- Qualify market OFF/denial persistence: unsupported older-binary configuration saves can erase these fields; re-check the setting before browsing after such a downgrade.
 - Candidate/build/fixtures are not publication, installed-game collection or server cache validation. See Testing67 notes and the Site contract handoff.
 
 ## 0.0.66 - Testing local submarine voyage retention

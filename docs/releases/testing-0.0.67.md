@@ -18,15 +18,39 @@ defines the required authenticated receiver; current Site has no such endpoint.
 
 "Contribute observed market data to Gillions" is **ON by default**, including
 older Testing configurations without this choice. OFF persists, stops new market
-sends and clears/cancels transient work without affecting ordinary sync/PF.
+sends and clears/cancels transient work without affecting ordinary sync/PF
+through supported 0.0.67 handling. An unsupported 0.0.66 configuration save can
+strip both market OFF and denied-enrollment fields; returning to 0.0.67 then
+defaults ON and loses the stop. Preserve configuration, do not downgrade, and
+re-check/disable contribution before browsing after any older-binary save.
 No website needs to be open. No market searches, crawler, Universalis upload or
 Dalamud preference access. Existing HTTPS pairing is authentication, not anonymous
 transport; market payloads exclude player/buyer/retainer/account identities.
+Contribution transport disables cookies and redirects. Readiness status changes
+when compatible intake/context becomes available; repeated ready refreshes
+preserve later acceptance/retry outcomes instead of claiming no uploads.
 
 Public receive events copy only partial listings/recent sales. World is guarded
 current-world context, not a response field. Empty/unavailable data cannot mean
 zero listings. Listing creation/review time and source snapshot time are unavailable;
 source purchase times remain distinct from client observation/server receipt.
+
+## Review correction evidence
+
+The initial history-precedence finding was withdrawn after checking the original
+outer grouping: common validation already applied to both packet kinds. A kind
+switch now makes that structure explicit; mirrored malformed listing/history
+and public-history adapter fixtures verify atomic rejection and time/row bounds.
+The confirmed readiness-status and cookie-transport findings are corrected.
+The unsupported-downgrade consent limitation is disclosed above.
+
+Local `scripts/verify.ps1` passes: 224 market checks, 474 submarine checks,
+268 existing audit regressions, authenticated/legacy Party Finder fixtures,
+Beastmaster freshness/assembly boundaries, performance and actual Dalamud
+configuration Save/load tests. Market defaults ON; saved OFF prevents new sends
+and coexists with ordinary Automatic sync ON. Both build channels pass with no
+warnings/errors. These are fixtures/source checks, not in-game or Site intake
+validation. The v1 endpoint, acknowledgment, payload and receipt schema are unchanged.
 
 ## Focused / isolated acceptance checklist
 
@@ -36,6 +60,8 @@ source purchase times remain distinct from client observation/server receipt.
 2. Before a compatible isolated server acknowledges v1, naturally view market
    data. Status must remain waiting; no market endpoint requests occur. Ordinary
    existing presence/sync is unchanged, with only the optional capability header.
+   After acknowledgment, status must report ready, not "No market uploads";
+   repeated maintenance must preserve subsequent acceptance/retry summaries.
 3. Use only an approved disposable HTTPS origin with the exact existing pairing
    contract and v1 acknowledgment/intake. Do not use production contribution traffic
    or bypass TLS/authentication. Site separately owns environment implementation.

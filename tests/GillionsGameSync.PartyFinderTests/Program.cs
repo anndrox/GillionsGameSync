@@ -94,6 +94,7 @@ internal static class Program {
     private static void TestDedicatedClientRejectsRedirects() {
         using var handler = PartyFinderHttp.CreateHandler();
         Assert(!handler.AllowAutoRedirect, "The dedicated contribution client must never follow endpoint redirects.");
+        Assert(!handler.UseCookies, "Contribution must not accept or replay cookies across requests/enrollments.");
     }
 
     private static async Task TestOffByDefaultAndNoCaptureWhileDisabled() {

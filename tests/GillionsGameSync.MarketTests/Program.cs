@@ -10,6 +10,7 @@ void Check(bool value, string why) { checks++; if (!value) throw new Exception(w
 var now = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
 var world = (ushort)74;
 MarketObservation Observation() => MarketObservation.ListingsPacket(world, 5333, [new("12345678901234567890", true, 7, 1500, 1)], now);
+MarketObservation HistoryObservation() => MarketObservation.HistoryPacket(world, 5333, [new(false, 2, 600, now.AddMinutes(-1), false)], now);
 HttpResponseMessage Receipt(byte[] body, string status = "accepted") {
     var row = JsonSerializer.Deserialize<JsonElement>(body);
     return new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new {
@@ -31,6 +32,48 @@ Check(MarketContributor.Compatible("{\"marketContribution\":{\"contractVersion\"
 Check(!MarketContributor.Compatible("{\"marketContribution\":{\"contractVersion\":2,\"enabled\":true,\"acceptedClientProduct\":\"GillionsGameSyncTest\"}}"), "Unknown contract accepted.");
 Check(!MarketContributor.Compatible("{\"marketContribution\":{\"contractVersion\":1,\"enabled\":true,\"acceptedClientProduct\":\"GillionsGameSync\"}}"), "Stable permission accepted.");
 contributor.RefreshSession(Session(Accept));
+// Mirror the complete common scope/time/null validation surface for both kinds.
+foreach (var good in new[] { Observation(), HistoryObservation() }) {
+    Check(good.Valid, "Valid listing/history packet rejected.");
+    foreach (var bad in new[] {
+        good with { ObservationId = "not-a-guid" }, good with { ObservationId = null! },
+        good with { WorldId = 0 }, good with { ItemId = 0 }, good with { ItemId = 1000000 },
+        good with { ItemId = uint.MaxValue }, good with { Kind = "complete" }, good with { Kind = null! },
+        good with { ClientObservedAtUtc = default },
+        good with { ClientObservedAtUtc = DateTime.SpecifyKind(now, DateTimeKind.Local) },
+        good with { ClientObservedAtUtc = DateTime.SpecifyKind(now, DateTimeKind.Unspecified) },
+        good with { ClientObservedAtUtc = DateTime.UnixEpoch.AddTicks(-1) },
+        good with { ClientObservedAtUtc = DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc) },
+        good with { Listings = null! }, good with { Sales = null! }
+    }) {
+        Check(!bad.Valid, $"Common validation bypassed for {good.Kind}.");
+        Check(!contributor.Observe(bad), $"Malformed {good.Kind} packet queued.");
+    }
+    Check(!contributor.Observe(good with { ClientObservedAtUtc = now.AddSeconds(6) }), "Future observation admitted.");
+    Check(!contributor.Observe(good with { ClientObservedAtUtc = now.AddMinutes(-2).AddTicks(-1) }), "Stale observation admitted.");
+}
+foreach (var bad in new[] {
+    HistoryObservation() with { Sales = [] },
+    HistoryObservation() with { Sales = Enumerable.Repeat(HistoryObservation().Sales[0], 21).ToArray() },
+    HistoryObservation() with { Listings = Observation().Listings },
+    HistoryObservation() with { Sales = [null!] },
+    HistoryObservation() with { Sales = [new(false, 0, 1, now, false)] },
+    HistoryObservation() with { Sales = [new(false, 1, 0, now, false)] },
+    HistoryObservation() with { Sales = [new(false, 1, 1, default, false)] },
+    HistoryObservation() with { Sales = [new(false, 1, 1, DateTime.SpecifyKind(now, DateTimeKind.Local), false)] },
+    HistoryObservation() with { Sales = [new(false, 1, 1, DateTime.SpecifyKind(now, DateTimeKind.Unspecified), false)] },
+    HistoryObservation() with { Sales = [new(false, 1, 1, DateTime.UnixEpoch.AddTicks(-1), false)] },
+    HistoryObservation() with { Sales = [new(false, 1, 1, now.AddMinutes(5).AddTicks(1), false)] },
+    Observation() with { Sales = HistoryObservation().Sales },
+    Observation() with { Listings = [null!] },
+    Observation() with { Listings = Enumerable.Repeat(Observation().Listings[0], 11).ToArray() },
+    Observation() with { Listings = [new("1", false, 1, 1, 0)] },
+    Observation() with { Listings = [new("1", false, 1, 1, 9)] }
+}) Check(!contributor.Observe(bad), "Invalid kind-specific rows/wrong-side arrays admitted.");
+Check((HistoryObservation() with { Sales = Enumerable.Repeat(HistoryObservation().Sales[0], 20).ToArray() }).Valid,
+    "Twenty history rows including ambiguous repeated trades must preserve multiplicity.");
+Check((HistoryObservation() with { Sales = [new(false, uint.MaxValue, uint.MaxValue, now.AddMinutes(5), true)] }).Valid,
+    "Supported history numeric/time upper boundary rejected.");
 Check(!contributor.Observe(Observation() with { WorldId = 75 }), "Cross-world observation admitted.");
 foreach (var bad in new[] {
     Observation() with { ItemId = 0 }, Observation() with { ItemId = 1000000 },
@@ -46,6 +89,9 @@ foreach (var bad in new[] {
 Check(contributor.Observe(Observation()), "Sanitized listing observation rejected.");
 now = now.AddSeconds(3); contributor.Tick(now); await contributor.WhenIdleAsync();
 Check(sent.Count == 1, "Observed listing was not sent.");
+var acceptedStatus = contributor.Status;
+contributor.RefreshSession(Session(Accept));
+Check(contributor.Status == acceptedStatus, "Same ready session erased acceptance status.");
 var payload = JsonSerializer.Deserialize<JsonElement>(sent[0]);
 Check(payload.GetProperty("completeness").GetString() == "partial" && payload.GetProperty("worldEvidence").GetString() == "current-world-context", "Partial/context limits omitted.");
 Check(payload.GetProperty("sourceSnapshotAtUtc").ValueKind == JsonValueKind.Null && !payload.TryGetProperty("receivedAtUtc", out _), "Snapshot/receiver timestamp fabricated.");
@@ -69,6 +115,14 @@ now = now.AddSeconds(3); contributor.Tick(now); await contributor.WhenIdleAsync(
 var sales = JsonSerializer.Deserialize<JsonElement>(sent[^1]);
 Check(sent.Count == 3 && sales.GetProperty("sales")[0].GetProperty("soldAtUtc").GetDateTime().Kind == DateTimeKind.Utc, "Source sale timestamp lost.");
 Check(!System.Text.Encoding.UTF8.GetString(sent[^1]).Contains("buyer", StringComparison.OrdinalIgnoreCase), "History contains buyer identity.");
+foreach (var bad in new[] {
+    new HistoryPacket(0), new HistoryPacket(1000000), new HistoryPacket(uint.MaxValue),
+    new HistoryPacket(rows: []), new HistoryPacket(rows: [null!]),
+    new HistoryPacket(rows: Enumerable.Repeat<IMarketBoardHistoryListing>(new Sale(), 21).ToArray()),
+    new HistoryPacket(rows: [new Sale(quantity: 0)]), new HistoryPacket(rows: [new Sale(price: 0)]),
+    new HistoryPacket(rows: [new Sale(at: DateTime.SpecifyKind(now, DateTimeKind.Unspecified))]),
+    new HistoryPacket(rows: [new Sale(at: now.AddMinutes(6))])
+}) { source.History(bad); Check(contributor.PendingCount == 0, "Malformed public history event was not dropped atomically."); }
 source.Listings(new Packet([])); Check(contributor.PendingCount == 0, "Empty packet fabricated zero listings.");
 source.Listings(new Packet([new Listing(), new Listing(5334)])); Check(contributor.PendingCount == 0, "Mixed item packet admitted.");
 contributor.SetEnabled(false); source.History(new HistoryPacket()); Check(contributor.PendingCount == 0, "Disabled native event admitted.");
@@ -103,10 +157,14 @@ int absentCalls = 0;
 absent.RefreshSession(Session((_, _) => { absentCalls++; return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)); }));
 absent.Observe(Observation()); now = now.AddSeconds(3); absent.Tick(now); await absent.WhenIdleAsync();
 absent.Observe(Observation()); now = now.AddSeconds(10); absent.Tick(now); await absent.WhenIdleAsync(); Check(absentCalls == 1, "Missing endpoint retried uncontrollably.");
+absent.RefreshSession(Session(Accept)); absent.SetEnabled(false); absent.SetEnabled(true);
+Check(absent.Status.Contains("stopped for this load") && !absent.Observe(Observation()), "Refresh/toggle falsely reported stopped endpoint ready.");
 
 using var bounded = new MarketContributor(_ => {}, () => now); bounded.RefreshSession(Session(Accept));
 for (int i = 0; i < 64; i++) Check(bounded.Observe(Observation()), "Queue full before bound.");
 Check(!bounded.Observe(Observation()) && bounded.PendingCount == 64, "Queue growth unbounded.");
+var fullStatus = bounded.Status; bounded.RefreshSession(Session(Accept));
+Check(bounded.Status == fullStatus, "Same ready refresh erased queue-full outcome.");
 now = now.AddMinutes(3); bounded.Tick(now); Check(bounded.PendingCount == 0, "Stale observations retained indefinitely.");
 using var network = new MarketContributor(_ => {}, () => now);
 int networkCalls = 0;
@@ -119,6 +177,41 @@ int receiptCalls = 0;
 badReceipt.RefreshSession(Session((_, _) => { receiptCalls++; return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"ok\":true}") }); }));
 badReceipt.Observe(Observation()); now = now.AddSeconds(3); badReceipt.Tick(now); await badReceipt.WhenIdleAsync();
 Check(receiptCalls == 1 && badReceipt.PendingCount == 1 && !badReceipt.Status.Contains("accepted"), "Malformed receipt falsely acknowledged.");
+var retryStatus = badReceipt.Status;
+badReceipt.RefreshSession(Session((body, _) => Task.FromResult(Receipt(body))));
+Check(badReceipt.Status == retryStatus, "Same ready refresh erased retry/error outcome.");
+
+// Complete readiness transitions; refreshes must never claim no uploads when armed.
+using var transitions = new MarketContributor(_ => {}, () => now);
+transitions.RefreshSession(null);
+Check(transitions.Status.Contains("No market uploads"), "Null/incompatible context must report no uploads.");
+var readySession = Session(Accept);
+transitions.RefreshSession(readySession);
+Check(transitions.Status.Contains("intake ready") && !transitions.Status.Contains("No market uploads"), "Waiting-to-ready status remained misleading.");
+var readyStatus = transitions.Status;
+transitions.RefreshSession(readySession);
+Check(transitions.Status == readyStatus, "Repeated readiness refresh changed status.");
+transitions.Observe(Observation());
+transitions.RefreshSession(new("world-75", "synthetic-pairing", false, 75, default, () => Task.CompletedTask, Accept));
+Check(transitions.PendingCount == 0 && transitions.Status.Contains("intake ready"), "World transition kept old queue/waiting status.");
+Check(!transitions.Observe(Observation()), "World transition admitted former-world data.");
+Check(transitions.Observe(Observation() with { WorldId = 75 }), "New world was not ready.");
+transitions.RefreshSession(null);
+Check(transitions.PendingCount == 0 && transitions.Status.Contains("No market uploads") && !transitions.Observe(Observation()), "Ready-to-null transition remained armed/misleading.");
+using var transitionCancellation = new CancellationTokenSource();
+transitions.RefreshSession(Session(Accept, token: transitionCancellation.Token));
+transitionCancellation.Cancel(); transitions.RefreshSession(Session(Accept, token: transitionCancellation.Token));
+Check(transitions.Status.Contains("No market uploads"), "Cancelled context reported ready.");
+transitions.SetEnabled(false); transitions.RefreshSession(readySession);
+Check(transitions.Status.StartsWith("Off;") && !transitions.Observe(Observation()), "Compatible refresh overrode OFF.");
+transitions.SetEnabled(true);
+Check(transitions.Status.Contains("intake ready"), "Re-enable with compatible context did not report ready.");
+transitions.RefreshSession(Session(Accept, blocked: true));
+Check(transitions.Status.Contains("authorization denied") && !transitions.Observe(Observation()), "Blocked same-key context reported ready.");
+transitions.SetEnabled(false); transitions.SetEnabled(true);
+Check(transitions.Status.Contains("authorization denied"), "Local toggle falsely reset denied status.");
+transitions.RefreshSession(new("fresh-runtime", "fresh-enrollment", false, world, default, () => Task.CompletedTask, Accept));
+Check(transitions.Status.Contains("intake ready") && transitions.Observe(Observation()), "Fresh enrollment remained stale-denied.");
 
 using var cancelled = new MarketContributor(_ => {}, () => now);
 var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -190,11 +283,11 @@ sealed class Listing(uint item = 5333) : IMarketBoardItemListing {
     public IReadOnlyList<IItemMateria> Materia => throw new Exception(); public int MateriaCount => throw new Exception();
     public bool OnMannequin => throw new Exception(); public int Stain1Id => throw new Exception(); public int Stain2Id => throw new Exception(); public uint TotalTax => throw new Exception();
 }
-sealed class HistoryPacket : IMarketBoardHistory {
-    public uint ItemId => 5333;
-    public IReadOnlyList<IMarketBoardHistoryListing> HistoryListings => [new Sale()];
+sealed class HistoryPacket(uint item = 5333, IReadOnlyList<IMarketBoardHistoryListing>? rows = null) : IMarketBoardHistory {
+    public uint ItemId => item;
+    public IReadOnlyList<IMarketBoardHistoryListing> HistoryListings => rows ?? [new Sale()];
 }
-sealed class Sale : IMarketBoardHistoryListing {
+sealed class Sale(uint quantity = 2, uint price = 600, DateTime? at = null) : IMarketBoardHistoryListing {
     public string BuyerName => throw new Exception("Identity read"); public bool IsHq => false; public bool OnMannequin => false;
-    public DateTime PurchaseTime => new(2026, 10, 1, 11, 0, 0, DateTimeKind.Utc); public uint Quantity => 2; public uint SalePrice => 600;
+    public DateTime PurchaseTime => at ?? new(2026, 10, 1, 11, 0, 0, DateTimeKind.Utc); public uint Quantity => quantity; public uint SalePrice => price;
 }

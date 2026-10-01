@@ -29,6 +29,11 @@ transient work clears and active requests are cancelled where possible. Ordinary
 sync/PF and Dalamud's own uploader/preference are unaffected. The website does not
 change this choice; server compatibility/authentication is availability, not consent.
 
+OFF and denied-enrollment state persist through supported 0.0.67 handling, not
+unsupported downgrades. A 0.0.66 save can discard both fields; a later 0.0.67 load
+then defaults ON and loses that stop. Preserve configuration, do not downgrade,
+and re-check/disable contribution before browsing after any older-binary save.
+
 The market payload excludes player/character/account/Content IDs, buyer/retainer/
 artisan names and identities. It includes public market listing IDs (not reporter
 IDs), item/world, HQ/quantity/unit price and available retainer city; recent sales
@@ -38,6 +43,8 @@ supported interface; none is fabricated. World is guarded current-world context,
 not a field supplied by the response. Every observation remains partial.
 
 Authentication uses the existing origin-bound bearer solely in Authorization;
+the dedicated contribution transport neither accepts nor replays cookies, and
+market intake must not create cookie authentication/tracking.
 existing presence still contains its established character/device relationship.
 The presence body is unchanged, with an optional non-identifying capability
 header. User-Agent gives the existing product/version. TLS/network service and

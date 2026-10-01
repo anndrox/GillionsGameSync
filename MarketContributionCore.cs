@@ -24,14 +24,17 @@ internal sealed record MarketObservation(string ObservationId, ushort WorldId, u
         && ClientObservedAtUtc.Kind == DateTimeKind.Utc && ClientObservedAtUtc >= DateTime.UnixEpoch
         && ClientObservedAtUtc <= DateTime.MaxValue.AddMinutes(-5)
         && Listings is not null && Sales is not null
-        && (Kind == "listings" && Listings.Length is >= 1 and <= 10 && Sales.Length == 0
+        && (Kind switch {
+            "listings" => Listings.Length is >= 1 and <= 10 && Sales.Length == 0
             && Listings.All(l => l is not null && ulong.TryParse(l.ListingId, out var id) && id > 0
                 && l.ListingId == id.ToString(System.Globalization.CultureInfo.InvariantCulture)
                 && l.Quantity > 0 && l.PricePerUnit > 0 && (l.RetainerCityId is null or >= 1 and <= 8))
-            && Listings.Select(l => l.ListingId).Distinct().Count() == Listings.Length
-            || Kind == "history" && Sales.Length is >= 1 and <= 20 && Listings.Length == 0
+            && Listings.Select(l => l.ListingId).Distinct().Count() == Listings.Length,
+            "history" => Sales.Length is >= 1 and <= 20 && Listings.Length == 0
                 && Sales.All(s => s is not null && s.Quantity > 0 && s.SalePrice > 0 && s.SoldAtUtc.Kind == DateTimeKind.Utc
-                    && s.SoldAtUtc >= DateTime.UnixEpoch && s.SoldAtUtc <= ClientObservedAtUtc.AddMinutes(5)));
+                    && s.SoldAtUtc >= DateTime.UnixEpoch && s.SoldAtUtc <= ClientObservedAtUtc.AddMinutes(5)),
+            _ => false
+        });
     internal byte[] Serialize() => JsonSerializer.SerializeToUtf8Bytes(new {
         schemaVersion = 1, source = "gillions-game-sync", clientProduct = "GillionsGameSyncTest",
         ObservationId, WorldId, ItemId, Kind, ClientObservedAtUtc,
@@ -86,7 +89,8 @@ internal sealed class MarketContributor : IDisposable {
         lock (gate) {
             if (enabled == value || disposed) return;
             enabled = value; epoch++; pending.Clear(); recent.Clear(); stop = cancellation;
-            status = value ? "On; awaiting naturally received market data and compatible intake." : "Off; unsent market observations cleared. Ordinary sync unchanged.";
+            if (value) UpdateReadinessStatus(true);
+            else status = "Off; unsent market observations cleared. Ordinary sync unchanged.";
         }
         Cancel(stop);
     }
@@ -94,18 +98,28 @@ internal sealed class MarketContributor : IDisposable {
         CancellationTokenSource? stop = null;
         lock (gate) {
             if (disposed) return;
+            var wasReady = Ready;
             if (next?.Cancellation.IsCancellationRequested == true) next = null;
-            if (next?.Key != session?.Key) {
+            var changed = next?.Key != session?.Key;
+            if (changed) {
                 epoch++; pending.Clear(); recent.Clear(); stop = cancellation;
             }
             session = next;
             if (next?.Blocked == true) deniedAuthorization = next.AuthorizationKey;
-            if (!enabled) status = "Off; ordinary sync unchanged.";
-            else if (endpointStopped) status = "Market endpoint unavailable/redirected; stopped for this load. Site must establish the contract.";
-            else if (next is null) status = "On; waiting for compatible paired intake/current-world context. No market uploads.";
-            else if (deniedAuthorization == next.AuthorizationKey) status = "Market authorization denied for this pairing; correct permission and pair again.";
+            UpdateReadinessStatus(!wasReady || changed);
         }
         Cancel(stop);
+    }
+    // Called under gate. Refresh only transition status, not later upload outcomes.
+    private void UpdateReadinessStatus(bool transitioned) {
+        if (!enabled) status = "Off; ordinary sync unchanged.";
+        else if (endpointStopped) status = "Market endpoint unavailable/redirected; stopped for this load. Site must establish the contract.";
+        else if (session is null || session.Cancellation.IsCancellationRequested)
+            status = "On; waiting for compatible paired intake/current-world context. No market uploads.";
+        else if (deniedAuthorization == session.AuthorizationKey)
+            status = "Market authorization denied for this pairing; correct permission and pair again.";
+        else if (transitioned)
+            status = "On; compatible authenticated Gillions intake ready. Naturally received partial market observations may be uploaded.";
     }
     internal bool Observe(MarketObservation observation) {
         lock (gate) {

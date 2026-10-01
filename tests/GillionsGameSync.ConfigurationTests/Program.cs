@@ -92,6 +92,11 @@ if (testingProduct) {
     var marketReload = load.Invoke(configurations, [product])!;
     Assert(!(bool)marketSetting.GetValue(marketReload)! && !(bool)configurationType.GetProperty("AutomaticSync")!.GetValue(marketReload)!,
         "Actual Dalamud Save/load must preserve market opt-out without modifying ordinary sync.");
+    configurationType.GetProperty("AutomaticSync")!.SetValue(marketReload, true);
+    configurationType.GetMethod("Save")!.Invoke(marketReload, [savedViaPlugin]);
+    marketReload = load.Invoke(configurations, [product])!;
+    Assert(!(bool)marketSetting.GetValue(marketReload)! && (bool)configurationType.GetProperty("AutomaticSync")!.GetValue(marketReload)!,
+        "Market OFF must coexist with ordinary Automatic sync ON through actual Save/load.");
     var marketStop = configurationType.GetProperty("GillionsMarketBlockedGeneration")!;
     marketStop.SetValue(marketReload, "synthetic-market-denied");
     configurationType.GetMethod("Save")!.Invoke(marketReload, [savedViaPlugin]);
