@@ -141,6 +141,20 @@ Check(currentLimit.Current.Count == 32 && currentLimit.CapacityReached, "Current
 var malformed = JsonSerializer.Deserialize<SubmarineVoyageRetention>(JsonSerializer.Serialize(store))!;
 malformed.Voyages[0].Result = malformed.Voyages[0].Result! with { Limitations = ["untrusted free text"] };
 Check(!new SubmarineVoyageRetentionPolicy(malformed).Supported, "Malformed retained free text admitted to export.");
+foreach (bool full in new[] { false, true }) {
+    var warningStore = Enabled(); warningStore.CapacityReached = full;
+    if (!full) warningStore.SchemaVersion = 99;
+    var warningPolicy = new SubmarineVoyageRetentionPolicy(warningStore);
+    string warning = full ? "Retention limit reached" : "Unsupported/oversized retained format";
+    Check(warningPolicy.WaitingStatus.Contains(warning), "Initial state hid a retained warning.");
+    warningStore.CommunityContributionEnabled = true;
+    Check(warningPolicy.WaitingStatus.Contains(warning), "Community opt-in hid a retained warning.");
+    warningStore.LocalRetentionEnabled = false;
+    Check(warningPolicy.WaitingStatus.StartsWith("Local retention off") && warningPolicy.WaitingStatus.Contains(warning),
+        "Local opt-out hid a retained warning or implied collection remains on.");
+    warningStore.CommunityContributionEnabled = false;
+    Check(warningPolicy.WaitingStatus.Contains(warning), "Community opt-out hid a retained warning.");
+}
 foreach (var invalidTime in new[] { DateTime.SpecifyKind(now, DateTimeKind.Local), DateTime.SpecifyKind(now, DateTimeKind.Unspecified), default(DateTime), DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc) }) {
     foreach (bool resultTime in new[] { false, true }) {
         var malformedTime = JsonSerializer.Deserialize<SubmarineVoyageRetention>(JsonSerializer.Serialize(store))!;

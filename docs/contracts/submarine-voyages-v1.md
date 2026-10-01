@@ -101,6 +101,8 @@ and interface event. An identical refresh does not mutate retained timestamps or
 request a configuration save; an actual semantic change requests one save for
 the event. Enabling retention reports awaiting verified workshop data, not a
 previous off/loaded status. No verified slots means unavailable, never empty.
+Unsupported-format and capacity warnings remain visible after initialization or
+either consent toggle, including while local retention is off.
 
 If no defensible anchor exists, retain an **unlinked** result fingerprint scoped
 to that submarine. Identical unlinked results collapse; two truly identical

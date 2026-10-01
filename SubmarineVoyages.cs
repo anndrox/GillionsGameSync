@@ -66,9 +66,16 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
     internal const string CollectorSchema = "submarine-observation-v1";
     private bool? supported;
     internal string Status { get; private set; } = "Local retention off; no submarine reads or uploads.";
-    internal string WaitingStatus => store.LocalRetentionEnabled
-        ? "Local retention on; awaiting verified data from workshop interfaces you open normally. History preserved."
-        : "Local retention off; no submarine reads or uploads. History preserved.";
+    internal string WaitingStatus {
+        get {
+            var off = store.LocalRetentionEnabled ? "" : "Local retention off; no submarine reads or uploads. ";
+            if (!Supported) return off + "Unsupported/oversized retained format; history preserved unchanged. Collection/export paused.";
+            if (store.CapacityReached) return off + "Retention limit reached; history preserved. New identities paused; existing anchors retain completion space when local retention is on.";
+            return store.LocalRetentionEnabled
+                ? "Local retention on; awaiting verified data from workshop interfaces you open normally. History preserved."
+                : off + "History preserved.";
+        }
+    }
     internal bool Supported => supported ??= ValidateLoaded();
     private bool ValidateLoaded() {
         try {
