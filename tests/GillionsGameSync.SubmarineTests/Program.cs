@@ -22,6 +22,26 @@ Check(!offPolicy.ObserveSnapshot(Snapshot(unix + 100)) && off.Voyages.Count == 0
 Check(!offPolicy.ObserveResult(key, build, Result(), now, "synthetic", "synthetic"), "Off result admission changed history.");
 bool refused = false; try { offPolicy.PrepareExport(); } catch (InvalidOperationException) { refused = true; }
 Check(refused, "Export bypassed community consent.");
+Check(offPolicy.WaitingStatus.StartsWith("Local retention off"), "Disabled status contradicts consent.");
+off.LocalRetentionEnabled = true;
+Check(offPolicy.WaitingStatus.StartsWith("Local retention on; awaiting verified"), "Enabled status does not await loaded evidence.");
+off.LocalRetentionEnabled = false;
+
+var planning = Enabled(); var planningPolicy = new SubmarineVoyageRetentionPolicy(planning);
+int planningSaves = 0;
+void PlanningEvent(byte[] plan, DateTime observed) {
+    if (planningPolicy.ObserveSnapshots([Snapshot(unix + 100) with { PlannedRoute = plan, ObservedAtUtc = observed }])) planningSaves++;
+}
+PlanningEvent([3, 4], now);
+var firstPlanningState = JsonSerializer.Serialize(planning);
+PlanningEvent([3, 4], now.AddSeconds(1));
+Check(planningSaves == 1 && JsonSerializer.Serialize(planning) == firstPlanningState,
+    "Identical normalized planning refresh mutated retained state or requested persistence.");
+PlanningEvent([4, 3], now.AddSeconds(2));
+Check(planningSaves == 2 && planning.Current.Single().Snapshot.PlannedRoute!.SequenceEqual(new byte[] { 4, 3 }),
+    "Actual plan change did not produce exactly one semantic save.");
+Check(planning.Voyages.Count == 1 && planning.Voyages[0].OrderedRoute.SequenceEqual(new byte[] { 1, 2 }),
+    "Planning event changed producing route or duplicated voyage.");
 
 var store = Enabled(true); var policy = new SubmarineVoyageRetentionPolicy(store);
 Check(!policy.ObserveSnapshot(Snapshot(unix + 100) with { RegisteredAtUnix = 0 }), "Unloaded registration admitted.");
@@ -121,6 +141,18 @@ Check(currentLimit.Current.Count == 32 && currentLimit.CapacityReached, "Current
 var malformed = JsonSerializer.Deserialize<SubmarineVoyageRetention>(JsonSerializer.Serialize(store))!;
 malformed.Voyages[0].Result = malformed.Voyages[0].Result! with { Limitations = ["untrusted free text"] };
 Check(!new SubmarineVoyageRetentionPolicy(malformed).Supported, "Malformed retained free text admitted to export.");
+foreach (var invalidTime in new[] { DateTime.SpecifyKind(now, DateTimeKind.Local), DateTime.SpecifyKind(now, DateTimeKind.Unspecified), default(DateTime), DateTime.SpecifyKind(DateTime.MinValue, DateTimeKind.Utc) }) {
+    foreach (bool resultTime in new[] { false, true }) {
+        var malformedTime = JsonSerializer.Deserialize<SubmarineVoyageRetention>(JsonSerializer.Serialize(store))!;
+        if (resultTime) malformedTime.Voyages[0].ResultsObservedAtUtc = invalidTime;
+        else malformedTime.Voyages[0].FirstObservedAtUtc = invalidTime;
+        var preserved = JsonSerializer.Serialize(malformedTime);
+        var malformedTimePolicy = new SubmarineVoyageRetentionPolicy(malformedTime);
+        Check(!malformedTimePolicy.Supported, "Malformed/local/unspecified retained UTC field admitted.");
+        refused = false; try { malformedTimePolicy.PrepareExport(); } catch (InvalidOperationException) { refused = true; }
+        Check(refused && JsonSerializer.Serialize(malformedTime) == preserved, "Invalid UTC field exported or silently repaired.");
+    }
+}
 
 if (args.Length >= 2 && args[0] == "--fixture") {
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(args[1]))!);

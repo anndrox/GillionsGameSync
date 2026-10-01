@@ -50,7 +50,7 @@ internal sealed class SubmarineLocalView : IDisposable {
         foreach (var kind in Events) lifecycle.RegisterListener(kind, Addons, OnAddon);
         commands.AddHandler("/gillionssubs", new CommandInfo((_, _) => Show()) { HelpMessage = "Open testing submarine local retention and sanitized export controls (no uploads)." });
         ui.UiBuilder.Draw += Draw;
-        Publish("Enable local retention, then use the workshop normally. Unavailable memory never clears history.");
+        Publish(policy.WaitingStatus);
     }
     internal void Show() => visible = true;
     private void Publish(string? status = null, double milliseconds = 0) {
@@ -117,29 +117,37 @@ internal sealed class SubmarineLocalView : IDisposable {
             int selectedSlot = -1;
             for (byte slot = 0; slot < 4; slot++) {
                 fixed (HousingWorkshopSubmersibleSubData* sub = &workshop->Submersible.Data[slot]) {
-                    var snapshot = Snapshot(workshop, sub, slot, now);
-                    if (snapshot is null) continue; // Unloaded/unused slot is not an empty voyage.
-                    changed |= policy.ObserveSnapshot(snapshot);
                     if (selected == sub) selectedSlot = slot;
                 }
             }
             // Never dereference an unverified selected/copy pointer. Only a
             // pointer into this loaded workshop's four native slots is admitted.
+            byte[]? planned = null;
             if (selectedSlot >= 0) {
+                sectorIds ??= data.GetExcelSheet<SubmarineExploration>().Where(row => row.RowId > 0 && !row.StartingPoint).Select(row => row.RowId).ToHashSet();
                 var planning = AgentSubmersibleExploration.Instance();
-                byte[]? planned = null;
                 if (planning != null && planning->IsAgentActive() && planning->AddonId == args.Addon.Id
                     && planning->SelectedPointsCount <= 5) planned = ReadRoute(planning->SelectedPoints[..planning->SelectedPointsCount]);
-                var selectedSnapshot = Snapshot(workshop, selected, (byte)selectedSlot, now, planned);
-                if (selectedSnapshot is not null) {
-                    changed |= policy.ObserveSnapshot(selectedSnapshot);
-                    var results = AgentSubmersibleExplorationResult.Instance();
-                    if (results != null && results->IsAgentActive() && results->AddonId == args.Addon.Id && results->Data != null) {
-                        var result = Results(selected, results->Data, selectedSnapshot.CurrentRoute);
-                        if (result is not null) changed |= policy.ObserveResult(selectedSnapshot.LocalSubmarineKey,
-                            selectedSnapshot.Build, result, now, selectedSnapshot.GameVersion, collectorVersion);
-                        else readStatus = "Result interface partially loaded or inconsistent; no completion inferred.";
-                    }
+            }
+            var snapshots = new List<SubmarineSnapshot>(4);
+            SubmarineSnapshot? selectedSnapshot = null;
+            for (byte slot = 0; slot < 4; slot++) {
+                fixed (HousingWorkshopSubmersibleSubData* sub = &workshop->Submersible.Data[slot]) {
+                    var snapshot = Snapshot(workshop, sub, slot, now, slot == selectedSlot ? planned : null);
+                    if (snapshot is null) continue; // Unloaded/unused slot is not an empty voyage.
+                    snapshots.Add(snapshot);
+                    if (slot == selectedSlot) selectedSnapshot = snapshot;
+                }
+            }
+            changed |= policy.ObserveSnapshots(snapshots);
+            if (snapshots.Count == 0) readStatus = "No verified loaded submarine slots; history preserved. Local retention remains on.";
+            if (selectedSnapshot is not null) {
+                var results = AgentSubmersibleExplorationResult.Instance();
+                if (results != null && results->IsAgentActive() && results->AddonId == args.Addon.Id && results->Data != null) {
+                    var result = Results(selected, results->Data, selectedSnapshot.CurrentRoute);
+                    if (result is not null) changed |= policy.ObserveResult(selectedSnapshot.LocalSubmarineKey,
+                        selectedSnapshot.Build, result, now, selectedSnapshot.GameVersion, collectorVersion);
+                    else readStatus = "Result interface partially loaded or inconsistent; no completion inferred.";
                 }
             } else {
                 var results = AgentSubmersibleExplorationResult.Instance();
@@ -192,7 +200,7 @@ internal sealed class SubmarineLocalView : IDisposable {
         ? new("voyage-only", [], rewards.ToArray(), null, [reason, "hq-experience-unlocks-unavailable"]) : null;
     private void Change(Action action) {
         export = "";
-        _ = framework.RunOnFrameworkThread(() => { if (disposed) return; action(); export = ""; persist(); Publish(); });
+        _ = framework.RunOnFrameworkThread(() => { if (disposed) return; action(); export = ""; persist(); Publish(policy.WaitingStatus); });
     }
     private void Draw() {
         if (!visible || disposed) return;

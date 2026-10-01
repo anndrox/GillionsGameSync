@@ -41,6 +41,8 @@ publication, third-party plugin dependency, voyage control or upload endpoint.
    export is unavailable, prepared data clears, retained history stays.
 8. Check interface-read/save timing and gameplay responsiveness with the window
    open and closed. There must be no recurring submarine sampling or hidden requests.
+   Repeated unchanged planning refreshes must not increase retained counts or
+   cause recurring configuration-save hitches; a changed plan stays separate.
    Bounds are tested synthetically, not by filling a player's real configuration.
 
 Open the submarine window and **Copy aggregate diagnostics** after one test.

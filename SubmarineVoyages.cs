@@ -66,6 +66,9 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
     internal const string CollectorSchema = "submarine-observation-v1";
     private bool? supported;
     internal string Status { get; private set; } = "Local retention off; no submarine reads or uploads.";
+    internal string WaitingStatus => store.LocalRetentionEnabled
+        ? "Local retention on; awaiting verified data from workshop interfaces you open normally. History preserved."
+        : "Local retention off; no submarine reads or uploads. History preserved.";
     internal bool Supported => supported ??= ValidateLoaded();
     private bool ValidateLoaded() {
         try {
@@ -75,6 +78,8 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
                 && store.Current.Select(row => row.Snapshot.LocalSubmarineKey).Distinct().Count() == store.Current.Count
                 && store.Voyages.All(row => row is not null && LocalKey(row.LocalVoyageKey) && LocalKey(row.LocalSubmarineKey)
                     && Guid.TryParseExact(row.ObservationId, "N", out _) && row.OrderedRoute is not null
+                    && UtcObservation(row.FirstObservedAtUtc)
+                    && (row.ResultsObservedAtUtc is null || UtcObservation(row.ResultsObservedAtUtc.Value))
                     && (!row.LinkedToVoyage || row.ExpectedReturnUnix > 0 && Route(row.OrderedRoute))
                     && (row.BuildEvidence is "unavailable-not-observed-in-flight" or "observed-while-in-flight-not-dispatch-proof")
                     && Metadata(row.GameVersion) && Metadata(row.CollectorVersion)
@@ -97,16 +102,24 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
     private static bool Route(byte[] route) => route.Length is >= 1 and <= 5 && route.All(id => id > 0) && route.Distinct().Count() == route.Length;
     private static bool LocalKey(string value) => value.Length == 64 && value.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
     private static bool Metadata(string value) => value.Length is >= 1 and <= 80 && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_');
+    private static bool UtcObservation(DateTime value) => value.Kind == DateTimeKind.Utc && value >= DateTime.UnixEpoch;
     private static bool BuildValid(SubmarineBuild b) => b.Rank > 0 && b.Parts is { Hull: > 0, Stern: > 0, Bow: > 0, Bridge: > 0 } && b.Stats is not null;
     private static bool SnapshotValid(SubmarineSnapshot s) => LocalKey(s.LocalSubmarineKey) && s.Slot < 4
         && s.Name.Length <= 20 && s.RegisteredAtUnix > 0 && s.Build.Rank > 0
         && s.Build.Parts is { Hull: > 0, Stern: > 0, Bow: > 0, Bridge: > 0 }
         && s.CurrentRoute.Length <= 5 && (s.CurrentRoute.Length == 0 || Route(s.CurrentRoute))
         && (s.PlannedRoute is null || s.PlannedRoute.Length == 0 || Route(s.PlannedRoute))
-        && Metadata(s.GameVersion) && Metadata(s.CollectorVersion) && s.ObservedAtUtc.Kind == DateTimeKind.Utc;
+        && Metadata(s.GameVersion) && Metadata(s.CollectorVersion) && UtcObservation(s.ObservedAtUtc);
     private bool RejectCapacity() {
         Status = "Retention full or record too large: existing history preserved; new observations not admitted. No automatic deletion or upload.";
         var changed = !store.CapacityReached; store.CapacityReached = true; return changed;
+    }
+    // One already-normalized snapshot per slot/event. The caller saves once only
+    // when this batch or its result observation actually changes retained data.
+    internal bool ObserveSnapshots(IEnumerable<SubmarineSnapshot> snapshots) {
+        bool changed = false;
+        foreach (var snapshot in snapshots) changed |= ObserveSnapshot(snapshot);
+        return changed;
     }
     internal bool ObserveSnapshot(SubmarineSnapshot snapshot) {
         if (!store.LocalRetentionEnabled) return false;
@@ -163,7 +176,7 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
         DateTime now, string gameVersion, string collectorVersion) {
         if (!store.LocalRetentionEnabled) return false;
         if (!Supported || !ResultValid(result) || !LocalKey(localSubmarineKey) || !BuildValid(resultTimeBuild)
-            || !Metadata(gameVersion) || !Metadata(collectorVersion) || now.Kind != DateTimeKind.Utc) {
+            || !Metadata(gameVersion) || !Metadata(collectorVersion) || !UtcObservation(now)) {
             Status = "Partial/unsupported results; retained history preserved."; return false;
         }
         var current = store.Current.SingleOrDefault(row => row.Snapshot.LocalSubmarineKey == localSubmarineKey);

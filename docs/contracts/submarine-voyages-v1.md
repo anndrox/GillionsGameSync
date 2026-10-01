@@ -64,7 +64,9 @@ do not feed the new retained file to an older Testing binary as a recovery step.
 Root `SubmarineVoyageRetention`:
 
 - `SchemaVersion`: integer 1. Unsupported/malformed/oversized retained formats are
-  preserved unchanged and collection/export fail closed.
+  preserved unchanged and collection/export fail closed. First/result observation
+  times must be UTC and no earlier than the Unix epoch; invalid loaded timestamps
+  are not exported or silently repaired.
 - `LocalRetentionEnabled`, `CommunityContributionEnabled`: separate booleans,
   both false by default. Neither depends on ordinary Automatic sync or pairing.
 - `Current`: at most 32 local snapshots, including name/slot, private scoped key,
@@ -93,6 +95,12 @@ routes/in-flight builds/results flag the existing record and preserve the origin
 conflicted records cannot enter countable exports. Only identical aggregate
 voyage-only results may gain stronger verified sector attribution; this does not
 replace observation-time consent, first result time or the original build.
+
+Planning metadata is normalized before the single snapshot admission per slot
+and interface event. An identical refresh does not mutate retained timestamps or
+request a configuration save; an actual semantic change requests one save for
+the event. Enabling retention reports awaiting verified workshop data, not a
+previous off/loaded status. No verified slots means unavailable, never empty.
 
 If no defensible anchor exists, retain an **unlinked** result fingerprint scoped
 to that submarine. Identical unlinked results collapse; two truly identical

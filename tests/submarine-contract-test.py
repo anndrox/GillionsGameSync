@@ -17,6 +17,13 @@ for guard in ["!store.LocalRetentionEnabled", "!framework.IsInFrameworkUpdateThr
     assert guard in native, guard
 assert "ItemHQPrimary" in native and "ItemHQAdditional" in native and "row.Point" in native
 assert "sector-aggregate-mismatch" in native and "if (result->ItemReturnListCount > 10)" in native
+event = native.split("private unsafe void OnAddon", 1)[1].split("private unsafe SubmarineResult? Results", 1)[0]
+assert event.count("Snapshot(workshop,") == 1, "Snapshot must be normalized once per slot/event."
+assert "ObserveSnapshot(" not in event and event.count("ObserveSnapshots(snapshots)") == 1
+assert event.index("planning->SelectedPoints") < event.index("Snapshot(workshop,") < event.index("ObserveSnapshots(snapshots)")
+assert event.count("persist();") == 1 and 'if (changed) { export = ""; persist(); }' in event
+assert "No verified loaded submarine slots" in event and native.count("Publish(policy.WaitingStatus)") == 2
+assert "UtcObservation(row.FirstObservedAtUtc)" in model and "UtcObservation(row.ResultsObservedAtUtc.Value)" in model
 assert "VoyageBuild = inFlight ? snapshot.Build : null" in model
 assert "candidate.ResultTimeBuild ??=" in model
 assert "MaximumRecords = 400" in model and "MaximumRetainedBytes = 4 * 1024 * 1024" in model
