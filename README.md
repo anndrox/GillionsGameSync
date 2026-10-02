@@ -61,11 +61,11 @@ Results stay in memory and are not uploaded. See [local test instructions](docs/
 For the combined Beastmaster and Party Finder test, add this URL to Dalamud's
 custom plugin repositories:
 
-`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.66-testing/GillionsGameSyncTesting.json`
+`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.68-testing/GillionsGameSyncTesting.json`
 
 This installs the separate **Gillions Game Sync Testing** identity. It does not
 replace the stable plugin or update the existing `gillions.app` testing feed.
-Testing `0.0.66` retains both features, performance corrections and authenticated Gillions Party Finder intake, and adds off-by-default read-only local submarine retention. Replace the previous manual repository entry, update to `0.0.66.0`, and follow the [in-game checklist and diagnostic-copy instructions](docs/releases/testing-0.0.66.md). Ordinary HTTPS/PF pairing and consent are unchanged.
+Testing `0.0.68` continues published 0.0.66/0.0.67 and adds local Hunt Bill observations and private submarine snapshots. Replace the previous manual entry after successor publication is confirmed, update to `0.0.68.0`, and follow the [live checklist and diagnostics](docs/releases/testing-0.0.68.md). Do not downgrade or delete configuration. Ordinary HTTPS/PF pairing and consent are unchanged.
 
 Open `/gillionssubs` or **Submarine voyage retention**. Use workshop interfaces
 manually; no submarine control, polling or third-party plugin is involved. Local
@@ -77,21 +77,31 @@ build/sector evidence remain unavailable. See [schema, examples and Site require
 
 ## Build and verify
 
-### Testing 0.0.67 market candidate
+### Testing 0.0.67 market predecessor
 
-The same 0.0.66 Testing lineage now prepares passive market contribution; it does
-not replace the published 0.0.66 assets or create another plugin identity. Version
-0.0.67 is a **candidate**, not a published/installed update. Keep the published
-0.0.66 repository above until successor publication is explicitly confirmed.
+Testing 0.0.67 was published October 1, 2026 at tag `v0.0.67-testing`, source
+`9821c92df8f51c9fef913a9e8294fd6ed3b4469c`. Its immutable assets are preserved;
+0.0.68 uses the same separate product identity. Publication is not live-game proof.
 
 "Contribute observed market data to Gillions" is independently **on by default**,
 including older Testing configurations without that field. It has a persistent
 off switch. Supported receive events supply only naturally encountered partial
 listings and recent sales, never automatic searches. Uploads require an exact
-authenticated server compatibility acknowledgment; the existing server has no
-market intake yet. Ordinary sync, Party Finder and Dalamud's own contribution
+authenticated server compatibility acknowledgment. Ordinary sync, Party Finder and Dalamud's own contribution
 preference remain independent. Read the [contract/Site handoff](docs/contracts/market-observations-v1.md)
 and [candidate checks](docs/releases/testing-0.0.67.md).
+
+### Testing 0.0.68 personal-state experiments
+
+Open `/gillionshunts` or **My Hunt Bills local test**; local retention defaults OFF.
+Naturally opened accepted bills supply positive cache targets/counters. Cache
+ownership, current acceptance, complete bill set and resets remain unverified.
+Open `/gillionssubs` for off-by-default local submarine retention; selected visible
+planning interfaces can add positive unlocked/explored sector history, not a full
+unlock-set claim. Exact game/SDK gates stop these experiments after unknown patches.
+Each offers explicit **PRIVATE** export for trusted diagnostics, not community
+contribution. Neither uploads. See [draft fields and bounded Site handoff](docs/contracts/personal-observations-v1.md).
+No radar, game requests, UI opening, voyage actions or third-party dependency.
 
 Requirements are Windows, .NET 10 SDK and the Dalamud dependencies used by `Dalamud.NET.Sdk`.
 

@@ -144,11 +144,44 @@ if (testingProduct) {
     Assert(Parse(sanitized)["voyages"] is JArray { Count: 1 } && !sanitized.Contains("LOCAL-NAME-ONLY"),
         "Actual saved/reloaded retained results must produce only the consented sanitized dataset.");
     Console.WriteLine("Actual submarine configuration Save/load and sanitized export passed; no native collection performed.");
+    var privateRetention = File.ReadAllText(Path.GetFullPath("artifacts/verification/submarine-policy/personal-retained-fixture.json"));
+    submarineProperty.SetValue(syntheticConfig, JsonConvert.DeserializeObject(privateRetention, submarineProperty.PropertyType));
+    configurationType.GetMethod("Save")!.Invoke(syntheticConfig, [savedViaPlugin]);
+    var privateReload = submarineProperty.GetValue(load.Invoke(configurations, [product]))!;
+    Assert(JToken.DeepEquals(ParseToken(privateRetention), ParseToken(JsonConvert.SerializeObject(privateReload))),
+        "Actual Save/load must preserve additive private scope/sector/UTC fields.");
+    Console.WriteLine("Actual submarine private scope/sector/provenance Save/load passed; synthetic only.");
 } else {
     Assert(submarineProperty is null && submarineViewType is null
         && pluginAssembly.GetType("GillionsGameSync.SubmarineVoyageRetention") is null,
         "Stable product must not gain submarine collection or persisted format.");
 }
+
+var huntProperty = configurationType.GetProperty("HuntBills");
+var huntType = pluginAssembly.GetType("GillionsGameSync.HuntBillLocalView");
+if (testingProduct) {
+    Assert(huntProperty is not null && huntType is not null, "Testing Hunt collection missing from actual binary.");
+    var huntConfig = Activator.CreateInstance(configurationType)!;
+    var huntStore = huntProperty!.GetValue(huntConfig)!;
+    Assert(!(bool)huntStore.GetType().GetProperty("LocalRetentionEnabled")!.GetValue(huntStore)!, "Hunt retention must default OFF.");
+    var fixture = File.ReadAllText(Path.GetFullPath("artifacts/verification/personal-state/hunt-bills-v1.json"));
+    var billArray = Parse(fixture)["bills"]!;
+    var retained = new JObject { ["SchemaVersion"] = 1, ["LocalRetentionEnabled"] = true,
+        ["Characters"] = new JArray(new JObject { ["LocalCharacterKey"] = new string('a', 64), ["Bills"] = billArray }) };
+    huntProperty.SetValue(huntConfig, JsonConvert.DeserializeObject(retained.ToString(), huntProperty.PropertyType));
+    configurationType.GetMethod("Save")!.Invoke(huntConfig, [savedViaPlugin]);
+    var huntReload = huntProperty.GetValue(load.Invoke(configurations, [product]))!;
+    var huntPolicyType = pluginAssembly.GetType("GillionsGameSync.HuntBillRetentionPolicy", true)!;
+    var huntPolicy = Activator.CreateInstance(huntPolicyType, [huntReload])!;
+    Assert((bool)huntPolicyType.GetProperty("Supported", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(huntPolicy)!,
+        "Actual Dalamud Hunt Save/load lost fields, UTC kinds or observation identity.");
+    huntReload.GetType().GetProperty("LocalRetentionEnabled")!.SetValue(huntReload, false);
+    huntProperty.SetValue(huntConfig, huntReload); configurationType.GetMethod("Save")!.Invoke(huntConfig, [savedViaPlugin]);
+    var huntOff = huntProperty.GetValue(load.Invoke(configurations, [product]))!;
+    Assert(!(bool)huntOff.GetType().GetProperty("LocalRetentionEnabled")!.GetValue(huntOff)!, "Hunt opt-out did not survive actual serializer.");
+    Console.WriteLine("Actual Hunt Testing-only/default-OFF/private-state/UTC/identity/opt-out Save/load passed; no native collection.");
+} else Assert(huntProperty is null && huntType is null && pluginAssembly.GetType("GillionsGameSync.HuntBillRetention") is null,
+    "Stable must not contain Hunt collector/retention.");
 
 // Type metadata deliberately names retired types. Dalamud LoadForType and the
 // inert backup reader must not resolve or construct them. All data is synthetic.

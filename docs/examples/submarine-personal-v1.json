@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1, "collectorSchema": "submarine-personal-v1",
+  "uploadState": "local-only-no-server-contract",
+  "workshopScope": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "scopeEvidence": "observed-workshop-not-fc-membership-proof",
+  "completeness": "positive-observations-only",
+  "slots": [{
+    "slot": 0, "name": "Synthetic submarine", "registeredAtUnix": 1790899200,
+    "build": {"rank": 40, "parts": {"hull": 3, "stern": 4, "bow": 1, "bridge": 2}, "stats": {"surveillanceBase": 50, "retrievalBase": 60, "speedBase": 70, "rangeBase": 80, "favorBase": 90, "surveillanceBonus": 1, "retrievalBonus": 2, "speedBonus": 3, "rangeBonus": 4, "favorBonus": 5, "logSpeed": 73}},
+    "currentExperience": 100, "nextRankExperience": 200,
+    "observedAtUtc": "2026-10-02T12:00:00Z", "gameVersion": "synthetic-game", "collectorVersion": "0.0.68.0",
+    "expectedReturnAtUtc": "2026-10-03T12:00:00Z", "departureAtUtc": null,
+    "voyageState": "expected-in-flight", "orderedSectorIds": [1,2], "plannedSectorIds": null,
+    "unlockedSectorIds": [1,2], "exploredSectorIds": [1],
+    "sectorFreshness": "retained-positive-history-not-current-lock-state", "sectorCompleteness": "positive-observations-only"
+  }]
+}

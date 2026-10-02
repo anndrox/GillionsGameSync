@@ -1,8 +1,23 @@
 # Testing
 
+## Testing 0.0.68 — local Hunt Bills and private submarines
+
+Use [0.0.68 live checks](releases/testing-0.0.68.md) and the
+[private-state draft/Site handoff](contracts/personal-observations-v1.md).
+Both local-retention choices default OFF. No Hunt/submarine uploads exist;
+Site preview data cannot become synchronized personal state until the bounded
+intake handoff is implemented and joint tests pass. Published 0.0.67 is the
+immutable predecessor (its original preparation notes below are historical).
+
+The new experiments require game `2026.09.15.0000.0000` and installed
+FFXIVClientStructs assembly `7.56.2.9136`. Other pairs stop native collection and
+preserve history. This is an inspected catalog/SDK pair, not live correctness.
+Run the full verification plus focused personal-state fixtures; actual Dalamud
+Save/load tests are separate from real interface/access/performance validation.
+
 ## Passive market candidate — Testing 0.0.67
 
-Same-lineage successor to published 0.0.66, not yet published. Use the
+Same-lineage successor to 0.0.66, published October 1, 2026 (no live proof). Use the
 [candidate checklist](releases/testing-0.0.67.md) and [intake contract/Site handoff](contracts/market-observations-v1.md).
 Public-interface adapter fixtures use identity getters that throw if accessed.
 Managed fixtures test sanitation, partial/empty/malformed data, source timestamps,

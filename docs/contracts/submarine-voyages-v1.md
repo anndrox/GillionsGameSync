@@ -1,8 +1,13 @@
 # Submarine observations v1 — local Testing draft
 
-Scope: Testing `0.0.66`, plugin-side retention and manual sanitized export only.
+Scope: introduced in Testing `0.0.66`; continued in `0.0.68`, local retention and manual sanitized export only.
 This is **not an HTTP contract**, receiver, automatic uploader or server deployment.
 Site Operations owns future admission, storage, comparisons, page and notifications.
+
+Testing 0.0.68 adds an exact game/SDK gate, <=1/second event-read ceiling,
+optional private workshop/positive-sector snapshot fields, and a separate PRIVATE
+personal export. See [personal-state draft](personal-observations-v1.md); those
+private fields never enter this sanitized community dataset.
 
 ## Read-only source and availability
 
@@ -97,8 +102,9 @@ voyage-only results may gain stronger verified sector attribution; this does not
 replace observation-time consent, first result time or the original build.
 
 Planning metadata is normalized before the single snapshot admission per slot
-and interface event. An identical refresh does not mutate retained timestamps or
-request a configuration save; an actual semantic change requests one save for
+and interface event. Identical refreshes within 60 seconds do not mutate retained
+timestamps or save. A later event may refresh observation UTC at most once/minute.
+An actual semantic change requests one save for
 the event. Enabling retention reports awaiting verified workshop data, not a
 previous off/loaded status. No verified slots means unavailable, never empty.
 Unsupported-format and capacity warnings remain visible after initialization or
@@ -112,7 +118,7 @@ No session time or guessed departure is fabricated to manufacture uniqueness.
 
 ## Bounds and overflow
 
-Reserve at most 8192 serialized UTF-8 bytes per voyage record and 2048 per current
+Reserve at most 8192 serialized UTF-8 bytes per voyage record and 4096 per current
 snapshot. With 400 records, 32 snapshots and bounded metadata, this retained
 component stays below 4 MiB; it is separate from ordinary sync's existing pending
 budget and is **not a bound on the whole credential-bearing configuration**.

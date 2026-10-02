@@ -1,6 +1,12 @@
-# Gillions Game Sync Testing 0.0.67 — prepared market candidate
+# Gillions Game Sync Testing 0.0.67 — market predecessor
 
-Status: source/package candidate, not a published release or installed-game proof.
+Current evidence: GitHub prerelease `v0.0.67-testing` published October 1, 2026,
+tag source `9821c92df8f51c9fef913a9e8294fd6ed3b4469c`.
+ZIP SHA-256: `3ab1409a84918aa19e2ef88d80bb413455cdfede8eef7d362a7c488ea753547a`.
+These assets remain immutable. The preparation narrative below is historical,
+not current server or installed-game proof.
+
+Original preparation status: source/package candidate, not installed-game proof.
 It continues the existing 0.0.66 branch ancestry and preserves Party Finder,
 Beastmaster, performance additions and read-only submarine retention. Stable,
 published 0.0.66 immutable assets and server deployments are unchanged.

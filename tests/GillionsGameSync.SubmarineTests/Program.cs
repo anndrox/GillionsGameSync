@@ -168,9 +168,48 @@ foreach (var invalidTime in new[] { DateTime.SpecifyKind(now, DateTimeKind.Local
     }
 }
 
+var workshopKey = SubmarineVoyageRetentionPolicy.Hash("synthetic-workshop");
+var personal = Enabled(); var personalPolicy = new SubmarineVoyageRetentionPolicy(personal);
+var personalSnapshot = Snapshot(unix + 100) with { LocalWorkshopKey = workshopKey, UnlockedSectorIds = [1, 2], ExploredSectorIds = [1] };
+Check(personalPolicy.ObserveSnapshot(personalSnapshot), "Private scoped snapshot not admitted.");
+Check(personalPolicy.ObserveSnapshot(personalSnapshot with { Slot = 1, LocalSubmarineKey = SubmarineVoyageRetentionPolicy.Hash("synthetic-slot-1"), Name = "Synthetic second" }), "Second submarine not admitted.");
+Check(!personalPolicy.ObserveSnapshot(personalSnapshot with { UnlockedSectorIds = [0] }), "Unknown/zero sector evidence admitted.");
+Check(!personalPolicy.ObserveSnapshot(personalSnapshot with { UnlockedSectorIds = [] }), "Empty sectors passed for unavailable.");
+Check(!personalPolicy.ObserveSnapshot(personalSnapshot with { UnlockedSectorIds = [1, 1] }), "Duplicate unlock flags admitted.");
+Check(!personalPolicy.ObserveSnapshot(personalSnapshot with { Build = build with { Stats = null! } }), "Partial stats admitted.");
+Check(!personalPolicy.ObserveSnapshot(personalSnapshot with { Build = build with { Stats = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) } }), "Unpopulated stats admitted.");
+Check(!personalPolicy.ObserveSnapshot(personalSnapshot with { CurrentRoute = null! }), "Unloaded route admitted.");
+Check(!personalPolicy.ObserveSnapshot(personalSnapshot with { LocalWorkshopKey = null }), "Unscoped progression admitted.");
+Check(!personalPolicy.ObserveSnapshot(personalSnapshot with { ObservedAtUtc = now.AddSeconds(-1), Build = laterBuild }), "Older build replaced current.");
+Check(personalPolicy.ObserveSnapshot(personalSnapshot with { UnlockedSectorIds = null, ExploredSectorIds = null, ObservedAtUtc = now.AddMinutes(2) }), "Bounded freshness refresh missing.");
+Check(personal.Current.Single(c => c.Snapshot.Slot == 0).Snapshot.UnlockedSectorIds!.SequenceEqual(new byte[] { 1, 2 }), "Unavailable flags erased positive evidence.");
+var privateJson = personalPolicy.PreparePersonalExport(workshopKey);
+using (var privateDoc = JsonDocument.Parse(privateJson)) {
+    Check(privateDoc.RootElement.GetProperty("slots").GetArrayLength() == 2, "Multiple submarine slots missing.");
+    var slot = privateDoc.RootElement.GetProperty("slots")[0];
+    Check(slot.GetProperty("voyageState").GetString() == "expected-return-due-not-observed-completion", "Expected return claimed actual completion.");
+    Check(slot.GetProperty("build").GetProperty("parts").GetProperty("hull").GetInt32() == 3, "Component ID changed.");
+    Check(slot.GetProperty("departureAtUtc").ValueKind == JsonValueKind.Null, "Departure fabricated.");
+    Check(slot.GetProperty("sectorCompleteness").GetString() == "positive-observations-only", "Partial flags claimed complete unlocks.");
+}
+Check(!privateJson.Contains(key) && !privateJson.Contains("987654321"), "Private export contains raw house/submarine key.");
+var personalRestart = JsonSerializer.Deserialize<SubmarineVoyageRetention>(JsonSerializer.Serialize(personal))!;
+Check(new SubmarineVoyageRetentionPolicy(personalRestart).PreparePersonalExport(workshopKey) == privateJson, "Private state did not survive restart.");
+Check(personalPolicy.ObserveSnapshot(personalSnapshot with { CurrentRoute = [], ExpectedReturnUnix = 0, ObservedAtUtc = now.AddMinutes(3) }), "Unavailable voyage snapshot rejected.");
+using (var unknownDoc = JsonDocument.Parse(personalPolicy.PreparePersonalExport(workshopKey))) {
+    var slot = unknownDoc.RootElement.GetProperty("slots")[0];
+    Check(slot.GetProperty("voyageState").GetString() == "unavailable" && slot.GetProperty("orderedSectorIds").ValueKind == JsonValueKind.Null, "Cleared fields claimed idle/empty route.");
+}
+personal.LocalRetentionEnabled = false;
+refused = false; try { personalPolicy.PreparePersonalExport(workshopKey); } catch (InvalidOperationException) { refused = true; }
+Check(refused && personal.Current.Count == 2, "Opt-out allowed private export or erased history.");
+Check(!PersonalObservationCompatibility.Supports("unavailable", PersonalObservationCompatibility.NativeVersion), "Unsupported patch admitted.");
+
 if (args.Length >= 2 && args[0] == "--fixture") {
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(args[1]))!);
     File.WriteAllText(args[1], JsonSerializer.Serialize(store));
+    File.WriteAllText(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(args[1]))!, "submarine-personal-v1.json"), privateJson);
+    File.WriteAllText(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(args[1]))!, "personal-retained-fixture.json"), JsonSerializer.Serialize(personalRestart));
     if (args.Length == 4 && args[2] == "--export-fixture") {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(args[3]))!);
         File.WriteAllText(args[3], policy.PrepareExport());

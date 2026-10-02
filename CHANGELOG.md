@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.68 - Testing local Hunt Bills and private submarine observations
+
+- Add a separate default-OFF, event-only Hunt Bill cache reader with bounded local retention and explicit PRIVATE export. Targets/counters come from the SDK and local Lumina catalogs, not sightings or spawn scans. Acceptance/cache ownership/reset remain unverified; cleared flags never fabricate empty state.
+- Extend existing submarine retention with private workshop scoping and positive-only unlocked/explored sector evidence during naturally opened planning interfaces. Keep expected return separate from observed completion and current/planned routes separate from voyage history. No full unlock-set claim.
+- Fail these two native experiments closed outside the inspected game/SDK pair. Keep prior observations, opt-outs, bounded storage and ordinary sync; never open UIs, request game data or act on voyages.
+- Private copies warn about names/scope/activity and are separate from sanitized community voyage exports. No Hunt/submarine HTTP upload or server contract activation is introduced.
+- Preserve published 0.0.66/0.0.67, Party Finder, Beastmaster, market contribution defaults and previous performance work. Stable remains unchanged. See the 0.0.68 checklist and bounded Site handoff.
+
 ## 0.0.67 - Testing passive Gillions market contribution candidate
 
 - Continue the published 0.0.66 Testing ancestry, preserving Party Finder, local Beastmaster, performance corrections and submarine retention. Stable unchanged.

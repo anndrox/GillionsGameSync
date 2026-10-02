@@ -59,6 +59,7 @@ public sealed class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
     private readonly BeastmasterLocalView beastmasterLocal;
     private readonly SubmarineLocalView submarineLocal;
+    private readonly HuntBillLocalView huntLocal;
     private readonly ICondition marketConditions;
     private readonly MarketContributor marketContributor;
     private readonly MarketContributionSource marketSource;
@@ -145,6 +146,7 @@ public sealed class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         "Observed market contribution is on by default and has its own off switch. Only naturally received partial listings/recent sales go to compatible Gillions intake; no scanning or buyer/retainer identities. Existing pairing is authentication, not anonymous transport.",
         "Submarine voyage retention is a separate off-by-default local read-only test. Community preparation needs a second opt-in and explicit sanitized export; no submarine upload endpoint exists.",
+        "Hunt Bills and private submarine snapshots are Testing-only, off-by-default local experiments with manual PRIVATE export. Missing/unloaded data never means empty. They require the exact supported game/SDK build; no Hunt/submarine upload contract exists yet.",
         "Testing Party Finder contribution requires fresh Testing pairing with site permission and a separate local opt-in. Public listings go to Gillions HTTPS, not directly to xivpf.com or localhost.",
         "Gillions keeps only an expiring, runtime current-listing cache; the paired token is used only for Gillions Authorization, never listing data. Permission denials stay stopped across logout/reload until fresh pairing.",
 #else
@@ -222,6 +224,9 @@ public sealed class Plugin : IDalamudPlugin {
         configuration.SubmarineVoyages ??= new();
         submarineLocal = new SubmarineLocalView(pluginInterface, commands, framework, clientState, dataManager,
             addonLifecycle, configuration.SubmarineVoyages, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
+        configuration.HuntBills ??= new();
+        huntLocal = new HuntBillLocalView(pluginInterface, commands, framework, clientState, dataManager,
+            addonLifecycle, configuration.HuntBills, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
         this.marketConditions = marketConditions;
         marketContributor = new MarketContributor(RecordDiagnostic);
         marketContributor.SetEnabled(configuration.ContributeObservedMarketData);
@@ -1056,6 +1061,7 @@ public sealed class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         if (ImGui.Button("Beastmaster local test")) beastmasterLocal.Show();
         if (ImGui.Button("Submarine voyage retention")) submarineLocal.Show();
+        if (ImGui.Button("My Hunt Bills local test")) huntLocal.Show();
         ImGui.Separator();
         var marketEnabled = marketContributor.Enabled;
         if (ImGui.Checkbox("Contribute observed market data to Gillions", ref marketEnabled)) QueueUiAction(() => {
@@ -1450,6 +1456,7 @@ public sealed class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         beastmasterLocal.Dispose();
         submarineLocal.Dispose();
+        huntLocal.Dispose();
         marketSource.Dispose(); marketContributor.Dispose(); marketHttp.Dispose();
 #endif
         if (framework.IsInFrameworkUpdateThread) FlushConfigurationSave();
@@ -1487,6 +1494,7 @@ internal sealed record CapturedSnapshotBatch(string CharacterName, string Charac
 public sealed class PluginConfiguration : IPluginConfiguration {
 #if GILLIONS_TEST_BUILD
     public SubmarineVoyageRetention SubmarineVoyages { get; set; } = new();
+    public HuntBillRetention HuntBills { get; set; } = new();
     public bool ContributeObservedMarketData { get; set; } = true;
     // Enrollment stop only, never market payload or reporter identity.
     public string GillionsMarketBlockedGeneration { get; set; } = "";

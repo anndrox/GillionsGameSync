@@ -20,6 +20,10 @@ dotnet run --project $submarineTests -c Release -- --fixture (Join-Path $root 'a
 if ($LASTEXITCODE -ne 0) { throw 'Submarine retention/consent fixtures failed.' }
 python (Join-Path $root 'tests/submarine-contract-test.py')
 if ($LASTEXITCODE -ne 0) { throw 'Submarine source-boundary fixtures failed.' }
+dotnet run --project (Join-Path $root 'tests/GillionsGameSync.PersonalStateTests/GillionsGameSync.PersonalStateTests.csproj') -c Release -- --fixture (Join-Path $root 'artifacts/verification/personal-state/hunt-bills-v1.json')
+if ($LASTEXITCODE -ne 0) { throw 'Hunt/private-state/patch fixtures failed.' }
+python (Join-Path $root 'tests/personal-state-contract-test.py')
+if ($LASTEXITCODE -ne 0) { throw 'Personal-state source contracts failed.' }
 
 dotnet run --project (Join-Path $root 'tests/GillionsGameSync.MarketTests/GillionsGameSync.MarketTests.csproj') -c Release
 if ($LASTEXITCODE -ne 0) { throw 'Passive market event/transport fixtures failed.' }

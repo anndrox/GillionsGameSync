@@ -9,5 +9,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\SubmarineVoyages.cs" Link="SubmarineVoyages.cs" />
+    <Compile Include="..\..\PersonalObservationPolicy.cs" Link="PersonalObservationPolicy.cs" />
   </ItemGroup>
 </Project>

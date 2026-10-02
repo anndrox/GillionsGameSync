@@ -20,7 +20,13 @@ public sealed record SubmarineResult(string RewardAssociation, SubmarineSectorRe
     SubmarineReward[] VoyageRewards, uint? TotalExperience, string[] Limitations);
 public sealed record SubmarineSnapshot(string LocalSubmarineKey, byte Slot, string Name, uint RegisteredAtUnix,
     SubmarineBuild Build, uint CurrentExperience, uint NextRankExperience, uint ExpectedReturnUnix,
-    byte[] CurrentRoute, byte[]? PlannedRoute, DateTime ObservedAtUtc, string GameVersion, string CollectorVersion);
+    byte[] CurrentRoute, byte[]? PlannedRoute, DateTime ObservedAtUtc, string GameVersion, string CollectorVersion) {
+    // Additive private-state metadata. Old snapshots remain valid with nulls.
+    // Positive sector evidence only; missing/false native flags are not locks.
+    public string? LocalWorkshopKey { get; init; }
+    public byte[]? UnlockedSectorIds { get; init; }
+    public byte[]? ExploredSectorIds { get; init; }
+}
 
 public sealed class SubmarineCurrentObservation {
     public SubmarineSnapshot Snapshot { get; set; } = null!;
@@ -61,7 +67,7 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
     internal const int MaximumRecords = 400;
     internal const int MaximumCurrentSnapshots = 32;
     internal const int MaximumRecordBytes = 8192;
-    internal const int MaximumSnapshotBytes = 2048;
+    internal const int MaximumSnapshotBytes = 4096;
     internal const int MaximumRetainedBytes = 4 * 1024 * 1024;
     internal const string CollectorSchema = "submarine-observation-v1";
     private bool? supported;
@@ -100,22 +106,28 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
         } catch (Exception) { return false; } // Preserve malformed retained data; never repair/prune implicitly.
     }
     // Reservation bounds guarantee admitted anchors have room to become results.
-    // 400 * 8192 + 32 * 2048 + bounded metadata remains below 4 MiB.
+    // 400 * 8192 + 32 * 4096 + bounded metadata remains below 4 MiB.
     internal static int Size<T>(T row) => JsonSerializer.SerializeToUtf8Bytes(row).Length;
     internal static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
     internal static string SubmarineKey(ulong privateHouseId, byte slot, uint registration)
         => Hash(FormattableString.Invariant($"{privateHouseId}:{slot}:{registration}"));
     private static string Fingerprint<T>(T value) => Hash(JsonSerializer.Serialize(value));
     private static bool Route(byte[] route) => route.Length is >= 1 and <= 5 && route.All(id => id > 0) && route.Distinct().Count() == route.Length;
-    private static bool LocalKey(string value) => value.Length == 64 && value.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
-    private static bool Metadata(string value) => value.Length is >= 1 and <= 80 && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_');
+    private static bool LocalKey(string? value) => PersonalObservationCompatibility.Key(value);
+    private static bool Metadata(string? value) => PersonalObservationCompatibility.Metadata(value);
     private static bool UtcObservation(DateTime value) => value.Kind == DateTimeKind.Utc && value >= DateTime.UnixEpoch;
-    private static bool BuildValid(SubmarineBuild b) => b.Rank > 0 && b.Parts is { Hull: > 0, Stern: > 0, Bow: > 0, Bridge: > 0 } && b.Stats is not null;
-    private static bool SnapshotValid(SubmarineSnapshot s) => LocalKey(s.LocalSubmarineKey) && s.Slot < 4
-        && s.Name.Length <= 20 && s.RegisteredAtUnix > 0 && s.Build.Rank > 0
-        && s.Build.Parts is { Hull: > 0, Stern: > 0, Bow: > 0, Bridge: > 0 }
-        && s.CurrentRoute.Length <= 5 && (s.CurrentRoute.Length == 0 || Route(s.CurrentRoute))
+    private static bool BuildValid(SubmarineBuild b) => b.Rank > 0 && b.Parts is { Hull: > 0, Stern: > 0, Bow: > 0, Bridge: > 0 }
+        && b.Stats is not null && b.Stats.SpeedBase + b.Stats.SpeedBonus > 0 && b.Stats.RangeBase + b.Stats.RangeBonus > 0;
+    private static bool SectorEvidence(byte[]? values) => values is null || values.Length is >= 1 and <= 255
+        && values.All(v => v > 0) && values.Distinct().Count() == values.Length;
+    private static bool SnapshotValid(SubmarineSnapshot s) => s is not null && LocalKey(s.LocalSubmarineKey) && s.Slot < 4
+        && s.Name is { Length: > 0 and <= 20 } && !s.Name.Any(char.IsControl) && s.RegisteredAtUnix > 0
+        && s.Build is not null && BuildValid(s.Build)
+        && s.CurrentRoute is not null && s.CurrentRoute.Length <= 5 && (s.CurrentRoute.Length == 0 || Route(s.CurrentRoute))
         && (s.PlannedRoute is null || s.PlannedRoute.Length == 0 || Route(s.PlannedRoute))
+        && (s.LocalWorkshopKey is null || LocalKey(s.LocalWorkshopKey))
+        && SectorEvidence(s.UnlockedSectorIds) && SectorEvidence(s.ExploredSectorIds)
+        && (s.LocalWorkshopKey is not null || s.UnlockedSectorIds is null && s.ExploredSectorIds is null)
         && Metadata(s.GameVersion) && Metadata(s.CollectorVersion) && UtcObservation(s.ObservedAtUtc);
     private bool RejectCapacity() {
         Status = "Retention full or record too large: existing history preserved; new observations not admitted. No automatic deletion or upload.";
@@ -133,6 +145,14 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
         if (!Supported) { Status = "Retained format unsupported/oversized; preserved unchanged. Collection paused."; return false; }
         if (!SnapshotValid(snapshot)) { Status = "Partial workshop data; no valid or empty voyage inferred."; return false; }
         var current = store.Current.SingleOrDefault(row => row.Snapshot.LocalSubmarineKey == snapshot.LocalSubmarineKey);
+        if (current is not null && snapshot.ObservedAtUtc < current.Snapshot.ObservedAtUtc) return false;
+        if (current is not null && snapshot.LocalWorkshopKey is not null && current.Snapshot.LocalWorkshopKey == snapshot.LocalWorkshopKey) {
+            // Unavailable flags never erase previously observed positive evidence.
+            snapshot = snapshot with {
+                UnlockedSectorIds = MergeEvidence(current.Snapshot.UnlockedSectorIds, snapshot.UnlockedSectorIds),
+                ExploredSectorIds = MergeEvidence(current.Snapshot.ExploredSectorIds, snapshot.ExploredSectorIds)
+            };
+        }
         var key = snapshot.ExpectedReturnUnix > 0 && Route(snapshot.CurrentRoute)
             ? Hash($"{snapshot.LocalSubmarineKey}:{snapshot.ExpectedReturnUnix}") : null;
         var voyage = key is null ? null : store.Voyages.SingleOrDefault(row => row.LocalVoyageKey == key);
@@ -141,7 +161,8 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
         var next = new SubmarineCurrentObservation { Snapshot = snapshot, AnchoredVoyageKey = key ?? current?.AnchoredVoyageKey };
         if (Size(next) > MaximumSnapshotBytes) return RejectCapacity();
         bool changed = current is null || Fingerprint(current.Snapshot with { ObservedAtUtc = DateTime.MinValue })
-            != Fingerprint(snapshot with { ObservedAtUtc = DateTime.MinValue }) || current.AnchoredVoyageKey != next.AnchoredVoyageKey;
+            != Fingerprint(snapshot with { ObservedAtUtc = DateTime.MinValue }) || current.AnchoredVoyageKey != next.AnchoredVoyageKey
+            || snapshot.ObservedAtUtc - current.Snapshot.ObservedAtUtc >= TimeSpan.FromMinutes(1);
         if (changed) {
             if (current is not null) store.Current.Remove(current);
             store.Current.Add(next);
@@ -164,6 +185,31 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
         Status = store.CapacityReached ? "Retention limit reached; existing admitted voyages can still receive results. New history is paused."
             : "Loaded snapshot retained. Expected return is not observed completion; departure time unavailable.";
         return changed;
+    }
+    private static byte[]? MergeEvidence(byte[]? prior, byte[]? next) => prior is null ? next
+        : next is null ? prior : prior.Concat(next).Distinct().Order().ToArray();
+    internal string PreparePersonalExport(string workshopKey) {
+        if (!Supported || !store.LocalRetentionEnabled || !LocalKey(workshopKey))
+            throw new InvalidOperationException("Personal export unavailable.");
+        var snapshots = store.Current.Where(c => c.Snapshot.LocalWorkshopKey == workshopKey).Select(c => c.Snapshot)
+            .GroupBy(s => s.Slot).Select(g => g.OrderBy(s => s.ObservedAtUtc).ThenBy(s => s.RegisteredAtUnix).Last()).ToArray();
+        if (snapshots.Length == 0) throw new InvalidOperationException("No scoped workshop observation.");
+        return JsonSerializer.Serialize(new {
+            schemaVersion = 1, collectorSchema = "submarine-personal-v1", uploadState = "local-only-no-server-contract",
+            workshopScope = workshopKey, scopeEvidence = "observed-workshop-not-fc-membership-proof",
+            completeness = "positive-observations-only", slots = snapshots.OrderBy(s => s.Slot).Select(s => new {
+                s.Slot, s.Name, s.RegisteredAtUnix, s.Build, s.CurrentExperience, s.NextRankExperience,
+                s.ObservedAtUtc, s.GameVersion, s.CollectorVersion,
+                expectedReturnAtUtc = s.ExpectedReturnUnix > 0 ? (DateTime?)DateTimeOffset.FromUnixTimeSeconds(s.ExpectedReturnUnix).UtcDateTime : null,
+                departureAtUtc = (DateTime?)null,
+                voyageState = s.ExpectedReturnUnix == 0 ? "unavailable" : s.ExpectedReturnUnix > new DateTimeOffset(s.ObservedAtUtc).ToUnixTimeSeconds()
+                    ? "expected-in-flight" : "expected-return-due-not-observed-completion",
+                orderedSectorIds = s.CurrentRoute.Length > 0 ? s.CurrentRoute : null, plannedSectorIds = s.PlannedRoute,
+                unlockedSectorIds = s.UnlockedSectorIds, exploredSectorIds = s.ExploredSectorIds,
+                sectorFreshness = "retained-positive-history-not-current-lock-state",
+                sectorCompleteness = s.UnlockedSectorIds is null && s.ExploredSectorIds is null ? "unavailable" : "positive-observations-only"
+            })
+        }, PersonalObservationCompatibility.Json);
     }
     private static bool ResultValid(SubmarineResult r) => r.RewardAssociation is "per-sector" or "voyage-only"
         && r.Sectors.Length <= 5 && r.VoyageRewards.Length <= 10 && r.Limitations.Length <= 8

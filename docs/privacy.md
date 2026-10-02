@@ -1,5 +1,39 @@
 # Privacy
 
+## Testing 0.0.68 personal observation experiments
+
+Hunt local retention defaults OFF independently of pairing/ordinary sync.
+It stores at most 16 own-character hashed partitions, 22 latest positive bill
+observations per partition, below 256 KiB in existing Testing configuration.
+Only the logged-in player's Content ID is read for local scoping; raw ID is not
+retained or exported. Hashing is not anonymization. No other player's ID,
+sighting/radar, chat, spawn scan or Hunt upload is introduced.
+
+Submarine snapshots now also hold a private hashed workshop scope and optional
+positive unlocked/explored sector evidence. They still use the same existing
+retained store, not another database/file. Unavailable state never erases history.
+Both readers are event-only, throttled to at most once/second, patch-gated, and
+require explicit local opt-in. Global Automatic sync does not govern these
+separate local tests; disable their local controls to stop reads.
+
+**PRIVATE export is not community contribution.** It requires explicit prepare
+and copy and contains gameplay/activity facts. Submarine private export includes
+names, slot, registration, hashed workshop scope and route/return/progression.
+Hunt private export excludes character name/ID/hash, but contains assigned-target
+cache/counter observations and times. It is scoped to the active character;
+submarine export requires a workshop verified in the current territory/session.
+Opt-out/session changes clear prepared copies. An already copied clipboard or
+shared file cannot be recalled. Copy only if permitted, to a trusted recipient.
+Never share the credential-bearing full configuration. Aggregate diagnostics
+contain no names, IDs, routes, counters, credentials or raw exception text.
+
+The existing sanitized voyage-results export excludes all newly added private
+fields and remains separately consented. Neither private nor community export
+uploads. No new credential, receiver, public FC telemetry or enrollment expansion
+exists. Future private sync requires explicit consent, Testing/authenticated
+admission, account isolation and compatibility review; see the
+[exact draft and limitations](contracts/personal-observations-v1.md).
+
 Gillions Game Sync is opt-in and account-linked. Automatic sync is a global switch for its nine supported ordinary categories, not a per-category selection. Manual sync requests one collection of available supported data. Paired startup and successful pairing perform one character sync and presence request even when Automatic sync is off. Website item links have a separate switch, enabled by default, and require a valid pairing and logged-in character.
 
 ## Connection and ownership

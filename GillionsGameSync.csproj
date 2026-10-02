@@ -43,7 +43,7 @@
   <!-- A separate Dalamud identity keeps the test repository from updating or
        sharing configuration with the stable member plugin. -->
   <PropertyGroup Condition="'$(GillionsTestBuild)' == 'true'">
-    <Version>0.0.67</Version>
+    <Version>0.0.68</Version>
     <AssemblyName>GillionsGameSyncTest</AssemblyName>
     <Name>Gillions Game Sync Testing</Name>
     <Punchline>Unreleased Gillions sync test build.</Punchline>
