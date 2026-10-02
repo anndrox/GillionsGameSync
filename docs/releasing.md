@@ -1,5 +1,34 @@
 # Releasing
 
+## Fixed Testing update feed
+
+Owner direction establishes this existing URL as the rolling Testing feed:
+
+`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
+
+The historical tag in the URL does not pin the advertised version. Authorized
+Testing successors replace this JSON with their reviewed manifest, retaining
+`GillionsGameSyncTest` identity. ZIP links point to the actual successor version;
+do not rename a new binary to pretend it is 0.0.64. No per-release repository-entry
+change is required. This explicitly mutable channel pointer is the exception to
+the versioned-artifact preservation rule below; Stable is unaffected.
+
+After required review and successor publication, verify the published versioned
+manifest, ZIP checksum and embedded identity first. Then use the existing GitHub
+tool (replace X.Y.Z with the approved published Testing successor):
+
+```text
+gh release upload v0.0.64-testing artifacts/package/testing/X.Y.Z/GillionsGameSyncTesting.json --repo anndrox/GillionsGameSync --clobber
+```
+
+Replace only `GillionsGameSyncTesting.json`, not a ZIP or tag. Before replacement,
+capture the current feed digest/version. After replacement, anonymously fetch
+the exact fixed URL, check the advertised identity/version/all download links,
+download its update ZIP and verify reviewed checksum/embedded version. Record
+the changed pointer under [Testing feed evidence](../data/releases/testing-update-feed.json).
+Publication is incomplete until this existing update URL resolves to the intended
+successor. Do not advance it to a prepared/unpublished or unapproved candidate.
+
 ## Testing 0.0.66 submarine addition
 
 Use the existing separate GitHub Testing prerelease/manual JSON path, not the

@@ -65,7 +65,7 @@ custom plugin repositories:
 
 This installs the separate **Gillions Game Sync Testing** identity. It does not
 replace the stable plugin or update the existing `gillions.app` testing feed.
-Testing `0.0.68` continues published 0.0.66/0.0.67 and adds local Hunt Bill observations and private submarine snapshots. Replace the previous manual entry after successor publication is confirmed, update to `0.0.68.0`, and follow the [live checklist and diagnostics](docs/releases/testing-0.0.68.md). Do not downgrade or delete configuration. Ordinary HTTPS/PF pairing and consent are unchanged.
+Testing `0.0.68` continues published 0.0.66/0.0.67 and adds local Hunt Bill observations and private submarine snapshots. Keep the existing custom-repository URL `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`: it is the rolling Testing update feed, despite its historical tag name. Refresh Dalamud's plugin list and update to `0.0.68.0`; do not replace the repository entry for each release. Follow the [live checklist and diagnostics](docs/releases/testing-0.0.68.md). Do not downgrade or delete configuration. Ordinary HTTPS/PF pairing and consent are unchanged.
 
 Open `/gillionssubs` or **Submarine voyage retention**. Use workshop interfaces
 manually; no submarine control, polling or third-party plugin is involved. Local

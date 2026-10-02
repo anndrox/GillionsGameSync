@@ -21,6 +21,7 @@
   "manifestSha256": "a9d717b2ca04813952bc97a6d7a0ea5ab3f20d530bcfbb65ed1d499284f4747e",
   "assemblySha256": "7c719e2a394b0531fa0777b55ec733d7c5017e392fb204ad10aafd839ec9475d",
   "feed": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.68-testing/GillionsGameSyncTesting.json",
+  "updateFeed": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json",
   "download": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.68-testing/GillionsGameSyncTesting-0.0.68.zip",
   "release": "https://github.com/anndrox/GillionsGameSync/releases/tag/v0.0.68-testing",
   "notes": "docs/releases/testing-0.0.68.md",

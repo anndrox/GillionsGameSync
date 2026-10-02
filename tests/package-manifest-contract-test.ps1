@@ -37,6 +37,15 @@ foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate'
   Assert-Condition ($manualTesting[$field] -ceq $manualTestingUrl) "Manual testing candidate $field must resolve to its immutable 0.0.68 GitHub prerelease asset when published."
 }
 
+$fixedTestingFeed = 'https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json'
+$feedEvidence = [IO.File]::ReadAllText((Join-Path $root 'data/releases/testing-update-feed.json')) | ConvertFrom-Json -AsHashtable
+Assert-Condition ($feedEvidence.feed -ceq $fixedTestingFeed) 'Testing update URL must remain the owner-selected existing repository URL.'
+Assert-Condition ($feedEvidence.version -ceq $manualTesting.AssemblyVersion -and $feedEvidence.internalName -ceq $manualTesting.InternalName -and $feedEvidence.download -ceq $manualTestingUrl) 'Fixed feed evidence must agree with the reviewed successor manifest.'
+$readme = [IO.File]::ReadAllText((Join-Path $root 'README.md'))
+$releasing = [IO.File]::ReadAllText((Join-Path $root 'docs/releasing.md'))
+Assert-Condition ($readme.Contains($fixedTestingFeed) -and $releasing.Contains($fixedTestingFeed)) 'Installation and publication guidance must retain the fixed Testing update URL.'
+Assert-Condition ($releasing.Contains('gh release upload v0.0.64-testing artifacts/package/testing/X.Y.Z/GillionsGameSyncTesting.json') -and $releasing.Contains('--clobber')) 'Testing publication must advance the existing manifest, not require a new repository entry.'
+
 $publisher = [IO.File]::ReadAllText((Join-Path $root 'scripts/publish-stable-github-release.ps1'))
 Assert-Condition ($publisher.Contains('gh release create')) 'Stable publication no longer creates a GitHub Release.'
 Assert-Condition ($publisher.Contains('git -C $root push upstream $tag')) 'Stable publication no longer pushes the reviewed release tag to GitHub.'

@@ -8,10 +8,12 @@ Preparation, public availability and live-game success are distinct.
 
 Published manual Dalamud repository:
 
-`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.68-testing/GillionsGameSyncTesting.json`
+`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
 
-Replace earlier manual Testing entry, not Stable. Preserve configuration; do not
-downgrade. Disable Stable while comparing ordinary sync to avoid duplicates;
+Keep this existing entry: it is the rolling Testing update feed despite the
+historical tag name. It now advertises 0.0.68.0; refresh Dalamud's list and update,
+without changing repository URLs. The 0.0.68 release also carries its versioned
+manifest. Preserve configuration; do not downgrade. Disable Stable while comparing ordinary sync to avoid duplicates;
 this release does not automatically change it.
 
 ## Flags
