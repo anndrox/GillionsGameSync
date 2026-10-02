@@ -3,10 +3,10 @@
 Testing only, separate `GillionsGameSyncTest` product, Dalamud API 15.
 No Stable, Site, server, infrastructure, market runtime or Wardrobe changes.
 Published 0.0.66/0.0.67 remain unchanged. See [exact draft and Site handoff](../contracts/personal-observations-v1.md).
-Source/hash/publication evidence lives separately under data/releases.
+Source/hash/publication evidence: [Testing 0.0.68 release record](../../data/releases/testing-0.0.68.json).
 Preparation, public availability and live-game success are distinct.
 
-Manual Dalamud repository after publication:
+Published manual Dalamud repository:
 
 `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.68-testing/GillionsGameSyncTesting.json`
 
@@ -92,7 +92,7 @@ and successor Testing tag/assets are targets. Existing worktree reused.
 | E server accepts | MISSING | MISSING |
 | F server persists | MISSING; plugin local persistence proven separately | MISSING; plugin local persistence proven separately |
 | G personal Web/API | MISSING; synthetic/reference preview exists | MISSING; synthetic/reference preview exists |
-| H published | MISSING in 0.0.67; verify successor after publication | IMPLEMENTED + PROVEN local reader in 0.0.67; verify successor private support after publication |
+| H published | MISSING in 0.0.67 / IMPLEMENTED + PROVEN package presence in 0.0.68 | IMPLEMENTED + PROVEN local reader in 0.0.67 / private support package presence in 0.0.68 |
 | I live validation | IMPLEMENTED BUT UNPROVEN | IMPLEMENTED BUT UNPROVEN; requires eligible FC tester |
 
 Departure/verified bill reset timing are UNSUPPORTED BY CURRENT GAME STATE

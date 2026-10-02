@@ -1,0 +1,94 @@
+{
+  "channel": "testing",
+  "version": "0.0.68",
+  "assemblyVersion": "0.0.68.0",
+  "status": "published-github-prerelease",
+  "repository": "https://github.com/anndrox/GillionsGameSync",
+  "branch": "codex/game-sync/beastmaster-party-finder-testing",
+  "internalName": "GillionsGameSyncTest",
+  "dalamudApiLevel": 15,
+  "startingCommit": "9821c92df8f51c9fef913a9e8294fd6ed3b4469c",
+  "implementationCommit": "ee1c5bcd1372ab69c85cf2db38ea7c3c96e59168",
+  "correctionCommits": ["f55a0a300ab007071caa60beb04d7bb14514a3f4"],
+  "sourceCommit": "f55a0a300ab007071caa60beb04d7bb14514a3f4",
+  "sourceTag": "v0.0.68-testing",
+  "securityAcceptedCommit": "f55a0a300ab007071caa60beb04d7bb14514a3f4",
+  "securityReview": "Independent review ACCEPTED after coherent correction and affected-surface re-review. Current anchor admission and result association enforce retained identity, same-submarine ownership, build chronology, route/reward/EXP coherence and export revalidation without repairing or deleting malformed history. Private/community disclosure distinction corrected. Reviewer independently reran 539 submarine checks and verified corrected package/manifest hashes. No remaining BLOCKER, FOLLOW-UP or OPTIONAL findings; unchanged Hunt/consent/patch/no-transport acceptance carries forward. No live-game or server intake claim.",
+  "publishedAtInput": 1790980718,
+  "publishedAt": "2026-10-02T22:55:53Z",
+  "archive": "GillionsGameSyncTesting-0.0.68.zip",
+  "archiveSha256": "90b8e27aa8da1a1666645b44bbf04cc3e17a277f4cc5de13a27ec65eeca93332",
+  "manifestSha256": "a9d717b2ca04813952bc97a6d7a0ea5ab3f20d530bcfbb65ed1d499284f4747e",
+  "assemblySha256": "7c719e2a394b0531fa0777b55ec733d7c5017e392fb204ad10aafd839ec9475d",
+  "feed": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.68-testing/GillionsGameSyncTesting.json",
+  "download": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.68-testing/GillionsGameSyncTesting-0.0.68.zip",
+  "release": "https://github.com/anndrox/GillionsGameSync/releases/tag/v0.0.68-testing",
+  "notes": "docs/releases/testing-0.0.68.md",
+  "contract": "docs/contracts/personal-observations-v1.md",
+  "examples": ["docs/examples/hunt-bills-v1.json", "docs/examples/submarine-personal-v1.json"],
+  "featureFlags": {
+    "huntLocalRetentionDefault": false,
+    "submarineLocalRetentionDefault": false,
+    "submarineCommunityPreparationDefault": false,
+    "beastmasterSamplingAfterLoad": false,
+    "partyFinderLocalContributionDefault": false,
+    "marketContributionDefault": true,
+    "ordinarySyncAndHttpsDefaults": "unchanged",
+    "huntOrSubmarineTransport": "absent"
+  },
+  "nativeCompatibility": {
+    "gameVersion": "2026.09.15.0000.0000",
+    "clientStructsAssemblyVersion": "7.56.2.9136",
+    "otherPairs": "Stop new reads before native access; preserve retention. Matching inspected versions is not live layout/freshness proof."
+  },
+  "completedValidation": [
+    "Exact corrected candidate scripts/verify.ps1 passed",
+    "539 submarine managed retention/identity/association/route/rewards/EXP/privacy/overflow checks passed",
+    "55 Hunt/private-state/patch fixtures passed; partial/unknown/unavailable/reset-not-inferred/opt-out/isolation covered",
+    "268 prior regression checks and 224 market checks passed",
+    "Party Finder behavior/session/auth/retry contracts, Beastmaster freshness, ordinary sync and prior performance contracts passed",
+    "Stable and Testing actual SDK Release builds with warnings as errors: zero warnings and errors",
+    "Actual Dalamud configuration serializer: 12 fixtures per channel; final packaged Testing DLL also passed 12 fixtures",
+    "Offline installed game catalogs verified Hunt order/category/subrow references and exact version; no native game collection",
+    "Anonymous published JSON/ZIP downloads matched reviewed artifact hashes; GitHub asset digests also matched",
+    "Three-file ZIP, embedded 0.0.68.0 Testing identity/API 15, DLL feature metadata and assembly hash passed; private path/IP scan passed",
+    "Market v1 contract and PF/Beastmaster/native snapshot source surfaces unchanged from starting candidate; no new direct Universalis uploader"
+  ],
+  "retention": {
+    "persistence": "Existing Testing Dalamud configuration only",
+    "hunt": {
+      "schemaVersion": 1,
+      "maximumCharacterPartitions": 16,
+      "maximumBillTypesPerCharacter": 22,
+      "maximumComponentBytes": 262144,
+      "semantics": "Latest positive observation per bill type; no history-counting, reset inference or absence deletion",
+      "overflow": "Preserve admitted partitions; reject new character with sticky warning; bounded existing-character updates remain possible"
+    },
+    "submarine": {
+      "schemaVersion": 1,
+      "maximumVoyageRecords": 400,
+      "maximumCurrentSnapshots": 32,
+      "maximumReservedComponentBytes": 4194304,
+      "overflow": "Preserve history; warn and pause new identities; keep reserved completion space for existing anchors. No pruning, eviction or export-based capacity release"
+    },
+    "unavailableOrMalformed": "Unavailable preserves retained observations. Unsupported/malformed storage is preserved and admission/export fails closed; no implicit repair. No unsent contribution journal or server ACK exists."
+  },
+  "predecessorsUnchanged": {
+    "0.0.66": {
+      "sourceCommit": "70cf56516770189ccb7ae831e7c22107f524036a",
+      "archiveSha256": "89103fc4f75b5acb706c19e426da35357929e3aa379edd15780c4d21d553fc64"
+    },
+    "0.0.67": {
+      "sourceCommit": "9821c92df8f51c9fef913a9e8294fd6ed3b4469c",
+      "archiveSha256": "3ab1409a84918aa19e2ef88d80bb413455cdfede8eef7d362a7c488ea753547a"
+    }
+  },
+  "runtimeValidation": "No live game session. Hunt cache ownership/current acceptance/reset and native field accuracy, submarine selected-agent/slot ownership/current workshop freshness, permissions, exact live rewards and frame/save costs remain unproven. Published code presence and fixtures do not prove live collection.",
+  "siteSourceAudited": "4daedf6bfb4c40c252785b8c96ab24b3250a9f95",
+  "siteRequirements": "Bounded TEST-only authenticated private hunt_bills/submarine_personal proposal through existing sync envelope, versioned permission/compatibility, strict validation, immutable nonce receipts, account isolation and provisional private storage/read labels. Agree activation before collector transport wiring; current plugin sends neither. Trusted HTTPS TEST origin required; plaintext IP is rejected. Static reference/planner truth stays separate. Exact handoff in personal-observations-v1.md.",
+  "productionEffects": "Only authorized Testing task-branch pushes, successor tag and GitHub prerelease assets. No Stable/main integration, Site source change, server deployment/intake, production effect, Wardrobe/Market runtime change, game write, radar or hidden game request.",
+  "scopeExpansion": "None beyond bounded Hunts/private submarine observation, existing-history validation corrections, privacy review, documentation and authorized Testing publication.",
+  "endState": "BLOCKED — SITE/SERVER HANDOFF REQUIRED",
+  "nextAction": "Owner performs the one local live checklist; eligible FC tester required for submarine cases. Site implements/reviews agreed TEST private intake and trusted HTTPS compatibility; Native Collector subsequently wires and jointly validates a bounded successor. No current synchronized preview replacement claim.",
+  "rollback": "Disable corresponding retention or Testing plugin, preserve configuration and use forward corrections. Do not downgrade or replace published immutable assets."
+}
