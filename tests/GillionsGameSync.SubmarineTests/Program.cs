@@ -168,6 +168,59 @@ foreach (var invalidTime in new[] { DateTime.SpecifyKind(now, DateTimeKind.Local
     }
 }
 
+// Complete loaded relationship validation, not just field syntax.
+SubmarineVoyageRetention CloneValid() => JsonSerializer.Deserialize<SubmarineVoyageRetention>(JsonSerializer.Serialize(store))!;
+var corruptions = new Action<SubmarineVoyageRetention>[] {
+    s => s.Current[0].AnchoredVoyageKey = "malformed",
+    s => s.Current[0].AnchoredVoyageKey = new string('f', 64),
+    s => {
+        var foreign = JsonSerializer.Deserialize<RetainedSubmarineVoyage>(JsonSerializer.Serialize(s.Voyages[0]))!;
+        foreign.LocalSubmarineKey = new string('b', 64);
+        foreign.LocalVoyageKey = SubmarineVoyageRetentionPolicy.Hash($"{foreign.LocalSubmarineKey}:{foreign.ExpectedReturnUnix}");
+        foreign.ObservationId = Guid.NewGuid().ToString("N");
+        s.Voyages.Add(foreign); s.Current[0].AnchoredVoyageKey = foreign.LocalVoyageKey;
+    },
+    s => { s.Voyages[0].LocalVoyageKey = new string('c', 64); s.Current[0].AnchoredVoyageKey = s.Voyages[0].LocalVoyageKey; },
+    s => s.Voyages[0].Result = s.Voyages[0].Result! with { Sectors = [s.Voyages[0].Result!.Sectors[0] with { SectorId = 3 }, s.Voyages[0].Result!.Sectors[1]] },
+    s => s.Voyages[0].Result = s.Voyages[0].Result! with { VoyageRewards = [new(1000, 999, null), new(1001, 4, null)] },
+    s => s.Voyages[0].Result = s.Voyages[0].Result! with { TotalExperience = 301 },
+    s => s.Voyages[0].Result = s.Voyages[0].Result! with { Sectors = [null!] },
+    s => s.Voyages[0].Result = s.Voyages[0].Result! with { VoyageRewards = null! },
+    s => s.Voyages[0].BuildEvidence = "unavailable-not-observed-in-flight",
+    s => s.Voyages[0].ResultsObservedAtUtc = now.AddSeconds(-1),
+    s => s.Voyages[0].ResultsObservedAtUtc = now.AddSeconds(1),
+};
+foreach (var corrupt in corruptions) {
+    var invalid = CloneValid(); corrupt(invalid);
+    var bytes = JsonSerializer.Serialize(invalid);
+    var invalidPolicy = new SubmarineVoyageRetentionPolicy(invalid);
+    Check(!invalidPolicy.Supported, "Inconsistent retained relation admitted on reload.");
+    refused = false; try { invalidPolicy.PrepareExport(); } catch (InvalidOperationException) { refused = true; }
+    Check(refused && JsonSerializer.Serialize(invalid) == bytes, "Inconsistent retained relation exported or repaired.");
+    Check(!invalidPolicy.ObserveSnapshot(Snapshot(unix + 10000))
+        && !invalidPolicy.ObserveResult(key, build, Result(), returned, "synthetic", "synthetic")
+        && JsonSerializer.Serialize(invalid) == bytes, "Malformed history changed by collection.");
+}
+var activeMutation = CloneValid(); var activePolicy = new SubmarineVoyageRetentionPolicy(activeMutation);
+var badUnlinked = JsonSerializer.Deserialize<SubmarineVoyageRetention>(JsonSerializer.Serialize(orphan))!;
+badUnlinked.Voyages[0].LocalVoyageKey = new string('e', 64);
+Check(!new SubmarineVoyageRetentionPolicy(badUnlinked).Supported, "Invalid unlinked fingerprint identity admitted.");
+Check(activePolicy.Supported, "Valid relation baseline rejected.");
+activeMutation.Current[0].AnchoredVoyageKey = new string('f', 64);
+var mutatedBytes = JsonSerializer.Serialize(activeMutation);
+Check(!activePolicy.ObserveResult(key, build, Result(), returned, "synthetic", "synthetic")
+    && JsonSerializer.Serialize(activeMutation) == mutatedBytes, "Cached validation bypassed association guard.");
+var exportMutation = CloneValid(); var exportPolicy = new SubmarineVoyageRetentionPolicy(exportMutation);
+Check(exportPolicy.Supported, "Valid export baseline rejected.");
+exportMutation.Voyages[0].Result = exportMutation.Voyages[0].Result! with { TotalExperience = 999 };
+refused = false; try { exportPolicy.PrepareExport(); } catch (InvalidOperationException) { refused = true; }
+Check(refused, "Cached validation allowed mutated history export.");
+var badAdmission = Enabled(true); var badAdmissionPolicy = new SubmarineVoyageRetentionPolicy(badAdmission);
+badAdmissionPolicy.ObserveSnapshot(Snapshot(unix - 1));
+var admittedBefore = JsonSerializer.Serialize(badAdmission);
+Check(!badAdmissionPolicy.ObserveResult(key, build, Result() with { VoyageRewards = [new(1000, 3, null)] }, now, "synthetic", "synthetic")
+    && JsonSerializer.Serialize(badAdmission) == admittedBefore, "Bad aggregate admitted through direct result path.");
+
 var workshopKey = SubmarineVoyageRetentionPolicy.Hash("synthetic-workshop");
 var personal = Enabled(); var personalPolicy = new SubmarineVoyageRetentionPolicy(personal);
 var personalSnapshot = Snapshot(unix + 100) with { LocalWorkshopKey = workshopKey, UnlockedSectorIds = [1, 2], ExploredSectorIds = [1] };

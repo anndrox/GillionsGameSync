@@ -27,7 +27,7 @@ require live acceptance. Missing/partial data never means empty or clears histor
 
 | Field | Evidence and limitation |
 | --- | --- |
-| Identity/name/rank | Local workshop slot, registration timestamp, native bounded UTF-8 name and rank. No player or FC account identifiers are read. Name stays local. |
+| Identity/name/rank | Local workshop slot, registration timestamp, native bounded UTF-8 name and rank. No player or FC account identifiers are read. Name stays out of diagnostics/sanitized community export; explicit PRIVATE export is separately described. |
 | Hull/stern/bow/bridge | Native `SubmarinePart` row IDs; catalog-validated. These are part row IDs, not item IDs. |
 | Stats | Native surveillance, retrieval, speed, range and favor base/bonus fields, plus log speed. Stored as observed, not recalculated. |
 | Current route | Ordered nonzero `CurrentExplorationPoints`, at most five distinct catalog sectors. Zero/invalid data is unavailable, not an empty voyage. |
@@ -85,7 +85,7 @@ Root `SubmarineVoyageRetention`:
 Private submarine key is SHA-256 of workshop house identity + slot + registration
 timestamp. Raw house identity is transient and never retained/exported. Hashing
 is local scoping, **not anonymization for publication**; the hash, name, slot and
-registration are excluded from exports.
+registration are excluded from sanitized community exports, not the new explicit PRIVATE personal export.
 
 Anchored voyage key is SHA-256(private submarine key + expected return timestamp).
 Route is deliberately not part of the identity: a changed route for the same
@@ -100,6 +100,13 @@ routes/in-flight builds/results flag the existing record and preserve the origin
 conflicted records cannot enter countable exports. Only identical aggregate
 voyage-only results may gain stronger verified sector attribution; this does not
 replace observation-time consent, first result time or the original build.
+
+Reload and community export validate deterministic linked-voyage identity,
+current-anchor existence/ownership, build evidence, result chronology, route
+membership, aggregate reward totals and total experience coherence. Dangling,
+foreign or inconsistent retained relationships fail closed without repair or
+history deletion. Result association separately rechecks anchor ownership;
+successful initial validation is not permission to trust a later mutated link.
 
 Planning metadata is normalized before the single snapshot admission per slot
 and interface event. Identical refreshes within 60 seconds do not mutate retained

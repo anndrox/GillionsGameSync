@@ -89,22 +89,43 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
                 && store.Current.Count <= MaximumCurrentSnapshots && store.Voyages.Count <= MaximumRecords
                 && store.Current.All(row => row?.Snapshot is not null && SnapshotValid(row.Snapshot) && Size(row) <= MaximumSnapshotBytes)
                 && store.Current.Select(row => row.Snapshot.LocalSubmarineKey).Distinct().Count() == store.Current.Count
-                && store.Voyages.All(row => row is not null && LocalKey(row.LocalVoyageKey) && LocalKey(row.LocalSubmarineKey)
-                    && Guid.TryParseExact(row.ObservationId, "N", out _) && row.OrderedRoute is not null
-                    && UtcObservation(row.FirstObservedAtUtc)
-                    && (row.ResultsObservedAtUtc is null || UtcObservation(row.ResultsObservedAtUtc.Value))
-                    && (!row.LinkedToVoyage || row.ExpectedReturnUnix > 0 && Route(row.OrderedRoute))
-                    && (row.BuildEvidence is "unavailable-not-observed-in-flight" or "observed-while-in-flight-not-dispatch-proof")
-                    && Metadata(row.GameVersion) && Metadata(row.CollectorVersion)
-                    && (row.VoyageBuild is null || BuildValid(row.VoyageBuild))
-                    && (row.Result is null || ResultValid(row.Result) && row.ResultsObservedAtUtc is not null
-                        && row.ResultTimeBuild is not null && BuildValid(row.ResultTimeBuild)
-                        && Metadata(row.ResultGameVersion!) && Metadata(row.ResultCollectorVersion!))
-                    && Size(row) <= MaximumRecordBytes)
+                && store.Voyages.All(RecordValid)
                 && store.Voyages.Select(row => row.LocalVoyageKey).Distinct().Count() == store.Voyages.Count
-                && store.Voyages.Select(row => row.ObservationId).Distinct().Count() == store.Voyages.Count;
+                && store.Voyages.Select(row => row.ObservationId).Distinct().Count() == store.Voyages.Count
+                && store.Current.All(CurrentAnchorValid);
         } catch (Exception) { return false; } // Preserve malformed retained data; never repair/prune implicitly.
     }
+    private bool CurrentAnchorValid(SubmarineCurrentObservation current) {
+        if (current.AnchoredVoyageKey is null) return current.Snapshot.ExpectedReturnUnix == 0 || current.Snapshot.CurrentRoute.Length == 0;
+        if (!LocalKey(current.AnchoredVoyageKey)) return false;
+        var anchor = store.Voyages.SingleOrDefault(v => v.LocalVoyageKey == current.AnchoredVoyageKey);
+        return anchor is { LinkedToVoyage: true } && RecordValid(anchor) && anchor.LocalSubmarineKey == current.Snapshot.LocalSubmarineKey
+            && (current.Snapshot.ExpectedReturnUnix == 0 || current.Snapshot.CurrentRoute.Length == 0
+                || anchor.ExpectedReturnUnix == current.Snapshot.ExpectedReturnUnix
+                    && (anchor.ConflictingObservation || anchor.OrderedRoute.SequenceEqual(current.Snapshot.CurrentRoute)));
+    }
+    private static string VoyageKey(string submarineKey, uint returnAt) => Hash(FormattableString.Invariant($"{submarineKey}:{returnAt}"));
+    private static bool RecordValid(RetainedSubmarineVoyage row) => row is not null
+        && LocalKey(row.LocalVoyageKey) && LocalKey(row.LocalSubmarineKey)
+        && Guid.TryParseExact(row.ObservationId, "N", out _) && row.OrderedRoute is not null
+        && UtcObservation(row.FirstObservedAtUtc)
+        && (row.ResultsObservedAtUtc is null || UtcObservation(row.ResultsObservedAtUtc.Value)
+            && row.ResultsObservedAtUtc >= row.FirstObservedAtUtc)
+        && Metadata(row.GameVersion) && Metadata(row.CollectorVersion)
+        && (row.LinkedToVoyage ? row.ExpectedReturnUnix > 0 && Route(row.OrderedRoute)
+            && row.LocalVoyageKey == VoyageKey(row.LocalSubmarineKey, row.ExpectedReturnUnix.Value)
+            : row.ExpectedReturnUnix is null && row.OrderedRoute.Length == 0 && row.VoyageBuild is null
+                && row.Result is not null && row.LocalVoyageKey == Hash($"unlinked:{row.LocalSubmarineKey}:{Fingerprint(row.Result)}"))
+        && (row.VoyageBuild is null ? row.BuildEvidence == "unavailable-not-observed-in-flight"
+            : BuildValid(row.VoyageBuild) && row.LinkedToVoyage
+                && row.BuildEvidence == "observed-while-in-flight-not-dispatch-proof"
+                && row.ExpectedReturnUnix > new DateTimeOffset(row.FirstObservedAtUtc).ToUnixTimeSeconds())
+        && (row.Result is null ? row.ResultsObservedAtUtc is null && row.ResultTimeBuild is null
+            : ResultCoherent(row.Result, row.LinkedToVoyage ? row.OrderedRoute : null)
+                && row.ResultsObservedAtUtc is not null && row.ResultTimeBuild is not null && BuildValid(row.ResultTimeBuild)
+                && Metadata(row.ResultGameVersion) && Metadata(row.ResultCollectorVersion)
+                && (!row.LinkedToVoyage || row.ExpectedReturnUnix <= new DateTimeOffset(row.ResultsObservedAtUtc.Value).ToUnixTimeSeconds() + 30))
+        && Size(row) <= MaximumRecordBytes;
     // Reservation bounds guarantee admitted anchors have room to become results.
     // 400 * 8192 + 32 * 4096 + bounded metadata remains below 4 MiB.
     internal static int Size<T>(T row) => JsonSerializer.SerializeToUtf8Bytes(row).Length;
@@ -145,6 +166,9 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
         if (!Supported) { Status = "Retained format unsupported/oversized; preserved unchanged. Collection paused."; return false; }
         if (!SnapshotValid(snapshot)) { Status = "Partial workshop data; no valid or empty voyage inferred."; return false; }
         var current = store.Current.SingleOrDefault(row => row.Snapshot.LocalSubmarineKey == snapshot.LocalSubmarineKey);
+        if (current is not null && !CurrentAnchorValid(current)) {
+            supported = false; Status = "Inconsistent retained anchor; preserved unchanged. Collection paused."; return false;
+        }
         if (current is not null && snapshot.ObservedAtUtc < current.Snapshot.ObservedAtUtc) return false;
         if (current is not null && snapshot.LocalWorkshopKey is not null && current.Snapshot.LocalWorkshopKey == snapshot.LocalWorkshopKey) {
             // Unavailable flags never erase previously observed positive evidence.
@@ -154,7 +178,7 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
             };
         }
         var key = snapshot.ExpectedReturnUnix > 0 && Route(snapshot.CurrentRoute)
-            ? Hash($"{snapshot.LocalSubmarineKey}:{snapshot.ExpectedReturnUnix}") : null;
+            ? VoyageKey(snapshot.LocalSubmarineKey, snapshot.ExpectedReturnUnix) : null;
         var voyage = key is null ? null : store.Voyages.SingleOrDefault(row => row.LocalVoyageKey == key);
         if (current is null && store.Current.Count >= MaximumCurrentSnapshots || key is not null && voyage is null && store.Voyages.Count >= MaximumRecords)
             return RejectCapacity();
@@ -189,6 +213,7 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
     private static byte[]? MergeEvidence(byte[]? prior, byte[]? next) => prior is null ? next
         : next is null ? prior : prior.Concat(next).Distinct().Order().ToArray();
     internal string PreparePersonalExport(string workshopKey) {
+        supported = ValidateLoaded();
         if (!Supported || !store.LocalRetentionEnabled || !LocalKey(workshopKey))
             throw new InvalidOperationException("Personal export unavailable.");
         var snapshots = store.Current.Where(c => c.Snapshot.LocalWorkshopKey == workshopKey).Select(c => c.Snapshot)
@@ -211,33 +236,50 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
             })
         }, PersonalObservationCompatibility.Json);
     }
-    private static bool ResultValid(SubmarineResult r) => r.RewardAssociation is "per-sector" or "voyage-only"
+    private static bool ResultValid(SubmarineResult r) => r is not null && r.RewardAssociation is "per-sector" or "voyage-only"
+        && r.Sectors is not null && r.VoyageRewards is not null && r.Limitations is not null
         && r.Sectors.Length <= 5 && r.VoyageRewards.Length <= 10 && r.Limitations.Length <= 8
         && r.Limitations.All(value => value is "sector-data-unavailable-or-inconsistent" or "sector-reward-unavailable-or-inconsistent"
             or "sector-attribution-unavailable" or "sector-aggregate-mismatch" or "hq-experience-unlocks-unavailable"
             or "total-experience-unavailable-route-completeness-unverified")
-        && r.Sectors.All(s => s.SectorId > 0 && s.Rewards.Length <= 2 && s.Rewards.All(reward => RewardValid(reward) && reward.Hq.HasValue))
+        && r.Sectors.All(s => s is not null && s.SectorId > 0 && s.UnlockedSectorId is not 0
+            && s.Rewards is not null && s.Rewards.Length <= 2 && s.Rewards.All(reward => RewardValid(reward) && reward.Hq.HasValue))
         && r.Sectors.Select(s => s.SectorId).Distinct().Count() == r.Sectors.Length
-        && r.VoyageRewards.All(RewardValid)
-        && (r.RewardAssociation != "voyage-only" || r.Sectors.Length == 0 && r.TotalExperience is null)
+        && r.VoyageRewards.All(reward => RewardValid(reward) && reward.Hq is null)
+        && (r.RewardAssociation != "voyage-only" || r.Sectors.Length == 0 && r.TotalExperience is null && r.VoyageRewards.Length > 0)
         && (r.RewardAssociation != "per-sector" || r.Sectors.Length > 0);
-    private static bool RewardValid(SubmarineReward r) => r.ItemId > 0 && r.Quantity > 0;
-    private static string RewardTotals(SubmarineResult result) => JsonSerializer.Serialize((result.RewardAssociation == "per-sector"
-        ? result.Sectors.SelectMany(s => s.Rewards) : result.VoyageRewards)
+    private static bool RewardValid(SubmarineReward r) => r is not null && r.ItemId > 0 && r.Quantity > 0;
+    private static string Totals(IEnumerable<SubmarineReward> rewards) => JsonSerializer.Serialize(rewards
         .GroupBy(r => r.ItemId).OrderBy(g => g.Key).Select(g => new { id = g.Key, quantity = g.Sum(r => (long)r.Quantity) }));
+    private static string RewardTotals(SubmarineResult result) => Totals(result.RewardAssociation == "per-sector"
+        ? result.Sectors.SelectMany(s => s.Rewards) : result.VoyageRewards);
+    private static bool ResultCoherent(SubmarineResult result, byte[]? route) => ResultValid(result)
+        && (result.RewardAssociation != "per-sector" || Totals(result.Sectors.SelectMany(s => s.Rewards)) == Totals(result.VoyageRewards)
+            && (route is null || result.Sectors.All(s => route.Contains(s.SectorId)))
+            && (result.TotalExperience is null || result.Sectors.Sum(s => (long)s.Experience) == result.TotalExperience.Value
+                && (route is null || result.Sectors.Length == route.Length)));
     internal bool ObserveResult(string localSubmarineKey, SubmarineBuild resultTimeBuild, SubmarineResult result,
         DateTime now, string gameVersion, string collectorVersion) {
         if (!store.LocalRetentionEnabled) return false;
-        if (!Supported || !ResultValid(result) || !LocalKey(localSubmarineKey) || !BuildValid(resultTimeBuild)
+        if (!Supported || !ResultCoherent(result, null)
+            || !LocalKey(localSubmarineKey) || resultTimeBuild is null || !BuildValid(resultTimeBuild)
             || !Metadata(gameVersion) || !Metadata(collectorVersion) || !UtcObservation(now)) {
             Status = "Partial/unsupported results; retained history preserved."; return false;
         }
         var current = store.Current.SingleOrDefault(row => row.Snapshot.LocalSubmarineKey == localSubmarineKey);
+        if (current is not null && !CurrentAnchorValid(current)) {
+            supported = false; Status = "Inconsistent retained anchor; preserved unchanged. Collection paused."; return false;
+        }
         var anchor = current?.AnchoredVoyageKey is { } anchorKey
             ? store.Voyages.SingleOrDefault(row => row.LocalVoyageKey == anchorKey) : null;
         bool linked = anchor is { LinkedToVoyage: true, ConflictingObservation: false, ExpectedReturnUnix: not null }
+            && RecordValid(anchor) && anchor.LocalSubmarineKey == localSubmarineKey
+            && anchor.LocalVoyageKey == VoyageKey(localSubmarineKey, anchor.ExpectedReturnUnix.Value)
             && anchor.ExpectedReturnUnix <= new DateTimeOffset(now).ToUnixTimeSeconds() + 30
-            && (result.RewardAssociation == "voyage-only" || result.Sectors.All(s => anchor.OrderedRoute.Contains(s.SectorId)));
+            && ResultCoherent(result, anchor.OrderedRoute);
+        if (!ResultCoherent(result, linked ? anchor!.OrderedRoute : null)) {
+            Status = "Inconsistent route/aggregate results; retained history preserved."; return false;
+        }
         // Without an anchor, preserve a non-countable observation. A fingerprint
         // cannot distinguish identical successive voyages; never pretend otherwise.
         var key = linked ? anchor!.LocalVoyageKey : Hash($"unlinked:{localSubmarineKey}:{Fingerprint(result)}");
@@ -264,6 +306,7 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
         candidate.ResultCollectorVersion ??= collectorVersion;
         if (existing?.Result is null) candidate.ContributionConsentAtResult = store.CommunityContributionEnabled;
         if (Size(candidate) > MaximumRecordBytes) return RejectCapacity();
+        if (!RecordValid(candidate)) { Status = "Inconsistent result history; existing records preserved."; return false; }
         if (existing is not null) store.Voyages.Remove(existing);
         store.Voyages.Add(candidate);
         Status = linked ? "Completed result retained locally; no upload. Voyage-time build is preserved or explicitly unavailable."
@@ -271,6 +314,7 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
         return true;
     }
     internal string PrepareExport() {
+        supported = ValidateLoaded();
         if (!Supported || !store.CommunityContributionEnabled) throw new InvalidOperationException("Community preparation is off or retained format unsupported.");
         var eligible = store.Voyages.Where(v => v.LinkedToVoyage && !v.ConflictingObservation
             && v.Result is not null && v.ContributionConsentAtResult).Select(v => new {

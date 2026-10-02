@@ -269,7 +269,7 @@ internal sealed class SubmarineLocalView : IDisposable {
             }
             if (ImGui.Button("Copy aggregate diagnostics")) ImGui.SetClipboardText($"Gillions Game Sync Testing {collectorVersion}\nSubmarine retention\nLocal: {state.Local}; community preparation: {state.Community}\n{state.Status}\nRetained: {state.Records}; results: {state.Results}; interface read/save: {state.Milliseconds:F2} ms\nNo upload endpoint. No live correctness claim.");
             ImGui.Separator();
-            foreach (var row in state.Rows) ImGui.TextUnformatted(row); // Names are local UI only, never diagnostic/export.
+            foreach (var row in state.Rows) ImGui.TextUnformatted(row); // Names stay out of diagnostics/sanitized community export; PRIVATE copy is explicit.
         }
         ImGui.End();
     }
