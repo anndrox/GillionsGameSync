@@ -13,6 +13,32 @@ yet prove current server reset/ownership: no live-success claim.
 See [capability matrix](../dashboard-capability-audit.md) and
 [exact private model / Site handoff](../contracts/dashboard-facts-v1.md).
 
+## Prepared candidate evidence
+
+Reviewed source `3c6f680dcbddf02586a570473d58a511cb51f3f9`; starting source
+`d4d33572a1edcc3386d678ebf35abb8b84644892`, existing
+`codex/game-sync/beastmaster-party-finder-testing` branch. No new worktree.
+Independent Security & Privacy assessment accepted the complete new private
+collection/retention/export/integration/disclosure surface, no findings; reviewer
+independently passed 746 managed and source-contract checks. Unchanged accepted
+features retain acceptance, not a new live validation claim.
+
+Maintained verify passed: 2,064 numbered managed checks (746 new facts, 287 Hunt,
+539 submarine, 224 market, 268 prior regression) plus PF/BST/ordinary/source/
+performance/package/configuration checks. Actual installed SDK builds: zero
+warnings/errors. Actual Dalamud serializer cases passed for both products and
+the exact packaged successor; new facts default OFF and Stable excludes them.
+Synthetic retained-store validation averaged 0.65 ms / 20 iterations; this is
+not in-game frame-time evidence. Docs local targets and diff whitespace passed.
+
+Prepared ZIP `GillionsGameSyncTesting-0.0.71.zip` SHA256
+`b8a25bc62221c4d4b5432f022c91b4478032fc819208d9197d87e0f9e20f2559`.
+ZIP and manifest preserved outside the worktree in the owner's Evidence area;
+no release/tag/feed update. [Machine-readable preparation evidence](../../data/releases/testing-0.0.71.json).
+Source commits/pushes do not publish the candidate or prove native collection.
+The full matrix, retained/export model, sanitized fixture, validation and bounded
+Site handoff are committed with it. No new HTTP contract or production effect.
+
 ## Live checklist after publication is appropriate
 
 Keep the same testing repository URL; do not delete config or downgrade. No need

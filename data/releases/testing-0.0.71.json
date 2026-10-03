@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "version": "0.0.71",
+  "assemblyVersion": "0.0.71.0",
+  "status": "READY_TO_PUBLISH_TESTING_SUCCESSOR_HELD",
+  "reasonHeld": "Preserve the owner's active Hunt validation; no release/tag/feed publication in this objective.",
+  "startingSource": "d4d33572a1edcc3386d678ebf35abb8b84644892",
+  "reviewedSource": "3c6f680dcbddf02586a570473d58a511cb51f3f9",
+  "branch": "codex/game-sync/beastmaster-party-finder-testing",
+  "gameBuild": "2026.09.15.0000.0000",
+  "nativeVersion": "7.56.2.9136",
+  "artifact": "GillionsGameSyncTesting-0.0.71.zip",
+  "artifactSha256": "b8a25bc62221c4d4b5432f022c91b4478032fc819208d9197d87e0f9e20f2559",
+  "manifestSha256": "fb7a5e08ac58b63393d425e8addca906c703bbc9ee3ccf23f0703c47fbdc3637",
+  "dllSha256": "257e1f5bdc07cfff1d98233832688f90327c9b610e05b46e0baa436bcf4ff025",
+  "preservation": "Owner workspace Evidence/GameSync/Testing-0.0.71/3c6f680dcbddf02586a570473d58a511cb51f3f9; ZIP and manifest hashes verified after copy, no player data.",
+  "privacyReview": {
+    "candidate": "3c6f680dcbddf02586a570473d58a511cb51f3f9",
+    "result": "ACCEPTED",
+    "scope": "Complete new private Dashboard collector, consent, persistence, export, session/patch/capacity gates, plugin integration, configuration tests and disclosures.",
+    "findings": "No BLOCKER, FOLLOW-UP or OPTIONAL privacy findings.",
+    "independentValidation": "746 managed fixtures and Dashboard source-contract checks independently rerun; synthetic/static only.",
+    "inheritedAcceptance": "Unchanged Hunt, submarine, Party Finder, Beastmaster and market surfaces retain prior acceptance; no publication/live authority inferred."
+  },
+  "validation": {
+    "maintainedVerify": "scripts/verify.ps1 PASS on reviewed source",
+    "numberedManagedChecks": 2064,
+    "dashboard": 746,
+    "hunts": 287,
+    "submarines": 539,
+    "market": 224,
+    "priorRegression": 268,
+    "additionalSuites": "Party Finder auth/session/retry/ack, Beastmaster freshness, HTTPS-only pairing, ordinary sync, source privacy/no-upload boundaries, package/manifest, folklore/bardings, ownership/budgets and performance contracts PASS.",
+    "actualConfiguration": "Actual Dalamud LoadForType/plugin Save/Newtonsoft serializer: Stable and Testing 12 legacy fixtures each plus new private-facts default-OFF/restart/UTC/opt-out/future-members and preserved prior feature cases; exact packaged 0.0.71 DLL rerun PASS.",
+    "build": "Actual SDK Stable-compatible and Testing builds plus exact 0.0.71 package: zero warnings/errors.",
+    "performance": "One managed due gate / five seconds, one bounded group; fair seven-group schedule; no per-frame native scans. Synthetic 16-character retained-store validation average 0.65 ms (20 iterations), not live game frame time.",
+    "package": "Three-file ZIP, Testing product/API15/0.0.71.0 embedded and feed identity, source/manifest/DLL SHA256, no private path or test-server address scan PASS.",
+    "documentation": "Changed local Markdown targets and git diff --check PASS."
+  },
+  "publishedTesting": {
+    "version": "0.0.70.0",
+    "fixedFeed": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json",
+    "manifestSha256": "a141ca716053581592f8016a258d5f4ac1776ff044938336bbfa12281edd1130",
+    "artifactSha256": "d3329ad04e3787b07067d71d712648424bdeca3c9ca4d17807df4095ce5fb8bd",
+    "verification": "Anonymous exact unchanged URL returns 0.0.70.0 and unchanged manifest hash; GitHub release asset digest agrees. No 0.0.71 release/tag/feed update performed."
+  },
+  "runtimeValidation": "No live 0.0.71 native/cache/reset/character correctness or frame-time validation. Prior owner Hunt validation is preserved and is not evidence for new facts. Submarine capture remains separately live-unverified.",
+  "siteDependency": "Accept authenticated Testing selected-character private facts intake and freshness/reset-window proof before any new transport or automatic dated checklist completion. Existing supported snapshots can be reused now. Unsupported personal systems stay manual-only.",
+  "boundaries": "No Stable publication, main integration, Site/server writes/deployment, Market/Worker architecture, new credentials, new uploads, gameplay/native mutations, forced UI or requests, or Dashboard configuration in plugin."
+}
