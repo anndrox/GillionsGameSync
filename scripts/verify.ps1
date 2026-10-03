@@ -25,6 +25,11 @@ if ($LASTEXITCODE -ne 0) { throw 'Hunt/private-state/patch fixtures failed.' }
 python (Join-Path $root 'tests/personal-state-contract-test.py')
 if ($LASTEXITCODE -ne 0) { throw 'Personal-state source contracts failed.' }
 
+dotnet run --project (Join-Path $root 'tests/GillionsGameSync.DashboardTests/GillionsGameSync.DashboardTests.csproj') -c Release -- --fixture (Join-Path $root 'artifacts/verification/dashboard/dashboard-facts-v1.json')
+if ($LASTEXITCODE -ne 0) { throw 'Dashboard private-fact policy fixtures failed.' }
+python (Join-Path $root 'tests/dashboard-contract-test.py')
+if ($LASTEXITCODE -ne 0) { throw 'Dashboard source/fixture boundaries failed.' }
+
 dotnet run --project (Join-Path $root 'tests/GillionsGameSync.MarketTests/GillionsGameSync.MarketTests.csproj') -c Release
 if ($LASTEXITCODE -ne 0) { throw 'Passive market event/transport fixtures failed.' }
 python (Join-Path $root 'tests/market-contribution-contract-test.py')

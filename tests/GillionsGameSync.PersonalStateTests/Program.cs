@@ -3,6 +3,40 @@ using Lumina.Excel.Sheets;
 using System.Text.Json;
 using GillionsGameSync;
 
+// Offline SDK/catalog capability inventory only; no live pointers or requests.
+if (args.Length == 1 && args[0] == "--dashboard-sdk") {
+    var assembly = typeof(FFXIVClientStructs.FFXIV.Client.Game.UI.PlayerState).Assembly;
+    Console.WriteLine(assembly.GetName());
+    foreach (var name in new[] { "PlayerState", "UIState", "InstanceContent", "ContentsNote", "InventoryManager", "SatisfactionSupplyManager", "AgentSatisfactionSupply", "AgentReconstructionBox", "FashionCheckManager", "AgentAozContentBriefing" }) {
+        var type = assembly.GetTypes().Single(t => t.Name == name);
+        Console.WriteLine(type.FullName);
+        foreach (var member in type.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+            .Where(m => m is FieldInfo or PropertyInfo or MethodInfo && !m.Name.StartsWith("get_") && !m.Name.StartsWith("set_"))
+            .Where(m => !m.Name.Contains("MemberFunction") && !m.Name.Contains("VirtualTable"))) Console.WriteLine(member);
+    }
+    foreach (var name in new[] { "ContentRoulette", "ContentsNote", "SatisfactionNpc", "Tomestones", "TomestonesItem", "AozContent", "FashionCheckWeeklyTheme", "WeeklyBingoOrderData" }) {
+        var type = typeof(MobHuntOrder).Assembly.GetTypes().FirstOrDefault(t => t.Name == name && t.Namespace == "Lumina.Excel.Sheets");
+        Console.WriteLine("Sheet " + name + ": " + (type is null ? "unavailable" : string.Join(", ", type.GetProperties().Select(p => p.Name + "=" + p.PropertyType.Name))));
+    }
+    return;
+}
+if (args.Length == 2 && args[0] == "--dashboard-catalog") {
+    using var game = new Lumina.GameData(args[1]);
+    Console.WriteLine("Game version: " + game.Repositories["ffxiv"].Version);
+    var sheet = game.GetExcelSheet<Lumina.Excel.Sheets.ContentRoulette>()!;
+    foreach (var row in sheet.Where(r => r.Name.ExtractText().Length > 0))
+        Console.WriteLine(string.Join(", ", typeof(Lumina.Excel.Sheets.ContentRoulette).GetProperties().Where(p => new[] { "RowId", "Name", "IsInDutyFinder", "CompletionArrayIndex" }.Contains(p.Name)).Select(p => p.Name + "=" + p.GetValue(row))));
+    foreach (var row in game.GetExcelSheet<Tomestones>()!)
+        Console.WriteLine("Tomestone " + string.Join(", ", typeof(Tomestones).GetProperties().Select(p => p.Name + "=" + p.GetValue(row))));
+    Console.WriteLine("Challenge IDs: " + string.Join(",", game.GetExcelSheet<Lumina.Excel.Sheets.ContentsNote>()!.Select(r => r.RowId)));
+    foreach (var row in game.GetExcelSheet<SatisfactionNpc>()!.Where(r => r.RowId > 0))
+        Console.WriteLine($"Delivery {row.RowId}, NPC {row.Npc.RowId}, DeliveriesPerWeek {row.DeliveriesPerWeek}");
+    foreach (var row in game.GetExcelSheet<TomestonesItem>()!.Where(r => r.Item.RowId > 0))
+        Console.WriteLine($"TomestonesItem {row.RowId}, item {row.Item.RowId}, tomestones {row.Tomestones.RowId}, inventory slot {row.CurrencyInventorySlot}");
+    Console.WriteLine("Supported Challenge rows: " + game.GetExcelSheet<Lumina.Excel.Sheets.ContentsNote>()!.Count(r => r.RowId is >= 1 and <= 104 && r.RequiredAmount > 0));
+    return;
+}
+
 // Explicit offline catalog verification; never a game/server request.
 if (args.Length == 2 && args[0] == "--catalog") {
     foreach (var type in new[] { typeof(MobHuntOrder), typeof(MobHuntOrderType), typeof(MobHuntTarget) })

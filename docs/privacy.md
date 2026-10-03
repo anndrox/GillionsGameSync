@@ -1,5 +1,21 @@
 # Privacy
 
+### Prepared Testing 0.0.71 private daily / weekly facts
+
+This separate OFF-by-default experiment retains private personal counters,
+flags and activity/next-boundary times locally. Own ContentId is transient;
+a domain-separated SHA256 partition remains local, never exported. At most
+16 characters / 24 latest groups each / 384 KiB; overflow preserves records,
+warns and refuses oversized admissions. No unlimited history or silent eviction.
+Manual PRIVATE copy excludes names, raw/local-hashed identities, account/FC,
+credentials, pairing secrets, logs, equipment and Dashboard configuration.
+There is no new upload, public sharing, credential or scope. Disable stops new
+reads/copy and preserves retention; copies already shared cannot be retracted.
+Configuration contains unrelated credentials and must never be shared.
+Unsupported retained members stay inert and are excluded from export. Source
+ownership/reset freshness remains unverified and explicitly disclosed; no automatic
+dated checklist completion is authorized. See [schema/retention](contracts/dashboard-facts-v1.md).
+
 ## Testing 0.0.69 personal observation experiments
 
 Hunt local retention defaults OFF independently of pairing/ordinary sync.

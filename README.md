@@ -77,6 +77,19 @@ build/sector evidence remain unavailable. See [schema, examples and Site require
 
 ## Build and verify
 
+### Prepared Testing 0.0.71 daily / weekly facts
+
+The task branch prepares a separate default-OFF `/gillionsfacts` local experiment
+for roulette reward flags, Custom Delivery allowances/rank, Challenge Log
+completion, weekly-earned tomestones, Wondrous Tails, allowances/expected timers
+and weekly PvP counters. It does not store Dashboard configuration or upload new
+resources. Native-cache ownership/reset freshness remains unverified; unknown
+sources preserve prior observations. See the [capability audit](docs/dashboard-capability-audit.md),
+[private schema/Site handoff](docs/contracts/dashboard-facts-v1.md) and
+[held successor/live checklist](docs/releases/testing-0.0.71.md).
+This is not a published update: the current rolling feed still serves 0.0.70.
+
+
 ### Testing 0.0.67 market predecessor
 
 Testing 0.0.67 was published October 1, 2026 at tag `v0.0.67-testing`, source

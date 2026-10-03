@@ -184,6 +184,43 @@ if (testingProduct) {
     "Stable must not contain Hunt collector/retention.");
 
 // Type metadata deliberately names retired types. Dalamud LoadForType and the
+var dashboardProperty = configurationType.GetProperty("DashboardFacts");
+var dashboardView = pluginAssembly.GetType("GillionsGameSync.DashboardLocalView");
+if (testingProduct) {
+    Assert(dashboardProperty is not null && dashboardView is not null, "Testing Dashboard facts missing.");
+    var config = JsonConvert.DeserializeObject("{\"AutomaticSync\":true,\"ContributeObservedMarketData\":false}", configurationType)!;
+    var empty = dashboardProperty!.GetValue(config)!;
+    Assert(!(bool)empty.GetType().GetProperty("LocalRetentionEnabled")!.GetValue(empty)!, "Older configs must default new facts OFF.");
+    var export = Parse(File.ReadAllText("artifacts/verification/dashboard/dashboard-facts-v1.json"));
+    var observationKeys = new[] { "system", "scopeId", "observedAtUtc", "nextAtUtc", "values", "gameVersion", "nativeVersion", "collectorVersion" };
+    var rows = new JArray(((JArray)export["observations"]!).Cast<JObject>()
+        .Select(o => new JObject(observationKeys.Select(k => new JProperty(k, o[k]!.DeepClone())))));
+    var retained = new JObject { ["SchemaVersion"] = 1, ["LocalRetentionEnabled"] = true,
+        ["Characters"] = new JArray(new JObject { ["LocalCharacterKey"] = new string('a', 64), ["Observations"] = rows }) };
+    dashboardProperty.SetValue(config, JsonConvert.DeserializeObject(retained.ToString(), dashboardProperty.PropertyType));
+    configurationType.GetMethod("Save")!.Invoke(config, [savedViaPlugin]);
+    var loaded = load.Invoke(configurations, [product])!;
+    var retention = dashboardProperty.GetValue(loaded)!;
+    var type = pluginAssembly.GetType("GillionsGameSync.DashboardRetentionPolicy", true)!;
+    var policy = Activator.CreateInstance(type, [retention])!;
+    Assert((bool)type.GetProperty("Supported", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(policy)!, "Actual Dashboard serializer lost fields or UTC provenance.");
+    Assert((bool)configurationType.GetProperty("AutomaticSync")!.GetValue(loaded)! && !(bool)marketSetting!.GetValue(loaded)!, "Facts retention changed ordinary sync/market opt-out.");
+    retention.GetType().GetProperty("LocalRetentionEnabled")!.SetValue(retention, false);
+    configurationType.GetMethod("Save")!.Invoke(loaded, [savedViaPlugin]);
+    retention = dashboardProperty.GetValue(load.Invoke(configurations, [product]))!;
+    Assert(!(bool)retention.GetType().GetProperty("LocalRetentionEnabled")!.GetValue(retention)!, "Facts opt-out not durable.");
+    var future = Parse(File.ReadAllText(pathForFixture));
+    future["DashboardFacts"]!["SchemaVersion"] = 99;
+    future["DashboardFacts"]!["FutureData"] = new JObject { ["inert"] = "preserve" };
+    File.WriteAllText(pathForFixture, future.ToString());
+    loaded = load.Invoke(configurations, [product])!;
+    configurationType.GetMethod("Save")!.Invoke(loaded, [savedViaPlugin]);
+    Assert(Parse(File.ReadAllText(pathForFixture))["DashboardFacts"]!["FutureData"]!.Value<string>("inert") == "preserve", "Unknown future facts retention stripped.");
+    Console.WriteLine("Actual Dashboard facts Testing-only/default-OFF/UTC/restart/opt-out/unknown-schema preservation passed; synthetic, no native collection.");
+} else Assert(dashboardProperty is null && dashboardView is null && pluginAssembly.GetType("GillionsGameSync.DashboardRetention") is null,
+    "Stable must not gain daily/weekly experimental retention or collectors.");
+
+// Type metadata deliberately names retired types. Dalamud LoadForType and the
 // inert backup reader must not resolve or construct them. All data is synthetic.
 var original = Parse("""
 {

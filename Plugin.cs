@@ -60,6 +60,7 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly BeastmasterLocalView beastmasterLocal;
     private readonly SubmarineLocalView submarineLocal;
     private readonly HuntBillLocalView huntLocal;
+    private readonly DashboardLocalView dashboardLocal;
     private readonly ICondition marketConditions;
     private readonly MarketContributor marketContributor;
     private readonly MarketContributionSource marketSource;
@@ -144,6 +145,7 @@ public sealed class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Private daily/weekly native facts are a separate OFF-by-default Testing experiment with bounded local retention and explicit PRIVATE export. No Dashboard configuration or uploads; unavailable sources preserve prior state, and reset/cache ownership remains unverified.",
         "Observed market contribution is on by default and has its own off switch. Only naturally received partial listings/recent sales go to compatible Gillions intake; no scanning or buyer/retainer identities. Existing pairing is authentication, not anonymous transport.",
         "Submarine voyage retention is a separate off-by-default local read-only test. Community preparation needs a second opt-in and explicit sanitized export; no submarine upload endpoint exists.",
         "Hunt Bills and private submarine snapshots are Testing-only, off-by-default local experiments with manual PRIVATE export. Missing/unloaded data never means empty. They require the exact supported game/SDK build; no Hunt/submarine upload contract exists yet.",
@@ -183,7 +185,7 @@ public sealed class Plugin : IDalamudPlugin {
 
     public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commands, IClientState clientState, IObjectTable objects, IFramework framework, IDataManager dataManager, IUnlockState unlockState, IGameInventory gameInventory, IPartyFinderGui partyFinderGui, IChatGui chatGui, IPluginLog log
 #if GILLIONS_TEST_BUILD
-        , IAddonLifecycle addonLifecycle, IMarketBoard marketBoard, ICondition marketConditions
+        , IAddonLifecycle addonLifecycle, IMarketBoard marketBoard, ICondition marketConditions, IGameGui gameGui
 #endif
     ) {
         this.pluginInterface = pluginInterface;
@@ -227,6 +229,9 @@ public sealed class Plugin : IDalamudPlugin {
         configuration.HuntBills ??= new();
         huntLocal = new HuntBillLocalView(pluginInterface, commands, framework, clientState, dataManager,
             marketConditions, configuration.HuntBills, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
+        configuration.DashboardFacts ??= new();
+        dashboardLocal = new DashboardLocalView(pluginInterface, commands, framework, clientState, dataManager,
+            gameGui, marketConditions, addonLifecycle, configuration.DashboardFacts, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
         this.marketConditions = marketConditions;
         marketContributor = new MarketContributor(RecordDiagnostic);
         marketContributor.SetEnabled(configuration.ContributeObservedMarketData);
@@ -342,6 +347,7 @@ public sealed class Plugin : IDalamudPlugin {
         partyFinderContributor.Tick(now);
 #if GILLIONS_TEST_BUILD
         huntLocal.Tick(now); // Independent local retention; five-second due check before native access.
+        dashboardLocal.Tick(now); // Independent, off-by-default; one bounded source group per due check.
         if (now >= nextMarketMaintenanceUtc) {
             nextMarketMaintenanceUtc = now.AddMilliseconds(250);
             marketContributor.RefreshSession(CaptureMarketSession());
@@ -1063,6 +1069,7 @@ public sealed class Plugin : IDalamudPlugin {
         if (ImGui.Button("Beastmaster local test")) beastmasterLocal.Show();
         if (ImGui.Button("Submarine voyage retention")) submarineLocal.Show();
         if (ImGui.Button("My Hunt Bills local test")) huntLocal.Show();
+        if (ImGui.Button("Private daily / weekly facts")) dashboardLocal.Show();
         ImGui.Separator();
         var marketEnabled = marketContributor.Enabled;
         if (ImGui.Checkbox("Contribute observed market data to Gillions", ref marketEnabled)) QueueUiAction(() => {
@@ -1458,6 +1465,7 @@ public sealed class Plugin : IDalamudPlugin {
         beastmasterLocal.Dispose();
         submarineLocal.Dispose();
         huntLocal.Dispose();
+        dashboardLocal.Dispose();
         marketSource.Dispose(); marketContributor.Dispose(); marketHttp.Dispose();
 #endif
         if (framework.IsInFrameworkUpdateThread) FlushConfigurationSave();
@@ -1496,6 +1504,7 @@ public sealed class PluginConfiguration : IPluginConfiguration {
 #if GILLIONS_TEST_BUILD
     public SubmarineVoyageRetention SubmarineVoyages { get; set; } = new();
     public HuntBillRetention HuntBills { get; set; } = new();
+    public DashboardRetention DashboardFacts { get; set; } = new();
     public bool ContributeObservedMarketData { get; set; } = true;
     // Enrollment stop only, never market payload or reporter identity.
     public string GillionsMarketBlockedGeneration { get; set; } = "";

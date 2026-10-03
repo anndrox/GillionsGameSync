@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <DefineConstants>$(DefineConstants);GILLIONS_DASHBOARD_TESTS</DefineConstants>
+    <DalamudLibPath Condition="'$(DalamudLibPath)' == ''">$(appdata)/XIVLauncher/addon/Hooks/dev</DalamudLibPath>
+    <DalamudLibPath Condition="'$(DALAMUD_HOME)' != ''">$(DALAMUD_HOME)</DalamudLibPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\DashboardFacts.cs" Link="DashboardFacts.cs" />
+    <Compile Include="..\..\PersonalObservationPolicy.cs" Link="PersonalObservationPolicy.cs" />
+    <Reference Include="Newtonsoft.Json" HintPath="$(DalamudLibPath)/Newtonsoft.Json.dll" />
+  </ItemGroup>
+</Project>
