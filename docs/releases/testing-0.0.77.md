@@ -33,3 +33,13 @@ expiry within45s with no more sends. No Hunt kill, repeated teleport, config res
 or credential sharing is required.
 
 **READY FOR OWNER LIVE TRAVEL TRANSPORT VALIDATION** once published and verified.
+
+Published2026-10-03T23:21:26Z as `v0.0.77-testing`, source
+`3349f9fef6223ba358edc25f419e706ccd0f58e9`; both independent exact-package reviews
+accepted without findings.5884 maintained checks,3 additional deployed-module
+ack/receipt checks, actual configuration/SDK and12 final packaged fixtures pass.
+No rebuild after final validation. Anonymous immutable and original rolling URL
+chains verified23:22:18Z with matching manifest/ZIP/contained DLL hashes.
+Immutable75/76, historical64 ZIP/notes and Stable1.0.30 remained unchanged.
+See the release evidence for hashes and the separate source/publication identities.
+Final state: **READY FOR OWNER LIVE TRAVEL TRANSPORT VALIDATION**.
