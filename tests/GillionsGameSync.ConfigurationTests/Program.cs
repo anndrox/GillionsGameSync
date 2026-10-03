@@ -112,8 +112,16 @@ if (testingProduct) {
     var map = Dalamud.Utility.MapUtil.WorldToMap(new System.Numerics.Vector2(0,0),0,0,100);
     Assert(Math.Abs(map.X-21.48f)<0.001f && Math.Abs(map.Y-21.48f)<0.001f,"Actual public map conversion changed.");
     Assert(pluginAssembly.GetType("GillionsGameSync.TravelContextLocalView") is not null,"Testing travel collector missing.");
+    var travelPolicy=pluginAssembly.GetType("GillionsGameSync.TravelSyncPolicy",true)!;
+    var admit=travelPolicy.GetMethod("Admit",BindingFlags.Static|BindingFlags.NonPublic)!;
+    for(int mask=0;mask<32;mask++) Assert((bool)admit.Invoke(null,[(mask&1)!=0,(mask&2)!=0,(mask&4)!=0,(mask&8)!=0,"https://test.gillions.app",(mask&16)!=0])! == (mask==31),"Packaged travel admission gate differs.");
+    Assert(pluginAssembly.GetType("GillionsGameSync.TravelPrepared",true)!.GetMethod("ToString")!.DeclaringType==typeof(object),"Packaged preparation dumps its payload.");
+    var httpHandler=(HttpClientHandler)pluginAssembly.GetType("GillionsGameSync.PartyFinderHttp",true)!.GetMethod("CreateHandler",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[])!;
+    using(httpHandler) Assert(!httpHandler.AllowAutoRedirect&&!httpHandler.UseCookies,"Personal/travel client follows redirects or retains cookies.");
+    Assert(((string)pluginType.GetField("PluginVersion",BindingFlags.Static|BindingFlags.NonPublic)!.GetValue(null)!).Split('.').Length==4,"Testing request/enrollment version must be four-part.");
     Console.WriteLine("Actual travel serializer/default-OFF/unrelated consent/SDK/map conversion PASS. No live game or HTTP invocation.");
-} else Assert(travelSetting is null && pluginAssembly.GetType("GillionsGameSync.TravelContextLocalView") is null,"Stable gained travel collection.");
+} else Assert(travelSetting is null && pluginAssembly.GetType("GillionsGameSync.TravelContextLocalView") is null
+    && pluginAssembly.GetType("GillionsGameSync.TravelSyncState") is null && pluginAssembly.GetType("GillionsGameSync.TravelPrepared") is null,"Stable gained travel collection/transport.");
 if (testingProduct) {
     var oldLinkConfig = JsonConvert.DeserializeObject("{\"EnableItemLinkRequests\":true}", configurationType)!;
     Assert(!(bool)pfLinkSetting!.GetValue(oldLinkConfig)! && !(bool)pfLinkSetting.GetValue(Activator.CreateInstance(configurationType))!,

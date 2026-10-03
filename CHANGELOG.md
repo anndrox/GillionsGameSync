@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.77 - Testing private ephemeral Hunt travel transport
+
+- Activate the accepted authenticated HTTPS shared TEST travel-context-v1 only
+  with separate default-OFF location consent and the independent server travel grant.
+- One immutable RAM-only nonce/payload,45s expiry; >=15s admission/backoff,
+  Retry-After for429/503, exact receipts. Lifecycle/OFF cancels travel independently.
+- Preserve cached teleport quotes/null final cost/UNKNOWN usability; no history,
+  error-body/coordinate logging, redirects, TLS bypass, gameplay actions or new collection.
+- Preserve all76 capabilities, immutable releases, and the original rolling URL.
+
 ## 0.0.76 - Testing private ephemeral Hunt travel context
 
 - Separate OFF-by-default location consent; rounded current map-space facts

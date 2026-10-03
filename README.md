@@ -1,9 +1,11 @@
 # Gillions Game Sync
 
-Testing76 adds a separate default-OFF private Hunt routing-context experiment:
+Testing77 activates the accepted shared TEST transport for the separate default-OFF
+private Hunt routing-context experiment introduced in76:
 rounded location and positive public teleport observations, RAM/latest-only.
-Travel transport is dormant pending Site's exact contract; cached Gil is not a
-proven final charge. See the [capability audit and Site handoff](docs/contracts/travel-context-v1.md).
+Travel needs its own server grant and exact capability agreement at HTTPS
+test.gillions.app; one RAM-only preparation expires45s after observation. Cached
+Gil is not a proven final charge. See the [exact capability/transport contract](docs/contracts/travel-context-v1.md).
 
 Gillions Game Sync is the open-source Dalamud plugin for [Gillions](https://gillions.app). This source targets `1.0.30`, with read-only character and Retainer synchronization, safer pairing and offline records, and a simpler settings window. The [stable manifest](data/GillionsGameSync.json) on `main` and [GitHub Releases](https://github.com/anndrox/GillionsGameSync/releases) identify the publicly available build; a task branch or local package is not a published update.
 

@@ -62,6 +62,10 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly HuntBillLocalView huntLocal;
     private readonly DashboardLocalView dashboardLocal;
     private readonly TravelContextLocalView travelLocal;
+    private readonly TravelSyncState travelSync = new();
+    private bool travelAccepted, travelInFlight;
+    private string travelBinding = "";
+    private volatile string travelStatus = "Travel sync OFF; no location uploads.";
     private readonly ICondition marketConditions;
     private readonly MarketContributor marketContributor;
     private readonly MarketContributionSource marketSource;
@@ -143,7 +147,11 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly object diagnosticsLock = new();
     private readonly List<string> diagnostics = [];
     private DateTime diagnosticRecordingUntilUtc = DateTime.MinValue;
+#if GILLIONS_TEST_BUILD
+    private static readonly string PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(4) ?? "unavailable";
+#else
     private static readonly string PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "1.0.4";
+#endif
 #if GILLIONS_TEST_BUILD
     private const string CommandName = "/gillionssynctest";
 #else
@@ -158,7 +166,7 @@ public sealed class Plugin : IDalamudPlugin {
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
         "Testing PF contribution now uses the approved secure TEST paired origin, never production. Website PF links require a new separate opt-in and compatible Site request contract; they deliver a native chat link requiring a final in-game click, never join or apply.",
-        "Hunt routing context has separate OFF-by-default location consent. Rounded location and naturally visible public Teleport cache are RAM-only, latest-only, read at most every 15 seconds. No Site travel contract means no uploads. Cached Gil is diagnostic, not a proven final charge or recommendation.",
+        "Hunt routing context has separate OFF-by-default location consent and server travel grant. Rounded location and naturally visible public Teleport cache use authenticated HTTPS TEST only, RAM-only, latest-only, 15-second read/send admission and 45-second expiry. Cached Gil is a quote, not final charge. OFF cancels travel only; no movement history.",
         "Private daily/weekly native facts are a separate OFF-by-default Testing experiment with bounded local retention and explicit PRIVATE export. No Dashboard configuration or uploads; unavailable sources preserve prior state, and reset/cache ownership remains unverified.",
         "Observed market contribution is on by default and has its own off switch. Only naturally received partial listings/recent sales go to compatible Gillions intake; no scanning or buyer/retainer identities. Existing pairing is authentication, not anonymous transport.",
         "Submarine voyage retention remains read-only and separate from community preparation. Private Hunt/submarine sync has separate OFF-by-default permissions, uses only the approved HTTPS shared TEST with explicit compatible Testing pairing, and never uploads community voyage results.",
@@ -248,6 +256,7 @@ public sealed class Plugin : IDalamudPlugin {
         dashboardLocal = new DashboardLocalView(pluginInterface, commands, framework, clientState, dataManager,
             gameGui, marketConditions, addonLifecycle, configuration.DashboardFacts, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
         travelLocal = new TravelContextLocalView(pluginInterface,clientState,objects,travelPlayerState,dataManager,gameGui,marketConditions);
+        travelLocal.Invalidated += ClearTravelPending;
         travelLocal.SetEnabled(configuration.ShareHuntRoutingLocation);
         this.marketConditions = marketConditions;
         marketContributor = new MarketContributor(RecordDiagnostic);
@@ -319,9 +328,16 @@ public sealed class Plugin : IDalamudPlugin {
             using var request = Request("/api/game-sync/presence", permit, presence);
 #if GILLIONS_TEST_BUILD
             request.Headers.Add("X-Gillions-Market-Contract", "1"); // Optional capability; existing body/identity unchanged.
-            if (permit.Origin == PersonalSyncPolicy.Origin) request.Headers.Add("X-Gillions-Personal-Contract", PersonalSyncPolicy.Contract);
+            if (permit.Origin == PersonalSyncPolicy.Origin) {
+                request.Headers.Add("X-Gillions-Personal-Contract", PersonalSyncPolicy.Contract);
+                request.Headers.Add("X-Gillions-Personal-Capability", TravelSyncPolicy.Capability);
+            }
 #endif
+#if GILLIONS_TEST_BUILD
+            using var response = await SendPresenceAsync(request, permit);
+#else
             using var response = await SendAsync(request, permit);
+#endif
             await EnsureSuccessfulResponse(response, permit.Cancellation);
             var responseJson = await SyncResponsePolicy.ReadAsync(response.Content, permit.Cancellation);
             if (!RetainerPresenceResponsePolicy.TryParse(responseJson, RetainerClient, out var uploadSupported))
@@ -333,6 +349,8 @@ public sealed class Plugin : IDalamudPlugin {
                 personalAccepted.Clear();
                 if (permit.Origin == PersonalSyncPolicy.Origin) foreach (var resource in PersonalSyncPolicy.Resources)
                     if (PersonalSyncPolicy.Compatible(responseJson, resource)) personalAccepted.Add(resource);
+                travelAccepted = permit.Origin == TravelSyncPolicy.Origin && TravelSyncPolicy.Compatible(responseJson);
+                if (!travelAccepted) ClearTravelPending();
 #endif
                 nextRetainerPresenceUtc = DateTime.UtcNow.Add(RetainerPresencePolicy.NextSuccessDelay(Random.Shared.Next(-5, 6)));
             });
@@ -340,6 +358,9 @@ public sealed class Plugin : IDalamudPlugin {
             if (!disposed) await framework.RunOnFrameworkThread(() => {
                 if (!PermitIsCurrent(permit)) return;
                 ClearRetainerServerAcceptance(); presenceFailureCount++;
+#if GILLIONS_TEST_BUILD
+                travelAccepted = false; ClearTravelPending();
+#endif
                 nextRetainerPresenceUtc = DateTime.UtcNow.Add(RetainerPresencePolicy.NextFailureDelay(presenceFailureCount, Random.Shared.Next(-5, 6)));
             });
             log.Debug("Gillions presence will retry ({Type}).", error.GetType().Name);
@@ -378,6 +399,7 @@ public sealed class Plugin : IDalamudPlugin {
         huntLocal.Tick(now); // Independent local retention; five-second due check before native access.
         dashboardLocal.Tick(now); // Independent, off-by-default; one bounded source group per due check.
         travelLocal.Tick(now); // Independent default-OFF, latest-only RAM, bounded 15-second read.
+        TickTravelSync(now); // Also clears invalid/expired pending state while unpaired.
         if (now >= nextMarketMaintenanceUtc) {
             nextMarketMaintenanceUtc = now.AddMilliseconds(250);
             marketContributor.RefreshSession(CaptureMarketSession());
@@ -1195,9 +1217,11 @@ public sealed class Plugin : IDalamudPlugin {
         if (ImGui.Button("Private daily / weekly facts")) dashboardLocal.Show();
         var routingLocation = configuration.ShareHuntRoutingLocation;
         if (ImGui.Checkbox("Share my current location for Hunt route recommendations",ref routingLocation)) QueueUiAction(() => {
-            configuration.ShareHuntRoutingLocation=routingLocation; travelLocal.SetEnabled(routingLocation); RequestConfigurationSave();
+            configuration.ShareHuntRoutingLocation=routingLocation; travelLocal.SetEnabled(routingLocation);
+            ClearTravelPending(); nextRetainerPresenceUtc = DateTime.MinValue; RequestConfigurationSave();
         });
-        ImGui.TextWrapped("OFF by default. Private rounded current location and naturally viewed public teleports, latest-only RAM (45s). Currently LOCAL ONLY: Site travel intake is not approved/activated; no location uploads. OFF clears volatile travel state, preserving Hunt and all unrelated sync. No movement history.");
+        ImGui.TextWrapped("OFF by default. Private rounded current location and naturally viewed public teleports, latest-only RAM (45s). Only HTTPS test.gillions.app with a compatible paired Testing device and its separate travel permission. OFF cancels pending location uploads; Site expires its last context within 45s. Hunt and all unrelated sync are preserved. No movement history.");
+        ImGui.TextWrapped(travelStatus);
         if (ImGui.Button("Private Hunt routing context")) travelLocal.Show();
         ImGui.Separator();
         var marketEnabled = marketContributor.Enabled;
@@ -1294,6 +1318,7 @@ public sealed class Plugin : IDalamudPlugin {
         if (disposed) return;
         requestLifetime.Invalidate(); ClearTransientState(); ClearRetainerServerAcceptance();
 #if GILLIONS_TEST_BUILD
+        travelAccepted = false; travelBinding = ""; ClearTravelPending(); travelLocal?.ClearSession();
         foreach (var cancellation in personalCancellation.Values) { cancellation.Cancel(); cancellation.Dispose(); }
         personalCancellation.Clear(); nextPersonalUtc = DateTime.MinValue;
 #endif
@@ -1308,6 +1333,10 @@ public sealed class Plugin : IDalamudPlugin {
         if (contentId != activeRetainerCharacterContentId || generation != activeGeneration) {
             ResetSessionContext();
             activeRetainerCharacterContentId = contentId; activeGeneration = generation;
+#if GILLIONS_TEST_BUILD
+            if (contentId != 0 && HasPairedSession) travelBinding = TravelBinding(requestLifetime.Capture(SyncRequestMode.Personal,
+                contentId,configuration.ActiveSession,configuration.ActiveSession!.Origin,configuration.DeviceToken));
+#endif
             nextAutomaticSyncUtc = DateTime.MinValue; nextGilLedgerPollUtc = DateTime.MinValue;
             nextRetainerListingCaptureUtc = DateTime.MinValue;
             nextRetainerVentureResultCaptureUtc = DateTime.MinValue; nextRetainerVentureRosterCaptureUtc = DateTime.MinValue;
@@ -1438,16 +1467,94 @@ public sealed class Plugin : IDalamudPlugin {
     private void RequirePermit(SyncRequestPermit permit) {
         if (!PermitIsCurrent(permit)) throw new OperationCanceledException("The connection or sync settings changed.");
     }
-    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, SyncRequestPermit permit) {
+#if GILLIONS_TEST_BUILD
+    private Task<HttpResponseMessage> SendPresenceAsync(HttpRequestMessage request, SyncRequestPermit permit) {
+        if (permit.Origin == TravelSyncPolicy.Origin) return SendAsync(request, permit, personalHttp);
+        return SendAsync(request, permit);
+    }
+#endif
+    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, SyncRequestPermit permit
+#if GILLIONS_TEST_BUILD
+        , HttpClient? client = null
+#endif
+    ) {
         if (disposed) throw new OperationCanceledException();
         Task<HttpResponseMessage>? pending = null;
         await framework.RunOnFrameworkThread(() => {
             RequirePermit(permit);
+#if GILLIONS_TEST_BUILD
+            pending = (client ?? http).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, permit.Cancellation);
+#else
             pending = http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, permit.Cancellation);
+#endif
         });
         return await pending!;
     }
 #if GILLIONS_TEST_BUILD
+    private void ClearTravelPending() => travelSync.Clear();
+    private string TravelBinding(SyncRequestPermit permit) => $"{permit.Session!.Generation}:{permit.Epoch}:{permit.ContentId}";
+    private bool TravelAdmitted() => TravelSyncPolicy.Admit(true, travelLocal.Available(activeRetainerCharacterContentId),
+        configuration.ShareHuntRoutingLocation, HasPairedSession && activeOwnedState is not null,
+        configuration.ActiveSession?.Origin ?? "", travelAccepted);
+    private void TickTravelSync(DateTime now) {
+        var admitted = TravelAdmitted();
+        var binding = travelBinding;
+        var due = travelSync.Maintain(binding,admitted,now);
+        if (!configuration.ShareHuntRoutingLocation) { travelStatus = "Travel sync OFF; volatile preparation cleared. Unrelated sync unchanged."; return; }
+        if (HasPairedSession && activeOwnedState is not null && configuration.ActiveSession!.Origin == TravelSyncPolicy.Origin
+            && !presenceInFlight && now >= nextRetainerPresenceUtc)
+            SendCurrentRetainerPresence(activeRetainerCharacterContentId,now,SyncRequestMode.Personal);
+        if (!admitted) { travelStatus = "Travel waiting for a current supported character, HTTPS TEST pairing and its separate travel grant/capability. No location sent."; return; }
+        if (!due || travelInFlight) return;
+        var prepared = travelSync.Prepare(binding,travelLocal.Current(activeRetainerCharacterContentId,now),now);
+        if (prepared is null) return;
+        var permit = CapturePermit(SyncRequestMode.Personal);
+        if (binding != TravelBinding(permit)) { ClearTravelPending(); return; }
+        travelSync.Dispatched(now); travelInFlight = true;
+        var featureToken = prepared.Lifetime.Token;
+        _ = Task.Run(() => SendTravelAsync(permit,prepared,featureToken));
+    }
+    private async Task SendTravelAsync(SyncRequestPermit permit, TravelPrepared prepared, CancellationToken featureToken) {
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation,featureToken);
+        var token = cancellation.Token;
+        try {
+            using var request = SnapshotRequest("/api/game-sync/sync",permit,TravelSyncPolicy.Resource,prepared.Nonce,Encoding.UTF8.GetBytes(prepared.Payload));
+            request.Headers.UserAgent.Clear(); request.Headers.UserAgent.ParseAdd($"GillionsGameSyncTest/{PluginVersion}");
+            request.Headers.Add("X-Gillions-Personal-Contract",TravelSyncPolicy.Contract);
+            request.Headers.Add("X-Gillions-Personal-Resource",TravelSyncPolicy.Resource);
+            request.Headers.Add("X-Gillions-Personal-Capability",TravelSyncPolicy.Capability);
+            Task<HttpResponseMessage>? pending = null;
+            await framework.RunOnFrameworkThread(() => {
+                RequirePermit(permit); token.ThrowIfCancellationRequested();
+                if (!TravelAdmitted() || !ReferenceEquals(travelSync.Pending,prepared)
+                    || TravelBinding(permit) != prepared.Binding || !prepared.Fresh(DateTime.UtcNow)) throw new OperationCanceledException();
+                pending = personalHttp.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,token);
+            });
+            using var response = await pending!;
+            int status = (int)response.StatusCode;
+            // Never read error bodies: they may reflect location or identifiers.
+            bool receipt = status is 200 or 201 && TravelSyncPolicy.Receipt(status,await SyncResponsePolicy.ReadAsync(response.Content,token));
+            double? retryAfter = response.Headers.RetryAfter?.Delta?.TotalSeconds
+                ?? (response.Headers.RetryAfter?.Date is { } date ? (date-DateTimeOffset.UtcNow).TotalSeconds : null);
+            await framework.RunOnFrameworkThread(() => {
+                if (!PermitIsCurrent(permit) || token.IsCancellationRequested || !TravelAdmitted()
+                    || !ReferenceEquals(travelSync.Pending,prepared)) return;
+                if (!prepared.Fresh(DateTime.UtcNow)) { ClearTravelPending(); travelStatus="Travel observation expired; volatile preparation cleared."; return; }
+                travelSync.Complete(prepared,receipt,status,retryAfter,DateTime.UtcNow);
+                if (receipt) { travelStatus = "Travel context accepted by TEST; freshness remains observation-based (45s)."; RecordDiagnostic("Travel context accepted by TEST."); }
+                else if (TravelSyncPolicy.Terminal(status)) { travelAccepted=false; ClearTravelPending(); travelStatus=$"Travel stopped: HTTP {status}; waiting for compatible TEST acknowledgement. No insecure fallback."; }
+                else travelStatus = "Travel HTTPS receipt unavailable; bounded retry of the same volatile nonce/body before expiry.";
+            });
+        } catch (Exception) {
+            if (!disposed) await framework.RunOnFrameworkThread(() => {
+                if (!PermitIsCurrent(permit) || token.IsCancellationRequested || !ReferenceEquals(travelSync.Pending,prepared)) return;
+                travelSync.Complete(prepared,false,0,null,DateTime.UtcNow);
+                travelStatus = "Travel HTTPS send/receipt unavailable; bounded retry before expiry. Unrelated sync unchanged.";
+            });
+        } finally {
+            if (!disposed) await framework.RunOnFrameworkThread(() => travelInFlight=false);
+        }
+    }
     private bool PersonalEnabled(string resource) => resource == "hunt_bills"
         ? configuration.SyncPersonalHunts && configuration.HuntBills.LocalRetentionEnabled
         : resource == "submarine_personal" && configuration.SyncPersonalSubmarines && configuration.SubmarineVoyages.LocalRetentionEnabled;

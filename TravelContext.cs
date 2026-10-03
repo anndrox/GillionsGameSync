@@ -71,8 +71,5 @@ internal sealed class TravelContextState {
         if (!Enabled || character == 0 || owner != character || !TravelPolicy.Fresh(latest,now)) { latest = null; return null; }
         return latest;
     }
-    // No server-approved travel capability exists. Even enabled local consent
-    // cannot authorize a guessed contract or a network send.
-    internal static bool TransportActivated => false;
 }
 #endif

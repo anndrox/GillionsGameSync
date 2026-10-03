@@ -1,7 +1,8 @@
 # Private travel context v1 — Native producer and bounded Site handoff
 
-Status: **local Testing producer; proposed contract, NOT activated intake**.
-Extends Testing75 without changing Hunt, submarine, Dashboard, PF or market contracts.
+Status: **Testing77 transport to accepted shared TEST travel-context-v1**.
+Testing76 remains the immutable local-only predecessor. Activation changes no
+Hunt, submarine, Dashboard, PF or market contract or collection semantics.
 
 ## Capability audit and evidence limits
 
@@ -45,7 +46,7 @@ Upstream is reference only; installed SDK owns candidate compatibility.
 Separate `ShareHuntRoutingLocation` setting: **OFF by default**, including older
 configs where Hunt/ordinary/PF permissions are ON. User label:
 “Share my current location for Hunt route recommendations”. It clearly says
-**LOCAL ONLY, Site travel intake pending, no uploads**. Turning OFF clears volatile
+**HTTPS shared TEST only, independently granted**. Turning OFF cancels/clears volatile
 travel state and stops reads; Hunt/submarine local retention and sync, ordinary,
 PF/item links, Dashboard, Beastmaster and market choices stay independent.
 
@@ -57,7 +58,7 @@ entries are excluded (house/apartment/ward/plot/subindex). Other character/sessi
 observations are invalidated; stale/older/equal-time replacement is rejected.
 Unavailable clears ONLY volatile travel state, never retained Hunt or other data.
 
-Every framework callback only checks a managed deadline when enabled. At most
+Every framework callback checks cheap lifecycle/expiry admission when enabled. At most
 one travel read per15 seconds; event invalidation cannot bypass that cadence.
 No full sheet enumeration: cached Lumina sheets, bounded row lookups, one public
 player position. Draw uses a bounded immutable view and hides expired facts;
@@ -67,19 +68,16 @@ deadline, so they cannot bypass the15-second limit. Diagnostics report total rea
 view ms and framework-thread allocations. Offline policy timing is separately
 identified; actual native read timing awaits owner test.
 
-## Current Site readiness (read-only audit)
+## Accepted Site readiness (independently verified before editing)
 
 Shared TEST checkout and baked web revision observed October3:
-`432a46e3625de8708efe49ded865c5fb8a5be7e8`, image
-`sha256:46abd8a9cee84b82123b9a416bcfce4829567c546ee3977a886c01233eb6ed8b`.
-Active `PERSONAL_RESOURCES` contains only `hunt_bills` / `submarine_personal`.
-The maintained compatible Site contract has no `travel_context` resource,
-permission, capability, validator, expiry storage or private read model.
-Native therefore has **no travel send path**, even if the checkbox is ON.
-Hunt/submarine PersonalSyncPolicy is unchanged. No guessed capability agreement.
-Site must rediscover its current deployed identity before implementing below.
+`93007035e6cce8636e10a356dcda4fb07c3dfd1c`, image
+`sha256:82dba0e1aa50a98182e049dab28cc7a8b0b8f337e7e36807fa8658f03c06128a`.
+Site accepts travel alongside Hunt/submarine; schema0020. Travel custody is a
+single-process expiring RAM cache, NOT durable personal-latest/receipt tables.
+Hunt/submarine PersonalSyncPolicy remains unchanged; travel preparation is RAM-only.
 
-## Exact proposed transport handoff — Site owns acceptance and implementation
+## Exact accepted transport — Site owns intake and private presentation
 
 Reuse existing authenticated `POST /api/game-sync/sync` envelope
 `{resourceType, nonce, payload}` and paired-device account/linked-character
@@ -88,7 +86,7 @@ exact trusted HTTPS origin `https://test.gillions.app`, no redirects/IP/HTTP/TLS
 bypass. Existing pairing, active account, character, version and resource checks
 must run before body handling and on every request, not merely presence.
 
-Proposed new resource:
+Accepted resource:
 
 - resourceType `travel_context`
 - schemaVersion `1`, collectorSchema `travel-context-v1`
@@ -144,7 +142,7 @@ Site chooses appropriate short-lived storage consistent with these invariants;
 ordinary durable personal observation tables/14-day payload receipts are NOT
 automatically suitable. Read responses private/no-store and account-owned only.
 
-**Retry/receipts proposal:** same nonce+same canonical payload -> same logical
+**Retry/receipts:** same nonce+same canonical payload -> same logical
 receipt; different content under nonce ->409/fail closed. Existing success shape
 `{ok:true,snapshotId:<UUID>,receivedAt:<UTC>,unchanged:<boolean>}`;201 new/200
 unchanged. Retain only bounded nonce+hash+receipt metadata through the short TTL,
@@ -152,17 +150,32 @@ not historical location bodies. Same key tied to device+character+resource;
 unauthorized cross-account/character requests fail before body processing.
 Bound at one latest context and one current retry receipt per owner/character,
 no unbounded journal. After expiry a stale nonce must not resurrect old location.
-Native future wiring may keep one immutable prepared nonce/payload for<=45s in
+Native keeps one immutable prepared nonce/payload for<=45s in
 RAM, replace expired pending state with a new nonce+fresh observation, and use
 bounded >=15s retry/backoff (Retry-After on429/503). Permission OFF/logout/switch/
 wrong origin/unsupported build cancels and clears ONLY travel pending/latest.
 
-These are **requirements for Site agreement**, not an already activated contract.
-Site must return exact acknowledgment/resource limits/permission/TTL/provenance
-and acceptance tests. Native then wires a bounded successor against the confirmed
-contract. Until then, transport/auth/receipt/persistence/isolation tests for this
-new resource are NOT claimed as passed; only dormant-boundary and local ownership
-tests pass. Do not invent accepted server behavior from fixtures.
+Presence retains `X-Gillions-Personal-Contract: personal-observations-v1` and adds
+`X-Gillions-Personal-Capability: travel_context_v1`. Only the exact grant-gated
+`personalObservations.resources` travel entry admits transmission. It must match
+schema, collector, transportContract, capability, endpoint, byte/depth/destination
+limits, ttlSeconds and header names. Existing personal grants alone cannot admit it.
+Both enrolled and request Testing versions must be four-part0.0.76.0 or compatible
+0.0 successor; ordinary presence updates the stored installed version normally.
+Submission uses `X-Gillions-Personal-Contract: travel-context-v1`, resource
+`X-Gillions-Personal-Resource: travel_context`, and the capability header above.
+No redirects, alternate origin, direct IP, HTTP or TLS bypass. Valid receipts are
+201/unchanged:false or200/unchanged:true with UUID and UTC time; receipt time never
+extends freshness. Error bodies are not read/logged. Retries >=15s with bounded
+exponential backoff;429/503 honor Retry-After and at least60s. A backoff outliving
+the observation discards its pending body; a genuinely fresh observation later
+gets a new nonce. Clearing facts does not reset the per-load send/backoff budget.
+Consent OFF/logout/session switch/re-pair/unpair/unload/map change/incompatible
+build/wrong origin/rejected capability/expiry cancel the affected volatile state.
+No configuration or offline queue entry is created. Logs contain only a concise
+acceptance message; neither complete payloads nor coordinates are logged.
+`uploadState: local-only-no-server-contract` is retained historical producer
+metadata required by Site v1, NOT an assertion that Testing77 transport is dormant.
 
 ## Exact product direction for Site's Hunt routing lane
 
@@ -195,6 +208,9 @@ and compare up to five destination IDs/quote Gil/flags after one15-second check.
 Move or make one normal zone transition, confirm old context clears/new position
 appears, then turn OFF and confirm facts clear while ordinary/Hunt sync continues.
 No Hunt kill, repeated teleports, extra delivery, configuration reset or credential
-sharing needed. No upload can occur in76; Site transport remains the next lane.
+sharing needed. No upload can occur in76. In77, also confirm the independent Site
+device travel grant, fresh private Site routing context, one replacement after
+moving/zoning, and expiry within45s after turning OFF. No kill/teleport execution
+is required. Synthetic/transport tests are not real FFXIV collection evidence.
 
-End state: **READY FOR SITE HUNT ROUTING HANDOFF**.
+End state after77 publication: **READY FOR OWNER LIVE TRAVEL TRANSPORT VALIDATION**.

@@ -26,10 +26,19 @@ internal sealed class TravelContextLocalView : IDisposable {
     private readonly IGameGui gameGui;
     private readonly ICondition conditions;
     private readonly TravelContextState state = new();
+    internal event System.Action? Invalidated;
+    // Cheap lifecycle admission; no position/cache reads or JSON per frame.
+    internal bool Available(ulong character) => !disposed && state.Enabled && client.IsLoggedIn && player.IsLoaded
+        && character != 0 && player.ContentId == character && !client.IsPvP && !client.IsGPosing
+        && !conditions[ConditionFlag.BetweenAreas] && !conditions[ConditionFlag.BetweenAreas51]
+        && PersonalObservationCompatibility.Supports(GameVersion(), nativeVersion);
+    internal TravelObservation? Current(ulong character, DateTime now) => Available(character) ? state.Current(character,now) : null;
+    internal void ClearSession() { state.Clear(); Reset(); }
     private bool visible, disposed;
     private sealed record View(string Status, string[] Rows, double Milliseconds, long Bytes, DateTime? ObservedAtUtc = null);
     private volatile View view = new("Location consent OFF; no travel reads or uploads.", [], 0, 0);
     private readonly string version = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "unavailable";
+    private readonly string nativeVersion = typeof(Telepo).Assembly.GetName().Version?.ToString() ?? "unavailable";
     internal TravelContextLocalView(IDalamudPluginInterface ui, IClientState client, IObjectTable objects,
         IPlayerState player, IDataManager data, IGameGui gameGui, ICondition conditions) {
         this.ui=ui; this.client=client; this.objects=objects; this.player=player;
@@ -41,10 +50,11 @@ internal sealed class TravelContextLocalView : IDisposable {
     internal void SetEnabled(bool enabled) {
         if (state.Enabled == enabled) return;
         state.SetEnabled(enabled);
-        view = new(enabled ? "Awaiting current session; local only, Site travel contract pending."
+        Invalidated?.Invoke();
+        view = new(enabled ? "Awaiting current session; transport requires the independent shared TEST grant."
             : "Location consent OFF; volatile location cleared. No uploads.", [], 0, 0);
     }
-    private void Reset() { state.Invalidate(); view = new(state.Enabled
+    private void Reset() { state.Invalidate(); Invalidated?.Invoke(); view = new(state.Enabled
         ? "Session/map changed: no current travel observation. No upload."
         : "Location consent OFF; no travel reads or uploads.", [], 0, 0); }
     private void Logout(int _, int __) { state.Clear(); Reset(); }
@@ -87,6 +97,8 @@ internal sealed class TravelContextLocalView : IDisposable {
         return result.ToArray();
     }
     internal void Tick(DateTime now) {
+        if (view.ObservedAtUtc is { } observed && now >= observed.AddSeconds(TravelPolicy.TtlSeconds)) Unavailable("Current travel observation expired; volatile facts cleared.");
+        if (view.ObservedAtUtc is not null && !Available(player.ContentId)) Unavailable("Current player/build unavailable; volatile facts cleared.");
         if (disposed || !state.Begin(now)) return; // no position/native reads each frame
         var start = Stopwatch.GetTimestamp(); var allocated = GC.GetAllocatedBytesForCurrentThread();
         try {
@@ -119,16 +131,16 @@ internal sealed class TravelContextLocalView : IDisposable {
                 if (label.Length>80) label=label[..80];
                 rows.Add($"{label} (Aetheryte {d.AetheryteId}): list quote {d.ObservedListGil} Gil; Home {d.Home}; Free {d.Free}; Favored {d.Favored}");
             }
-            view = new("Private current context observed locally. Site travel contract pending: NO UPLOADS.",rows.ToArray(),
+            view = new("Private current context observed locally. HTTPS TEST transport is separately gated by the paired travel grant.",rows.ToArray(),
                 Stopwatch.GetElapsedTime(start).TotalMilliseconds,GC.GetAllocatedBytesForCurrentThread()-allocated,now);
         } catch (Exception) { Unavailable("Travel source unavailable; no current context. Unrelated sync preserved."); }
     }
-    private void Unavailable(string message) { state.Invalidate(); view = new(message,[],0,0); }
+    private void Unavailable(string message) { state.Invalidate(); Invalidated?.Invoke(); view = new(message,[],0,0); }
     private void Draw() {
         if (!visible || disposed) return;
         if (ImGui.Begin("Hunt routing context — private local test",ref visible)) {
             var current=view;
-            ImGui.TextWrapped("Separate OFF-by-default location permission. Current map-space position rounded to 0.1; RAM only, no movement history. Read at most once/15 seconds. No Site travel contract, hence no uploads. Naturally open Teleport to inspect cached quotes; never opened by Gillions.");
+            ImGui.TextWrapped("Separate OFF-by-default location permission. Current map-space position rounded to 0.1; RAM only, no movement history. Read at most once/15 seconds. Upload only to HTTPS shared TEST with its independent travel grant. Naturally open Teleport to inspect cached quotes; never opened by Gillions.");
             ImGui.TextWrapped(current.Status);
             var age = current.ObservedAtUtc is { } observed ? (DateTime.UtcNow-observed).TotalSeconds : double.PositiveInfinity;
             if (age is >= 0 and < TravelPolicy.TtlSeconds) {
@@ -140,7 +152,7 @@ internal sealed class TravelContextLocalView : IDisposable {
         ImGui.End();
     }
     public void Dispose() {
-        disposed=true; state.Clear(); view=new("Disposed",[],0,0);
+        disposed=true; state.Clear(); Invalidated?.Invoke(); view=new("Disposed",[],0,0);
         ui.UiBuilder.Draw -= Draw; client.Login -= Reset; client.Logout -= Logout;
         client.TerritoryChanged -= Changed; client.MapIdChanged -= Changed;
     }

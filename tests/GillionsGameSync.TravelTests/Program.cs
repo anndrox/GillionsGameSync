@@ -5,12 +5,12 @@ using GillionsGameSync;
 int checks=0;
 void Check(bool ok,string name) { checks++; if (!ok) throw new Exception(name); }
 var now = new DateTime(2026,10,3,18,0,0,DateTimeKind.Utc);
-TravelDestination Destination(uint id=1) => new(id,100,"OBSERVED_IN_PERSONAL_LIST","UNKNOWN",120,null,false,false,true);
-TravelObservation Row() => new(100,200,10.1,20.2,now,PersonalObservationCompatibility.GameBuild,
-    PersonalObservationCompatibility.NativeVersion,"0.0.76.0","OBSERVED_PARTIAL",[Destination()]);
+TravelDestination Destination(uint id=2) => new(id,132,"OBSERVED_IN_PERSONAL_LIST","UNKNOWN",120,null,false,false,true);
+TravelObservation Row() => new(132,2,10.1,20.2,now,PersonalObservationCompatibility.GameBuild,
+    PersonalObservationCompatibility.NativeVersion,"0.0.77.0","OBSERVED_PARTIAL",[Destination()]);
 var state = new TravelContextState();
 Check(!state.Enabled && !state.Begin(now) && !state.Observe(1,Row(),now) && state.Current(1,now)==null,"default OFF");
-Check(!TravelContextState.TransportActivated,"no approved Site contract: transport dormant");
+Check(!TravelSyncPolicy.Admit(true,true,false,true,TravelSyncPolicy.Origin,true),"transport OFF without distinct consent");
 state.SetEnabled(true);
 Check(state.Begin(now) && !state.Begin(now.AddSeconds(14)) && state.Begin(now.AddSeconds(15)),"bounded fallback");
 foreach(var lifecycle in new[] { "logout/login","OFF/ON","map/territory" }) {
@@ -79,4 +79,11 @@ long allocated=GC.GetAllocatedBytesForCurrentThread();var start=Stopwatch.GetTim
 for(int i=0;i<500;i++) if(!TravelPolicy.Valid(benchmark)) throw new Exception("benchmark admission");
 Console.WriteLine($"Travel policy benchmark128: {Stopwatch.GetElapsedTime(start).TotalMilliseconds/500:F3} ms/check; {(GC.GetAllocatedBytesForCurrentThread()-allocated)/500} bytes/check. Fixture, not live native timing.");
 if(args.Length==2 && args[0]=="--fixture") { var path=Path.GetFullPath(args[1]); Directory.CreateDirectory(Path.GetDirectoryName(path)!); File.WriteAllText(path,json); }
-Console.WriteLine($"Travel checks PASS: {checks}; transport dormant, no real HTTP/auth/game validation claimed.");
+if(args.Length==2 && args[0]=="--site-protocol") {
+    using var site=JsonDocument.Parse(File.ReadAllText(args[1]));
+    Check(TravelSyncPolicy.Compatible(site.RootElement.GetProperty("ack").GetRawText()),"exact deployed Site ack incompatible");
+    Check(TravelSyncPolicy.Receipt(201,site.RootElement.GetProperty("first").GetRawText()),"exact deployed Site new receipt incompatible");
+    Check(TravelSyncPolicy.Receipt(200,site.RootElement.GetProperty("retry").GetRawText()),"exact deployed Site retry receipt incompatible");
+}
+checks += TravelTransportTests.Run();
+Console.WriteLine($"Travel checks PASS: {checks}; bounded Testing transport fixtures; no real FFXIV validation claimed.");
