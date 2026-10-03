@@ -44,8 +44,12 @@ must precede Stable beta; this Testing release does not enable them.
 Prepared from published Testing 0.0.74 publication record
 `9ef7cdec7384148aa0117123002dce38e8d0333e` on
 `codex/game-sync/beastmaster-party-finder-testing`.
-Exact source/artifact/review/publication evidence will be recorded after validation
-in `data/releases/testing-0.0.75.json`. Offline/fixture proof is not live game proof.
+Source/tag target: `ac0fc194a8a5f98890ffd7fb95d8f72d53733dc5`.
+Release/tag: `v0.0.75-testing`. Independent Security/Privacy and compatibility
+review accepted that source after the redirect blocker was corrected/re-reviewed;
+no remaining findings. Source/artifact/review/publication evidence is recorded
+in [Testing75 evidence](../../data/releases/testing-0.0.75.json).
+Offline/fixture proof is not live game proof.
 Maintained `scripts/verify.ps1` PASS: **3,333 numbered checks** (prior 268, PF
 requests116, Submarine542, personal391, Dashboard1,792, Market224), plus existing
 PF contribution, source/manifest/ownership/performance suites and actual12
@@ -60,7 +64,7 @@ no second-origin request/claim transfer/presentation. They are disposable fixtur
 not an accepted personal/PF origin or TLS bypass. Code correction required rebuild;
 exact corrected package/hash/configuration validation was re-run.
 
-Prepared artifact SHA256:
+Published artifact SHA256:
 
 ```text
 ZIP      bbb18828c9213879383fab0cfbb6582cc6f09bbceff3b27556958c7fd01e18d3
@@ -70,3 +74,15 @@ Manifest d5f90054dffc6cc97dd147fc9071ad3d7da5958bb0d9568eed4832d01ffebdd1
 
 No Site source/server deployment, Stable/main integration, Market architecture,
 Wardrobe, native gameplay writes or TLS bypass is part of this release.
+
+Published 2026-10-03 at13:17:20 America/New_York (17:17:20 UTC). Anonymous versioned
+chain passed17:17:47 UTC; the exact unchanged rolling feed and downloaded75
+ZIP/DLL/product/API15/version passed17:18:58 UTC. Historical64 release notes and
+ZIP remain intact; only current feed/note prefix advanced. Immutable66/73/74 and
+Stable1.0.30 remain unchanged. Durable byte-equal copies of final artifacts and
+superseded preparation are preserved outside the task checkout.
+
+**READY FOR SITE PARTY FINDER / OPEN-IN-FFXIV HANDOFF.**
+**BLOCKED — PRODUCTION SITE/SERVER HANDOFF REQUIRED** for Submarine beta;
+owner FC access is not a blocker. No gameplay action is requested now while Site
+page/request/production dependencies remain missing.
