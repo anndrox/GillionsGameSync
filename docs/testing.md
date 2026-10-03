@@ -4,12 +4,19 @@
 
 Keep `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
 in Dalamud. This JSON is the rolling Testing channel pointer, not a version pin.
-The anonymously verified feed currently advertises the reviewed 0.0.69 ZIP. Refresh
+The published feed currently advertises 0.0.69; authorized 0.0.70 publication
+advances the same JSON to the tested target-name correction. Refresh
 the plugin list and update normally; keep the installed configuration. Future
 authorized Testing publications must advance this same JSON, not ask testers to
 change repository URLs. [Publication procedure](releasing.md#fixed-testing-update-feed).
 
 ## Testing 0.0.68 — local Hunt Bills and private submarines
+
+0.0.70 adds readable localized target names, separate wrapped target rows and
+kill counters. Use [0.0.70 live checks](releases/testing-0.0.70.md). This is
+display-only: numeric retention/export and five-second admission are unchanged.
+Fixtures cover Unicode, missing/throwing/empty names, text bounds, counters,
+static cache reuse/overflow and unchanged retained data. No live rendering proof.
 
 For the Hunt event-path correction, use [0.0.69 retest instructions](releases/testing-0.0.69.md).
 The corrected reader does not require opening a bill when matching loaded Key

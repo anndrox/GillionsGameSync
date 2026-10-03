@@ -26,6 +26,7 @@ internal sealed class HuntBillLocalView : IDisposable {
     private readonly ICondition conditions;
     private readonly HuntBillRetention store;
     private readonly HuntBillRetentionPolicy policy;
+    private readonly HuntTargetPresentation presentation;
     private readonly System.Action persist;
     private readonly string collectorVersion = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "unavailable";
     private Dictionary<uint, MobHuntOrderType>? types;
@@ -44,6 +45,10 @@ internal sealed class HuntBillLocalView : IDisposable {
         this.ui = ui; this.commands = commands; this.framework = framework; this.client = client;
         this.data = data; this.conditions = conditions; this.store = store; this.persist = persist;
         policy = new(store);
+        presentation = new(id => {
+            var sheet = data.GetExcelSheet<BNpcName>();
+            return id > 0 && sheet.HasRow(id) ? sheet.GetRow(id).Singular.ExtractText() : null;
+        });
         client.Logout += OnLogout;
         commands.AddHandler("/gillionshunts", new CommandInfo((_, _) => Show()) { HelpMessage = "Testing read-only Hunt Bill local observations (no uploads)." });
         ui.UiBuilder.Draw += Draw;
@@ -60,9 +65,10 @@ internal sealed class HuntBillLocalView : IDisposable {
     private void OnLogout(int _, int __) { export = ""; schedule.Reset(); Publish("Logged out; retained Hunt state is historical, not current. No upload."); }
     private void Publish(string status, string characterKey = "", double milliseconds = 0) {
         var rows = policy.Supported ? store.Characters.SingleOrDefault(c => c.LocalCharacterKey == characterKey)?.Bills
-            .OrderBy(b => b.BillTypeId).Select(b => $"Bill {b.BillTypeId} ({b.Category}, tier {b.Tier}) | order {b.OrderId} | "
-                + string.Join(", ", b.Targets.Select(t => $"target {t.TargetId}: {t.ObservedKills}/{t.RequiredKills}"))
-                + $" | retained observation {b.ObservedAtUtc:u}; current acceptance/cache ownership unverified").ToArray() ?? [] : [];
+            .OrderBy(b => b.BillTypeId).SelectMany(b => new[] {
+                $"Bill {b.BillTypeId} ({b.Category}, tier {b.Tier}) | order {b.OrderId}",
+                $"Retained observation {b.ObservedAtUtc:u}; current acceptance/cache ownership unverified"
+            }.Concat(b.Targets.OrderBy(t => t.TargetIndex).Select(presentation.TargetLine))).ToArray() ?? [] : [];
         view = new(store.LocalRetentionEnabled, status, rows, milliseconds, attempts, lastAttemptUtc);
     }
     private HuntBillTarget[]? CatalogTargets(uint orderId, MobHuntOrderType type) {
@@ -166,7 +172,9 @@ internal sealed class HuntBillLocalView : IDisposable {
             }
             if (enabled && export.Length > 0 && ImGui.Button("Copy PRIVATE Hunt JSON")) ImGui.SetClipboardText(export);
             if (ImGui.Button("Copy aggregate Hunt diagnostics")) ImGui.SetClipboardText($"Gillions Game Sync Testing {collectorVersion}\nGame: {GameVersion()}; SDK: {typeof(MobHunt).Assembly.GetName().Version}\nHunts local: {state.Enabled}\n{state.Status}\nAttempts: {state.Attempts}; last attempt UTC: {state.LastAttemptUtc:u}; cadence: 5 seconds\nRead/save: {state.Milliseconds:F2} ms\nNo upload; no live correctness claim.");
+            ImGui.PushTextWrapPos(0);
             foreach (var row in state.Rows) ImGui.TextUnformatted(row);
+            ImGui.PopTextWrapPos();
         }
         ImGui.End();
     }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.70 - Testing Hunt target names
+
+- Show each retained Hunt target on its own wrapped line with its localized BNpcName catalog name and observed/required kill counts; retain numeric IDs for diagnostics.
+- Resolve static labels when publishing the five-second view, never on each UI frame. Bound the label cache to 512 entries and fall back explicitly when names are unavailable.
+- Display-only correction: no retained/export schema change, new collection, upload, consent change, game action or server effect. Existing Testing JSON URL advances to the successor; Stable unchanged.
+
 ## 0.0.69 - Testing Hunt cache collection correction
 
 - Remove the insufficient case/expansion-specific bill-window dependency. Observe naturally loaded bill caches every five seconds on the existing framework loop; no opening bills or logout required when corroborated data is loaded.

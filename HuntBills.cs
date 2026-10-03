@@ -16,6 +16,22 @@ public sealed record HuntBillObservation(byte BillTypeId, string Category, byte 
     public string? SourceEvidence { get; init; }
 }
 
+// Static catalog labels only; never part of retained observations or exports.
+internal sealed class HuntTargetPresentation(Func<uint, string?> resolveName) {
+    internal const int MaximumNames = 512;
+    private readonly Dictionary<uint, string> names = new();
+    internal string TargetLine(HuntBillTarget target) {
+        if (!names.TryGetValue(target.NpcNameId, out var name)) {
+            string? value;
+            try { value = resolveName(target.NpcNameId); } catch (Exception) { value = null; }
+            name = value is null ? "" : new string(value.Where(c => !char.IsControl(c)).Take(160).ToArray()).Trim();
+            if (name.Length == 0) name = "Target name unavailable";
+            if (names.Count < MaximumNames) names[target.NpcNameId] = name;
+        }
+        return $"  {name} — {target.ObservedKills}/{target.RequiredKills} kills (target ID {target.TargetId}; NPC name ID {target.NpcNameId})";
+    }
+}
+
 // Managed admission/cadence only. No native pointers, requests or ownership inference.
 internal sealed class HuntObservationSchedule {
     private DateTime nextReadUtc;

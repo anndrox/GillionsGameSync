@@ -65,7 +65,7 @@ custom plugin repositories:
 
 This installs the separate **Gillions Game Sync Testing** identity. It does not
 replace the stable plugin or update the existing `gillions.app` testing feed.
-Testing `0.0.69` preserves the published Testing lineage and corrects Hunt collection without requiring bill-window events. Keep the existing custom-repository URL above: it is the rolling Testing update feed, despite its historical tag name. Refresh Dalamud's plugin list and update to `0.0.69.0`; do not replace the repository entry for each release. Follow the [live checklist and diagnostics](docs/releases/testing-0.0.69.md). Do not downgrade or delete configuration. Ordinary HTTPS/PF pairing and consent are unchanged.
+Testing `0.0.70` preserves the published Testing lineage and adds readable localized Hunt target names to the corrected collector. Keep the existing custom-repository URL above: it is the rolling Testing update feed, despite its historical tag name. Refresh Dalamud's plugin list and update to `0.0.70.0`; do not replace the repository entry for each release. Follow the [live checklist and diagnostics](docs/releases/testing-0.0.70.md). Do not downgrade or delete configuration. Ordinary HTTPS/PF pairing and consent are unchanged.
 
 Open `/gillionssubs` or **Submarine voyage retention**. Use workshop interfaces
 manually; no submarine control, polling or third-party plugin is involved. Local
@@ -81,7 +81,7 @@ build/sector evidence remain unavailable. See [schema, examples and Site require
 
 Testing 0.0.67 was published October 1, 2026 at tag `v0.0.67-testing`, source
 `9821c92df8f51c9fef913a9e8294fd6ed3b4469c`. Its immutable assets are preserved;
-0.0.69 uses the same separate product identity. Publication is not live-game proof.
+0.0.70 uses the same separate product identity. Publication is not live-game proof.
 
 "Contribute observed market data to Gillions" is independently **on by default**,
 including older Testing configurations without that field. It has a persistent
@@ -91,12 +91,15 @@ authenticated server compatibility acknowledgment. Ordinary sync, Party Finder a
 preference remain independent. Read the [contract/Site handoff](docs/contracts/market-observations-v1.md)
 and [candidate checks](docs/releases/testing-0.0.67.md).
 
-### Testing 0.0.69 personal-state experiments
+### Testing 0.0.70 personal-state experiments
 
 Testing 0.0.69 corrects Hunt collection: the existing framework loop reads at most
 every five seconds, requiring matching loaded bill Key Items. Bill windows and
 logout are not prerequisites when coherent data is available. Keep the same
-Testing URL and follow [0.0.69 retest instructions](docs/releases/testing-0.0.69.md).
+Testing URL. 0.0.70 adds localized target names and one wrapped row per target;
+numeric IDs remain diagnostic fallbacks. Labels use a bounded static catalog
+cache, not native reads or sheet lookups every UI frame. See
+[0.0.70 retest instructions](docs/releases/testing-0.0.70.md).
 
 Open `/gillionshunts` or **My Hunt Bills local test**; local retention defaults OFF.
 Naturally loaded caches with matching bill Key Items supply positive targets/counters. Cache

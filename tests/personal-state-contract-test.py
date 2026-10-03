@@ -29,6 +29,12 @@ assert plugin.index("huntLocal.Tick(now);") < plugin.index("if (!HasPairedSessio
 assert "ObtainedFlags" in hunt and "GetObtainedHuntOrderRowId(index)" in hunt
 assert "CurrentKills[index].Counts" in hunt and "CatalogTargets" in hunt
 assert "orders.HasRow(orderId)" in hunt and "catalog.HasRow(row.Target.RowId)" in hunt
+assert "presentation = new(id =>" in hunt and "sheet.GetRow(id).Singular.ExtractText()" in hunt
+assert "b.Targets.OrderBy(t => t.TargetIndex).Select(presentation.TargetLine)" in hunt
+draw = hunt.split("private void Draw()", 1)[1]
+assert "GetExcelSheet" not in draw and "presentation.TargetLine" not in draw
+assert "ImGui.PushTextWrapPos(0)" in draw and "ImGui.PopTextWrapPos()" in draw
+assert "foreach (var row in state.Rows) ImGui.TextUnformatted(row)" in draw
 assert "if ((hunt->ObtainedFlags & (1 << index)) == 0) continue" in hunt
 assert "characterAssociation =" in (root / "HuntBills.cs").read_text()
 assert "IsSubmarineExplorationUnlocked" in sub and "IsSubmarineExplorationExplored" in sub

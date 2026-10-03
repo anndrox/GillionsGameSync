@@ -25,6 +25,29 @@ HuntBillObservation Bill(byte type = 0, int kills = 1, uint order = 1) => new(ty
 int checks = 0;
 void Check(bool value, string name) { checks++; if (!value) throw new Exception(name); }
 bool Refused(Func<string> action) { try { action(); return false; } catch (InvalidOperationException) { return true; } }
+var displayTarget = Bill().Targets[0];
+var displayBefore = JsonSerializer.Serialize(displayTarget);
+int nameReads = 0;
+var display = new HuntTargetPresentation(id => { nameReads++; return id == 100 ? "étoile 魔物" : null; });
+Check(display.TargetLine(displayTarget) == "  étoile 魔物 — 1/3 kills (target ID 1; NPC name ID 100)", "Localized target/counter/IDs missing.");
+Check(display.TargetLine(displayTarget with { ObservedKills = 3 }).Contains("3/3 kills") && nameReads == 1, "Label cache froze counters or reread static catalog.");
+Check(displayBefore == JsonSerializer.Serialize(displayTarget), "Presentation changed retained target.");
+foreach (string? value in new string?[] { null, "", " \r\n\t ", "\0" }) {
+    var missing = new HuntTargetPresentation(_ => value);
+    Check(missing.TargetLine(displayTarget).Contains("Target name unavailable — 1/3 kills (target ID 1; NPC name ID 100)"), "Missing name guessed or lost numeric fallback.");
+}
+Check(new HuntTargetPresentation(_ => throw new InvalidOperationException()).TargetLine(displayTarget).Contains("Target name unavailable"), "Catalog failure broke presentation.");
+Check(new HuntTargetPresentation(_ => "\n test\t\0 ").TargetLine(displayTarget).StartsWith("  test —"), "Catalog control text escaped target row.");
+Check(new HuntTargetPresentation(_ => new string('x', 1000)).TargetLine(displayTarget).StartsWith("  " + new string('x', 160) + " —"), "Display label bound exceeded.");
+int boundedReads = 0;
+var boundedNames = new HuntTargetPresentation(_ => { boundedReads++; return null; });
+for (uint id = 1; id <= HuntTargetPresentation.MaximumNames; id++) boundedNames.TargetLine(displayTarget with { NpcNameId = id });
+for (uint id = 1; id <= HuntTargetPresentation.MaximumNames; id++) boundedNames.TargetLine(displayTarget with { NpcNameId = id });
+Check(boundedReads == HuntTargetPresentation.MaximumNames, "Unavailable-name cache rescanned known IDs.");
+boundedNames.TargetLine(displayTarget with { NpcNameId = 9999 });
+boundedNames.TargetLine(displayTarget with { NpcNameId = 9999 });
+Check(boundedReads == HuntTargetPresentation.MaximumNames + 2, "Display cache grew beyond bound.");
+Check(boundedNames.TargetLine(displayTarget).Contains("target ID 1") && boundedReads == HuntTargetPresentation.MaximumNames + 2, "Overflow evicted prior static label.");
 var cadence = new HuntObservationSchedule();
 Check(!cadence.TryBegin(now, false), "Disabled cadence admitted.");
 Check(cadence.TryBegin(now, true), "First loaded-cache check not immediate.");
