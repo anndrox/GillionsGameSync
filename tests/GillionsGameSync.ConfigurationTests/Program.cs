@@ -91,7 +91,7 @@ if (testingProduct) {
     personalHuntSetting.SetValue(oldPersonal, true);
     configurationType.GetMethod("Save")!.Invoke(oldPersonal, [savedViaPlugin]);
     var savedPersonal = load.Invoke(configurations, [product])!;
-    Assert((bool)personalHuntSetting.GetValue(savedPersonal)! && !(bool)personalSubSetting.GetValue(savedPersonal)!,
+    Assert((bool)personalHuntSetting.GetValue(savedPersonal)! && !(bool)personalSubSetting!.GetValue(savedPersonal)!,
         "Actual serializer preserves independent Hunt/Submarine permissions.");
     personalHuntSetting.SetValue(savedPersonal, false);
     configurationType.GetMethod("Save")!.Invoke(savedPersonal, [savedViaPlugin]);

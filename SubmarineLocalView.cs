@@ -113,7 +113,6 @@ internal sealed class SubmarineLocalView : IDisposable {
     }
     private unsafe void OnAddon(AddonEvent kind, AddonArgs args) {
         if (disposed || !store.LocalRetentionEnabled || !framework.IsInFrameworkUpdateThread) return;
-        transportCharacter = 0; transportPayload = "";
         // Gate before ALL native pointers/signature calls, including PlayerState.
         if (!PersonalObservationCompatibility.Supports(GameVersion(), typeof(HousingManager).Assembly.GetName().Version?.ToString())) {
             activeWorkshopKey = ""; personalExport = "";
@@ -121,6 +120,7 @@ internal sealed class SubmarineLocalView : IDisposable {
         }
         if (DateTime.UtcNow < nextReadUtc) return;
         nextReadUtc = DateTime.UtcNow.AddSeconds(1);
+        transportCharacter = 0; transportPayload = "";
         var started = Stopwatch.GetTimestamp();
         bool changed = false;
         string? readStatus = null;

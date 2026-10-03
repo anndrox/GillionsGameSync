@@ -1391,7 +1391,8 @@ public sealed class Plugin : IDalamudPlugin {
                 featureCancellation = new CancellationTokenSource(); personalCancellation.Add(resource, featureCancellation);
             }
             personalInFlight = true;
-            _ = Task.Run(() => SendPersonalAsync(permit, prepared, featureCancellation.Token));
+            var featureToken = featureCancellation.Token;
+            _ = Task.Run(() => SendPersonalAsync(permit, prepared, featureToken));
             return;
         }
         personalStatus = "Private sync waiting for explicit server permission/new positive observations, or retained state already acknowledged. No empty replacement.";

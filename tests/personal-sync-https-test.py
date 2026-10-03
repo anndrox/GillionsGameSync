@@ -114,7 +114,14 @@ try:
   check(status==200 and json.loads(text).get('unchanged'),resource+' older observation does not replace latest')
   status,page,h=req(('/hunts' if resource=='hunt_bills' else '/submarines')+'?character='+str(fixture))
   check(status==200 and 'no-store' in h.get('Cache-Control',''),resource+' private persisted page read')
-  check('Synthetic preview' not in page,'fixture stored state selected without demo flag (NOT live evidence)')
+  check('SYNTHETIC TEST FIXTURE' not in page,'stored state selected without synthetic demo banner (NOT live evidence)')
+  if resource=='hunt_bills':
+   check('Daily Hunt Bills' in page and 'Weekly Hunt Bills' in page and 'provisional cache' in page,'Hunts page grouping/provisional freshness')
+   for bill in payload['bills']:
+    check('hunt-bill-'+str(bill['billTypeId']) in page and bill['observedAtUtc'] in page,'Hunt persisted type and observation timestamp rendered')
+   check('not live sightings' in page or 'not a sighting' in page,'reference locations never treated as sightings')
+  else:
+   check(all(row['name'] in page for row in payload['slots']),'Native-export fixture slot names rendered from persisted observation')
  status,_,_=req('/hunts?character=999999999')
  check(status==403,'unowned character read rejection')
  for d in created:
