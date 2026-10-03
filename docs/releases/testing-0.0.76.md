@@ -20,3 +20,15 @@ the concise owner checklist there; no live success is claimed from fixtures.
 Publication identities, validation totals and hashes are recorded in
 [release evidence](../../data/releases/testing-0.0.76.json) after publication.
 Stable/main/production/Site/Market architecture/Wardrobe untouched;75 preserved.
+
+Published2026-10-03T17:57:36Z, tag `v0.0.76-testing`, source
+`19290cdb82c1015fe09bc7b8ab612adceb1c37ea`. Independent privacy review accepted
+after fixing lifecycle cadence bypass and adding bounded public destination labels.
+Full maintained suite5698 numbered checks plus12 configuration fixtures/product
+and final packaged DLL12 fixtures PASS; zero warnings/errors. Replacement package
+was rebuilt only for that correction and fully revalidated; no later rebuild.
+Both anonymous immutable and original rolling-feed76 chains passed17:58:41Z.
+Historical64 notes/ZIP and immutable75/Stable1.0.30 assets remain unchanged.
+
+No live location/price or travel HTTP/auth/receipt/persistence proof is claimed.
+**READY FOR SITE HUNT ROUTING HANDOFF.**
