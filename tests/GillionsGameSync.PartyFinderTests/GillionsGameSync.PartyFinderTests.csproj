@@ -5,9 +5,11 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <DefineConstants>$(DefineConstants);GILLIONS_PF_LINK_TESTS</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\PartyFinderContributionCore.cs" Link="PartyFinderContributionCore.cs" />
     <Compile Include="..\..\GillionsPartyFinderContributor.cs" Link="GillionsPartyFinderContributor.cs" />
+    <Compile Include="..\..\PartyFinderLinkRequests.cs" Link="PartyFinderLinkRequests.cs" />
   </ItemGroup>
 </Project>

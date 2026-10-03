@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.75 - Testing Party Finder origin and native website links
+
+- Testing PF contributions use the approved authenticated secure TEST session,
+  not production; explicit pairing permission and local opt-in remain required.
+- Reuse item-link polling/one-time consume for a strictly validated, separately
+  OFF-by-default PF action. Supported native chat links require a final game click;
+  no join/apply, internal invocation or simulated input. Dormant until Site agrees
+  the exact request contract and connects its page to current contributed listings.
+- Existing item links and Hunt/Submarine/Dashboard/Custom Delivery/Beastmaster/
+  Market/ordinary-sync behavior are preserved. Stable transport is unchanged.
+- Standard attribution: Data provided by xivpf.com; keep its clickable source link.
+- Record a separate production Submarine beta handoff: lack of owner FC access is
+  not a blocker, but production intake/kill switch/Stable/privacy gates still apply.
+
 ## 0.0.74 - Testing private Hunt/submarine HTTPS transport
 
 - Add separate OFF-by-default Hunt/Submarine personal-sync switches; local retention consent remains independent. Existing configurations/pairings are not silently promoted, and new pairing resets local upload permissions.

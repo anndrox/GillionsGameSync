@@ -75,6 +75,9 @@ public sealed class Plugin : IDalamudPlugin {
     private int personalFailures;
     private bool observedPersonalHunts, observedPersonalSubmarines;
     private volatile string personalStatus = "Private Hunt/submarine sync OFF. Local retention and ordinary sync are independent.";
+    private PartyFinderLinkRequestProcessor partyFinderLinkProcessor = new();
+    private bool observedPartyFinderLinks;
+    private volatile string partyFinderLinkStatus = "Party Finder website links OFF; existing item links unchanged.";
 #endif
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private readonly HttpClient partyFinderHttp = PartyFinderHttp.CreateClient();
@@ -153,6 +156,7 @@ public sealed class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Testing PF contribution now uses the approved secure TEST paired origin, never production. Website PF links require a new separate opt-in and compatible Site request contract; they deliver a native chat link requiring a final in-game click, never join or apply.",
         "Private daily/weekly native facts are a separate OFF-by-default Testing experiment with bounded local retention and explicit PRIVATE export. No Dashboard configuration or uploads; unavailable sources preserve prior state, and reset/cache ownership remains unverified.",
         "Observed market contribution is on by default and has its own off switch. Only naturally received partial listings/recent sales go to compatible Gillions intake; no scanning or buyer/retainer identities. Existing pairing is authentication, not anonymous transport.",
         "Submarine voyage retention remains read-only and separate from community preparation. Private Hunt/submarine sync has separate OFF-by-default permissions, uses only the approved HTTPS shared TEST with explicit compatible Testing pairing, and never uploads community voyage results.",
@@ -475,7 +479,16 @@ public sealed class Plugin : IDalamudPlugin {
                 itemLinkPollInFlight = true; ownsPoll = true; processor = itemLinkRequestProcessor;
                 return result;
             });
+#if GILLIONS_TEST_BUILD
+            var pfAllowed = await framework.RunOnFrameworkThread(() => PartyFinderLinksPermitted(permit));
+            using var pollRequest = Request("/api/game-sync/item-links/poll", permit, new {
+                capability = "native_item_link", pluginVersion = PluginVersion,
+                nativeRequests = new { contract = PartyFinderLinkPolicy.Contract, contractVersion = 1,
+                    capabilities = pfAllowed ? new[] { PartyFinderLinkPolicy.Capability } : Array.Empty<string>() }
+            });
+#else
             using var pollRequest = Request("/api/game-sync/item-links/poll", permit, new { capability = "native_item_link", pluginVersion = PluginVersion });
+#endif
             using var pollResponse = await SendAsync(pollRequest, permit);
             if (pollResponse.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed or HttpStatusCode.NotImplemented) {
                 await CommitAsync(permit, _ => nextItemLinkPollUtc = DateTime.UtcNow.AddMinutes(UnsupportedItemLinkRetryMinutes));
@@ -486,7 +499,32 @@ public sealed class Plugin : IDalamudPlugin {
                 return;
             }
             await EnsureSuccessfulResponse(pollResponse, permit.Cancellation);
-            var response = JsonSerializer.Deserialize<ItemLinkPollResponse>(await SyncResponsePolicy.ReadAsync(pollResponse.Content, permit.Cancellation), SyncResponsePolicy.Options);
+            var pollJson = await SyncResponsePolicy.ReadAsync(pollResponse.Content, permit.Cancellation);
+#if GILLIONS_TEST_BUILD
+            using var pollDocument = JsonDocument.Parse(pollJson);
+            if (pollDocument.RootElement.TryGetProperty("request", out var typedRequest) && typedRequest.ValueKind == JsonValueKind.Object
+                && typedRequest.TryGetProperty("requestType", out var requestType)
+                && !(requestType.ValueKind == JsonValueKind.String && requestType.GetString() == "item")) {
+                if (requestType.ValueKind == JsonValueKind.String && requestType.GetString() == PartyFinderLinkPolicy.RequestType) {
+                    var pfRequest = PartyFinderLinkPolicy.Parse(pollDocument.RootElement);
+                    var pfProcessor = await framework.RunOnFrameworkThread(() => { RequirePermit(permit); return partyFinderLinkProcessor; });
+                    var pfResult = await pfProcessor.ProcessAsync(pfRequest, () => DateTime.UtcNow,
+                        () => !permit.Cancellation.IsCancellationRequested,
+                        r => ConsumePartyFinderLinkAsync(permit, r),
+                        r => framework.RunOnFrameworkThread(() => {
+                            RequirePermit(permit);
+                            if (!PartyFinderLinksPermitted(permit) || !PartyFinderLinkPolicy.Valid(r, DateTime.UtcNow)) throw new OperationCanceledException();
+                            chatGui.Print(NativePartyFinderLinkFactory.Create(r), "Gillions");
+                        }));
+                    await CommitAsync(permit, _ => { partyFinderLinkStatus = pfResult; RecordDiagnostic($"Party Finder link: {pfResult}."); });
+                } else await CommitAsync(permit, _ => RecordDiagnostic("Website request type unsupported; no action."));
+                return;
+            }
+            await CommitAsync(permit, _ => {
+                if (configuration.EnablePartyFinderLinkRequests) partyFinderLinkStatus = "Awaiting compatible Site native PF request contract; existing item links remain available.";
+            });
+#endif
+            var response = JsonSerializer.Deserialize<ItemLinkPollResponse>(pollJson, SyncResponsePolicy.Options);
             if (response?.Ok != true) throw new InvalidOperationException("Invalid item-link response.");
             if (response.Request is null) return;
             var result = await processor!.ProcessAsync(response.Request, DateTime.UtcNow,
@@ -515,6 +553,27 @@ public sealed class Plugin : IDalamudPlugin {
         return item is { RowId: > 0 } ? item.Value.Name.ExtractText() : null;
     });
 
+#if GILLIONS_TEST_BUILD
+    private bool PartyFinderLinksPermitted(SyncRequestPermit permit) => PermitIsCurrent(permit)
+        && configuration.EnableItemLinkRequests && configuration.EnablePartyFinderLinkRequests
+        && permit.Origin == GillionsPartyFinderContributor.ApprovedTestingOrigin;
+    private async Task<bool> ConsumePartyFinderLinkAsync(SyncRequestPermit permit, PartyFinderLinkRequest request) {
+        if (!await framework.RunOnFrameworkThread(() => PartyFinderLinksPermitted(permit) && PartyFinderLinkPolicy.Valid(request, DateTime.UtcNow))) return false;
+        using var consumeRequest = Request("/api/game-sync/item-links/consume", permit, new {
+            requestId = request.RequestId, claimToken = request.ClaimToken, requestType = PartyFinderLinkPolicy.RequestType,
+            listingKey = request.ListingKey, contract = PartyFinderLinkPolicy.Contract
+        });
+        using var response = await SendAsync(consumeRequest, permit);
+        if (!response.IsSuccessStatusCode) return false;
+        using var document = JsonDocument.Parse(await SyncResponsePolicy.ReadAsync(response.Content, permit.Cancellation));
+        var root = document.RootElement;
+        return root.TryGetProperty("ok", out var ok) && ok.ValueKind == JsonValueKind.True
+            && root.TryGetProperty("consumed", out var consumed) && consumed.ValueKind == JsonValueKind.True
+            && root.TryGetProperty("contract", out var contract) && contract.GetString() == PartyFinderLinkPolicy.Contract
+            && root.TryGetProperty("requestType", out var type) && type.GetString() == PartyFinderLinkPolicy.RequestType
+            && root.TryGetProperty("requestId", out var id) && id.GetString() == request.RequestId;
+    }
+#endif
     private async Task<bool> ConsumeItemLinkRequestAsync(SyncRequestPermit permit, ItemLinkRequest request) {
         if (DateTime.UtcNow >= request.ExpiresAtUtc) return false;
         using var consumeRequest = Request("/api/game-sync/item-links/consume", permit, new { requestId = request.RequestId, claimToken = request.ClaimToken });
@@ -1029,9 +1088,22 @@ public sealed class Plugin : IDalamudPlugin {
         if (ImGui.Button("Sync now")) _ = SyncAsync();
         ImGui.EndDisabled();
         var enableItemLinks = view.ItemLinks;
-        if (ImGui.Checkbox("Allow website 'Link in game' requests", ref enableItemLinks)) QueueUiAction(() => {
+#if GILLIONS_TEST_BUILD
+        const string websiteRequestLabel = "Allow website 'Open in FFXIV' requests";
+#else
+        const string websiteRequestLabel = "Allow website 'Link in game' requests";
+#endif
+        if (ImGui.Checkbox(websiteRequestLabel, ref enableItemLinks)) QueueUiAction(() => {
             configuration.EnableItemLinkRequests = enableItemLinks; RefreshSessionContext(); RequestConfigurationSave();
         });
+#if GILLIONS_TEST_BUILD
+        var pfLinks = configuration.EnablePartyFinderLinkRequests;
+        if (ImGui.Checkbox("Include Party Finder native links (final in-game click)", ref pfLinks)) QueueUiAction(() => {
+            configuration.EnablePartyFinderLinkRequests = pfLinks; RefreshSessionContext(); RequestConfigurationSave();
+        });
+        ImGui.TextWrapped("New action class: separately OFF for existing and new users. Secure TEST only; compatible Site request contract required. Never joins or applies. Item links retain their existing preference.");
+        ImGui.TextWrapped(partyFinderLinkStatus);
+#endif
         ImGui.Separator();
         var enablePartyFinderContributions = view.PartyFinderContributions;
         if (ImGui.Checkbox("Contribute public Party Finder listings", ref enablePartyFinderContributions)) QueueUiAction(() => {
@@ -1044,14 +1116,14 @@ public sealed class Plugin : IDalamudPlugin {
             partyFinderContributor.SetEnabled(enablePartyFinderContributions);
         });
 #if GILLIONS_TEST_BUILD
-        ImGui.TextWrapped("Off by default. Pair on https://gillions.app as Testing and explicitly grant public Party Finder contribution permission, then opt in here. Public listing names/descriptions, owner ID lower bits, worlds, duties, jobs and slots go to Gillions HTTPS—not xivpf.com. Automatic sync is independent. No active game queries are made.");
+        ImGui.TextWrapped("Off by default. Pair on the approved secure TEST origin as Testing and explicitly grant public Party Finder contribution permission, then opt in here. Public listing names/descriptions, owner ID lower bits, worlds, duties, jobs and slots go to TEST Gillions HTTPS, not xivpf.com. No production fallback. Automatic sync is independent. No active game queries are made.");
         ImGui.TextWrapped("The paired-device credential authenticates only to Gillions. No chat, Square Enix credentials, diagnostics or unrelated local data is submitted. Reporter identity is private; listing owners may be other players. Disable to cancel and clear unsent observations.");
         if (partyFinderContributor is GillionsPartyFinderContributor intake) ImGui.TextWrapped(intake.Status);
 #else
         ImGui.TextWrapped("Off by default and independent of Gillions pairing or sync. When enabled, public listing names and descriptions, owner ID lower bits, worlds, duty/settings, jobs and slots are batched and sent directly to xivpf.com. They never pass through Gillions.");
         ImGui.TextWrapped("No chat, Gillions account or device credential, Square Enix credential, diagnostic, or unrelated local data is included.");
 #endif
-        ImGui.TextWrapped("Powered by xivpf.com — https://xivpf.com");
+        ImGui.TextWrapped("Data provided by xivpf.com — https://xivpf.com");
         if (ImGui.Button("Open xivpf.com")) Util.OpenLink("https://xivpf.com");
         ImGui.Separator();
         if (!string.IsNullOrWhiteSpace(view.Message)) ImGui.TextWrapped(view.Message);
@@ -1180,6 +1252,9 @@ public sealed class Plugin : IDalamudPlugin {
         pendingRetainerBalance = null; pendingRetainerBalanceSinceUtc = DateTime.MinValue;
         recentRetainerWithdrawals.Clear(); recentGilLedgerLogs.Clear(); recentGilLedgerChat.Clear(); emittedRetainerChatEvidence.Clear();
         DirectGameSnapshotCollector.ClearTransientState(); itemLinkRequestProcessor = new();
+#if GILLIONS_TEST_BUILD
+        partyFinderLinkProcessor = new();
+#endif
         lock (diagnosticsLock) diagnostics.Clear();
         uiState = PluginUiSnapshot.Empty; uiBudget = null; uiAvailability = ""; nextUiDetailsUtc = DateTime.MinValue;
         uiRefreshPolicy.Reset();
@@ -1228,6 +1303,12 @@ public sealed class Plugin : IDalamudPlugin {
             observedItemLinks = configuration.EnableItemLinkRequests;
             requestLifetime.InvalidateItemLinks();
         }
+#if GILLIONS_TEST_BUILD
+        if (observedPartyFinderLinks != configuration.EnablePartyFinderLinkRequests) {
+            observedPartyFinderLinks = configuration.EnablePartyFinderLinkRequests;
+            requestLifetime.InvalidateItemLinks();
+        }
+#endif
     }
 
     private SyncRequestPermit CapturePermit(SyncRequestMode mode) {
@@ -1251,7 +1332,7 @@ public sealed class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         if (disposed || !framework.IsInFrameworkUpdateThread || !PartyFinderContributionEnabled || !clientState.IsLoggedIn) return null;
         RefreshSessionContext();
-        if (!HasPairedSession || activeOwnedState is null || configuration.ActiveSession!.Origin != "https://gillions.app") return null;
+        if (!HasPairedSession || activeOwnedState is null || configuration.ActiveSession!.Origin != GillionsPartyFinderContributor.ApprovedTestingOrigin) return null;
         var permit = CapturePermit(SyncRequestMode.Manual);
         var authorizationGeneration = permit.Session!.Generation;
         return new GillionsPartyFinderSession($"{authorizationGeneration}:{permit.Epoch}:{permit.ContentId}", authorizationGeneration,
@@ -1266,7 +1347,7 @@ public sealed class Plugin : IDalamudPlugin {
                 FlushConfigurationSave(receivedAuthorizationDenial: true);
             }),
             async (body, cancellation) => {
-                using var request = new HttpRequestMessage(HttpMethod.Post, GillionsPartyFinderContributor.Endpoint) {
+                using var request = new HttpRequestMessage(HttpMethod.Post, GillionsPartyFinderContributor.SessionEndpoint(permit.Origin)) {
                     Content = new ByteArrayContent(body)
                 };
                 request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
@@ -1672,6 +1753,9 @@ public sealed class PluginConfiguration : IPluginConfiguration {
     public string DeviceToken { get; set; } = "";
     public bool AutomaticSync { get; set; } = true;
     public bool EnableItemLinkRequests { get; set; } = true;
+#if GILLIONS_TEST_BUILD
+    public bool EnablePartyFinderLinkRequests { get; set; }
+#endif
     public bool EnablePartyFinderContributions { get; set; } = false;
     public bool EnableGillionsPartyFinderContributions { get; set; } = false;
     // Non-secret enrollment metadata only; no listing, response, or credential.

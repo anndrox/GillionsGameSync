@@ -48,7 +48,7 @@ Both channels use separate off-by-default contribution choices and listen only t
 
 Stable builds send the `UploadableListing` payload directly to xivpf's HTTPS receiver, independently of Gillions pairing. Gillions does not proxy or retain stable contributions, and no Gillions credential accompanies them. Stable pending and in-flight batches each retain at most 1,000 listings.
 
-Testing `0.0.65` sends only to `https://gillions.app/api/game-sync/party-finder/contribute`, not xivpf or localhost. It requires a valid main-site Testing pairing, separate site-recorded public Party Finder permission, and the new local contribution opt-in. Legacy xivpf consent is not transferred. The paired-device token is used only in Gillions Authorization, never the listing body. Gillions holds an expiring, runtime current-listing cache, not durable history; a successful acknowledgement is not xivpf delivery. Site production activation is separate from plugin publication.
+Testing `0.0.75` corrects the historical production target: it derives `/api/game-sync/party-finder/contribute` from the authenticated session restricted to `https://test.gillions.app`, not xivpf, production or localhost. It requires explicit Testing pairing, site-recorded public PF permission and separate local opt-in. Existing production pairings are not moved; ordinary sync remains independent. The token is only Gillions Authorization, never listing data. Current state is an expiring runtime cache, not durable history or proof of page integration. See [exact audit and Site handoff](docs/contracts/party-finder-native-requests-v1.md). Provider attribution: **Data provided by xivpf.com**, with its link.
 
 Testing keeps at most 1,000 pending identities and 100 in-flight listings, with requests at most 256 KiB. Retry timestamps are immutable; stale/expired observations are discarded. Disabling contribution clears unsent memory and cancels active work where possible. A 401/403 persists only a non-secret blocked enrollment-generation marker: logout, character changes, off/on and reload do not reset it. Correct account/permission and enroll again. Redirect/404 endpoint failures instead stop the load until deployment is corrected and the plugin reloaded. No Square Enix credential, private chat, diagnostic or unrelated local data is contributed.
 
@@ -65,7 +65,7 @@ custom plugin repositories:
 
 This installs the separate **Gillions Game Sync Testing** identity. It does not
 replace the stable plugin or update the existing `gillions.app` testing feed.
-Testing `0.0.74` adds independently consented private Hunt/Submarine sync to the approved secure TEST origin. Both upload switches default OFF, separately from local retention and existing feature permissions. Keep the existing custom-repository URL above: it is the rolling Testing update feed, despite its historical tag name. Refresh Dalamud's plugin list and update to `0.0.74.0`; do not replace the repository entry for each release. See [release, consent and live Hunt test](docs/releases/testing-0.0.74.md). Do not downgrade or delete configuration. Existing main-site pairings are not silently moved. Custom Delivery correction and ordinary/PF/Beastmaster/Market behavior are preserved; Dashboard facts remain local until Site provides an exact intake contract. Real Hunt transport and live FC validation remain outstanding.
+Testing `0.0.75` preserves independently consented private Hunt/Submarine TEST sync from74 and corrects the PF origin. New website PF links require separate default-OFF consent and the compatible Site request contract; until then they are dormant. Supported native chat delivery requires a final game click. Keep this same rolling repository URL and update to `0.0.75.0`; no configuration reset or downgrade. See [release and limits](docs/releases/testing-0.0.75.md) and [personal consent/live Hunt test](docs/releases/testing-0.0.74.md). Custom Deliveries, ordinary sync, item links, Beastmaster and Market are preserved; Dashboard facts remain local. Real PF/Hunt transport and live FC validation are not established by publication. Owner FC access does not block future [Submarine production beta](docs/contracts/submarine-production-beta-readiness.md), but its server/Stable/privacy gates still apply.
 
 Open `/gillionssubs` or **Submarine voyage retention**. Use workshop interfaces
 manually; no submarine control, polling or third-party plugin is involved. Local
@@ -86,7 +86,7 @@ Published `0.0.73` corrects the selected-client counter source after a live72
 satisfaction with the active agent and calculates client residual capacity;
 the agent's ambiguous remaining field is unsupported. Global allowances remain
 unchanged. See [diagnosis and capability state](docs/releases/testing-0.0.73.md).
-The immutable73 package remains preserved; the rolling Testing feed now advertises74.
+The immutable73 and74 packages remain preserved; the rolling Testing feed uses the current reviewed successor.
 
 The successor separates valid global allowance observations from rejected client
 details and adds a persistent, session-local **Custom Delivery read** reason to
@@ -116,7 +116,7 @@ The existing rolling Testing feed supplies this update; Stable is unchanged.
 
 Testing 0.0.67 was published October 1, 2026 at tag `v0.0.67-testing`, source
 `9821c92df8f51c9fef913a9e8294fd6ed3b4469c`. Its immutable assets are preserved;
-0.0.74 uses the same separate product identity. Publication is not live-game proof.
+0.0.75 uses the same separate product identity. Publication is not live-game proof.
 
 "Contribute observed market data to Gillions" is independently **on by default**,
 including older Testing configurations without that field. It has a persistent

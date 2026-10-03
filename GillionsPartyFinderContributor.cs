@@ -25,7 +25,14 @@ internal sealed class GillionsPartyFinderSession(string key, string authorizatio
 }
 
 internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
-    internal static readonly Uri Endpoint = new("https://gillions.app/api/game-sync/party-finder/contribute");
+    internal const string ApprovedTestingOrigin = "https://test.gillions.app";
+    internal const string ContributionPath = "/api/game-sync/party-finder/contribute";
+    // Build metadata is a compatibility guard, not the dispatch authority.
+    internal static readonly Uri Endpoint = new(ApprovedTestingOrigin + ContributionPath);
+    internal static Uri SessionEndpoint(string origin) {
+        if (origin != ApprovedTestingOrigin) throw new InvalidOperationException("Party Finder Testing requires the approved secure TEST pairing.");
+        return new Uri(origin + ContributionPath);
+    }
     internal const int MaximumBodyBytes = 262144;
     private sealed record Observation(PartyFinderContributionListing Listing, DateTime At, long Sequence);
     private readonly object gate = new();
@@ -86,7 +93,7 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
             // Refresh the persistent authorization flag even without a runtime-key change.
             if (session is not null && current?.Key == session.Key) session = current;
             if (session?.AuthorizationBlocked == true) blockedAuthorization = session.AuthorizationKey;
-            if (enabledState && session is null) status = "Waiting for a logged-in, paired Testing client on https://gillions.app.";
+            if (enabledState && session is null) status = "Waiting for a logged-in, paired Testing client on the approved secure TEST origin.";
             if (session is not null && blockedAuthorization == session.AuthorizationKey)
                 status = "Stopped for this pairing; correct account/permission and pair again. Logout or reload will not reset this stop.";
             if (endpointStopped) status = "Party Finder endpoint unavailable or redirected; contribution stopped for this load. Site must correct deployment before reload.";

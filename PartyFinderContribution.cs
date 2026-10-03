@@ -25,6 +25,16 @@ internal static class XivpfEndpoints {
     }
 }
 
+#if GILLIONS_TEST_BUILD
+internal static class NativePartyFinderLinkFactory {
+    internal static Dalamud.Game.Text.SeStringHandling.SeString Create(PartyFinderLinkRequest request) {
+        if (request.ListingId == 0 || !PartyFinderLinkPolicy.RecruiterValid(request.RecruiterName))
+            throw new ArgumentException("Invalid native Party Finder link fields.");
+        return Dalamud.Game.Text.SeStringHandling.SeString.CreatePartyFinderLink(request.ListingId, request.RecruiterName, request.CrossWorld);
+    }
+}
+#endif
+
 internal sealed class DalamudPartyFinderContributionSource : IPartyFinderContributionSource {
     private readonly IPartyFinderGui partyFinderGui;
     private readonly IPluginLog log;
@@ -43,6 +53,11 @@ internal sealed class DalamudPartyFinderContributionSource : IPartyFinderContrib
     private void OnListing(IPartyFinderListing listing, IPartyFinderListingEventArgs args) {
         if (disposed || !enabled()) return;
         try {
+#if GILLIONS_TEST_BUILD
+            // The native link API takes uint. Never silently truncate an ulong
+            // listing identity into a different actionable listing.
+            if (listing.Id == 0 || listing.Id > uint.MaxValue) return;
+#endif
             var snapshot = new PartyFinderListingSnapshot(
                 (uint)listing.Id,
                 (uint)listing.ContentId,

@@ -37,7 +37,7 @@ Assert(AcceptsOrigin("https://gillions.app") && !AcceptsOrigin("http://example.c
     "Both products must support the main HTTPS origin and reject all plaintext pairing origins.");
 Console.WriteLine($"Actual HTTPS-only pairing boundary passed: {pluginAssembly.GetName().Name}.");
 Assert(testingProduct
-        ? endpoint == new Uri("https://gillions.app/api/game-sync/party-finder/contribute")
+        ? endpoint == new Uri("https://test.gillions.app/api/game-sync/party-finder/contribute")
         : endpoint == new Uri("https://xivpf.com/contribute/multiple"),
     "Built product resolved an unsafe or unexpected xivpf contribution endpoint.");
 var changelog = (string[])pluginType.GetField("CurrentChangelog", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
@@ -84,6 +84,39 @@ saveProxy.Save = config => File.WriteAllText(pathForFixture, (string)serialize.I
 var marketSetting = configurationType.GetProperty("ContributeObservedMarketData");
 var personalHuntSetting = configurationType.GetProperty("SyncPersonalHunts");
 var personalSubSetting = configurationType.GetProperty("SyncPersonalSubmarines");
+var pfLinkSetting = configurationType.GetProperty("EnablePartyFinderLinkRequests");
+if (testingProduct) {
+    var oldLinkConfig = JsonConvert.DeserializeObject("{\"EnableItemLinkRequests\":true}", configurationType)!;
+    Assert(!(bool)pfLinkSetting!.GetValue(oldLinkConfig)! && !(bool)pfLinkSetting.GetValue(Activator.CreateInstance(configurationType))!,
+        "Old/default item consent must not silently expand to PF actions.");
+    pfLinkSetting.SetValue(oldLinkConfig, true);
+    configurationType.GetMethod("Save")!.Invoke(oldLinkConfig, [savedViaPlugin]);
+    var pfReload = load.Invoke(configurations, [product])!;
+    Assert((bool)pfLinkSetting.GetValue(pfReload)! && (bool)configurationType.GetProperty("EnableItemLinkRequests")!.GetValue(pfReload)!,
+        "PF action explicit consent and old item setting must survive serializer.");
+    pfLinkSetting.SetValue(pfReload, false);
+    Assert((bool)configurationType.GetProperty("EnableItemLinkRequests")!.GetValue(pfReload)!, "PF OFF changed item consent.");
+    var sdk = typeof(Dalamud.Game.Text.SeStringHandling.SeString);
+    var createPf = sdk.GetMethod("CreatePartyFinderLink", [typeof(uint),typeof(string),typeof(bool)]);
+    Assert(createPf is { IsPublic: true, IsStatic: true } && createPf.ReturnType == sdk, "Installed native PF API signature changed.");
+    Assert((byte)Dalamud.Game.Gui.PartyFinder.Types.SearchAreaFlags.World == 8
+        && (byte)Dalamud.Game.Gui.PartyFinder.Types.SearchAreaFlags.DataCenter == 1, "Installed cross-world flag semantics changed.");
+    Assert(!typeof(Dalamud.Plugin.Services.IPartyFinderGui).GetMethods().Any(m => m.Name.Contains("Open") || m.Name.Contains("Join") || m.Name.Contains("Apply")),
+        "Installed supported PF surface changed: reassess true open before claiming link-only.");
+    foreach (var listingId in new uint[] { 1,101,uint.MaxValue }) foreach (var cross in new[] { false,true }) {
+        var linkType = cross ? Dalamud.Game.Text.SeStringHandling.Payloads.PartyFinderPayload.PartyFinderLinkType.NotSpecified
+            : Dalamud.Game.Text.SeStringHandling.Payloads.PartyFinderPayload.PartyFinderLinkType.LimitedToHomeWorld;
+        var nativePayload = new Dalamud.Game.Text.SeStringHandling.Payloads.PartyFinderPayload(listingId, linkType);
+        var chain = new Dalamud.Game.Text.SeStringHandling.SeString(new Dalamud.Game.Text.SeStringHandling.Payload[] {
+            nativePayload, new Dalamud.Game.Text.SeStringHandling.Payloads.TextPayload("Fixture Recruiter"),
+            Dalamud.Game.Text.SeStringHandling.Payloads.RawPayload.LinkTerminator });
+        var decoded = Dalamud.Game.Text.SeStringHandling.SeString.Parse(chain.Encode()).Payloads
+            .OfType<Dalamud.Game.Text.SeStringHandling.Payloads.PartyFinderPayload>().Single();
+        Assert(decoded.ListingId == listingId && decoded.LinkType == linkType, "Actual SDK PF payload encoding roundtrip failed.");
+    }
+    Console.WriteLine("Actual installed PF API signature/flags/chat payload encoding/default-OFF and serializer consent PASS; no live game/chat invocation.");
+} else Assert(pfLinkSetting is null && pluginAssembly.GetType("GillionsGameSync.PartyFinderLinkRequestProcessor") is null,
+    "Stable must not gain website PF request action classes.");
 if (testingProduct) {
     var oldPersonal = JsonConvert.DeserializeObject("{\"AutomaticSync\":true,\"ContributeObservedMarketData\":false}", configurationType)!;
     Assert(!(bool)personalHuntSetting!.GetValue(oldPersonal)! && !(bool)personalSubSetting!.GetValue(oldPersonal)!,

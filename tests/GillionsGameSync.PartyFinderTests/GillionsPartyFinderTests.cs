@@ -61,6 +61,12 @@ internal static class GillionsPartyFinderTests {
         return response;
     }
     internal static async Task Run() {
+        Check(GillionsPartyFinderContributor.SessionEndpoint("https://test.gillions.app") == GillionsPartyFinderContributor.Endpoint, "Bound TEST origin not used.");
+        foreach (var origin in new[] { "https://gillions.app", "http://test.gillions.app", "https://10.10.2.1", "https://test.gillions.app/", "https://example.com" }) {
+            bool rejected = false;
+            try { GillionsPartyFinderContributor.SessionEndpoint(origin); } catch (InvalidOperationException) { rejected = true; }
+            Check(rejected, "Unapproved Testing session origin accepted.");
+        }
         Check(XivpfEndpointPolicy.RequireBuildSafe(GillionsPartyFinderContributor.Endpoint, true) == GillionsPartyFinderContributor.Endpoint, "Testing HTTPS intake rejected.");
         foreach (var url in new[] { "http://127.0.0.1:8000/contribute/multiple", "https://xivpf.com/contribute/multiple", "https://example.com/api/game-sync/party-finder/contribute", "https://gillions.app/api/game-sync/party-finder/contribute?x=1" }) {
             bool refused = false;

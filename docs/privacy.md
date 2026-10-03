@@ -1,5 +1,23 @@
 # Privacy
 
+## Testing 0.0.75 website Party Finder requests
+
+Testing PF contributions are now origin-bound to the approved secure TEST session,
+not the historical production target. Stable direct-xivpf contribution is unchanged.
+Website PF actions reuse authenticated item polling/one-time claims, but require
+new separate default-OFF consent beneath the existing master. Old item consent
+never expands. Authoritative recruiter/uint ID/scope and short expiry are validated;
+consume precedes native chat presentation with a final in-game click. No gameplay
+automation, arbitrary SeString/browser payload or second command channel. No new
+request IDs/names/claims/bodies/credentials are logged or persisted. Local attempted
+IDs are bounded to128; Site must reject consumed/expired claims across reload.
+Logout/re-pair/OFF invalidates work. Missing compatible Site contract fails closed
+without affecting item links or other resources. See [exact Site handoff](contracts/party-finder-native-requests-v1.md).
+
+Submarine production beta is a separate [readiness handoff](contracts/submarine-production-beta-readiness.md),
+not activated here. Private state must not become public community outcomes or
+raw operational telemetry. No owner FC live test is required for that beta decision.
+
 ## Testing 0.0.74 private shared-TEST synchronization
 
 Local retention remains independently consented. Separate Hunt/Submarine upload
@@ -95,7 +113,7 @@ The current bearer, origin binding and private gameplay history are stored in or
 
 ## Optional Party Finder contribution
 
-Party Finder listens only to Dalamud's public listing event; it never actively queries the game. Stable builds retain their separate off-by-default direct contribution to [xivpf.com](https://xivpf.com), independent of Gillions pairing. Testing `0.0.65` instead sends to the fixed `https://gillions.app/api/game-sync/party-finder/contribute` receiver. It requires a logged-in paired Testing device, explicit site-side contribution permission and a new local opt-in. Old third-party opt-in does not authorize this different recipient. Automatic/manual character sync is independent. Older testing `0.0.64` remains loopback-only.
+Party Finder listens only to Dalamud's public listing event; it never actively queries the game. Stable builds retain their separate off-by-default direct contribution to [xivpf.com](https://xivpf.com), independent of Gillions pairing. Testing `0.0.75` corrects the former production binding and derives its receiver only from the exact approved `https://test.gillions.app` authenticated session. It requires a logged-in paired Testing device, explicit site-side PF permission and separate local opt-in. No production/HTTP fallback or automatic pairing move. Old third-party opt-in does not authorize this different recipient. Automatic/manual character sync is independent. Historical 0.0.65–74 production and 0.0.64 loopback behavior are not the current successor path.
 
 The payload contains public listing IDs, owner ID lower bits, encoded names/descriptions, worlds, duty/settings, jobs and slots. Listing owners need not be contributors. Testing authenticates with the existing paired credential only to Gillions HTTPS; neither credentials nor reporter IDs are placed in the payload or forwarded to xivpf. Gillions derives a private reporter from authentication. It maintains a bounded runtime-only current cache, not history/durable delivery; restart clears it. No Square Enix credentials, private chat, diagnostics or unrelated local data are included. Testing queues at most 1,000 identities plus an in-flight batch of at most 100. Opt-out, logout, character changes, re-pair and disposal cancel/clear old-session testing observations. Accepted server effects cannot be recalled by cancellation.
 

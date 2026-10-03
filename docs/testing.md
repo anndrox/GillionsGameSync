@@ -10,6 +10,21 @@ the plugin list and update normally; keep the installed configuration. Future
 authorized Testing publications must advance this same JSON, not ask testers to
 change repository URLs. [Publication procedure](releasing.md#fixed-testing-update-feed).
 
+## Testing 0.0.75 — PF origin and native website requests
+
+Use [Testing75 notes](releases/testing-0.0.75.md) and
+[exact PF audit / Site handoff](contracts/party-finder-native-requests-v1.md).
+TEST contribution uses only the exact approved authenticated TEST session.
+Website PF links require separate default-OFF consent and a compatible Site
+contract; currently dormant. No owner party creation/join or forced searches.
+Offline tests prove strict field/expiry/consent/replay/session/consume behavior
+and installed SDK native payload encoding, not in-game rendering/clicking.
+Once Site page/cache and enqueue/claim support are ready, use an ordinarily
+received current PF listing, verify its TEST receipt and page provenance, click
+Open in FFXIV, then click the native chat link in game. Do not share credentials,
+claim tokens, configuration or raw private exports as diagnostics. Existing
+item-link requests and all unrelated opt-outs must stay independent.
+
 ## Testing 0.0.68 — local Hunt Bills and private submarines
 
 0.0.70 adds readable localized target names, separate wrapped target rows and
@@ -75,13 +90,15 @@ are transferred between the stable and testing product identities.
 The previously prepared private-HTTP pairing exception was never published and
 has been withdrawn. Both products retain HTTPS-only pairing.
 
-Testing `0.0.65` uses the fixed authenticated Gillions HTTPS Party Finder intake.
+Historical Testing `0.0.65` used the production Gillions HTTPS Party Finder intake;
+current75 uses the approved secure TEST paired origin only.
 It requires a new pairing created with Testing selected, real-data acknowledgement
 and separate site-side public Party Finder permission, plus a new local opt-in.
 Old `0.0.64` contribution settings do not enable this recipient. Leave contribution
-off until Site confirms production activation. The editable server field cannot
-retarget Party Finder or send its credential to another origin. Beastmaster remains
-local-only. See [0.0.65 testing checks](releases/testing-0.0.65.md).
+off unless paired to the exact approved TEST with its explicit PF permission.
+The editable field cannot retarget an existing authenticated session or create
+a production fallback. Beastmaster remains local-only. Current checks are in
+[Testing75 notes](releases/testing-0.0.75.md);65 is historical evidence only.
 
 This document describes the `1.0.30` source and its synthetic verification. The stable feed and GitHub Release identify the published package. Testing builds retain their separate product identity and publication path.
 
