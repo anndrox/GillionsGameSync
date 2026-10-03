@@ -76,3 +76,11 @@ native/admission/export/persistence/diagnostic surface. It adds no private field
 identity, credential, upload, trust or retention scope. The previously reviewed
 privacy boundaries remain unchanged; no new independent approval is claimed.
 The market-observations-v1 contract is unchanged.
+
+Prepared package source: `735bd17e77f959c103f59a465f047961c247465d`.
+ZIP SHA256: `91c3fd8da2322b10f3e0858db25ecd97df854bf3d4a5dfc9b569f8e6c727a563`.
+Manifest SHA256: `2062725468b69db98c0afc61d4229850f5d5ddb1ac0d6339e10dd7399fba99c2`.
+DLL SHA256: `fd2a3ee69401a61782a21136c48fe2c0b936c24c2790bce897f25b11be64cd58`.
+Exact packaged DLL actual configuration tests and product/API15/73/hash/private-path
+checks PASS. Original rolling feed anonymously remains72, not this candidate.
+Detailed durable evidence: [Testing73](../../data/releases/testing-0.0.73.json).
