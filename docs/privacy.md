@@ -1,5 +1,29 @@
 # Privacy
 
+## Testing 0.0.74 private shared-TEST synchronization
+
+Local retention remains independently consented. Separate Hunt/Submarine upload
+switches default OFF and require explicit Testing pairing permission at the exact
+approved HTTPS TEST origin, plus compatible server acknowledgment. Nothing is sent
+to production or a public/community feed. New pairing resets local upload consent.
+Hunts include target/progress/provenance; submarine personal state includes private
+names, hashed workshop scope, parts/stats/EXP/routes and activity/expected-return
+times. A scope hash is not anonymization or FC membership proof. Payloads exclude
+account/reporter/character IDs and credentials; the existing Bearer token is only
+transport authentication to the bound TEST origin. Ordinary sync/Market/PF controls
+remain independent. No new game requests/writes are made.
+
+Prepared private snapshots are retained in existing configuration, bounded to 16
+owner/resource entries and 1,152 KiB. Exact nonce/body is saved successfully before
+dispatch and preserved through failure/reload/opt-out; terminal failures stop, and
+unknown formats/capacity fail closed without eviction. Prior pairing generations
+remain inactive. OFF stops future sends and cancels outstanding work where possible,
+not an observation already accepted by Site. Local history is not erased; Site's
+existing private retained-user policy applies. Local windows describe collection
+only; the main window owns transport status. Dashboard facts remain local-only.
+Do not share configuration, credentials or private exports as routine diagnostics.
+See [exact transport and bounds](contracts/testing-personal-transport-v1.md).
+
 ### Testing 0.0.71–0.0.72 private daily / weekly facts
 
 This separate OFF-by-default experiment retains private personal counters,

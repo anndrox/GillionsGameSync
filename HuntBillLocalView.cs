@@ -38,7 +38,7 @@ internal sealed class HuntBillLocalView : IDisposable {
     private string export = "";
     private sealed record View(bool Enabled, string Status, string[] Rows, double Milliseconds,
         int Attempts = 0, DateTime? LastAttemptUtc = null);
-    private volatile View view = new(false, "Hunt retention off. No Hunt upload contract.", [], 0);
+    private volatile View view = new(false, "Hunt retention off. Private TEST sync is controlled separately in the main window.", [], 0);
 
     internal HuntBillLocalView(IDalamudPluginInterface ui, ICommandManager commands, IFramework framework,
         IClientState client, IDataManager data, ICondition conditions, HuntBillRetention store, System.Action persist) {
@@ -62,7 +62,7 @@ internal sealed class HuntBillLocalView : IDisposable {
         return client.IsLoggedIn && player != null && player->IsLoaded && player->ContentId != 0
             ? HuntBillRetentionPolicy.CharacterKey(player->ContentId) : "";
     }
-    private void OnLogout(int _, int __) { export = ""; schedule.Reset(); Publish("Logged out; retained Hunt state is historical, not current. No upload."); }
+    private void OnLogout(int _, int __) { export = ""; schedule.Reset(); Publish("Logged out; retained Hunt state is historical, not current. Private sync paused."); }
     private void Publish(string status, string characterKey = "", double milliseconds = 0) {
         var rows = policy.Supported ? store.Characters.SingleOrDefault(c => c.LocalCharacterKey == characterKey)?.Bills
             .OrderBy(b => b.BillTypeId).SelectMany(b => new[] {
@@ -144,7 +144,7 @@ internal sealed class HuntBillLocalView : IDisposable {
             }
             if (policy.Observe(characterKey, observations.ToArray())) { export = ""; persist(); }
             var status = observations.Count == 0 ? $"No corroborated bills observed; {partial} partial/unmatched. NOT proof of no bills. Prior state preserved."
-                : $"Observed {observations.Count} bill caches with matching loaded Key Items; {partial} partial. Bill windows not required. Current order/cache ownership/reset unverified. No upload.";
+                : $"Observed {observations.Count} bill caches with matching loaded Key Items; {partial} partial. Bill windows not required. Current order/cache ownership/reset unverified. Private TEST sync status is in the main window.";
             if (store.CapacityReached) status += " Retention capacity reached: new character observations paused; existing history preserved.";
             Publish(status, characterKey, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         } catch (Exception) { Publish("Hunt read/save failed; history preserved. New data may be memory-only. No live correctness claim."); }
@@ -154,7 +154,7 @@ internal sealed class HuntBillLocalView : IDisposable {
         var state = view;
         ImGui.SetNextWindowSize(new Vector2(780, 500), ImGuiCond.FirstUseEver);
         if (ImGui.Begin("My Hunt Bills local test###GillionsHuntBills", ref visible)) {
-            ImGui.TextWrapped("Testing, read-only, local-first. Every five seconds, observe naturally loaded bill caches corroborated by loaded Key Items. No bill window required. No radar, mob scans, UI opening, game requests, or Hunt upload endpoint. Missing data never clears retained bills.");
+            ImGui.TextWrapped("Testing, read-only, local-first. Every five seconds, observe naturally loaded bill caches corroborated by loaded Key Items. No bill window required. No radar, mob scans, UI opening or game requests. Missing data never clears retained bills. Private TEST uploads require separate permission; see the main window for sync controls/status.");
             bool enabled = state.Enabled;
             if (ImGui.Checkbox("Retain naturally loaded Hunt Bill observations locally", ref enabled)) {
                 export = "";
@@ -171,7 +171,7 @@ internal sealed class HuntBillLocalView : IDisposable {
                 });
             }
             if (enabled && export.Length > 0 && ImGui.Button("Copy PRIVATE Hunt JSON")) ImGui.SetClipboardText(export);
-            if (ImGui.Button("Copy aggregate Hunt diagnostics")) ImGui.SetClipboardText($"Gillions Game Sync Testing {collectorVersion}\nGame: {GameVersion()}; SDK: {typeof(MobHunt).Assembly.GetName().Version}\nHunts local: {state.Enabled}\n{state.Status}\nAttempts: {state.Attempts}; last attempt UTC: {state.LastAttemptUtc:u}; cadence: 5 seconds\nRead/save: {state.Milliseconds:F2} ms\nNo upload; no live correctness claim.");
+            if (ImGui.Button("Copy aggregate Hunt diagnostics")) ImGui.SetClipboardText($"Gillions Game Sync Testing {collectorVersion}\nGame: {GameVersion()}; SDK: {typeof(MobHunt).Assembly.GetName().Version}\nHunts local: {state.Enabled}\n{state.Status}\nAttempts: {state.Attempts}; last attempt UTC: {state.LastAttemptUtc:u}; cadence: 5 seconds\nRead/save: {state.Milliseconds:F2} ms\nLocal collection diagnostics only; private TEST sync controls/status are in the main window. No live correctness claim.");
             ImGui.PushTextWrapPos(0);
             foreach (var row in state.Rows) ImGui.TextUnformatted(row);
             ImGui.PopTextWrapPos();

@@ -48,5 +48,27 @@ internal static class PersonalSyncTests {
         check(PersonalSyncPolicy.Receipt(receipt),"exact receipt accepted");
         check(!PersonalSyncPolicy.Receipt("{\"ok\":true}"),"partial success not ACK");
         for(int i=0;i<20;i++)check(PersonalSyncPolicy.RetrySeconds(i) is >=60 and <=900,"bounded backoff");
+        var failedStore = new PersonalSyncState();
+        var failedPrepared = PersonalSyncPolicy.Prepare(failedStore,owner,"hunt_bills",payload)!;
+        string? durable = null; int dispatches=0;
+        for(int i=0;i<3;i++) {
+            var pending = PersonalSyncPolicy.Prepare(failedStore,owner,"hunt_bills",changed)!;
+            if(PersonalSyncPolicy.PersistBeforeSend(() => throw new IOException("synthetic save failure")))dispatches++;
+            check(pending.Nonce==failedPrepared.Nonce && pending.Payload==payload && dispatches==0,"save failure and next tick cannot dispatch unsaved snapshot");
+        }
+        if(PersonalSyncPolicy.PersistBeforeSend(() => durable=JsonSerializer.Serialize(failedStore)))dispatches++;
+        var afterSave = JsonSerializer.Deserialize<PersonalSyncState>(durable!)!;
+        check(dispatches==1 && afterSave.Prepared[0].Nonce==failedPrepared.Nonce && afterSave.Prepared[0].Payload==payload,"successful retry saves exact nonce/body before dispatch");
+        foreach(var status in new[]{400,401,403,404,409,413,415})
+            foreach(var ignoredBody in new[]{"","<html>error</html>","{broken",new string('x',65537)})
+                {
+                    var reads=0;
+                    var success=PersonalSyncPolicy.ReadReceiptAsync(status, () => { reads++; throw new JsonException(ignoredBody); }).GetAwaiter().GetResult();
+                    check(!success && reads==0 && PersonalSyncPolicy.TerminalStatus(status),"terminal status independent of invalid/empty/oversize body " + ignoredBody.Length);
+                }
+        foreach(var status in new[]{408,429,500,502,503,504})
+            check(!PersonalSyncPolicy.TerminalStatus(status)
+                && !PersonalSyncPolicy.ReadReceiptAsync(status, () => throw new JsonException("HTML transient body")).GetAwaiter().GetResult(),"transient response remains bounded retry");
+        check(PersonalSyncPolicy.ReadReceiptAsync(201,()=>Task.FromResult(receipt)).GetAwaiter().GetResult(),"success alone reads validated receipt body");
     }
 }

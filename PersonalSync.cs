@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace GillionsGameSync;
 
@@ -98,5 +99,11 @@ internal static class PersonalSyncPolicy {
         } catch (Exception error) when (error is JsonException or InvalidOperationException or KeyNotFoundException or FormatException) { return false; }
     }
     internal static int RetrySeconds(int failures) => (int)Math.Min(900, 60 * Math.Pow(2, Math.Clamp(failures, 0, 4)));
+    internal static bool PersistBeforeSend(Action save) {
+        try { save(); return true; } catch (Exception) { return false; }
+    }
+    internal static bool TerminalStatus(int status) => status is 400 or 401 or 403 or 404 or 409 or 413 or 415;
+    internal static async Task<bool> ReadReceiptAsync(int status, Func<Task<string>> read) =>
+        status is >= 200 and <= 299 && Receipt(await read());
 }
 #endif

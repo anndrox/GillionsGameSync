@@ -255,7 +255,7 @@ internal sealed class SubmarineLocalView : IDisposable {
         var state = view;
         ImGui.SetNextWindowSize(new Vector2(780, 540), ImGuiCond.FirstUseEver);
         if (ImGui.Begin("Submarine voyage retention (Testing)###GillionsSubmarineRetention", ref visible)) {
-            ImGui.TextWrapped("Read-only, local-first. Use FC workshop menus normally. No automatic interface opening, dispatch/recall/repair, game-server requests, third-party plugin or upload endpoint.");
+            ImGui.TextWrapped("Read-only, local-first. Use FC workshop menus normally. No automatic interface opening, dispatch/recall/repair, game-server requests or third-party plugin. Private TEST uploads require separate permission; sync controls/status are in the main window. Community results are not uploaded.");
             bool local = state.Local;
             if (ImGui.Checkbox("Retain naturally loaded submarine observations locally", ref local)) Change(() => store.LocalRetentionEnabled = local);
             bool community = state.Community;
@@ -284,7 +284,7 @@ internal sealed class SubmarineLocalView : IDisposable {
                 if (ImGui.Button("Copy sanitized JSON")) ImGui.SetClipboardText(export);
                 ImGui.TextWrapped(export.Length < 20000 ? export : "Export prepared (large). Copy only if you intend to share this sanitized voyage dataset.");
             }
-            if (ImGui.Button("Copy aggregate diagnostics")) ImGui.SetClipboardText($"Gillions Game Sync Testing {collectorVersion}\nSubmarine retention\nLocal: {state.Local}; community preparation: {state.Community}\n{state.Status}\nRetained: {state.Records}; results: {state.Results}; interface read/save: {state.Milliseconds:F2} ms\nNo upload endpoint. No live correctness claim.");
+            if (ImGui.Button("Copy aggregate diagnostics")) ImGui.SetClipboardText($"Gillions Game Sync Testing {collectorVersion}\nSubmarine retention\nLocal: {state.Local}; community preparation: {state.Community}\n{state.Status}\nRetained: {state.Records}; results: {state.Results}; interface read/save: {state.Milliseconds:F2} ms\nLocal collection diagnostics only; private TEST sync controls/status are in the main window. Community results are not uploaded. No live correctness claim.");
             ImGui.Separator();
             foreach (var row in state.Rows) ImGui.TextUnformatted(row); // Names stay out of diagnostics/sanitized community export; PRIVATE copy is explicit.
         }

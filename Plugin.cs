@@ -1166,9 +1166,10 @@ public sealed class Plugin : IDalamudPlugin {
     private OwnedCharacterState CurrentState => activeOwnedState ?? throw new InvalidOperationException("Pair and log into a character before syncing.");
 
     private void RequestConfigurationSave() => savePolicy.RequestDurable();
-    private void FlushConfigurationSave(bool receivedAuthorizationDenial = false) {
+    private void FlushConfigurationSave(bool receivedAuthorizationDenial = false, bool force = false) {
+        if (force && disposed) throw new InvalidOperationException("Configuration persistence is unavailable after disposal.");
         var now = DateTime.UtcNow;
-        if ((!disposed || receivedAuthorizationDenial) && savePolicy.ShouldSave(now)) {
+        if ((!disposed || receivedAuthorizationDenial) && (force || savePolicy.ShouldSave(now))) {
             configuration.Save(pluginInterface);
             savePolicy.Saved(now);
         }
@@ -1384,8 +1385,15 @@ public sealed class Plugin : IDalamudPlugin {
             var prior = configuration.PersonalSync.Prepared.SingleOrDefault(p => p.OwnerKey == owner && p.Resource == resource);
             var prepared = PersonalSyncPolicy.Prepare(configuration.PersonalSync, owner, resource, payload);
             if (prepared is null) { personalStatus = "Private preparation capacity/validation gate: existing pending state preserved; no new admission."; continue; }
-            if (!ReferenceEquals(prior, prepared)) { RequestConfigurationSave(); FlushConfigurationSave(); }
+            if (!ReferenceEquals(prior, prepared)) RequestConfigurationSave();
             if (!PersonalSyncPolicy.CanSend(true, true, configuration.ActiveSession.Origin, true, prepared)) continue;
+            // A prior in-memory entry might be a preparation whose save failed.
+            // Require actual successful persistence, not save scheduling, before
+            // every first/retry dispatch. Preserve its exact nonce/body on failure.
+            if (!PersonalSyncPolicy.PersistBeforeSend(() => FlushConfigurationSave(force: true))) {
+                personalStatus = "Private snapshot save unavailable; no dispatch. Exact in-memory nonce/body preserved; durable local state not erased.";
+                nextPersonalUtc = now.AddSeconds(60); return;
+            }
             var permit = CapturePermit(SyncRequestMode.Personal);
             if (!personalCancellation.TryGetValue(resource, out var featureCancellation)) {
                 featureCancellation = new CancellationTokenSource(); personalCancellation.Add(resource, featureCancellation);
@@ -1410,15 +1418,18 @@ public sealed class Plugin : IDalamudPlugin {
                 pending = personalHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
             });
             using var response = await pending!;
-            var json = await SyncResponsePolicy.ReadAsync(response.Content, token);
-            var receipt = response.IsSuccessStatusCode && PersonalSyncPolicy.Receipt(json);
+            // Status controls stop/retry independently of an HTML/empty/broken
+            // error body. Only success needs bounded receipt JSON validation.
+            var terminal = PersonalSyncPolicy.TerminalStatus((int)response.StatusCode);
+            var receipt = await PersonalSyncPolicy.ReadReceiptAsync((int)response.StatusCode,
+                () => SyncResponsePolicy.ReadAsync(response.Content, token));
             await framework.RunOnFrameworkThread(() => {
                 if (!PermitIsCurrent(permit) || token.IsCancellationRequested || !PersonalEnabled(prepared.Resource)) return;
                 if (receipt) {
                     prepared.Acknowledged = true; personalFailures = 0; nextPersonalUtc = DateTime.UtcNow.AddSeconds(5);
                     personalStatus = $"{prepared.Resource}: TEST receipt accepted. Positive retained observations only; current ownership/reset/completion claims remain limited.";
                     RecordDiagnostic($"Uploaded private {prepared.Resource} to shared TEST: HTTP {(int)response.StatusCode}; valid receipt. No live correctness claim.");
-                } else if ((int)response.StatusCode is 400 or 401 or 403 or 404 or 409 or 413 or 415) {
+                } else if (terminal) {
                     prepared.Blocked = true;
                     personalStatus = $"{prepared.Resource}: HTTP {(int)response.StatusCode}; private snapshot stopped/preserved. Ordinary sync unchanged.";
                 } else {
