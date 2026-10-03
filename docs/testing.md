@@ -4,8 +4,8 @@
 
 Keep `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
 in Dalamud. This JSON is the rolling Testing channel pointer, not a version pin.
-The published feed currently advertises 0.0.69; authorized 0.0.70 publication
-advances the same JSON to the tested target-name correction. Refresh
+The anonymously verified feed currently advertises the tested 0.0.70 target-name
+correction. Refresh
 the plugin list and update normally; keep the installed configuration. Future
 authorized Testing publications must advance this same JSON, not ask testers to
 change repository URLs. [Publication procedure](releasing.md#fixed-testing-update-feed).

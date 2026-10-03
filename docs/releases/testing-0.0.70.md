@@ -43,3 +43,17 @@ Keep the existing Dalamud repository URL:
 Build/fixture tests do not prove installed game name rendering or target/counter
 correctness. No Hunt/submarine upload exists; the existing bounded Site intake
 handoff is still required before joint server testing.
+
+## Publication evidence
+
+Published October 2, 2026, 20:26:57 New York time (October 3, 00:26:57 UTC),
+Testing source `f3378b7909882a0f3415cfd25c779c01ec76d603`, tag `v0.0.70-testing`.
+Full verification passed: 287 Hunt, 539 submarine, 268 prior regression and 224
+market checks, PF/Beastmaster/performance and actual build/serializer checks.
+The final packaged Testing DLL also passed the actual configuration suite.
+
+ZIP SHA-256: `d3329ad04e3787b07067d71d712648424bdeca3c9ca4d17807df4095ce5fb8bd`.
+The existing v0.0.64 JSON URL anonymously serves 0.0.70.0 with successor ZIP
+links; embedded identity and artifact hashes verified. See
+[durable release evidence](../../data/releases/testing-0.0.70.json) and
+[fixed-feed evidence](../../data/releases/testing-update-feed.json).
