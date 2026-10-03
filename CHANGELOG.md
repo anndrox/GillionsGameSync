@@ -1,11 +1,11 @@
 # Changelog
 
-## 0.0.71 - Prepared Testing private daily / weekly native facts
+## 0.0.71 - Testing private daily / weekly native facts
 
 - Separate default-OFF bounded local facts view/private export; no new uploads or Dashboard task/layout configuration.
 - Catalog-driven roulette reward flags, initialized selected Custom Delivery counts/satisfaction/rank, loaded Challenge Log completion, weekly-earned tomestones, held Wondrous Tails, natural Timers allowances/expected times and loaded weekly PvP counters.
 - Exact game/SDK fail-closed gates, explicit unknown/stale/cache/reset limitations, character isolation, bounded latest-only persistence and overflow without eviction. Unsupported Doman, weekly loot, Fashion, Carnivale and other facts remain manual-only.
-- Candidate held to preserve active Hunt testing; published 0.0.70 feed, Stable, PF/Beastmaster/Market/Hunts/Submarines and ordinary sync remain unchanged.
+- Published to the existing fixed Testing feed after owner acceptance of Hunt testing. Stable, PF/Beastmaster/Market/Hunts/Submarines and ordinary sync remain unchanged. New facts remain local-only and live-unverified.
 
 ## 0.0.70 - Testing Hunt target names
 

@@ -1,8 +1,9 @@
-# Testing 0.0.71 — prepared daily / weekly personal facts
+# Testing 0.0.71 — daily / weekly personal facts
 
-Status: **candidate held, not published**. Published Testing 0.0.70 and the owner's
-existing `v0.0.64-testing/GillionsGameSyncTesting.json` rolling URL remain unchanged.
-Do not interrupt an active Hunt validation session. No Stable/server effects.
+Status: **published Testing prerelease** on October 3, 2026 at 01:13:44 UTC.
+The owner accepted Hunt testing, removing the active-session publication hold.
+The existing `v0.0.64-testing/GillionsGameSyncTesting.json` rolling URL now points
+to 0.0.71.0; testers keep their existing repository entry. No Stable/server effects.
 
 Adds `/gillionsfacts` / **Private daily / weekly facts**, a separate default-OFF
 read-only experiment. No pairing permission change or new upload; no Dashboard
@@ -13,7 +14,7 @@ yet prove current server reset/ownership: no live-success claim.
 See [capability matrix](../dashboard-capability-audit.md) and
 [exact private model / Site handoff](../contracts/dashboard-facts-v1.md).
 
-## Prepared candidate evidence
+## Reviewed candidate evidence
 
 Reviewed source `3c6f680dcbddf02586a570473d58a511cb51f3f9`; starting source
 `d4d33572a1edcc3386d678ebf35abb8b84644892`, existing
@@ -31,18 +32,30 @@ the exact packaged successor; new facts default OFF and Stable excludes them.
 Synthetic retained-store validation averaged 0.65 ms / 20 iterations; this is
 not in-game frame-time evidence. Docs local targets and diff whitespace passed.
 
-Prepared ZIP `GillionsGameSyncTesting-0.0.71.zip` SHA256
+Published ZIP `GillionsGameSyncTesting-0.0.71.zip` SHA256
 `b8a25bc62221c4d4b5432f022c91b4478032fc819208d9197d87e0f9e20f2559`.
 ZIP and manifest preserved outside the worktree in the owner's Evidence area;
-no release/tag/feed update. [Machine-readable preparation evidence](../../data/releases/testing-0.0.71.json).
-Source commits/pushes do not publish the candidate or prove native collection.
+the immutable reviewed package was published without rebuilding.
+[Machine-readable release evidence](../../data/releases/testing-0.0.71.json).
+Publication does not prove live native collection or Site intake.
 The full matrix, retained/export model, sanitized fixture, validation and bounded
 Site handoff are committed with it. No new HTTP contract or production effect.
 
-## Live checklist after publication is appropriate
+The fixed URL was anonymously verified at 01:16:59 UTC: manifest SHA256
+`fb7a5e08ac58b63393d425e8addca906c703bbc9ee3ccf23f0703c47fbdc3637`,
+all four download links, downloaded ZIP, embedded product/API/version and DLL
+checksum matched the reviewed package. Initial GitHub predecessor caching cleared
+without changing the owner's URL or re-uploading. The historical 0.0.64 ZIP and
+notes were preserved; Stable 1.0.30 asset digest/date remains unchanged.
+Full maintained verification passed again after release metadata changes, with
+the same 2,064 numbered managed checks and zero SDK build warnings/errors.
 
-Keep the same testing repository URL; do not delete config or downgrade. No need
-to restart the current Hunt session to carry out this preparation work.
+## Live checklist
+
+Keep the same testing repository URL; do not delete config or downgrade.
+Update when convenient. Hunt testing is accepted by the owner, not additional
+independently observed runtime evidence. New facts and submarine capture remain
+live-unverified; Site owns future intake and page integration.
 
 1. Before enabling, note facts attempts stay zero while ordinary sync, Hunt local
    observations and existing contribution controls operate as before.

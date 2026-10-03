@@ -1,6 +1,6 @@
 # Privacy
 
-### Prepared Testing 0.0.71 private daily / weekly facts
+### Testing 0.0.71 private daily / weekly facts
 
 This separate OFF-by-default experiment retains private personal counters,
 flags and activity/next-boundary times locally. Own ContentId is transient;

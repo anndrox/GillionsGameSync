@@ -2,8 +2,7 @@
   "schemaVersion": 1,
   "version": "0.0.71",
   "assemblyVersion": "0.0.71.0",
-  "status": "READY_TO_PUBLISH_TESTING_SUCCESSOR_HELD",
-  "reasonHeld": "Preserve the owner's active Hunt validation; no release/tag/feed publication in this objective.",
+  "status": "PUBLISHED_TESTING_FIXED_FEED_ANONYMOUSLY_VERIFIED",
   "startingSource": "d4d33572a1edcc3386d678ebf35abb8b84644892",
   "reviewedSource": "3c6f680dcbddf02586a570473d58a511cb51f3f9",
   "branch": "codex/game-sync/beastmaster-party-finder-testing",
@@ -38,13 +37,29 @@
     "documentation": "Changed local Markdown targets and git diff --check PASS."
   },
   "publishedTesting": {
-    "version": "0.0.70.0",
+    "version": "0.0.71.0",
     "fixedFeed": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json",
-    "manifestSha256": "a141ca716053581592f8016a258d5f4ac1776ff044938336bbfa12281edd1130",
-    "artifactSha256": "d3329ad04e3787b07067d71d712648424bdeca3c9ca4d17807df4095ce5fb8bd",
-    "verification": "Anonymous exact unchanged URL returns 0.0.70.0 and unchanged manifest hash; GitHub release asset digest agrees. No 0.0.71 release/tag/feed update performed."
+    "manifestSha256": "fb7a5e08ac58b63393d425e8addca906c703bbc9ee3ccf23f0703c47fbdc3637",
+    "artifactSha256": "b8a25bc62221c4d4b5432f022c91b4478032fc819208d9197d87e0f9e20f2559",
+    "verification": "Anonymous exact unchanged fixed URL returns 0.0.71.0 and expected manifest hash; all four ZIP links, downloaded ZIP checksum, embedded product/API/version and DLL checksum PASS. Initial predecessor cache cleared without replacing URL or re-uploading. GitHub asset digests agree; historical 0.0.64 ZIP/notes and Stable 1.0.30 assets unchanged.",
+    "previousVersion": "0.0.70.0",
+    "previousManifestSha256": "a141ca716053581592f8016a258d5f4ac1776ff044938336bbfa12281edd1130"
   },
-  "runtimeValidation": "No live 0.0.71 native/cache/reset/character correctness or frame-time validation. Prior owner Hunt validation is preserved and is not evidence for new facts. Submarine capture remains separately live-unverified.",
+  "runtimeValidation": "Owner accepted Hunt testing by assumption; earlier provided name/counter/drop/reacquire/off-on observations remain the actual live evidence. No new live 0.0.71 native/cache/reset/character correctness or frame-time evidence. Submarine capture remains live-unverified; publication does not establish a sync path.",
   "siteDependency": "Accept authenticated Testing selected-character private facts intake and freshness/reset-window proof before any new transport or automatic dated checklist completion. Existing supported snapshots can be reused now. Unsupported personal systems stay manual-only.",
-  "boundaries": "No Stable publication, main integration, Site/server writes/deployment, Market/Worker architecture, new credentials, new uploads, gameplay/native mutations, forced UI or requests, or Dashboard configuration in plugin."
+  "boundaries": "Authorized Testing tag/prerelease and fixed JSON replacement only. No Stable publication, main integration, Site/server writes/deployment, Market/Worker architecture, new credentials, new uploads, gameplay/native mutations, forced UI or requests, or Dashboard configuration in plugin.",
+  "publication": {
+    "authority": "Existing objective permits normal Testing publication once active Hunt testing is not disrupted; owner accepted Hunt testing and assigned Site work to Site Ops.",
+    "sourceTag": "v0.0.71-testing",
+    "annotatedTag": "eba07b82c8f7d6b00e774c405c748b782421a769",
+    "publishedAt": "2026-10-03T01:13:44Z",
+    "release": "https://github.com/anndrox/GillionsGameSync/releases/tag/v0.0.71-testing",
+    "zipAssetId": 606852892,
+    "manifestAssetId": 606852893,
+    "fixedFeedAssetId": 606853567,
+    "fixedFeedReplacedAt": "2026-10-03T01:14:11Z",
+    "versionedVerification": "Anonymous versioned manifest, all four links, ZIP, embedded product/version and DLL hashes PASS. GitHub release digests agree.",
+    "postPublicationValidation": "Full maintained scripts/verify.ps1 rerun PASS after release manifest/docs/evidence updates: 2,064 numbered managed checks plus preserved feature/source/performance/package/configuration suites; Stable-compatible and Testing SDK builds zero warnings/errors. No functional changes or successor package rebuild.",
+    "fixedFeedVerifiedAt": "2026-10-03T01:16:59Z"
+  }
 }

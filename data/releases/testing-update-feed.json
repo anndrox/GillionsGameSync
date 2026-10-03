@@ -3,22 +3,24 @@
   "status": "published-and-anonymously-verified",
   "feed": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json",
   "policy": "Fixed rolling Testing update URL. Replace only this manifest after authorized reviewed successor publication; testers never need a new repository URL for an update.",
-  "version": "0.0.70.0",
+  "version": "0.0.71.0",
   "internalName": "GillionsGameSyncTest",
   "dalamudApiLevel": 15,
-  "sourceCommit": "f3378b7909882a0f3415cfd25c779c01ec76d603",
-  "manifestSha256": "a141ca716053581592f8016a258d5f4ac1776ff044938336bbfa12281edd1130",
-  "download": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.70-testing/GillionsGameSyncTesting-0.0.70.zip",
-  "archiveSha256": "d3329ad04e3787b07067d71d712648424bdeca3c9ca4d17807df4095ce5fb8bd",
-  "previousAdvertisedVersion": "0.0.69.0",
-  "previousManifestSha256": "26d6308b2d48b4280842ea21f41bbfab3d8322c5c22c9db039013dce013adb16",
+  "sourceCommit": "3c6f680dcbddf02586a570473d58a511cb51f3f9",
+  "manifestSha256": "fb7a5e08ac58b63393d425e8addca906c703bbc9ee3ccf23f0703c47fbdc3637",
+  "download": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.71-testing/GillionsGameSyncTesting-0.0.71.zip",
+  "archiveSha256": "b8a25bc62221c4d4b5432f022c91b4478032fc819208d9197d87e0f9e20f2559",
+  "previousAdvertisedVersion": "0.0.70.0",
+  "previousManifestSha256": "a141ca716053581592f8016a258d5f4ac1776ff044938336bbfa12281edd1130",
   "authority": "Owner explicitly required updating the existing URL rather than changing the Dalamud repository entry.",
   "validation": [
-    "Exact unchanged original URL anonymously returned validated 0.0.70 manifest hash",
-    "Single Testing product, API 15, version 0.0.70.0 and all four successor ZIP links verified",
-    "ZIP downloaded through the fixed feed update link matched reviewed checksum and embedded Testing version",
-    "Updated package/feed contract and Stable manifest contract passed; fixture Stable and Testing builds had zero warnings/errors"
+    "Exact unchanged original URL anonymously returned validated 0.0.71 manifest hash after initial predecessor cache cleared",
+    "Single Testing product, API15, version0.0.71.0 and all four successor ZIP links verified",
+    "ZIP downloaded through fixed feed update link matched reviewed checksum and embedded version; DLL checksum matched reviewed package",
+    "Full maintained verification rerun PASS: 2,064 numbered managed checks plus retained feature/source/performance/package/configuration suites; SDK builds zero warnings/errors",
+    "Historical 0.0.64 ZIP and historical notes preserved; Stable 1.0.30 release digest/date unchanged"
   ],
-  "effects": "Replaced only the owner-selected GitHub Testing JSON asset. Existing installed Testing users can update to the already-reviewed successor. No rebuilt binary, Stable/main integration, Site/server/production or gameplay effect.",
-  "liveValidation": "No installed Dalamud/game session available; actual update UI behavior remains owner validation."
+  "effects": "Published reviewed immutable Testing successor and replaced only owner-selected fixed GitHub JSON asset; updated current feed note prefix, preserving historical notes and ZIP. No rebuilt binary, Stable/main integration, Site/server/production or gameplay effect.",
+  "liveValidation": "No installed Dalamud/game session available; actual update UI behavior remains owner validation.",
+  "verifiedAt": "2026-10-03T01:16:59Z"
 }
