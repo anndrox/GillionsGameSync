@@ -42,7 +42,8 @@ HuntBuddy [inspected reader](https://github.com/SheepGoMeh/HuntBuddy/blob/1de61e
 is a technical reference for cache availability, not a dependency or copied code
 (no repository license detected). Its per-frame native flag checks/background
 native reads are not adopted. The 0.0.68 `MobHunt` subscription was insufficient:
-other implementations use case-sensitive `Mobhunt` and numbered expansion windows.
+other implementations use case-sensitive `Mobhunt` and numbered expansion windows
+([inspected Wayfarer names](https://github.com/will-corrigan/Wayfarer/blob/91e09b573ec8af79d430208485019bb8e48e3bb7/Wayfarer/Modules/Hunting/MarkBillButtons.cs)).
 The successor removes the UI-event dependency rather than adding more hooks.
 
 ## Hunt retained/private payload
@@ -60,7 +61,7 @@ Root fields are exactly `schemaVersion:1`, `collectorSchema:"hunt-bills-v1"`,
 | observationId | Random 32-hex identity for admitted observation; repeated export/reload keeps it | Changed state or >=60-second refresh admits a new observation; not bill-day identity | Private retry/idempotency identity; retained |
 | billTypeId | Native mark index 0–21, matching MobHuntOrderType | Only positive obtained flags; missing indices say nothing about absence | Personal cache snapshot |
 | category, tier | Type sheet 1=daily/2=weekly; inspected index mapping below | Unsupported type/tier rejected | Personal snapshot; static category reference |
-| orderId, eventItemId | Native obtained order row getter, validated against type OrderStart/OrderAmount; type EventItem row ID | Unknown/out-of-range order rejects that bill; never substitute available board order | Personal snapshot; no inventory/ownership inference |
+| orderId, eventItemId | Native obtained order row getter, validated against type OrderStart/OrderAmount; type EventItem row ID | Unknown/out-of-range order rejects that bill; never substitute available board order | Matching loaded bill item corroborates type only; cached-order ownership remains unverified |
 | observedAtUtc, gameVersion, collectorVersion | Framework observation UTC, Lumina base repository version, actual assembly version | UTC only; not server receipt, reset or fresh network response | Private activity/provenance, retained |
 | acceptance | Always `obtained-flag-observed-not-current-acceptance-proof` | Cache does not clear completed marks; no independent cache-owner/generation flag | No active-assignment claim |
 | sourceEvidence | Additive nullable observation provenance: `loaded-key-item-and-obtained-flag-cache-unverified` for new corroborated reads | null for older UI-only records; never retrospectively claim key-item evidence | Private snapshot; does not prove current cached order or ownership |

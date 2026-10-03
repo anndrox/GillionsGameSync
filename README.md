@@ -61,11 +61,11 @@ Results stay in memory and are not uploaded. See [local test instructions](docs/
 For the combined Beastmaster and Party Finder test, add this URL to Dalamud's
 custom plugin repositories:
 
-`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.68-testing/GillionsGameSyncTesting.json`
+`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
 
 This installs the separate **Gillions Game Sync Testing** identity. It does not
 replace the stable plugin or update the existing `gillions.app` testing feed.
-Testing `0.0.68` continues published 0.0.66/0.0.67 and adds local Hunt Bill observations and private submarine snapshots. Keep the existing custom-repository URL `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`: it is the rolling Testing update feed, despite its historical tag name. Refresh Dalamud's plugin list and update to `0.0.68.0`; do not replace the repository entry for each release. Follow the [live checklist and diagnostics](docs/releases/testing-0.0.68.md). Do not downgrade or delete configuration. Ordinary HTTPS/PF pairing and consent are unchanged.
+Testing `0.0.69` preserves the published Testing lineage and corrects Hunt collection without requiring bill-window events. Keep the existing custom-repository URL above: it is the rolling Testing update feed, despite its historical tag name. Refresh Dalamud's plugin list and update to `0.0.69.0`; do not replace the repository entry for each release. Follow the [live checklist and diagnostics](docs/releases/testing-0.0.69.md). Do not downgrade or delete configuration. Ordinary HTTPS/PF pairing and consent are unchanged.
 
 Open `/gillionssubs` or **Submarine voyage retention**. Use workshop interfaces
 manually; no submarine control, polling or third-party plugin is involved. Local
@@ -81,7 +81,7 @@ build/sector evidence remain unavailable. See [schema, examples and Site require
 
 Testing 0.0.67 was published October 1, 2026 at tag `v0.0.67-testing`, source
 `9821c92df8f51c9fef913a9e8294fd6ed3b4469c`. Its immutable assets are preserved;
-0.0.68 uses the same separate product identity. Publication is not live-game proof.
+0.0.69 uses the same separate product identity. Publication is not live-game proof.
 
 "Contribute observed market data to Gillions" is independently **on by default**,
 including older Testing configurations without that field. It has a persistent
@@ -91,7 +91,7 @@ authenticated server compatibility acknowledgment. Ordinary sync, Party Finder a
 preference remain independent. Read the [contract/Site handoff](docs/contracts/market-observations-v1.md)
 and [candidate checks](docs/releases/testing-0.0.67.md).
 
-### Testing 0.0.68 personal-state experiments
+### Testing 0.0.69 personal-state experiments
 
 Testing 0.0.69 corrects Hunt collection: the existing framework loop reads at most
 every five seconds, requiring matching loaded bill Key Items. Bill windows and
@@ -99,7 +99,7 @@ logout are not prerequisites when coherent data is available. Keep the same
 Testing URL and follow [0.0.69 retest instructions](docs/releases/testing-0.0.69.md).
 
 Open `/gillionshunts` or **My Hunt Bills local test**; local retention defaults OFF.
-Naturally opened accepted bills supply positive cache targets/counters. Cache
+Naturally loaded caches with matching bill Key Items supply positive targets/counters. Cache
 ownership, current acceptance, complete bill set and resets remain unverified.
 Open `/gillionssubs` for off-by-default local submarine retention; selected visible
 planning interfaces can add positive unlocked/explored sector history, not a full

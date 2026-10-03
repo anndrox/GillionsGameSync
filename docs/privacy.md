@@ -1,6 +1,6 @@
 # Privacy
 
-## Testing 0.0.68 personal observation experiments
+## Testing 0.0.69 personal observation experiments
 
 Hunt local retention defaults OFF independently of pairing/ordinary sync.
 It stores at most 16 own-character hashed partitions, 22 latest positive bill
@@ -12,8 +12,14 @@ sighting/radar, chat, spawn scan or Hunt upload is introduced.
 Submarine snapshots now also hold a private hashed workshop scope and optional
 positive unlocked/explored sector evidence. They still use the same existing
 retained store, not another database/file. Unavailable state never erases history.
-Both readers are event-only, throttled to at most once/second, patch-gated, and
-require explicit local opt-in. Global Automatic sync does not govern these
+Hunts sample naturally loaded caches at most once every five seconds on the
+existing framework loop, without requiring a bill window. Reads require loaded
+own-player state, no zoning and loaded Key Items containing a matching bill item.
+That corroborates the bill category, not cached-order ownership or freshness.
+Submarines remain interface-event-only, throttled to at most once/second. Both
+readers are patch-gated and require explicit local opt-in; neither requests data
+from the game server or automatically opens an interface.
+Global Automatic sync does not govern these
 separate local tests; disable their local controls to stop reads.
 
 **PRIVATE export is not community contribution.** It requires explicit prepare
