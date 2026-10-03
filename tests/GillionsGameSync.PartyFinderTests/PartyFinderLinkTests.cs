@@ -1,5 +1,7 @@
 using System.Text;
 using System.Text.Json;
+using System.Net;
+using System.Net.Sockets;
 using GillionsGameSync;
 
 internal static class PartyFinderLinkTests {
@@ -75,6 +77,60 @@ internal static class PartyFinderLinkTests {
         var memory = (System.Collections.Generic.HashSet<string>)typeof(PartyFinderLinkRequestProcessor).GetField("attempted", System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.GetValue(processor)!;
         for (int i = 0; i < 256; i++) await processor.ProcessAsync(Request(), () => Now, () => true, _ => Task.FromResult(false), Print);
         Check(memory.Count == 128 && prints == 1, "Attempt memory unbounded or rejected requests printed.");
+        await RedirectsCannotAuthorizeOrTransferClaims();
         Console.WriteLine($"Party Finder native request/identity/encoding/consent/expiry/consume/lifecycle fixtures passed: {checks}; synthetic, no game UI invoked.");
+    }
+
+    private static async Task RedirectsCannotAuthorizeOrTransferClaims() {
+        // Actual production handler; loopback sockets are disposable HTTP
+        // fixtures, not a new accepted plugin origin or a TLS bypass.
+        foreach (var status in new[] { 301, 302, 303, 307, 308 }) {
+            foreach (var kind in new[] { "poll", "consume" }) {
+                using var source = new TcpListener(IPAddress.Loopback, 0);
+                using var foreign = new TcpListener(IPAddress.Loopback, 0);
+                source.Start(); foreign.Start();
+                var sourcePort = ((IPEndPoint)source.LocalEndpoint).Port;
+                var foreignPort = ((IPEndPoint)foreign.LocalEndpoint).Port;
+                using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                int foreignHits = 0;
+                var foreignTask = Serve(foreign, _ => {
+                    Interlocked.Increment(ref foreignHits);
+                    return "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}";
+                }, cancellation.Token);
+                var sourceTask = Serve(source, _ => $"HTTP/1.1 {status} Redirect\r\nLocation: http://127.0.0.1:{foreignPort}/foreign\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", cancellation.Token);
+                using var client = PartyFinderHttp.CreateClient();
+                using var message = new HttpRequestMessage(HttpMethod.Post, $"http://127.0.0.1:{sourcePort}/api/game-sync/item-links/{kind}") {
+                    Content = new StringContent(kind == "consume" ? "{\"claimToken\":\"synthetic_private_claim\"}" : "{\"nativeRequests\":{}}", Encoding.UTF8, "application/json")
+                };
+                using var response = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellation.Token);
+                var originalBody = await sourceTask;
+                Check((int)response.StatusCode == status && response.RequestMessage?.RequestUri == message.RequestUri, "PF redirect was followed or origin changed.");
+                int printed = 0;
+                await new PartyFinderLinkRequestProcessor().ProcessAsync(Request(), () => Now, () => true,
+                    _ => Task.FromResult(response.IsSuccessStatusCode), _ => { printed++; return Task.CompletedTask; });
+                cancellation.Cancel();
+                string foreignBody = "";
+                try { foreignBody = await foreignTask; } catch (OperationCanceledException) { }
+                Check(foreignHits == 0 && foreignBody == "" && originalBody.Contains(kind == "consume" ? "claimToken" : "nativeRequests"), "PF redirect transferred request/secret claim to second origin.");
+                Check(printed == 0, "Redirect authorized native presentation.");
+            }
+        }
+    }
+    private static async Task<string> Serve(TcpListener listener, Func<string,string> response, CancellationToken cancellation) {
+        using var socket = await listener.AcceptTcpClientAsync(cancellation);
+        await using var stream = socket.GetStream();
+        using var reader = new StreamReader(stream, Encoding.UTF8, false, 1024, leaveOpen:true);
+        int contentLength = 0, headerLength = 0;
+        while (await reader.ReadLineAsync(cancellation) is { Length: >0 } line) {
+            headerLength += line.Length;
+            if (headerLength > 8192) throw new IOException("Oversized fixture header.");
+            if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase)) contentLength = int.Parse(line[15..].Trim());
+        }
+        if (contentLength is <0 or >8192) throw new IOException("Oversized fixture body.");
+        var body = new char[contentLength];
+        if (await reader.ReadBlockAsync(body.AsMemory(), cancellation) != contentLength) throw new IOException("Incomplete fixture body.");
+        var text = new string(body);
+        await stream.WriteAsync(Encoding.ASCII.GetBytes(response(text)), cancellation);
+        return text;
     }
 }

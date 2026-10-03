@@ -489,7 +489,13 @@ public sealed class Plugin : IDalamudPlugin {
 #else
             using var pollRequest = Request("/api/game-sync/item-links/poll", permit, new { capability = "native_item_link", pluginVersion = PluginVersion });
 #endif
+#if GILLIONS_TEST_BUILD
+            using var pollResponse = pfAllowed
+                ? await SendNativePartyFinderAsync(pollRequest, permit)
+                : await SendAsync(pollRequest, permit);
+#else
             using var pollResponse = await SendAsync(pollRequest, permit);
+#endif
             if (pollResponse.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed or HttpStatusCode.NotImplemented) {
                 await CommitAsync(permit, _ => nextItemLinkPollUtc = DateTime.UtcNow.AddMinutes(UnsupportedItemLinkRetryMinutes));
                 return;
@@ -563,7 +569,7 @@ public sealed class Plugin : IDalamudPlugin {
             requestId = request.RequestId, claimToken = request.ClaimToken, requestType = PartyFinderLinkPolicy.RequestType,
             listingKey = request.ListingKey, contract = PartyFinderLinkPolicy.Contract
         });
-        using var response = await SendAsync(consumeRequest, permit);
+        using var response = await SendNativePartyFinderAsync(consumeRequest, permit);
         if (!response.IsSuccessStatusCode) return false;
         using var document = JsonDocument.Parse(await SyncResponsePolicy.ReadAsync(response.Content, permit.Cancellation));
         var root = document.RootElement;
@@ -572,6 +578,16 @@ public sealed class Plugin : IDalamudPlugin {
             && root.TryGetProperty("contract", out var contract) && contract.GetString() == PartyFinderLinkPolicy.Contract
             && root.TryGetProperty("requestType", out var type) && type.GetString() == PartyFinderLinkPolicy.RequestType
             && root.TryGetProperty("requestId", out var id) && id.GetString() == request.RequestId;
+    }
+    // Same authenticated item-request channel, but PF-capable polls/consumes
+    // must never follow redirects or forward a claim body to another origin.
+    private async Task<HttpResponseMessage> SendNativePartyFinderAsync(HttpRequestMessage request, SyncRequestPermit permit) {
+        Task<HttpResponseMessage>? pending = null;
+        await framework.RunOnFrameworkThread(() => {
+            if (!PartyFinderLinksPermitted(permit)) throw new OperationCanceledException();
+            pending = partyFinderHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, permit.Cancellation);
+        });
+        return await pending!;
     }
 #endif
     private async Task<bool> ConsumeItemLinkRequestAsync(SyncRequestPermit permit, ItemLinkRequest request) {

@@ -46,19 +46,25 @@ Prepared from published Testing 0.0.74 publication record
 `codex/game-sync/beastmaster-party-finder-testing`.
 Exact source/artifact/review/publication evidence will be recorded after validation
 in `data/releases/testing-0.0.75.json`. Offline/fixture proof is not live game proof.
-Maintained `scripts/verify.ps1` PASS: **3,303 numbered checks** (prior 268, PF
-requests86, Submarine542, personal391, Dashboard1,792, Market224), plus existing
+Maintained `scripts/verify.ps1` PASS: **3,333 numbered checks** (prior 268, PF
+requests116, Submarine542, personal391, Dashboard1,792, Market224), plus existing
 PF contribution, source/manifest/ownership/performance suites and actual12
 configuration fixtures per product. Both builds and exact75 package have zero
 warnings/errors. Final packaged DLL passes12 actual serializer/SDK fixtures;
 archive is exactly three files with separate Testing identity/API15/version.
-Synthetic Dashboard store validation averaged0.67ms; no live frame-time claim.
+Synthetic Dashboard store validation averaged0.68ms; no live frame-time claim.
+Independent review found a PF shared-transport redirect blocker; corrected
+PF-capable polls/consumes use the existing no-redirect client. Ten real loopback
+redirect cases (301/302/303/307/308 for poll and consume) add30 assertions proving
+no second-origin request/claim transfer/presentation. They are disposable fixtures,
+not an accepted personal/PF origin or TLS bypass. Code correction required rebuild;
+exact corrected package/hash/configuration validation was re-run.
 
 Prepared artifact SHA256:
 
 ```text
-ZIP      a0607d45aff98a5cb31aae5a2ea8837e1a37c3d524a282e42823f749bb5cf93a
-DLL      36ca1437c8c496385a2d3ad2ce63dd12c478cbcf3d151eab625c66c198e45a5d
+ZIP      bbb18828c9213879383fab0cfbb6582cc6f09bbceff3b27556958c7fd01e18d3
+DLL      f4f49c072ae2832d34d2a7f663c3039f44bfdaec6b95db088f3d8bd477415bb8
 Manifest d5f90054dffc6cc97dd147fc9071ad3d7da5958bb0d9568eed4832d01ffebdd1
 ```
 

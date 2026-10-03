@@ -142,6 +142,10 @@ Primary references: [listing definition](https://github.com/goatcorp/Dalamud/blo
    again on the framework thread. Lost consume response sacrifices delivery,
    never retries a side effect. Server consumed-state/short expiry prevents replay
    after reload or bounded local-ID eviction. No persisted command journal.
+   PF-capable polls and PF consumes use the existing no-redirect/no-cookie
+   contribution HTTP handler, not ordinary sync's redirect-following client.
+   Any 3xx is a failed action: no follow-up origin request, claim-body transfer or
+   presentation. This does not add a poll channel or change Stable item transport.
 6. **Consent/migration:** existing Testing master is now “Allow website 'Open in
    FFXIV' requests”; its item behavior/default is unchanged. New child “Include
    Party Finder native links (final in-game click)” defaults OFF for existing and
