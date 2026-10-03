@@ -4,7 +4,7 @@
 
 Keep `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
 in Dalamud. This JSON is the rolling Testing channel pointer, not a version pin.
-Authorized 0.0.69 publication advances it to the reviewed 0.0.69 ZIP. Refresh
+The anonymously verified feed currently advertises the reviewed 0.0.69 ZIP. Refresh
 the plugin list and update normally; keep the installed configuration. Future
 authorized Testing publications must advance this same JSON, not ask testers to
 change repository URLs. [Publication procedure](releasing.md#fixed-testing-update-feed).

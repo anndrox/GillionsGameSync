@@ -50,3 +50,21 @@ are unchanged. Independent privacy applicability covers broadened cache admissio
 Diagnostics now include game/SDK versions, attempts, last attempt UTC, stage/status
 and read/save milliseconds. Send aggregates first, not private JSON/configuration,
 credentials or raw memory. No live successor/game validation was available locally.
+
+## Publication and review evidence
+
+Published GitHub Testing prerelease October 3, 2026 at 00:12:56 UTC (October 2
+evening in New York), source `f5da6bbeefcbd62c7c0b72e3dbfdd87388322c21`, tag
+`v0.0.69-testing`. Independent privacy review accepted the runtime and corrected
+documentation with no remaining findings. Full verification passed: 274 Hunt,
+539 submarine, 268 prior regression and 224 market checks; Party Finder,
+Beastmaster, performance, ordinary sync and actual serializer/build checks pass.
+
+ZIP SHA-256: `bd7c2a16ba574f6e7d8842153247a574fef948db636e0ecb3356f62245c26e6e`.
+The existing v0.0.64 JSON asset was advanced to this reviewed successor; no new
+Dalamud repository URL is required. The exact unchanged URL, all four links,
+downloaded ZIP and embedded identity/hash match the reviewed package anonymously.
+An initially cached old redirect resolved without another replacement. See
+[durable release evidence](../../data/releases/testing-0.0.69.json) and
+[fixed-feed evidence](../../data/releases/testing-update-feed.json).
+Stable, main, versioned predecessor artifacts and Site/server remain untouched.
