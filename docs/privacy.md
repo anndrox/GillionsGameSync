@@ -1,5 +1,14 @@
 # Privacy
 
+Testing76's Hunt routing-context setting is separate and OFF by default. Current
+map coordinates are rounded to0.1 map units; only the latest observation lives in
+RAM, expires after45 seconds and is invalidated on session/map changes. No raw
+world precision, names, ContentID, world/DC, housing details or movement journal
+is retained/exported. Turning OFF clears only travel context. No location uploads
+exist until Site agrees the [short-lived private contract](contracts/travel-context-v1.md).
+Cached Teleport Gil samples are diagnostic, not proven final charges. Hunt and
+all existing sync permissions remain independent.
+
 ## Testing 0.0.75 website Party Finder requests
 
 Testing PF contributions are now origin-bound to the approved secure TEST session,

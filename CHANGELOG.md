@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.76 - Testing private ephemeral Hunt travel context
+
+- Separate OFF-by-default location consent; rounded current map-space facts
+  and naturally visible public teleport cache, RAM/latest-only,15s cadence/45s TTL.
+- Positive attunement and Home/free/favored evidence only; cached list Gil is
+  diagnostic, final charged prices and current action usability remain unsupported.
+- No travel uploads until Site agrees an exact short-lived private intake contract.
+  No movement history, housing details, game requests/actions or radar.
+- Preserve all75 capabilities and handoffs. Publish Testing only, same rolling URL.
+
 ## 0.0.75 - Testing Party Finder origin and native website links
 
 - Testing PF contributions use the approved authenticated secure TEST session,

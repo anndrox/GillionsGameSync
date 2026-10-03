@@ -11,6 +11,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Dalamud" HintPath="$(DalamudLibPath)/Dalamud.dll" />
+    <Reference Include="Lumina.Excel" HintPath="$(DalamudLibPath)/Lumina.Excel.dll" />
+    <Reference Include="Lumina" HintPath="$(DalamudLibPath)/Lumina.dll" />
     <Reference Include="Newtonsoft.Json" HintPath="$(DalamudLibPath)/Newtonsoft.Json.dll" />
   </ItemGroup>
 </Project>

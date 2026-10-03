@@ -61,6 +61,7 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly SubmarineLocalView submarineLocal;
     private readonly HuntBillLocalView huntLocal;
     private readonly DashboardLocalView dashboardLocal;
+    private readonly TravelContextLocalView travelLocal;
     private readonly ICondition marketConditions;
     private readonly MarketContributor marketContributor;
     private readonly MarketContributionSource marketSource;
@@ -157,6 +158,7 @@ public sealed class Plugin : IDalamudPlugin {
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
         "Testing PF contribution now uses the approved secure TEST paired origin, never production. Website PF links require a new separate opt-in and compatible Site request contract; they deliver a native chat link requiring a final in-game click, never join or apply.",
+        "Hunt routing context has separate OFF-by-default location consent. Rounded location and naturally visible public Teleport cache are RAM-only, latest-only, read at most every 15 seconds. No Site travel contract means no uploads. Cached Gil is diagnostic, not a proven final charge or recommendation.",
         "Private daily/weekly native facts are a separate OFF-by-default Testing experiment with bounded local retention and explicit PRIVATE export. No Dashboard configuration or uploads; unavailable sources preserve prior state, and reset/cache ownership remains unverified.",
         "Observed market contribution is on by default and has its own off switch. Only naturally received partial listings/recent sales go to compatible Gillions intake; no scanning or buyer/retainer identities. Existing pairing is authentication, not anonymous transport.",
         "Submarine voyage retention remains read-only and separate from community preparation. Private Hunt/submarine sync has separate OFF-by-default permissions, uses only the approved HTTPS shared TEST with explicit compatible Testing pairing, and never uploads community voyage results.",
@@ -197,7 +199,7 @@ public sealed class Plugin : IDalamudPlugin {
 
     public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commands, IClientState clientState, IObjectTable objects, IFramework framework, IDataManager dataManager, IUnlockState unlockState, IGameInventory gameInventory, IPartyFinderGui partyFinderGui, IChatGui chatGui, IPluginLog log
 #if GILLIONS_TEST_BUILD
-        , IAddonLifecycle addonLifecycle, IMarketBoard marketBoard, ICondition marketConditions, IGameGui gameGui
+        , IAddonLifecycle addonLifecycle, IMarketBoard marketBoard, ICondition marketConditions, IGameGui gameGui, IPlayerState travelPlayerState
 #endif
     ) {
         this.pluginInterface = pluginInterface;
@@ -245,6 +247,8 @@ public sealed class Plugin : IDalamudPlugin {
         configuration.PersonalSync ??= new();
         dashboardLocal = new DashboardLocalView(pluginInterface, commands, framework, clientState, dataManager,
             gameGui, marketConditions, addonLifecycle, configuration.DashboardFacts, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
+        travelLocal = new TravelContextLocalView(pluginInterface,clientState,objects,travelPlayerState,dataManager,gameGui,marketConditions);
+        travelLocal.SetEnabled(configuration.ShareHuntRoutingLocation);
         this.marketConditions = marketConditions;
         marketContributor = new MarketContributor(RecordDiagnostic);
         marketContributor.SetEnabled(configuration.ContributeObservedMarketData);
@@ -373,6 +377,7 @@ public sealed class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         huntLocal.Tick(now); // Independent local retention; five-second due check before native access.
         dashboardLocal.Tick(now); // Independent, off-by-default; one bounded source group per due check.
+        travelLocal.Tick(now); // Independent default-OFF, latest-only RAM, bounded 15-second read.
         if (now >= nextMarketMaintenanceUtc) {
             nextMarketMaintenanceUtc = now.AddMilliseconds(250);
             marketContributor.RefreshSession(CaptureMarketSession());
@@ -1188,6 +1193,12 @@ public sealed class Plugin : IDalamudPlugin {
         if (ImGui.Button("Submarine voyage retention")) submarineLocal.Show();
         if (ImGui.Button("My Hunt Bills local test")) huntLocal.Show();
         if (ImGui.Button("Private daily / weekly facts")) dashboardLocal.Show();
+        var routingLocation = configuration.ShareHuntRoutingLocation;
+        if (ImGui.Checkbox("Share my current location for Hunt route recommendations",ref routingLocation)) QueueUiAction(() => {
+            configuration.ShareHuntRoutingLocation=routingLocation; travelLocal.SetEnabled(routingLocation); RequestConfigurationSave();
+        });
+        ImGui.TextWrapped("OFF by default. Private rounded current location and naturally viewed public teleports, latest-only RAM (45s). Currently LOCAL ONLY: Site travel intake is not approved/activated; no location uploads. OFF clears volatile travel state, preserving Hunt and all unrelated sync. No movement history.");
+        if (ImGui.Button("Private Hunt routing context")) travelLocal.Show();
         ImGui.Separator();
         var marketEnabled = marketContributor.Enabled;
         if (ImGui.Checkbox("Contribute observed market data to Gillions", ref marketEnabled)) QueueUiAction(() => {
@@ -1708,6 +1719,7 @@ public sealed class Plugin : IDalamudPlugin {
         submarineLocal.Dispose();
         huntLocal.Dispose();
         dashboardLocal.Dispose();
+        travelLocal.Dispose();
         marketSource.Dispose(); marketContributor.Dispose(); marketHttp.Dispose();
 #endif
         if (framework.IsInFrameworkUpdateThread) FlushConfigurationSave();
@@ -1754,6 +1766,7 @@ public sealed class PluginConfiguration : IPluginConfiguration {
     public PersonalSyncState PersonalSync { get; set; } = new();
     public bool SyncPersonalHunts { get; set; }
     public bool SyncPersonalSubmarines { get; set; }
+    public bool ShareHuntRoutingLocation { get; set; }
     public bool ContributeObservedMarketData { get; set; } = true;
     // Enrollment stop only, never market payload or reporter identity.
     public string GillionsMarketBlockedGeneration { get; set; } = "";

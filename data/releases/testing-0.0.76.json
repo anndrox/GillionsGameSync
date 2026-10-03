@@ -1,0 +1,32 @@
+{
+  "channel": "testing",
+  "version": "0.0.76",
+  "assemblyVersion": "0.0.76.0",
+  "status": "source-prepared-awaiting-package-review",
+  "startingHead": "e6ef4956e7081b0f1fddb951344e5324692f4325",
+  "startingRelease": "0.0.75.0",
+  "branch": "codex/game-sync/beastmaster-party-finder-testing",
+  "resource": "travel_context",
+  "contract": "docs/contracts/travel-context-v1.md",
+  "transport": "dormant-no-approved-Site-contract-no-send-path",
+  "costVerdict": "PARTIAL: observed loaded list Gil only; final charged cost and price-cache refresh generation unproven; actualCostGil null",
+  "consent": "ShareHuntRoutingLocation: default OFF; no expansion of Hunt/ordinary/PF/market grants",
+  "custody": "one current observation in RAM; no config payload or movement history; 15s cadence,45s TTL; no raw world precision/world/DC/player/account/housing identifiers",
+  "siteAudit": {
+    "revision": "432a46e3625de8708efe49ded865c5fb8a5be7e8",
+    "image": "sha256:46abd8a9cee84b82123b9a416bcfce4829567c546ee3977a886c01233eb6ed8b",
+    "resources": ["hunt_bills", "submarine_personal"],
+    "travel": "MISSING: permission/capability/intake/TTL/read model not activated"
+  },
+  "validation": {
+    "travelManaged": 2314,
+    "previousMaintainedNumbered": 3333,
+    "totalNumbered": 5647,
+    "actualSdkAndConfig": "12 fixtures per product plus travel SDK/public map utility/serializer/isolation assertions",
+    "live": "OUTSTANDING: no real player location or Teleport observation performed; no travel HTTP/auth/persistence claimed",
+    "transport": "dormant send-boundary/source test PASS; real auth/nonce/receipt/server lifecycle needs agreed Site contract",
+    "performance": "128-destination managed policy fixture approximately0.11ms/42,541 allocated bytes, not native framework timing"
+  },
+  "boundaries": "Testing only;75 immutable preserved; Stable/main/Site source/deployment/schema/production/Market architecture/Wardrobe untouched; no actions/radar/UI opening/game requests/public location/history",
+  "remaining": "READY_FOR_SITE_HUNT_ROUTING_HANDOFF"
+}

@@ -30,6 +30,11 @@ if ($LASTEXITCODE -ne 0) { throw 'Dashboard private-fact policy fixtures failed.
 python (Join-Path $root 'tests/dashboard-contract-test.py')
 if ($LASTEXITCODE -ne 0) { throw 'Dashboard source/fixture boundaries failed.' }
 
+dotnet run --project (Join-Path $root 'tests/GillionsGameSync.TravelTests/GillionsGameSync.TravelTests.csproj') -c Release -- --fixture (Join-Path $root 'artifacts/verification/travel/travel-context-v1.json')
+if ($LASTEXITCODE -ne 0) { throw 'Ephemeral private travel policy fixtures failed.' }
+python (Join-Path $root 'tests/travel-context-contract-test.py')
+if ($LASTEXITCODE -ne 0) { throw 'Travel read/consent/retention/source boundaries failed.' }
+
 dotnet run --project (Join-Path $root 'tests/GillionsGameSync.MarketTests/GillionsGameSync.MarketTests.csproj') -c Release
 if ($LASTEXITCODE -ne 0) { throw 'Passive market event/transport fixtures failed.' }
 python (Join-Path $root 'tests/market-contribution-contract-test.py')

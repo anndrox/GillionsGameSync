@@ -1,5 +1,10 @@
 # Gillions Game Sync
 
+Testing76 adds a separate default-OFF private Hunt routing-context experiment:
+rounded location and positive public teleport observations, RAM/latest-only.
+Travel transport is dormant pending Site's exact contract; cached Gil is not a
+proven final charge. See the [capability audit and Site handoff](docs/contracts/travel-context-v1.md).
+
 Gillions Game Sync is the open-source Dalamud plugin for [Gillions](https://gillions.app). This source targets `1.0.30`, with read-only character and Retainer synchronization, safer pairing and offline records, and a simpler settings window. The [stable manifest](data/GillionsGameSync.json) on `main` and [GitHub Releases](https://github.com/anndrox/GillionsGameSync/releases) identify the publicly available build; a task branch or local package is not a published update.
 
 Automatic sync is one global control for the supported categories: inventory, currencies, achievements, collectibles, character progress, quest journal, reputation, Shared FATEs and glamour plates. Retainer observations and venture results use a separate server compatibility acknowledgement. There is no per-category chooser. Unavailable game data is preserved or omitted instead of being reported as an intentional deletion.

@@ -85,6 +85,35 @@ var marketSetting = configurationType.GetProperty("ContributeObservedMarketData"
 var personalHuntSetting = configurationType.GetProperty("SyncPersonalHunts");
 var personalSubSetting = configurationType.GetProperty("SyncPersonalSubmarines");
 var pfLinkSetting = configurationType.GetProperty("EnablePartyFinderLinkRequests");
+var travelSetting = configurationType.GetProperty("ShareHuntRoutingLocation");
+if (testingProduct) {
+    var travelOlder = JsonConvert.DeserializeObject("{\"SyncPersonalHunts\":true,\"SyncPersonalSubmarines\":true,\"AutomaticSync\":true,\"EnablePartyFinderLinkRequests\":true,\"ContributeObservedMarketData\":false}",configurationType)!;
+    Assert(!(bool)travelSetting!.GetValue(travelOlder)! && !(bool)travelSetting.GetValue(Activator.CreateInstance(configurationType))!,"Old/default permissions must not grant location consent.");
+    travelSetting.SetValue(travelOlder,true);
+    configurationType.GetMethod("Save")!.Invoke(travelOlder,[savedViaPlugin]);
+    var roundTrip=load.Invoke(configurations,[product])!;
+    Assert((bool)travelSetting.GetValue(roundTrip)!,"Actual serializer dropped explicit location choice.");
+    travelSetting.SetValue(roundTrip,false);
+    configurationType.GetMethod("Save")!.Invoke(roundTrip,[savedViaPlugin]);
+    roundTrip=load.Invoke(configurations,[product])!;
+    Assert(!(bool)travelSetting.GetValue(roundTrip)! && (bool)personalHuntSetting!.GetValue(roundTrip)!
+        && (bool)personalSubSetting!.GetValue(roundTrip)! && (bool)pfLinkSetting!.GetValue(roundTrip)!
+        && (bool)configurationType.GetProperty("AutomaticSync")!.GetValue(roundTrip)! && !(bool)marketSetting!.GetValue(roundTrip)!,"Travel OFF changed unrelated choices.");
+    Assert(!configurationType.GetProperties().Any(p=>p.PropertyType.Name.StartsWith("Travel",StringComparison.Ordinal)),"Configuration must not retain travel data.");
+    var native=AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(libraryPath,"FFXIVClientStructs.dll"));
+    Assert(native.GetName().Version?.ToString()=="7.56.2.9136","Travel SDK gate needs reassessment.");
+    var info=native.GetType("FFXIVClientStructs.FFXIV.Client.Game.UI.TeleportInfo",true)!;
+    foreach(var name in new[] { "AetheryteId","GilCost","TerritoryId","IsFavourite","IsFreeAetheryte" }) Assert(info.GetField(name) is not null,"Travel field changed.");
+    var agent=native.GetType("FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentTeleport",true)!;
+    Assert(agent.GetField("AetheryteList")?.FieldType.IsPointer==true && agent.GetField("AetheryteCount")?.FieldType==typeof(int),"Teleport cache signature changed.");
+    Assert(typeof(Dalamud.Plugin.Services.IClientState).GetEvent("MapIdChanged")?.EventHandlerType==typeof(Action<uint>),"Map event changed.");
+    Assert(typeof(Dalamud.Plugin.Services.IPlayerState).GetProperty("HomeAetheryte") is not null
+        && typeof(Dalamud.Plugin.Services.IPlayerState).GetProperty("FreeAetheryte") is not null,"Public destination getters missing.");
+    var map = Dalamud.Utility.MapUtil.WorldToMap(new System.Numerics.Vector2(0,0),0,0,100);
+    Assert(Math.Abs(map.X-21.48f)<0.001f && Math.Abs(map.Y-21.48f)<0.001f,"Actual public map conversion changed.");
+    Assert(pluginAssembly.GetType("GillionsGameSync.TravelContextLocalView") is not null,"Testing travel collector missing.");
+    Console.WriteLine("Actual travel serializer/default-OFF/unrelated consent/SDK/map conversion PASS. No live game or HTTP invocation.");
+} else Assert(travelSetting is null && pluginAssembly.GetType("GillionsGameSync.TravelContextLocalView") is null,"Stable gained travel collection.");
 if (testingProduct) {
     var oldLinkConfig = JsonConvert.DeserializeObject("{\"EnableItemLinkRequests\":true}", configurationType)!;
     Assert(!(bool)pfLinkSetting!.GetValue(oldLinkConfig)! && !(bool)pfLinkSetting.GetValue(Activator.CreateInstance(configurationType))!,
