@@ -1,5 +1,10 @@
 # Testing personal observations v1 — local draft and bounded Site handoff
 
+Current transport successor: [Testing personal transport](testing-personal-transport-v1.md).
+The sections below describe the original producing local v1 format and proposal;
+Testing 0.0.74 adds independently consented shared-TEST transport without changing
+these payload fields or granting public sharing. Dashboard remains local-only.
+
 Applies to Testing 0.0.69 (retains 0.0.68 observations). This is **not an activated HTTP contract**. Both
 collectors retain locally in the existing Dalamud Testing configuration; explicit
 PRIVATE exports prepare the proposed payloads. No new endpoint, uploader, public

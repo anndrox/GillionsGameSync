@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.74 - Testing private Hunt/submarine HTTPS transport
+
+- Add separate OFF-by-default Hunt/Submarine personal-sync switches; local retention consent remains independent. Existing configurations/pairings are not silently promoted, and new pairing resets local upload permissions.
+- Require exact approved shared TEST HTTPS origin, explicit server Testing pairing permission and personal-observations-v1 presence acknowledgment. Reuse authenticated sync envelopes, immutable nonces and receipts; no new endpoint/auth or production intake.
+- Bound prepared private snapshots to 16 owner/resource entries and 1,152 KiB, preserving unacknowledged content across failure/reload without eviction. Terminal errors fail closed; transient failures back off. Ordinary sync, Market preference and other features remain independent.
+- Submarine transport uses a fresh current-character workshop batch, not unidentified historical snapshots. Correct numeric sector arrays in the private export; persisted voyage history/schema is unchanged.
+- Dashboard facts remain local-only pending an exact Site intake contract. Shared TEST fixture acceptance is not live Hunt/FC validation.
+
 ## 0.0.73 - Testing selected Custom Delivery counter correction
 
 - Stop interpreting AgentSatisfactionSupply.NpcData.RemainingAllowances as an independently verified per-client residual. Its exact semantics are unsupported; no clamp/minimum or bypass is used.

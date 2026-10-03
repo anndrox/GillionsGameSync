@@ -13,6 +13,7 @@
   <ItemGroup>
     <Compile Include="..\..\HuntBills.cs" Link="HuntBills.cs" />
     <Compile Include="..\..\PersonalObservationPolicy.cs" Link="PersonalObservationPolicy.cs" />
+    <Compile Include="..\..\PersonalSync.cs" Link="PersonalSync.cs" />
     <Reference Include="Lumina" HintPath="$(DalamudLibPath)/Lumina.dll" />
     <Reference Include="Lumina.Excel" HintPath="$(DalamudLibPath)/Lumina.Excel.dll" />
     <Reference Include="FFXIVClientStructs" HintPath="$(DalamudLibPath)/FFXIVClientStructs.dll" />

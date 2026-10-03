@@ -82,6 +82,25 @@ var savedViaPlugin = DispatchProxy.Create<IDalamudPluginInterface, Configuration
 var saveProxy = (ConfigurationSaveProxy)savedViaPlugin;
 saveProxy.Save = config => File.WriteAllText(pathForFixture, (string)serialize.Invoke(null, [config])!);
 var marketSetting = configurationType.GetProperty("ContributeObservedMarketData");
+var personalHuntSetting = configurationType.GetProperty("SyncPersonalHunts");
+var personalSubSetting = configurationType.GetProperty("SyncPersonalSubmarines");
+if (testingProduct) {
+    var oldPersonal = JsonConvert.DeserializeObject("{\"AutomaticSync\":true,\"ContributeObservedMarketData\":false}", configurationType)!;
+    Assert(!(bool)personalHuntSetting!.GetValue(oldPersonal)! && !(bool)personalSubSetting!.GetValue(oldPersonal)!,
+        "Older Testing configs must not silently grant personal upload consent.");
+    personalHuntSetting.SetValue(oldPersonal, true);
+    configurationType.GetMethod("Save")!.Invoke(oldPersonal, [savedViaPlugin]);
+    var savedPersonal = load.Invoke(configurations, [product])!;
+    Assert((bool)personalHuntSetting.GetValue(savedPersonal)! && !(bool)personalSubSetting.GetValue(savedPersonal)!,
+        "Actual serializer preserves independent Hunt/Submarine permissions.");
+    personalHuntSetting.SetValue(savedPersonal, false);
+    configurationType.GetMethod("Save")!.Invoke(savedPersonal, [savedViaPlugin]);
+    savedPersonal = load.Invoke(configurations, [product])!;
+    Assert(!(bool)personalHuntSetting.GetValue(savedPersonal)! && (bool)configurationType.GetProperty("AutomaticSync")!.GetValue(savedPersonal)!
+        && !(bool)marketSetting!.GetValue(savedPersonal)!, "Personal OFF preserves ordinary ON and market OFF through reload.");
+    Console.WriteLine("Actual Testing personal consent defaults/independent switches/ordinary and market isolation passed.");
+} else Assert(personalHuntSetting is null && personalSubSetting is null && pluginAssembly.GetType("GillionsGameSync.PersonalSyncPolicy") is null,
+    "Stable must not contain personal transport or permission settings.");
 if (testingProduct) {
     Assert(marketSetting is not null && (bool)marketSetting.GetValue(Activator.CreateInstance(configurationType))!,
         "New Testing configuration must default market contribution ON.");

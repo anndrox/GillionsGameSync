@@ -160,4 +160,5 @@ if (args.Length == 2 && args[0] == "--fixture") {
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(args[1]))!);
     File.WriteAllText(args[1], restartPolicy.PreparePrivateExport(key));
 }
-Console.WriteLine($"Hunt/private-state/patch/retention fixtures passed: {checks}; synthetic only, no live-game claim.");
+PersonalSyncTests.Run(Check);
+Console.WriteLine($"Hunt/private-state/patch/retention/transport fixtures passed: {checks}; synthetic only, no live-game claim.");

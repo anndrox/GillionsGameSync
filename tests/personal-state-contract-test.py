@@ -40,7 +40,16 @@ assert "characterAssociation =" in (root / "HuntBills.cs").read_text()
 assert "IsSubmarineExplorationUnlocked" in sub and "IsSubmarineExplorationExplored" in sub
 assert sub.index("planning->AddonId == args.Addon.Id") < sub.index("HousingManager.IsSubmarineExplorationUnlocked")
 assert "huntLocal.Dispose();" in plugin
-assert 'SyncScopes = ["inventory"' in plugin and '"hunt_bills"' not in plugin and '"submarine_personal"' not in plugin
+assert 'SyncScopes = ["inventory"' in plugin
+scopes = plugin.split('SyncScopes = [', 1)[1].split('];', 1)[0]
+assert 'hunt_bills' not in scopes and 'submarine_personal' not in scopes
+assert 'public bool SyncPersonalHunts { get; set; }' in plugin
+assert 'public bool SyncPersonalSubmarines { get; set; }' in plugin
+assert 'X-Gillions-Personal-Contract' in plugin and 'personalHttp.SendAsync' in plugin
+assert 'permit.Origin != PersonalSyncPolicy.Origin' in plugin
+assert 'PersonalEnabled(prepared.Resource)' in plugin and 'token.ThrowIfCancellationRequested()' in plugin
+assert 'PersonalSyncPolicy.Owner(configuration.ActiveSession.Generation, HuntBillRetentionPolicy.CharacterKey(activeRetainerCharacterContentId))' in plugin
+assert 'transportCharacter == contentId' in sub and 'new SubmarineVoyageRetention { LocalRetentionEnabled = true }' in sub
 model = (root / "SubmarineVoyages.cs").read_text()
 community = model.split("internal string PrepareExport()", 1)[1]
 assert "LocalWorkshopKey" not in community and "workshopScope" not in community
@@ -56,4 +65,7 @@ for example, fixture, array in [
     assert set(document[array][0]) == set(actual[array][0]), example
     assert document["uploadState"] == "local-only-no-server-contract"
     assert document[array][0]["gameVersion"] == "synthetic-game"
-print("Hunt/submarine Testing-only, opt-in, exact-patch, bounded observation, private export and no-upload source boundaries passed.")
+    if array == "slots":
+        for field in ["orderedSectorIds", "plannedSectorIds", "unlockedSectorIds", "exploredSectorIds"]:
+            assert actual[array][0][field] is None or isinstance(actual[array][0][field], list), field
+print("Hunt/submarine Testing-only, independent opt-ins, exact-patch, bounded observation, isolated authenticated personal transport boundaries passed.")

@@ -42,6 +42,11 @@ internal sealed class SubmarineLocalView : IDisposable {
     private string export = "";
     private string personalExport = "";
     private string activeWorkshopKey = "";
+    private ulong transportCharacter;
+    private string transportPayload = "";
+    internal string? PersonalPayload(ulong contentId) => store.LocalRetentionEnabled && policy.Supported
+        && activeWorkshopKey.Length > 0 && contentId != 0 && transportCharacter == contentId && transportPayload.Length > 0
+        ? transportPayload : null;
     private DateTime nextReadUtc;
     private sealed record View(bool Local, bool Community, string Status, string[] Rows, int Records, int Results, double Milliseconds);
     private volatile View view = new(false, false, "Local retention off. Open workshop interfaces manually after enabling.", [], 0, 0, 0);
@@ -58,8 +63,8 @@ internal sealed class SubmarineLocalView : IDisposable {
         Publish(policy.WaitingStatus);
     }
     internal void Show() => visible = true;
-    private void OnLogout(int _, int __) { activeWorkshopKey = ""; personalExport = ""; export = ""; Publish("Logged out; retained observations are historical, not current workshop state."); }
-    private void OnTerritoryChanged(uint _) { activeWorkshopKey = ""; personalExport = ""; export = ""; Publish("Territory changed; prior observations retained. Await workshop interface evidence."); }
+    private void OnLogout(int _, int __) { transportCharacter = 0; transportPayload = ""; activeWorkshopKey = ""; personalExport = ""; export = ""; Publish("Logged out; retained observations are historical, not current workshop state."); }
+    private void OnTerritoryChanged(uint _) { transportCharacter = 0; transportPayload = ""; activeWorkshopKey = ""; personalExport = ""; export = ""; Publish("Territory changed; prior observations retained. Await workshop interface evidence."); }
     private void Publish(string? status = null, double milliseconds = 0) {
         var rows = policy.Supported ? store.Current?.Where(row => row?.Snapshot is not null).Take(32).Select(row => {
             var s = row.Snapshot;
@@ -108,6 +113,7 @@ internal sealed class SubmarineLocalView : IDisposable {
     }
     private unsafe void OnAddon(AddonEvent kind, AddonArgs args) {
         if (disposed || !store.LocalRetentionEnabled || !framework.IsInFrameworkUpdateThread) return;
+        transportCharacter = 0; transportPayload = "";
         // Gate before ALL native pointers/signature calls, including PlayerState.
         if (!PersonalObservationCompatibility.Supports(GameVersion(), typeof(HousingManager).Assembly.GetName().Version?.ToString())) {
             activeWorkshopKey = ""; personalExport = "";
@@ -122,7 +128,7 @@ internal sealed class SubmarineLocalView : IDisposable {
             if (!policy.Supported) { activeWorkshopKey = ""; personalExport = ""; Publish("Unsupported/oversized retained format; preserved unchanged. Collection paused."); return; }
             var player = FFXIVClientStructs.FFXIV.Client.Game.UI.PlayerState.Instance();
             var housing = HousingManager.Instance();
-            if (!client.IsLoggedIn || player == null || !player->IsLoaded || args.Addon.IsNull || housing == null
+            if (!client.IsLoggedIn || player == null || !player->IsLoaded || player->ContentId == 0 || args.Addon.IsNull || housing == null
                 || housing->WorkshopTerritory == null || housing->CurrentTerritory != (HousingTerritory*)housing->WorkshopTerritory
                 || !housing->WorkshopTerritory->IsLoaded() || !args.Addon.IsVisible) {
                 activeWorkshopKey = ""; personalExport = "";
@@ -170,6 +176,17 @@ internal sealed class SubmarineLocalView : IDisposable {
             }
             changed |= policy.ObserveSnapshots(snapshots);
             activeWorkshopKey = snapshots.FirstOrDefault()?.LocalWorkshopKey ?? "";
+            // Transport only this admitted current-character batch, never the
+            // shared historical workshop snapshots from an unidentified reader.
+            if (snapshots.Count > 0) {
+                var currentBatch = new SubmarineVoyageRetention { LocalRetentionEnabled = true };
+                var batchPolicy = new SubmarineVoyageRetentionPolicy(currentBatch);
+                batchPolicy.ObserveSnapshots(snapshots);
+                if (currentBatch.Current.Count > 0) {
+                    transportPayload = batchPolicy.PreparePersonalExport(activeWorkshopKey);
+                    transportCharacter = player->ContentId;
+                }
+            }
             if (snapshots.Count == 0) readStatus = "No verified loaded submarine slots; history preserved. Local retention remains on.";
             if (selectedSnapshot is not null) {
                 var results = AgentSubmersibleExplorationResult.Instance();

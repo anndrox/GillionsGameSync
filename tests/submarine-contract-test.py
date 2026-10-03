@@ -10,7 +10,8 @@ assert native.startswith("#if GILLIONS_TEST_BUILD")
 assert model.startswith("#if GILLIONS_TEST_BUILD || GILLIONS_SUBMARINE_TESTS")
 assert "lifecycle.RegisterListener" in native and "lifecycle.UnregisterListener" in native
 assert "framework.Update" not in native
-assert not re.search(r"HttpClient|SendAsync|HookFrom|ReceiveEvent|FireCallback|RequestData|Dispatch|Repair\(|Recall\(|ContentId|FreeCompanyId", native)
+assert not re.search(r"HttpClient|SendAsync|HookFrom|ReceiveEvent|FireCallback|RequestData|Dispatch|Repair\(|Recall\(|FreeCompanyId", native)
+assert 'transportCharacter == contentId' in native, 'Private transport must match the observed current character.'
 for guard in ["!store.LocalRetentionEnabled", "!framework.IsInFrameworkUpdateThread", "!client.IsLoggedIn",
               "!player->IsLoaded", "housing->CurrentTerritory !=", "WorkshopTerritory->IsLoaded()", "!args.Addon.IsVisible",
               "sub->Parent !=", "sub->RegisterTime == 0", "results->IsAgentActive()", "results->AddonId == args.Addon.Id"]:
@@ -19,7 +20,8 @@ assert "ItemHQPrimary" in native and "ItemHQAdditional" in native and "row.Point
 assert "sector-aggregate-mismatch" in native and "if (result->ItemReturnListCount > 10)" in native
 event = native.split("private unsafe void OnAddon", 1)[1].split("private unsafe SubmarineResult? Results", 1)[0]
 assert event.count("Snapshot(workshop,") == 1, "Snapshot must be normalized once per slot/event."
-assert "ObserveSnapshot(" not in event and event.count("ObserveSnapshots(snapshots)") == 1
+assert "ObserveSnapshot(" not in event and event.count("changed |= policy.ObserveSnapshots(snapshots)") == 1
+assert event.count("batchPolicy.ObserveSnapshots(snapshots)") == 1, 'Transport batch is managed data already read, not a second native capture.'
 assert event.index("planning->SelectedPoints") < event.index("Snapshot(workshop,") < event.index("ObserveSnapshots(snapshots)")
 assert event.count("persist();") == 1 and 'if (changed) { export = ""; personalExport = ""; persist(); }' in event
 assert "No verified loaded submarine slots" in event and native.count("Publish(policy.WaitingStatus)") == 2

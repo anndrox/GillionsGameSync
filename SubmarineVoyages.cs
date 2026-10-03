@@ -229,8 +229,12 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
                 departureAtUtc = (DateTime?)null,
                 voyageState = s.ExpectedReturnUnix == 0 ? "unavailable" : s.ExpectedReturnUnix > new DateTimeOffset(s.ObservedAtUtc).ToUnixTimeSeconds()
                     ? "expected-in-flight" : "expected-return-due-not-observed-completion",
-                orderedSectorIds = s.CurrentRoute.Length > 0 ? s.CurrentRoute : null, plannedSectorIds = s.PlannedRoute,
-                unlockedSectorIds = s.UnlockedSectorIds, exploredSectorIds = s.ExploredSectorIds,
+                // byte[] serializes as base64 in System.Text.Json. The agreed
+                // private contract requires ordered numeric sector arrays.
+                orderedSectorIds = s.CurrentRoute.Length > 0 ? s.CurrentRoute.Select(id => (int)id).ToArray() : null,
+                plannedSectorIds = s.PlannedRoute?.Select(id => (int)id).ToArray(),
+                unlockedSectorIds = s.UnlockedSectorIds?.Select(id => (int)id).ToArray(),
+                exploredSectorIds = s.ExploredSectorIds?.Select(id => (int)id).ToArray(),
                 sectorFreshness = "retained-positive-history-not-current-lock-state",
                 sectorCompleteness = s.UnlockedSectorIds is null && s.ExploredSectorIds is null ? "unavailable" : "positive-observations-only"
             })

@@ -67,6 +67,14 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly HttpClient marketHttp = PartyFinderHttp.CreateClient();
     private string marketAcceptedGeneration = "";
     private DateTime nextMarketMaintenanceUtc;
+    private readonly HttpClient personalHttp = PartyFinderHttp.CreateClient();
+    private readonly HashSet<string> personalAccepted = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, CancellationTokenSource> personalCancellation = new(StringComparer.Ordinal);
+    private bool personalInFlight;
+    private DateTime nextPersonalUtc;
+    private int personalFailures;
+    private bool observedPersonalHunts, observedPersonalSubmarines;
+    private volatile string personalStatus = "Private Hunt/submarine sync OFF. Local retention and ordinary sync are independent.";
 #endif
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private readonly HttpClient partyFinderHttp = PartyFinderHttp.CreateClient();
@@ -147,8 +155,8 @@ public sealed class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         "Private daily/weekly native facts are a separate OFF-by-default Testing experiment with bounded local retention and explicit PRIVATE export. No Dashboard configuration or uploads; unavailable sources preserve prior state, and reset/cache ownership remains unverified.",
         "Observed market contribution is on by default and has its own off switch. Only naturally received partial listings/recent sales go to compatible Gillions intake; no scanning or buyer/retainer identities. Existing pairing is authentication, not anonymous transport.",
-        "Submarine voyage retention is a separate off-by-default local read-only test. Community preparation needs a second opt-in and explicit sanitized export; no submarine upload endpoint exists.",
-        "Hunt Bills and private submarine snapshots are Testing-only, off-by-default local experiments with manual PRIVATE export. Missing/unloaded data never means empty. They require the exact supported game/SDK build; no Hunt/submarine upload contract exists yet.",
+        "Submarine voyage retention remains read-only and separate from community preparation. Private Hunt/submarine sync has separate OFF-by-default permissions, uses only the approved HTTPS shared TEST with explicit compatible Testing pairing, and never uploads community voyage results.",
+        "Hunt Bills and private submarine snapshots preserve positive/unknown/provisional semantics. Missing data never means empty. Dashboard facts remain local: no server Dashboard intake contract is activated.",
         "Testing Party Finder contribution requires fresh Testing pairing with site permission and a separate local opt-in. Public listings go to Gillions HTTPS, not directly to xivpf.com or localhost.",
         "Gillions keeps only an expiring, runtime current-listing cache; the paired token is used only for Gillions Authorization, never listing data. Permission denials stay stopped across logout/reload until fresh pairing.",
 #else
@@ -230,6 +238,7 @@ public sealed class Plugin : IDalamudPlugin {
         huntLocal = new HuntBillLocalView(pluginInterface, commands, framework, clientState, dataManager,
             marketConditions, configuration.HuntBills, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
         configuration.DashboardFacts ??= new();
+        configuration.PersonalSync ??= new();
         dashboardLocal = new DashboardLocalView(pluginInterface, commands, framework, clientState, dataManager,
             gameGui, marketConditions, addonLifecycle, configuration.DashboardFacts, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
         this.marketConditions = marketConditions;
@@ -279,6 +288,9 @@ public sealed class Plugin : IDalamudPlugin {
                 RequirePermit(permit);
                 configuration.DeviceToken = enrolled.token; configuration.DeviceId = enrolled.device_id;
                 configuration.ActiveSession = session; configuration.PairingRequired = false; configuration.PairingCode = "";
+#if GILLIONS_TEST_BUILD
+                configuration.SyncPersonalHunts = false; configuration.SyncPersonalSubmarines = false;
+#endif
                 configuration.SyncBlockedCode = ""; configuration.SyncBlockedMessage = "";
                 RefreshSessionContext(); pairedClientHydration.PairingSucceeded();
                 presenceFailureCount = 0; nextRetainerPresenceUtc = DateTime.MinValue;
@@ -299,6 +311,7 @@ public sealed class Plugin : IDalamudPlugin {
             using var request = Request("/api/game-sync/presence", permit, presence);
 #if GILLIONS_TEST_BUILD
             request.Headers.Add("X-Gillions-Market-Contract", "1"); // Optional capability; existing body/identity unchanged.
+            if (permit.Origin == PersonalSyncPolicy.Origin) request.Headers.Add("X-Gillions-Personal-Contract", PersonalSyncPolicy.Contract);
 #endif
             using var response = await SendAsync(request, permit);
             await EnsureSuccessfulResponse(response, permit.Cancellation);
@@ -309,6 +322,9 @@ public sealed class Plugin : IDalamudPlugin {
                 retainerUploadServerSupported = uploadSupported; presenceFailureCount = 0;
 #if GILLIONS_TEST_BUILD
                 marketAcceptedGeneration = MarketContributor.Compatible(responseJson) ? permit.Session!.Generation : "";
+                personalAccepted.Clear();
+                if (permit.Origin == PersonalSyncPolicy.Origin) foreach (var resource in PersonalSyncPolicy.Resources)
+                    if (PersonalSyncPolicy.Compatible(responseJson, resource)) personalAccepted.Add(resource);
 #endif
                 nextRetainerPresenceUtc = DateTime.UtcNow.Add(RetainerPresencePolicy.NextSuccessDelay(Random.Shared.Next(-5, 6)));
             });
@@ -324,7 +340,12 @@ public sealed class Plugin : IDalamudPlugin {
         }
     }
 
-    private void ClearRetainerServerAcceptance() => retainerUploadServerSupported = false;
+    private void ClearRetainerServerAcceptance() {
+        retainerUploadServerSupported = false;
+#if GILLIONS_TEST_BUILD
+        personalAccepted.Clear();
+#endif
+    }
 
     private void SendCurrentRetainerPresence(ulong contentId, DateTime now, SyncRequestMode mode = SyncRequestMode.Automatic) {
         if (!HasPairedSession || presenceInFlight) return;
@@ -355,6 +376,9 @@ public sealed class Plugin : IDalamudPlugin {
         }
 #endif
         if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;
+#if GILLIONS_TEST_BUILD
+        TickPersonalSync(now);
+#endif
         var contentId = activeRetainerCharacterContentId;
         var state = CurrentState;
         if (ItemLinkPollPolicy.ShouldPoll(configuration.EnableItemLinkRequests, true, configuration.DeviceToken, itemLinkPollInFlight, now, nextItemLinkPollUtc)) {
@@ -1066,6 +1090,12 @@ public sealed class Plugin : IDalamudPlugin {
             ImGui.TextWrapped("Older records with unknown ownership remain inactive in local configuration and are outside this new storage limit. Do not share your plugin configuration: it includes a credential and private gameplay history.");
         }
 #if GILLIONS_TEST_BUILD
+        var huntSync = configuration.SyncPersonalHunts;
+        if (ImGui.Checkbox("Sync my private Hunt bills to shared TEST", ref huntSync)) QueueUiAction(() => SetPersonalSync("hunt_bills", huntSync));
+        var submarineSync = configuration.SyncPersonalSubmarines;
+        if (ImGui.Checkbox("Sync my private submarine state to shared TEST", ref submarineSync)) QueueUiAction(() => SetPersonalSync("submarine_personal", submarineSync));
+        ImGui.TextWrapped("Both OFF by default. Requires local retention ON and fresh Testing pairing at https://test.gillions.app with the matching private permission. Never sent to production. Submarines include private names, workshop scope and activity times—not public community results. Disabling sync preserves retained state and all unrelated features.");
+        ImGui.TextWrapped(personalStatus);
         if (ImGui.Button("Beastmaster local test")) beastmasterLocal.Show();
         if (ImGui.Button("Submarine voyage retention")) submarineLocal.Show();
         if (ImGui.Button("My Hunt Bills local test")) huntLocal.Show();
@@ -1160,6 +1190,10 @@ public sealed class Plugin : IDalamudPlugin {
     private void ResetSessionContext() {
         if (disposed) return;
         requestLifetime.Invalidate(); ClearTransientState(); ClearRetainerServerAcceptance();
+#if GILLIONS_TEST_BUILD
+        foreach (var cancellation in personalCancellation.Values) { cancellation.Cancel(); cancellation.Dispose(); }
+        personalCancellation.Clear(); nextPersonalUtc = DateTime.MinValue;
+#endif
         activeOwnedState = null; activeRetainerCharacterContentId = 0; activeGeneration = "";
         nextRetainerPresenceUtc = DateTime.MinValue; nextRetainerUploadUtc = DateTime.MinValue;
     }
@@ -1304,6 +1338,105 @@ public sealed class Plugin : IDalamudPlugin {
         });
         return await pending!;
     }
+#if GILLIONS_TEST_BUILD
+    private bool PersonalEnabled(string resource) => resource == "hunt_bills"
+        ? configuration.SyncPersonalHunts && configuration.HuntBills.LocalRetentionEnabled
+        : resource == "submarine_personal" && configuration.SyncPersonalSubmarines && configuration.SubmarineVoyages.LocalRetentionEnabled;
+    private void SetPersonalSync(string resource, bool enabled) {
+        if (resource == "hunt_bills") configuration.SyncPersonalHunts = enabled;
+        else configuration.SyncPersonalSubmarines = enabled;
+        if (personalCancellation.Remove(resource, out var previous)) { previous.Cancel(); previous.Dispose(); }
+        nextPersonalUtc = DateTime.MinValue; nextRetainerPresenceUtc = DateTime.MinValue;
+        personalStatus = enabled ? "Awaiting compatible TEST permission and positive current-character observations."
+            : "Private resource sync OFF; retained/pending state preserved. Ordinary sync unchanged.";
+        RequestConfigurationSave();
+    }
+    private void TickPersonalSync(DateTime now) {
+        foreach (var resource in PersonalSyncPolicy.Resources) {
+            var enabled = PersonalEnabled(resource);
+            var before = resource == "hunt_bills" ? observedPersonalHunts : observedPersonalSubmarines;
+            if (before && !enabled && personalCancellation.Remove(resource, out var canceled)) { canceled.Cancel(); canceled.Dispose(); }
+            if (resource == "hunt_bills") observedPersonalHunts = enabled; else observedPersonalSubmarines = enabled;
+        }
+        if (personalInFlight || now < nextPersonalUtc || (!configuration.SyncPersonalHunts && !configuration.SyncPersonalSubmarines)) return;
+        nextPersonalUtc = now.AddSeconds(5);
+        if (configuration.ActiveSession!.Origin != PersonalSyncPolicy.Origin) {
+            personalStatus = "Private sync requires pairing at https://test.gillions.app; no personal data sent. Ordinary sync unchanged."; return;
+        }
+        // Presence remains useful with ordinary automatic sync OFF, but never
+        // grants missing server pairing permissions or changes the paired origin.
+        if (!presenceInFlight && now >= nextRetainerPresenceUtc) SendCurrentRetainerPresence(activeRetainerCharacterContentId, now, SyncRequestMode.Personal);
+        if (!PersonalSyncPolicy.Valid(configuration.PersonalSync)) {
+            personalStatus = "Private prepared state invalid/oversized; preserved and fail-closed. Ordinary sync unchanged."; return;
+        }
+        var owner = PersonalSyncPolicy.Owner(configuration.ActiveSession.Generation, HuntBillRetentionPolicy.CharacterKey(activeRetainerCharacterContentId));
+        foreach (var resource in PersonalSyncPolicy.Resources) {
+            if (!PersonalEnabled(resource) || !personalAccepted.Contains(resource)) continue;
+            string? payload;
+            try {
+                payload = resource == "hunt_bills"
+                    ? new HuntBillRetentionPolicy(configuration.HuntBills).PreparePrivateExport(HuntBillRetentionPolicy.CharacterKey(activeRetainerCharacterContentId))
+                    : submarineLocal.PersonalPayload(activeRetainerCharacterContentId);
+            } catch (InvalidOperationException) { continue; }
+            // No negative/empty replacement. Submarines wait for verified
+            // workshop evidence in this character's session, including reload.
+            if (payload is null) continue;
+            var prior = configuration.PersonalSync.Prepared.SingleOrDefault(p => p.OwnerKey == owner && p.Resource == resource);
+            var prepared = PersonalSyncPolicy.Prepare(configuration.PersonalSync, owner, resource, payload);
+            if (prepared is null) { personalStatus = "Private preparation capacity/validation gate: existing pending state preserved; no new admission."; continue; }
+            if (!ReferenceEquals(prior, prepared)) { RequestConfigurationSave(); FlushConfigurationSave(); }
+            if (!PersonalSyncPolicy.CanSend(true, true, configuration.ActiveSession.Origin, true, prepared)) continue;
+            var permit = CapturePermit(SyncRequestMode.Personal);
+            if (!personalCancellation.TryGetValue(resource, out var featureCancellation)) {
+                featureCancellation = new CancellationTokenSource(); personalCancellation.Add(resource, featureCancellation);
+            }
+            personalInFlight = true;
+            _ = Task.Run(() => SendPersonalAsync(permit, prepared, featureCancellation.Token));
+            return;
+        }
+        personalStatus = "Private sync waiting for explicit server permission/new positive observations, or retained state already acknowledged. No empty replacement.";
+    }
+    private async Task SendPersonalAsync(SyncRequestPermit permit, PersonalPreparedSnapshot prepared, CancellationToken featureToken) {
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation, featureToken);
+        var token = cancellation.Token;
+        try {
+            using var request = SnapshotRequest("/api/game-sync/sync", permit, prepared.Resource, prepared.Nonce, Encoding.UTF8.GetBytes(prepared.Payload));
+            request.Headers.Add("X-Gillions-Personal-Contract", PersonalSyncPolicy.Contract);
+            Task<HttpResponseMessage>? pending = null;
+            await framework.RunOnFrameworkThread(() => {
+                RequirePermit(permit); token.ThrowIfCancellationRequested();
+                if (!PersonalEnabled(prepared.Resource) || permit.Origin != PersonalSyncPolicy.Origin || !personalAccepted.Contains(prepared.Resource)) throw new OperationCanceledException();
+                pending = personalHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
+            });
+            using var response = await pending!;
+            var json = await SyncResponsePolicy.ReadAsync(response.Content, token);
+            var receipt = response.IsSuccessStatusCode && PersonalSyncPolicy.Receipt(json);
+            await framework.RunOnFrameworkThread(() => {
+                if (!PermitIsCurrent(permit) || token.IsCancellationRequested || !PersonalEnabled(prepared.Resource)) return;
+                if (receipt) {
+                    prepared.Acknowledged = true; personalFailures = 0; nextPersonalUtc = DateTime.UtcNow.AddSeconds(5);
+                    personalStatus = $"{prepared.Resource}: TEST receipt accepted. Positive retained observations only; current ownership/reset/completion claims remain limited.";
+                    RecordDiagnostic($"Uploaded private {prepared.Resource} to shared TEST: HTTP {(int)response.StatusCode}; valid receipt. No live correctness claim.");
+                } else if ((int)response.StatusCode is 400 or 401 or 403 or 404 or 409 or 413 or 415) {
+                    prepared.Blocked = true;
+                    personalStatus = $"{prepared.Resource}: HTTP {(int)response.StatusCode}; private snapshot stopped/preserved. Ordinary sync unchanged.";
+                } else {
+                    personalFailures++; nextPersonalUtc = DateTime.UtcNow.AddSeconds(PersonalSyncPolicy.RetrySeconds(personalFailures));
+                    personalStatus = $"{prepared.Resource}: bounded retry; same nonce/payload preserved. Ordinary sync unchanged.";
+                }
+                RequestConfigurationSave();
+            });
+        } catch (Exception) {
+            if (!disposed) await framework.RunOnFrameworkThread(() => {
+                if (!PermitIsCurrent(permit) || token.IsCancellationRequested) return;
+                personalFailures++; nextPersonalUtc = DateTime.UtcNow.AddSeconds(PersonalSyncPolicy.RetrySeconds(personalFailures));
+                personalStatus = "Private HTTPS send/receipt unavailable; pending nonce/payload retained, bounded backoff. No TLS fallback; ordinary sync unchanged.";
+            });
+        } finally {
+            if (!disposed) await framework.RunOnFrameworkThread(() => { personalInFlight = false; });
+        }
+    }
+#endif
     private async Task CommitAsync(SyncRequestPermit permit, Action<OwnedCharacterState> change) {
         if (disposed) throw new OperationCanceledException();
         await framework.RunOnFrameworkThread(() => { RequirePermit(permit); change(CurrentState); });
@@ -1475,6 +1608,10 @@ public sealed class Plugin : IDalamudPlugin {
         chatGui.LogMessage -= OnLogMessage;
         gameInventory.InventoryChangedRaw -= OnInventoryChangedRaw;
         framework.Update -= OnFrameworkUpdate;
+#if GILLIONS_TEST_BUILD
+        foreach (var cancellation in personalCancellation.Values) { cancellation.Cancel(); cancellation.Dispose(); }
+        personalCancellation.Clear(); personalHttp.Dispose();
+#endif
         pluginInterface.UiBuilder.Draw -= DrawSettings;
         pluginInterface.UiBuilder.OpenConfigUi -= OpenSettings;
         commands.RemoveHandler(CommandName);
@@ -1505,6 +1642,9 @@ public sealed class PluginConfiguration : IPluginConfiguration {
     public SubmarineVoyageRetention SubmarineVoyages { get; set; } = new();
     public HuntBillRetention HuntBills { get; set; } = new();
     public DashboardRetention DashboardFacts { get; set; } = new();
+    public PersonalSyncState PersonalSync { get; set; } = new();
+    public bool SyncPersonalHunts { get; set; }
+    public bool SyncPersonalSubmarines { get; set; }
     public bool ContributeObservedMarketData { get; set; } = true;
     // Enrollment stop only, never market payload or reporter identity.
     public string GillionsMarketBlockedGeneration { get; set; } = "";

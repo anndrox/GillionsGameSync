@@ -244,6 +244,8 @@ using (var privateDoc = JsonDocument.Parse(privateJson)) {
     Check(slot.GetProperty("build").GetProperty("parts").GetProperty("hull").GetInt32() == 3, "Component ID changed.");
     Check(slot.GetProperty("departureAtUtc").ValueKind == JsonValueKind.Null, "Departure fabricated.");
     Check(slot.GetProperty("sectorCompleteness").GetString() == "positive-observations-only", "Partial flags claimed complete unlocks.");
+    foreach (var field in new[] { "orderedSectorIds", "unlockedSectorIds", "exploredSectorIds" })
+        Check(slot.GetProperty(field).ValueKind == JsonValueKind.Array && slot.GetProperty(field)[0].GetInt32() == 1, "Sector contract requires numeric arrays, not base64: " + field);
 }
 Check(!privateJson.Contains(key) && !privateJson.Contains("987654321"), "Private export contains raw house/submarine key.");
 var personalRestart = JsonSerializer.Deserialize<SubmarineVoyageRetention>(JsonSerializer.Serialize(personal))!;
