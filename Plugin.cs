@@ -226,7 +226,7 @@ public sealed class Plugin : IDalamudPlugin {
             addonLifecycle, configuration.SubmarineVoyages, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
         configuration.HuntBills ??= new();
         huntLocal = new HuntBillLocalView(pluginInterface, commands, framework, clientState, dataManager,
-            addonLifecycle, configuration.HuntBills, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
+            marketConditions, configuration.HuntBills, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
         this.marketConditions = marketConditions;
         marketContributor = new MarketContributor(RecordDiagnostic);
         marketContributor.SetEnabled(configuration.ContributeObservedMarketData);
@@ -341,6 +341,7 @@ public sealed class Plugin : IDalamudPlugin {
         RefreshSessionContext(); MaintainTransientState(now);
         partyFinderContributor.Tick(now);
 #if GILLIONS_TEST_BUILD
+        huntLocal.Tick(now); // Independent local retention; five-second due check before native access.
         if (now >= nextMarketMaintenanceUtc) {
             nextMarketMaintenanceUtc = now.AddMilliseconds(250);
             marketContributor.RefreshSession(CaptureMarketSession());

@@ -25,6 +25,25 @@ HuntBillObservation Bill(byte type = 0, int kills = 1, uint order = 1) => new(ty
 int checks = 0;
 void Check(bool value, string name) { checks++; if (!value) throw new Exception(name); }
 bool Refused(Func<string> action) { try { action(); return false; } catch (InvalidOperationException) { return true; } }
+var cadence = new HuntObservationSchedule();
+Check(!cadence.TryBegin(now, false), "Disabled cadence admitted.");
+Check(cadence.TryBegin(now, true), "First loaded-cache check not immediate.");
+for (int ms = 0; ms < 5000; ms += 25)
+    Check(!cadence.TryBegin(now.AddMilliseconds(ms), true), "Per-frame/native read cadence exceeded.");
+Check(cadence.TryBegin(now.AddSeconds(5), true), "Five-second refresh missing.");
+Check(!cadence.TryBegin(now.AddSeconds(10), false), "Opt-out did not stop due read.");
+Check(!cadence.TryBegin(now.AddSeconds(-1), true), "Backwards clock triggered repeated reads.");
+cadence.Reset(); Check(cadence.TryBegin(now, true), "Enable/session reset failed.");
+Check(!new HuntObservationSchedule().TryBegin(DateTime.SpecifyKind(now, DateTimeKind.Local), true), "Non-UTC cadence admitted.");
+Check(HuntObservationAdmission.CanUseBillCache(0, 1, true, 2000001, true), "Matching loaded bill corroboration rejected.");
+foreach (var bad in new[] {
+    (index: (byte)0, flags: 1, loaded: false, item: 2000001u, present: true),
+    (index: (byte)0, flags: 1, loaded: true, item: 2000001u, present: false),
+    (index: (byte)0, flags: 0, loaded: true, item: 2000001u, present: true),
+    (index: (byte)0, flags: -1, loaded: true, item: 2000001u, present: true),
+    (index: (byte)22, flags: 1, loaded: true, item: 2000001u, present: true),
+    (index: (byte)0, flags: 1, loaded: true, item: 0u, present: true)
+}) Check(!HuntObservationAdmission.CanUseBillCache(bad.index, bad.flags, bad.loaded, bad.item, bad.present), "Unavailable/foreign/absent bill admitted.");
 Check(PersonalObservationCompatibility.Supports("2026.09.15.0000.0000", "7.56.2.9136"), "Known candidate pair disabled.");
 foreach (var pair in new[] { ("unknown", "7.56.2.9136"), ("2026.09.15.0000.0000", "7.56.3.0"), ("2026.10.01.0000.0000", "7.56.2.9136") })
     Check(!PersonalObservationCompatibility.Supports(pair.Item1, pair.Item2), "Unsupported patch/SDK admitted.");
@@ -40,6 +59,7 @@ foreach (var bad in new[] {
     Bill() with { Targets = [new(0, 1, 100, 200, 300, 0, 3, -1, 1, 1)] }, Bill(kills: 4),
     Bill() with { BillTypeId = 22 }, Bill() with { Category = "radar" }, Bill() with { Tier = 0 },
     Bill() with { OrderId = 0 }, Bill() with { ObservedAtUtc = default },
+    Bill() with { SourceEvidence = "verified-current-acceptance" },
     Bill() with { ObservedAtUtc = DateTime.SpecifyKind(now, DateTimeKind.Local) }
 }) Check(!policy.Observe(key, [bad]) && store.Characters.Count == 0, "Partial/unknown/malformed admitted.");
 Check(policy.Observe(key, [Bill(), Bill(4)]), "Supported daily/weekly positive observations rejected.");
@@ -57,6 +77,13 @@ Check(!policy.Observe(key, [Bill(kills: 3) with { ObservedAtUtc = now.AddMinutes
 var restarted = JsonSerializer.Deserialize<HuntBillRetention>(JsonSerializer.Serialize(store))!;
 var restartPolicy = new HuntBillRetentionPolicy(restarted);
 Check(restartPolicy.Supported && restartPolicy.PreparePrivateExport(key) == policy.PreparePrivateExport(key), "Restart lost identity/state.");
+Check(policy.Observe(key, [Bill() with { SourceEvidence = HuntObservationAdmission.KeyItemEvidence, ObservedAtUtc = now.AddDays(2) }]), "Corroborated source did not update.");
+var evidenceRestart = JsonSerializer.Deserialize<HuntBillRetention>(JsonSerializer.Serialize(store))!;
+using (var evidenceJson = JsonDocument.Parse(new HuntBillRetentionPolicy(evidenceRestart).PreparePrivateExport(key))) {
+    Check(evidenceJson.RootElement.GetProperty("bills")[0].GetProperty("sourceEvidence").GetString() == HuntObservationAdmission.KeyItemEvidence, "Source evidence lost on restart/export.");
+    Check(evidenceJson.RootElement.GetProperty("characterAssociation").GetString()!.Contains("unverified"), "Corroboration incorrectly claims cache ownership.");
+    Check(evidenceJson.RootElement.GetProperty("bills")[1].GetProperty("sourceEvidence").ValueKind == JsonValueKind.Null, "Old UI-only observation gained fabricated key-item evidence.");
+}
 Check(Refused(() => policy.PreparePrivateExport(HuntBillRetentionPolicy.CharacterKey(999))), "Different character exposed retained bills.");
 var exported = policy.PreparePrivateExport(key);
 Check(!exported.Contains(key) && !exported.Contains("123456789") && !exported.Contains("token", StringComparison.OrdinalIgnoreCase), "Private credential/ID export.");

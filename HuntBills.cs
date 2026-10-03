@@ -13,6 +13,24 @@ public sealed record HuntBillTarget(byte TargetIndex, uint TargetId, uint NpcNam
 public sealed record HuntBillObservation(byte BillTypeId, string Category, byte Tier, uint OrderId,
     uint EventItemId, HuntBillTarget[] Targets, DateTime ObservedAtUtc, string GameVersion, string CollectorVersion) {
     public string ObservationId { get; init; } = Guid.NewGuid().ToString("N");
+    public string? SourceEvidence { get; init; }
+}
+
+// Managed admission/cadence only. No native pointers, requests or ownership inference.
+internal sealed class HuntObservationSchedule {
+    private DateTime nextReadUtc;
+    internal bool TryBegin(DateTime now, bool enabled) {
+        if (!enabled || !PersonalObservationCompatibility.Utc(now) || now < nextReadUtc) return false;
+        nextReadUtc = now.AddSeconds(5);
+        return true;
+    }
+    internal void Reset() => nextReadUtc = default;
+}
+internal static class HuntObservationAdmission {
+    internal const string KeyItemEvidence = "loaded-key-item-and-obtained-flag-cache-unverified";
+    internal static bool CanUseBillCache(byte index, int flags, bool keyItemsLoaded, uint expectedItem, bool present) =>
+        index < 22 && (flags & ~((1 << 22) - 1)) == 0 && (flags & (1 << index)) != 0
+        && keyItemsLoaded && expectedItem > 0 && present;
 }
 public sealed class RetainedHuntCharacter {
     public string LocalCharacterKey { get; set; } = "";
@@ -32,6 +50,7 @@ internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
     internal static bool BillValid(HuntBillObservation? bill) => bill is not null && bill.BillTypeId < 22
         && bill.Category is "daily" or "weekly" && bill.Tier is >= 1 and <= 3 && bill.OrderId > 0
         && bill.EventItemId > 0 && Guid.TryParseExact(bill.ObservationId, "N", out _)
+        && (bill.SourceEvidence is null || bill.SourceEvidence == HuntObservationAdmission.KeyItemEvidence)
         && PersonalObservationCompatibility.Utc(bill.ObservedAtUtc)
         && PersonalObservationCompatibility.Metadata(bill.GameVersion) && PersonalObservationCompatibility.Metadata(bill.CollectorVersion)
         && bill.Targets is { Length: >= 1 and <= 5 }
@@ -53,7 +72,7 @@ internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
     }
     internal string Status => !Supported ? "Unsupported/oversized Hunt retention preserved unchanged; collection/export paused."
         : store.CapacityReached ? "Hunt retention full; prior observations preserved. New character observations paused."
-        : store.LocalRetentionEnabled ? "Awaiting Hunt Bill interface observations; retained state is not proof of current acceptance."
+        : store.LocalRetentionEnabled ? "Awaiting bounded loaded-cache observation; bill windows are not required. Retained state is not proof of current acceptance."
         : "Hunt retention off; prior state preserved. No Hunt uploads.";
     // Missing/cleared obtained flags do NOT delete bills. Complete cache ownership
     // and reset/absence cannot be established from these native fields alone.
@@ -89,10 +108,10 @@ internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
         if (current is null || current.Bills.Count == 0) throw new InvalidOperationException("No retained Hunt observations for this character.");
         return JsonSerializer.Serialize(new {
             schemaVersion = 1, collectorSchema = "hunt-bills-v1", uploadState = "local-only-no-server-contract",
-            source = "naturally-visible-mob-hunt-client-cache", completeness = "positive-observations-only",
-            characterAssociation = "active-character-at-interface-cache-ownership-unverified",
+            source = "naturally-loaded-mob-hunt-client-cache", completeness = "positive-observations-only",
+            characterAssociation = "active-character-context-cache-ownership-unverified",
             resetAtUtc = (DateTime?)null, resetApplicability = "unavailable", bills = current.Bills.OrderBy(b => b.BillTypeId).Select(b => new {
-                b.ObservationId, b.BillTypeId, b.Category, b.Tier, b.OrderId, b.EventItemId, b.ObservedAtUtc, b.GameVersion, b.CollectorVersion,
+                b.ObservationId, b.BillTypeId, b.Category, b.Tier, b.OrderId, b.EventItemId, b.ObservedAtUtc, b.GameVersion, b.CollectorVersion, b.SourceEvidence,
                 acceptance = "obtained-flag-observed-not-current-acceptance-proof", targets = b.Targets.Select(t => new {
                     t.TargetIndex, t.TargetId, t.NpcNameId, t.MapId, t.PlaceNameId, t.FateId, t.RequiredKills, t.ObservedKills,
                     completed = t.ObservedKills == t.RequiredKills, t.TargetType, t.Rank

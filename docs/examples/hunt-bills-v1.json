@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "collectorSchema": "hunt-bills-v1",
   "uploadState": "local-only-no-server-contract",
-  "source": "naturally-visible-mob-hunt-client-cache",
+  "source": "naturally-loaded-mob-hunt-client-cache",
   "completeness": "positive-observations-only",
-  "characterAssociation": "active-character-at-interface-cache-ownership-unverified",
+  "characterAssociation": "active-character-context-cache-ownership-unverified",
   "resetAtUtc": null,
   "resetApplicability": "unavailable",
   "bills": [{
@@ -12,7 +12,8 @@
     "billTypeId": 0, "category": "daily", "tier": 1,
     "orderId": 1, "eventItemId": 2000001,
     "observedAtUtc": "2026-10-02T12:00:00Z",
-    "gameVersion": "synthetic-game", "collectorVersion": "0.0.68.0",
+    "gameVersion": "synthetic-game", "collectorVersion": "0.0.69.0",
+    "sourceEvidence": "loaded-key-item-and-obtained-flag-cache-unverified",
     "acceptance": "obtained-flag-observed-not-current-acceptance-proof",
     "targets": [{"targetIndex": 0, "targetId": 1, "npcNameId": 100, "mapId": 200, "placeNameId": 300, "fateId": 0, "requiredKills": 3, "observedKills": 1, "completed": false, "targetType": 1, "rank": 1}]
   }]

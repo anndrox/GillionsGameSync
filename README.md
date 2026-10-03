@@ -93,6 +93,11 @@ and [candidate checks](docs/releases/testing-0.0.67.md).
 
 ### Testing 0.0.68 personal-state experiments
 
+Testing 0.0.69 corrects Hunt collection: the existing framework loop reads at most
+every five seconds, requiring matching loaded bill Key Items. Bill windows and
+logout are not prerequisites when coherent data is available. Keep the same
+Testing URL and follow [0.0.69 retest instructions](docs/releases/testing-0.0.69.md).
+
 Open `/gillionshunts` or **My Hunt Bills local test**; local retention defaults OFF.
 Naturally opened accepted bills supply positive cache targets/counters. Cache
 ownership, current acceptance, complete bill set and resets remain unverified.

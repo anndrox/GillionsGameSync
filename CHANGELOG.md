@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.69 - Testing Hunt cache collection correction
+
+- Remove the insufficient case/expansion-specific bill-window dependency. Observe naturally loaded bill caches every five seconds on the existing framework loop; no opening bills or logout required when corroborated data is loaded.
+- Require loaded Key Items containing the matching bill-type item, loaded player, no zoning and the existing exact game/SDK gate. Keep current order/cache ownership explicitly unverified; unavailable never erases retained data.
+- Add nullable per-observation source evidence without relabelling older history. Diagnostics expose attempts, last UTC attempt and versions instead of silently waiting.
+- Preserve separate opt-in, retention bounds, market/PF/Beastmaster/submarine and ordinary sync. Testing update uses the existing fixed URL; no Stable/server change or Hunt upload.
+
 ## 0.0.68 - Testing local Hunt Bills and private submarine observations
 
 - Advance the existing v0.0.64-testing JSON URL as the rolling Testing update feed. Testers keep their repository entry; it now advertises/downloads 0.0.68.0. Future authorized Testing publications advance this same pointer. No binary or Stable behavior changes.

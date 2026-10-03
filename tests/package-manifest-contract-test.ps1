@@ -31,16 +31,18 @@ foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate'
 }
 
 $manualTesting = @([IO.File]::ReadAllText((Join-Path $root 'data/GillionsGameSyncTesting.json')) | ConvertFrom-Json -AsHashtable)[0]
-$manualTestingUrl = 'https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.68-testing/GillionsGameSyncTesting-0.0.68.zip'
-Assert-Condition ($manualTesting.InternalName -ceq 'GillionsGameSyncTest' -and $manualTesting.AssemblyVersion -ceq '0.0.68.0') 'Manual testing candidate must retain the separate testing identity on successor 0.0.68.'
+$manualTestingUrl = 'https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.69-testing/GillionsGameSyncTesting-0.0.69.zip'
+Assert-Condition ($manualTesting.InternalName -ceq 'GillionsGameSyncTest' -and $manualTesting.AssemblyVersion -ceq '0.0.69.0') 'Manual testing candidate must retain the separate testing identity on successor 0.0.69.'
 foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate', 'DownloadLinkTesting')) {
-  Assert-Condition ($manualTesting[$field] -ceq $manualTestingUrl) "Manual testing candidate $field must resolve to its immutable 0.0.68 GitHub prerelease asset when published."
+  Assert-Condition ($manualTesting[$field] -ceq $manualTestingUrl) "Manual testing candidate $field must resolve to its immutable 0.0.69 GitHub prerelease asset when published."
 }
 
 $fixedTestingFeed = 'https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json'
 $feedEvidence = [IO.File]::ReadAllText((Join-Path $root 'data/releases/testing-update-feed.json')) | ConvertFrom-Json -AsHashtable
 Assert-Condition ($feedEvidence.feed -ceq $fixedTestingFeed) 'Testing update URL must remain the owner-selected existing repository URL.'
-Assert-Condition ($feedEvidence.version -ceq $manualTesting.AssemblyVersion -and $feedEvidence.internalName -ceq $manualTesting.InternalName -and $feedEvidence.download -ceq $manualTestingUrl) 'Fixed feed evidence must agree with the reviewed successor manifest.'
+$publishedVersion = $feedEvidence.version -replace '\.0$', ''
+$publishedZip = "https://github.com/anndrox/GillionsGameSync/releases/download/v$publishedVersion-testing/GillionsGameSyncTesting-$publishedVersion.zip"
+Assert-Condition ([Version]$feedEvidence.version -le [Version]$manualTesting.AssemblyVersion -and $feedEvidence.internalName -ceq $manualTesting.InternalName -and $feedEvidence.download -ceq $publishedZip) 'Published fixed-feed evidence must be a real published predecessor or the candidate, not falsely advanced by preparation.'
 $readme = [IO.File]::ReadAllText((Join-Path $root 'README.md'))
 $releasing = [IO.File]::ReadAllText((Join-Path $root 'docs/releasing.md'))
 Assert-Condition ($readme.Contains($fixedTestingFeed) -and $releasing.Contains($fixedTestingFeed)) 'Installation and publication guidance must retain the fixed Testing update URL.'

@@ -4,12 +4,16 @@
 
 Keep `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
 in Dalamud. This JSON is the rolling Testing channel pointer, not a version pin.
-It currently advertises `0.0.68.0` and downloads the reviewed 0.0.68 ZIP. Refresh
+Authorized 0.0.69 publication advances it to the reviewed 0.0.69 ZIP. Refresh
 the plugin list and update normally; keep the installed configuration. Future
 authorized Testing publications must advance this same JSON, not ask testers to
 change repository URLs. [Publication procedure](releasing.md#fixed-testing-update-feed).
 
 ## Testing 0.0.68 — local Hunt Bills and private submarines
+
+For the Hunt event-path correction, use [0.0.69 retest instructions](releases/testing-0.0.69.md).
+The corrected reader does not require opening a bill when matching loaded Key
+Items/cache data are present. 0.0.68 collection instructions below are historical.
 
 Use [0.0.68 live checks](releases/testing-0.0.68.md) and the
 [private-state draft/Site handoff](contracts/personal-observations-v1.md).

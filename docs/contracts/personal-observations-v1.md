@@ -1,6 +1,6 @@
 # Testing personal observations v1 — local draft and bounded Site handoff
 
-Applies to Testing 0.0.68. This is **not an activated HTTP contract**. Both
+Applies to Testing 0.0.69 (retains 0.0.68 observations). This is **not an activated HTTP contract**. Both
 collectors retain locally in the existing Dalamud Testing configuration; explicit
 PRIVATE exports prepare the proposed payloads. No new endpoint, uploader, public
 FC dataset, credential or pairing scope is implemented. Ordinary sync, market v1
@@ -16,13 +16,20 @@ live memory layout, cache ownership or freshness. No supported Hunt Bill getter
 exists in the installed Dalamud service API; the collector uses its existing
 FFXIVClientStructs `MobHunt` definition, not bespoke offsets or packet hooks.
 
-Hunts read only `MobHunt` PostSetup/PostRefresh/PostRequestedUpdate events after
-the player opens a Hunt Bill. Submarines retain their existing workshop events;
+Hunts read naturally loaded `MobHunt` caches at most once every five seconds on
+the existing framework loop, independently of pairing, ordinary sync and whether
+a bill window is open. Admission requires loaded current PlayerState, no zoning,
+a loaded/bounded Key Items container, and a positive obtained flag with a matching
+MobHuntOrderType.EventItem actually present (positive quantity). This corroborates
+the bill type, not the cached order's character ownership or current freshness.
+No coherent positive evidence means unavailable/preserved, never no bills.
+Submarines retain their existing workshop events;
 positive unlock/exploration getters run only when the selected planning agent
 owns the visible interface in the loaded current workshop. Both require local
-opt-in and framework-thread execution; at most one read per second. Static
+opt-in and framework-thread execution; submarine reads remain at most once per second. Static
 catalogs are cached. No UI is opened, no mob/object table is scanned, no callback,
-packet hook, polling/request, gameplay action or third-party runtime is added.
+packet hook, game/web request, gameplay action or third-party runtime is added.
+Hunt memory observation is explicitly bounded, not a per-frame native scan.
 
 Definitions: [MobHunt](https://github.com/aers/FFXIVClientStructs/blob/6a562a1ef86b9acb22bda0726e28b0e23bb27552/FFXIVClientStructs/FFXIV/Client/Game/UI/MobHunt.cs),
 [HousingManager](https://github.com/aers/FFXIVClientStructs/blob/6a562a1ef86b9acb22bda0726e28b0e23bb27552/FFXIVClientStructs/FFXIV/Client/Game/HousingManager.cs),
@@ -31,14 +38,21 @@ These are technical references; compiled installed SDK/catalog evidence is also
 required. Lumina provides static identities/requirements, not player ownership,
 counter freshness, bill reset times, spawn sightings or FC permissions.
 
+HuntBuddy [inspected reader](https://github.com/SheepGoMeh/HuntBuddy/blob/1de61e25b99b6473f4d2c75b4023e588016f0aa4/HuntBuddy/Plugin.cs)
+is a technical reference for cache availability, not a dependency or copied code
+(no repository license detected). Its per-frame native flag checks/background
+native reads are not adopted. The 0.0.68 `MobHunt` subscription was insufficient:
+other implementations use case-sensitive `Mobhunt` and numbered expansion windows.
+The successor removes the UI-event dependency rather than adding more hooks.
+
 ## Hunt retained/private payload
 
 Authoritative definitions: `HuntBills.cs`; [invented example](../examples/hunt-bills-v1.json).
 Root fields are exactly `schemaVersion:1`, `collectorSchema:"hunt-bills-v1"`,
 `uploadState:"local-only-no-server-contract"`,
-`source:"naturally-visible-mob-hunt-client-cache"`,
+`source:"naturally-loaded-mob-hunt-client-cache"`,
 `completeness:"positive-observations-only"`,
-`characterAssociation:"active-character-at-interface-cache-ownership-unverified"`,
+`characterAssociation:"active-character-context-cache-ownership-unverified"`,
 `resetAtUtc:null`, `resetApplicability:"unavailable"`, and `bills` (1–22).
 
 | Fields | Source / semantics | Freshness / absence | Privacy / retention |
@@ -49,6 +63,7 @@ Root fields are exactly `schemaVersion:1`, `collectorSchema:"hunt-bills-v1"`,
 | orderId, eventItemId | Native obtained order row getter, validated against type OrderStart/OrderAmount; type EventItem row ID | Unknown/out-of-range order rejects that bill; never substitute available board order | Personal snapshot; no inventory/ownership inference |
 | observedAtUtc, gameVersion, collectorVersion | Framework observation UTC, Lumina base repository version, actual assembly version | UTC only; not server receipt, reset or fresh network response | Private activity/provenance, retained |
 | acceptance | Always `obtained-flag-observed-not-current-acceptance-proof` | Cache does not clear completed marks; no independent cache-owner/generation flag | No active-assignment claim |
+| sourceEvidence | Additive nullable observation provenance: `loaded-key-item-and-obtained-flag-cache-unverified` for new corroborated reads | null for older UI-only records; never retrospectively claim key-item evidence | Private snapshot; does not prove current cached order or ownership |
 | targets[].targetIndex | Order subrow index, 0–4 | Whole bill rejected for partial/invalid targets | Snapshot |
 | targetId, npcNameId | MobHuntOrder.Target -> MobHuntTarget -> BNpcName, known rows required | Unknown IDs rejected | Numeric reference join keys; no mob sighting |
 | mapId, placeNameId, fateId | MobHuntTarget sheet reference IDs, verbatim | 0 is the sheet's absent reference sentinel, not a coordinate or empty personal state | Static references; no live positions |
@@ -77,7 +92,7 @@ These snapshots are not an unsent contribution journal; there are no server ACKs
 
 PRIVATE export requires retention ON and the matching active character partition.
 It excludes character/account/name/hash, device/authentication, chat and diagnostics.
-The active character at a visible UI is context, **not independent proof the
+The active loaded character and matching bill item are context, **not independent proof the
 global cache belongs to that character**. Live transition validation remains
 required. Site must not present these provisional records as a complete current
 assignment, no bills, or a verified next-target recommendation.

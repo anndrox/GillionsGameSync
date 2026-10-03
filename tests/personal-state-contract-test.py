@@ -10,14 +10,22 @@ plugin = (root / "Plugin.cs").read_text(encoding="utf-8")
 for text in (hunt, sub):
     assert text.startswith("#if GILLIONS_TEST_BUILD")
     assert "framework.Update" not in text
-    assert "nextReadUtc" in text and "AddSeconds(1)" in text
     assert not re.search(r"HttpClient|SendAsync|RequestData|HookFrom|FireCallback|ReceiveEvent|GetIpcSubscriber|ObjectTable", text)
-    event = text.split("private unsafe void OnAddon", 1)[1]
+    event = text.split("private unsafe void OnAddon" if text is sub else "internal unsafe void Tick", 1)[1]
     assert event.index("PersonalObservationCompatibility.Supports") < event.index("PlayerState.Instance()" if text is sub else "CurrentCharacterKey()")
     assert "!framework.IsInFrameworkUpdateThread" in event
     assert "LocalRetentionEnabled" in event
     assert "client.Logout -= OnLogout" in text
     assert "PRIVATE" in text and "no upload" in text.lower()
+assert "nextReadUtc" in sub and "AddSeconds(1)" in sub
+assert "RegisterListener" not in hunt and "args.Addon" not in hunt
+tick = hunt.split("internal unsafe void Tick", 1)[1]
+assert tick.index("schedule.TryBegin") < tick.index("PersonalObservationCompatibility.Supports") < tick.index("InventoryManager.Instance()")
+assert "InventoryType.KeyItems" in hunt and "!keyItems->IsLoaded" in hunt
+assert "keyItems->Size is < 1 or > 256" in hunt and "item.Quantity > 0" in hunt
+assert "presentItems.Contains(type.EventItem.RowId)" in hunt and "HuntObservationAdmission.CanUseBillCache" in hunt
+assert "huntLocal.Tick(now);" in plugin
+assert plugin.index("huntLocal.Tick(now);") < plugin.index("if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;")
 assert "ObtainedFlags" in hunt and "GetObtainedHuntOrderRowId(index)" in hunt
 assert "CurrentKills[index].Counts" in hunt and "CatalogTargets" in hunt
 assert "orders.HasRow(orderId)" in hunt and "catalog.HasRow(row.Target.RowId)" in hunt
@@ -42,4 +50,4 @@ for example, fixture, array in [
     assert set(document[array][0]) == set(actual[array][0]), example
     assert document["uploadState"] == "local-only-no-server-contract"
     assert document[array][0]["gameVersion"] == "synthetic-game"
-print("Hunt/submarine Testing-only, opt-in, exact-patch, event-bounded, private export and no-upload source boundaries passed.")
+print("Hunt/submarine Testing-only, opt-in, exact-patch, bounded observation, private export and no-upload source boundaries passed.")
