@@ -2,7 +2,7 @@
 
 Follow-up: owner live72 evidence isolated `ClientCounterMismatch`. The earlier
 reference audit proved global allowances, not the agent per-client remaining
-equation. [Prepared73 diagnosis](releases/testing-0.0.73.md) documents new pinned
+equation. [Testing73 diagnosis](releases/testing-0.0.73.md) documents new pinned
 Umbra/HaselDebug manager-array evidence, strict manager/agent corroboration and
 unsupported ambiguous agent remaining semantics. Prior publication and all
 unrelated timer classifications remain unchanged.

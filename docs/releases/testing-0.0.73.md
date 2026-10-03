@@ -1,7 +1,8 @@
-# Prepared Testing 0.0.73 — selected Custom Delivery counter diagnosis
+# Testing 0.0.73 — selected Custom Delivery counter diagnosis
 
-Status: prepared correction, NOT published. Existing Testing 0.0.72 tag, ZIP and
-owner-selected rolling feed are unchanged. Stable/main/Site/server are untouched.
+Status: owner-approved Testing publication of the exact validated prepared
+package, without rebuilding. Versioned72 is preserved; the unchanged owner-selected
+rolling repository URL advances to73. Stable/main/Site/server are untouched.
 No new upload, game request, UI opening, hook, gameplay action or polling cadence.
 
 ## Diagnosis
@@ -56,7 +57,7 @@ bounds, default-OFF private consent, 8-group fair five-second cadence, private
 export and ordinary HTTPS pairing/sync remain unchanged.
 
 No additional delivery is needed. A successor build is required to run the
-corrected collector; publication/update is distinct from this prepared correction.
+corrected collector; the owner has accepted and authorized this publication.
 No new live state is requested to invent a semantic proof for the rejected field.
 
 ## Validation
@@ -82,5 +83,22 @@ ZIP SHA256: `91c3fd8da2322b10f3e0858db25ecd97df854bf3d4a5dfc9b569f8e6c727a563`.
 Manifest SHA256: `2062725468b69db98c0afc61d4229850f5d5ddb1ac0d6339e10dd7399fba99c2`.
 DLL SHA256: `fd2a3ee69401a61782a21136c48fe2c0b936c24c2790bce897f25b11be64cd58`.
 Exact packaged DLL actual configuration tests and product/API15/73/hash/private-path
-checks PASS. Original rolling feed anonymously remains72, not this candidate.
+checks PASS. The exact package is now published at `v0.0.73-testing`; no rebuild.
 Detailed durable evidence: [Testing73](../../data/releases/testing-0.0.73.json).
+
+## Owner-approved publication
+
+Published the exact prepared package, without rebuilding, on 2026-10-03 at
+07:00:12 UTC under tag `v0.0.73-testing`. Owner acceptance does not relabel this
+as live73 validation. Exact existing packaged DLL configuration tests were rerun
+with `--no-build` immediately before publication; all passed. Tag points to the
+validated source above; publication documentation does not alter that package.
+
+The unchanged owner-selected repository URL
+`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
+anonymously returned `0.0.73.0` at 07:01:57 UTC. Its manifest hash, all four links,
+downloaded ZIP hash, embedded product/API15/version and DLL hash match the exact
+prepared artifact. Initial predecessor cache cleared without re-upload or a new
+URL. Stable release/main and Site/server are untouched; versioned72 and historical
+Testing artifacts remain preserved. No additional delivery/Ameliance action is
+required for this publication.

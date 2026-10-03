@@ -1,11 +1,11 @@
 # Changelog
 
-## 0.0.73 - Prepared Testing selected Custom Delivery counter correction
+## 0.0.73 - Testing selected Custom Delivery counter correction
 
 - Stop interpreting AgentSatisfactionSupply.NpcData.RemainingAllowances as an independently verified per-client residual. Its exact semantics are unsupported; no clamp/minimum or bypass is used.
 - Match the selected ENpcResident to one SatisfactionNpc row, use its bounded RowId-minus-one manager array entry, and require usage/rank/satisfaction agreement with the active initialized agent before admitting client detail.
 - Client remaining is explicitly capacity minus corroborated weekly usage, not deliverability when the global allowance is exhausted. Global allowance collection, schema, consent, cadence, persistence and other features are unchanged.
-- Prepared successor only; published Testing 0.0.72 and the owner's unchanged update URL remain untouched during diagnosis. No new delivery or live-success claim.
+- Owner-approved Testing publication uses the exact validated prepared package, without rebuilding. The unchanged rolling repository URL now advertises73; versioned72 is preserved. No new delivery or live-success claim.
 
 ## 0.0.72 - Testing Timers lookup, Custom Delivery diagnostics and Doman
 

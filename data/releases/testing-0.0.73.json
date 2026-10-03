@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "version": "0.0.73",
   "assemblyVersion": "0.0.73.0",
-  "status": "PREPARED_UNPUBLISHED_TESTING",
+  "status": "PUBLISHED_TESTING_FIXED_FEED_ANONYMOUSLY_VERIFIED",
   "startingSource": "b8f33dbcdbe05420648cf7ed4d87e154b145ae0a",
   "sourceCommit": "735bd17e77f959c103f59a465f047961c247465d",
   "branch": "codex/game-sync/beastmaster-party-finder-testing",
@@ -38,7 +38,8 @@
     "build": "Installed SDK stable-compatible and Testing builds plus exact73 package zero warnings/errors.",
     "package": "Three entries, exact Testing product/API15/version/links, ZIP/manifest/DLL hashes and private-path/test-server-address scan PASS.",
     "performance": "Same8 groups and one bounded group per5seconds, no extra polling/hooks/UI/game requests; added only3 selected manager entries/bounds/corroboration. No live73 frame-time claim.",
-    "documents": "Focused local links, synthetic example/generated fixture equivalence and git diff --check PASS."
+    "documents": "Focused local links, synthetic example/generated fixture equivalence and git diff --check PASS.",
+    "publicationMetadata": "Manual manifest logically equals exact prepared manifest; links/version/API/product and evidence coherence validated without build. Docs links and git diff --check PASS."
   },
   "assessment": "Primary complete-surface assessment; no new private fields/identity/credentials/upload/trust/retention scope. Previous independent privacy boundaries unchanged, no new independent approval claimed.",
   "references": [
@@ -46,8 +47,29 @@
     "https://github.com/una-xiv/umbra/blob/cbd00524952aa1c0386a47126f05721191f80033/Umbra.Game/src/CustomDeliveries/CustomDeliveriesRepository.cs",
     "https://github.com/Haselnussbomber/HaselDebug/blob/91b4e56b626d0347edf22f3825b187ac07bc5996/HaselDebug/Tabs/SatisfactionSupplyTab.cs"
   ],
-  "publication": "No73 tag/release/upload/feed mutation. Exact original owner URL anonymously verified still72/hash e20db7000a2f51f9d79bc803b0ded487fb54b9576763bdbf35029043ac13902e.",
+  "publication": {
+    "authority": "Explicit owner accepted correction and approved exact prepared Testing73 publication; no rebuild/additional live action required.",
+    "publicationStartingHead": "7cb2ab72c66365bed6f5857cbab3514c6f8ce244",
+    "sourceTag": "v0.0.73-testing",
+    "annotatedTag": "864d49e4efef802df740d4083d8e718d7fc267f4",
+    "publishedAt": "2026-10-03T07:00:12Z",
+    "release": "https://github.com/anndrox/GillionsGameSync/releases/tag/v0.0.73-testing",
+    "isPrerelease": true,
+    "zipAssetId": 607330938,
+    "manifestAssetId": 607330937,
+    "fixedFeedAssetId": 607331610,
+    "fixedFeedReplacedAt": "2026-10-03T07:00:32Z",
+    "rebuilt": false,
+    "exactPackageValidation": "Prepared source unchanged; ZIP/DLL/manifest and saved durable copies byte-equal. Existing exact DLL configuration fixtures rerun with --no-build PASS immediately before publication.",
+    "versionedVerifiedAt": "2026-10-03T07:00:29Z",
+    "fixedFeed": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json",
+    "fixedFeedVerifiedAt": "2026-10-03T07:01:57Z",
+    "verification": "Anonymous exact unchanged original URL returned73 and expected manifest hash after predecessor cache cleared; four links, downloaded ZIP and embedded product/API15/version/DLL hashes PASS. No rebuild, cache-buster URL or re-upload.",
+    "previousAdvertisedVersion": "0.0.72.0",
+    "previousManifestSha256": "e20db7000a2f51f9d79bc803b0ded487fb54b9576763bdbf35029043ac13902e",
+    "preserved": "Versioned72 and earlier artifacts preserved; historical64 ZIP/notes and Stable1.0.30 publication date/asset digest unchanged. Remote main and canonical local plugin/Site HEADs unchanged."
+  },
   "preservation": "Prepared package retained under owner workspace Evidence/GameSync/Testing-0.0.73/735bd17e77f959c103f59a465f047961c247465d; copied ZIP/manifest byte-equal. No private diagnostic/player data included.",
-  "effects": "Routine task-branch source/evidence pushes only; no stable/main/Site/server/production change. market-observations-v1 untouched. No gameplay/native mutation, uploads, new dependencies or tools.",
-  "remaining": "Another Testing build is needed to run corrected source;73 is prepared, not published. No additional delivery requested. Source reference/SDK/fixture success is not live73 acceptance. Future authenticated Site facts transport remains separate and absent."
+  "effects": "Owner-authorized Testing prerelease/tag and original rolling JSON replacement only; current64 note prefix updated with history preserved. Task-branch docs/manifest/evidence pushes. No rebuild, Stable/main/Site/server/production effects, new credentials/game actions/uploads. market-observations-v1 untouched.",
+  "remaining": "Testing73 publication and original rolling URL download chain verified complete. No additional delivery/Ameliance action required. Live73 client-detail success not claimed; future authenticated Site facts transport remains separate and absent."
 }

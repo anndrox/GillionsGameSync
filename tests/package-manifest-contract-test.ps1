@@ -31,10 +31,10 @@ foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate'
 }
 
 $manualTesting = @([IO.File]::ReadAllText((Join-Path $root 'data/GillionsGameSyncTesting.json')) | ConvertFrom-Json -AsHashtable)[0]
-$manualTestingUrl = 'https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.72-testing/GillionsGameSyncTesting-0.0.72.zip'
-Assert-Condition ($manualTesting.InternalName -ceq 'GillionsGameSyncTest' -and $manualTesting.AssemblyVersion -ceq '0.0.72.0') 'Manual testing candidate must retain the separate testing identity on successor 0.0.72.'
+$manualTestingUrl = 'https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.73-testing/GillionsGameSyncTesting-0.0.73.zip'
+Assert-Condition ($manualTesting.InternalName -ceq 'GillionsGameSyncTest' -and $manualTesting.AssemblyVersion -ceq '0.0.73.0') 'Manual testing candidate must retain the separate testing identity on successor 0.0.73.'
 foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate', 'DownloadLinkTesting')) {
-  Assert-Condition ($manualTesting[$field] -ceq $manualTestingUrl) "Manual testing candidate $field must resolve to its immutable 0.0.72 GitHub prerelease asset when published."
+  Assert-Condition ($manualTesting[$field] -ceq $manualTestingUrl) "Manual testing candidate $field must resolve to its immutable 0.0.73 GitHub prerelease asset when published."
 }
 
 $fixedTestingFeed = 'https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json'

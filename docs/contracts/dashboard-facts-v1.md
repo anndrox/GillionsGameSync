@@ -19,7 +19,7 @@ ENpcResident-to-SatisfactionNpc match and coherent client limits. Since 0.0.72,
 unavailable/malformed selected-client detail cannot suppress separately valid
 global allowance facts (nor can malformed global counts suppress valid client
 facts). Shared UI/load/reset gates are unchanged; rejected facts preserve history.
-Prepared 0.0.73 uses the uniquely matched SatisfactionNpc RowId minus one,
+0.0.73 uses the uniquely matched SatisfactionNpc RowId minus one,
 bounds-checks the manager usage/rank/satisfaction arrays, and requires all three
 values to agree with the active agent. It does not use manager CurrentNpc's
 undocumented index convention or agent RemainingAllowances. That field's exact

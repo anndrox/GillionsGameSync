@@ -65,7 +65,7 @@ custom plugin repositories:
 
 This installs the separate **Gillions Game Sync Testing** identity. It does not
 replace the stable plugin or update the existing `gillions.app` testing feed.
-Testing `0.0.72` preserves the published Testing lineage, corrects the Timers lookup and Custom Delivery validation/diagnostics, and adds loaded Doman Enclave counters to the default-OFF private facts experiment. Keep the existing custom-repository URL above: it is the rolling Testing update feed, despite its historical tag name. Refresh Dalamud's plugin list and update to `0.0.72.0`; do not replace the repository entry for each release. Follow the [live checklist and diagnostics](docs/releases/testing-0.0.72.md). Do not downgrade or delete configuration. Ordinary HTTPS/PF pairing and consent are unchanged.
+Testing `0.0.73` preserves the published Testing lineage and corrects selected-client Custom Delivery counters using catalog-indexed manager/agent corroboration. Global weekly allowances remain independent; client remaining is residual capacity only, and ambiguous agent remaining is unsupported. Keep the existing custom-repository URL above: it is the rolling Testing update feed, despite its historical tag name. Refresh Dalamud's plugin list and update to `0.0.73.0`; do not replace the repository entry for each release. See [release and capability details](docs/releases/testing-0.0.73.md). No additional delivery or Ameliance action is required for publication. Do not downgrade or delete configuration. Ordinary HTTPS/PF pairing and consent are unchanged.
 
 Open `/gillionssubs` or **Submarine voyage retention**. Use workshop interfaces
 manually; no submarine control, polling or third-party plugin is involved. Local
@@ -79,19 +79,19 @@ build/sector evidence remain unavailable. See [schema, examples and Site require
 
 ### Testing 0.0.72 Timers, Custom Deliveries and Doman
 
-Prepared `0.0.73` corrects the selected-client counter source after a live72
+Published `0.0.73` corrects the selected-client counter source after a live72
 `ClientCounterMismatch`. It corroborates catalog-indexed manager usage/rank/
 satisfaction with the active agent and calculates client residual capacity;
 the agent's ambiguous remaining field is unsupported. Global allowances remain
-unchanged. See [diagnosis and prepared capability state](docs/releases/testing-0.0.73.md).
-This prepared build is not advertised by the existing Testing feed yet.
+unchanged. See [diagnosis and capability state](docs/releases/testing-0.0.73.md).
+The existing Testing feed advertises this exact approved package; no rebuild.
 
 The successor separates valid global allowance observations from rejected client
 details and adds a persistent, session-local **Custom Delivery read** reason to
 the facts window and aggregate diagnostics. It does not relax shared native
-load/reset gates or add uploads. Ameliance live capture remains unverified;
-[0.0.72 retest instructions](docs/releases/testing-0.0.72.md) identify the failed
-gate without another delivery, player data or configuration sharing. The Timers
+load/reset gates or add uploads. The owner provided72 client-counter rejection
+evidence;73 addresses the source assumption without claiming live73 success.
+The Timers
 addon lookup is corrected to `ContentsInfo`. Loaded Doman Enclave native donation
 totals are retained locally, without inferring weekly completion or reset.
 See the [all-timer GitHub reference audit](docs/timer-plugin-references.md) for
@@ -114,7 +114,7 @@ The existing rolling Testing feed supplies this update; Stable is unchanged.
 
 Testing 0.0.67 was published October 1, 2026 at tag `v0.0.67-testing`, source
 `9821c92df8f51c9fef913a9e8294fd6ed3b4469c`. Its immutable assets are preserved;
-0.0.72 uses the same separate product identity. Publication is not live-game proof.
+0.0.73 uses the same separate product identity. Publication is not live-game proof.
 
 "Contribute observed market data to Gillions" is independently **on by default**,
 including older Testing configurations without that field. It has a persistent
