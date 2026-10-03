@@ -1,5 +1,10 @@
 # Personal daily/weekly capability audit — Testing 0.0.71 candidate
 
+0.0.72 correction: [GitHub timer reference audit](timer-plugin-references.md)
+found the actual Timers addon `ContentsInfo` and the omitted loaded
+DomanEnclaveManager source. The Doman row below is updated to implemented local
+facts. Other classifications remain explicit; reference use is not live proof.
+
 Status: source/SDK/catalog validation, **not live-game or production validation**.
 Starting source: `d4d33572a1edcc3386d678ebf35abb8b84644892`, Testing 0.0.70 lineage.
 Game catalog: `2026.09.15.0000.0000`; installed FFXIVClientStructs: `7.56.2.9136`.
@@ -53,7 +58,7 @@ Classification is about available evidence, not a promise of live correctness.
 | Custom Delivery global allowance | Weekly | `SatisfactionSupplyManager.GetUsedAllowances`, `GetResetDateTime` | NEW COLLECTOR REQUIRED | COLLECTABLE ONLY AFTER NATURAL UI LOAD | Used/12/remaining and native next reset; own active initialized SatisfactionSupply, no forced request | U / private |
 | Custom Delivery selected client | Weekly counts + permanent rank | `AgentSatisfactionSupply.NpcData`, manager init flags, `SatisfactionNpc.Npc` | NEW COLLECTOR REQUIRED | COLLECTABLE ONLY AFTER NATURAL UI LOAD | Matched selected client only: used/max/remaining, satisfaction current/max, rank current/max. Other clients remain unknown | U+S / private |
 | All Custom Delivery client availability | Unlock/progression | Satisfaction NPC static requirements and quest data | ALREADY AVAILABLE ON SITE for prerequisite facts; native availability UNAVAILABLE | STATIC/REFERENCE ONLY | Site may display prerequisites; no fabricated visit recommendation or all-client availability flags | S / existing private prerequisites |
-| Doman weekly donated/cap/remaining | Weekly | `AgentReconstructionBox.LimitedTotal/UnlimitedTotal`; `AddonReconstructionBox`; `AgentContentsTimer` | UNAVAILABLE | NOT RELIABLY OBSERVABLE | Totals describe offered/attempted donation, NOT reliably already donated this week. No collector; manual-only | — / not retained |
+| Doman weekly donated/cap/remaining | Weekly | `DomanEnclaveManager.IsLoaded/State.Donated/Allowance/IsAcceptingDonations` | NEW COLLECTOR in 0.0.72 | RELIABLY COLLECTABLE typed loaded cache; ownership/reset proof unverified | Positive cap and donated<=cap required; remaining subtraction, accepting flag distinct from completion. Native reset unknown. ReconstructionBox offered-item totals are NOT substituted | B / private |
 | Doman reconstruction unlock/progression | Permanent | Existing filtered normal quests | ALREADY AVAILABLE ON SITE where supported | IMPLEMENTED ALREADY | Reuse quest facts; never turn progression into weekly donation completion; multiplier not newly inferred | E / existing private |
 | Fashion Report score/attempts | Weekly window | `FashionCheckManager.PlayerInfo.HighScore/Remaining`, Theme, pending flags | UNAVAILABLE | PARTIALLY OBSERVABLE | Fields exist but no verified completed response/load-owner gate. No new score/participation/reward claim. No solution/theme collection | — / not retained |
 | Masked Carnivale weekly challenges | Weekly | `AgentAozContentBriefing.WeeklyAozContentIds`, `IsWeeklyChallengeComplete`; `AozContentData.UnkLoadState` | UNAVAILABLE | PARTIALLY OBSERVABLE | Weekly getter distinct from lifetime clears; load state private/unknown and typed AozContent sheet unavailable in installed sheets. Withheld rather than treating zero flags as incomplete | — / not retained |

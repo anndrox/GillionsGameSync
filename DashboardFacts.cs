@@ -35,6 +35,13 @@ public sealed class DashboardRetention {
 }
 
 internal static class DashboardSources {
+    // The global allowance fact and selected-client details have independent
+    // bounds. An unavailable/malformed client must not suppress a valid global
+    // fact, and a malformed global count must not poison valid client details.
+    internal static DashboardObservation[] AdmitCustomDeliveries(DashboardObservation global, DashboardObservation? client) =>
+        new[] { global.System == "custom-deliveries-global" ? global : null,
+            client?.System == "custom-deliveries-client" ? client : null }
+        .Where(r => r is not null && DashboardRetentionPolicy.Valid(r)).Select(r => r!).ToArray();
     internal static (string Source, string Cadence)? Definition(string system) => system switch {
         "roulette-reward" => ("InstanceContent.IsRouletteComplete/natural-ContentsFinder", "daily"),
         "custom-deliveries-global" => ("SatisfactionSupplyManager/natural-SatisfactionSupply", "weekly"),
@@ -42,13 +49,14 @@ internal static class DashboardSources {
         "challenge-log" => ("ContentsNote.Loaded/natural-ContentsNote", "weekly"),
         "weekly-tomestones" => ("InventoryManager/loaded-Currency", "weekly"),
         "wondrous-tails" => ("PlayerState/held-journal", "journal-expiration"),
-        "leve-allowance" => ("QuestManager/natural-ContentsTimer", "allowance-regeneration"),
-        "society-allowance" => ("QuestManager/natural-ContentsTimer", "daily"),
-        "map-availability" => ("UIState.cached-NextMapAllowanceTimestamp/natural-ContentsTimer", "next-availability"),
-        "squadron-mission" => ("PlayerState/natural-ContentsTimer", "expected-completion"),
-        "squadron-training" => ("PlayerState/natural-ContentsTimer", "expected-completion"),
+        "leve-allowance" => ("QuestManager/natural-ContentsInfo", "allowance-regeneration"),
+        "society-allowance" => ("QuestManager/natural-ContentsInfo", "daily"),
+        "map-availability" => ("UIState.cached-NextMapAllowanceTimestamp/natural-ContentsInfo", "next-availability"),
+        "squadron-mission" => ("PlayerState/natural-ContentsInfo", "expected-completion"),
+        "squadron-training" => ("PlayerState/natural-ContentsInfo", "expected-completion"),
         "frontline-weekly" => ("PvPProfile.IsLoaded/weekly-counters", "weekly"),
         "rival-wings-weekly" => ("PvPProfile.IsLoaded/weekly-counters", "weekly"),
+        "doman-enclave-weekly" => ("DomanEnclaveManager.IsLoaded/weekly-donation-state", "weekly"),
         _ => null
     };
     internal static bool Counter(DashboardValue v, int maximum) => v.Progress is >= 0 && v.Limit is > 0
@@ -69,6 +77,7 @@ internal static class DashboardSources {
         "challenge-log" => v.Id is >= 1 and <= 104 && v.Completed.HasValue && v.Available is null
             && v.Progress is null && v.Limit is null && v.Remaining is null && v.RelatedId == 0,
         "weekly-tomestones" => v.Id > 0 && Counter(v, 10000),
+        "doman-enclave-weekly" => v.Id == 0 && v.Available.HasValue && Counter(v with { Available = null }, 65535),
         "frontline-weekly" or "rival-wings-weekly" => v.Id < (system == "frontline-weekly" ? 4 : 2)
             && v.Progress is >= 0 and <= 10000 && v.Limit is null && v.Remaining is null
             && v.Completed is null && v.Available is null && v.RelatedId == 0,
@@ -88,12 +97,30 @@ internal static class DashboardSources {
     };
 }
 
+internal enum DashboardDeliveryReadStatus {
+    Awaiting, Reading, AgentUnavailable, ManagerUnavailable, InterfaceClosed,
+    NpcInvalid, NpcUninitialized, AddonNotUpdated, ManagerInitializing, ManagerUninitialized,
+    ResetUnavailable, ClientCatalogMismatch, ClientAllowanceMismatch, ClientRankMismatch,
+    ClientCounterMismatch, ObservedBoth, ObservedGlobal, ObservedClient, InvalidFacts, ReadFailed
+}
+
+// Session-local, finite rejection reasons only: no NPC/player identifiers,
+// private values, exception text, history or configuration persistence.
+internal sealed class DashboardDeliveryDiagnostics {
+    internal DateTime? LastAttemptUtc { get; private set; }
+    internal DashboardDeliveryReadStatus Status { get; private set; }
+    internal void Reset() { LastAttemptUtc = null; Status = DashboardDeliveryReadStatus.Awaiting; }
+    internal void Record(DateTime now, DashboardDeliveryReadStatus status) { LastAttemptUtc = now; Status = status; }
+    internal string Text => $"Custom Delivery read: {Status}; last attempt UTC: {LastAttemptUtc?.ToString("u") ?? "not attempted"}. Read status only; retained rows and freshness are separate.";
+}
+
 internal sealed class DashboardSchedule {
+    internal const int GroupCount = 8;
     private DateTime next;
     private int roundRobin;
     private bool prioritize = true;
     private readonly HashSet<int> pending = [];
-    internal void Notice(int group) { if (group is >= 0 and < 7) pending.Add(group); }
+    internal void Notice(int group) { if (group is >= 0 and < GroupCount) pending.Add(group); }
     internal void Reset() { next = default; roundRobin = 0; prioritize = true; pending.Clear(); }
     internal int? Begin(DateTime now, bool enabled) {
         if (!enabled || !PersonalObservationCompatibility.Utc(now) || now < next) return null;
@@ -102,7 +129,7 @@ internal sealed class DashboardSchedule {
         // cached sources. At most one bounded group per five seconds.
         bool eventTurn = prioritize; prioritize = !prioritize;
         if (eventTurn && pending.Count > 0) { var priority = pending.Min(); pending.Remove(priority); return priority; }
-        var group = roundRobin; roundRobin = (roundRobin + 1) % 7; pending.Remove(group);
+        var group = roundRobin; roundRobin = (roundRobin + 1) % GroupCount; pending.Remove(group);
         return group;
     }
 }
@@ -140,7 +167,7 @@ internal sealed class DashboardRetentionPolicy(DashboardRetention store) {
         bool requiresTime = row.System is "custom-deliveries-global" or "custom-deliveries-client" or "wondrous-tails"
             or "leve-allowance" or "map-availability" or "squadron-mission" or "squadron-training";
         if (requiresTime && row.NextAtUtc is null) return false;
-        if (row.System is "roulette-reward" or "weekly-tomestones" or "society-allowance" or "frontline-weekly" or "rival-wings-weekly" && row.NextAtUtc is not null) return false;
+        if (row.System is "roulette-reward" or "weekly-tomestones" or "society-allowance" or "frontline-weekly" or "rival-wings-weekly" or "doman-enclave-weekly" && row.NextAtUtc is not null) return false;
         return row.NextAtUtc is null || PersonalObservationCompatibility.Utc(row.NextAtUtc.Value)
             && row.NextAtUtc > row.ObservedAtUtc && row.NextAtUtc - row.ObservedAtUtc <= TimeSpan.FromDays(15);
     }

@@ -7,7 +7,7 @@ using GillionsGameSync;
 if (args.Length == 1 && args[0] == "--dashboard-sdk") {
     var assembly = typeof(FFXIVClientStructs.FFXIV.Client.Game.UI.PlayerState).Assembly;
     Console.WriteLine(assembly.GetName());
-    foreach (var name in new[] { "PlayerState", "UIState", "InstanceContent", "ContentsNote", "InventoryManager", "SatisfactionSupplyManager", "AgentSatisfactionSupply", "AgentReconstructionBox", "FashionCheckManager", "AgentAozContentBriefing" }) {
+    foreach (var name in new[] { "PlayerState", "UIState", "InstanceContent", "ContentsNote", "InventoryManager", "SatisfactionSupplyManager", "AgentSatisfactionSupply", "AgentContentsTimer", "DomanEnclaveManager", "AgentReconstructionBox", "FashionCheckManager", "AgentAozContentBriefing" }) {
         var type = assembly.GetTypes().Single(t => t.Name == name);
         Console.WriteLine(type.FullName);
         foreach (var member in type.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)

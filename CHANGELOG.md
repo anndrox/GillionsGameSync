@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.72 - Testing Timers lookup, Custom Delivery diagnostics and Doman
+
+- Preserve valid global allowances when selected-client detail fails validation; independently reject malformed facts without clearing retained client history.
+- Persistent session-local Custom Delivery read/rejection reason and attempt time in the facts window and aggregate diagnostics. No identifiers, counters, exception text, extra polling, upload or relaxed native load gates.
+- Correct Timers addon lookup/lifecycle name to ContentsInfo with active AgentContentsTimer ownership. Restores the existing allowance/map/squadron source group; source labels corrected without changing retained fields.
+- Add loaded-state Doman Enclave native donated/allowance/remaining and accepting-donations flag. Native reset unavailable; no inferred completion. Eight fair bounded source groups, still one group per five seconds.
+- Ameliance live report remains unresolved pending the new gate diagnostics; no claim of successful live capture. Other Testing features and Stable remain unchanged.
+
 ## 0.0.71 - Testing private daily / weekly native facts
 
 - Separate default-OFF bounded local facts view/private export; no new uploads or Dashboard task/layout configuration.

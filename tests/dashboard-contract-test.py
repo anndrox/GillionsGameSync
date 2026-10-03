@@ -25,11 +25,30 @@ assert "GetWeeklyAcquiredTomestoneCount" in source and "GetTomestoneCount" not i
 assert "GetLimitedTomestoneWeeklyLimit" in source and "cap != limitedCap" in source
 assert "npc.RemainingAllowances != npc.MaxAllowances - npc.UsedAllowances" in source
 assert "CurrentNpcInitInProgress" in source and "NpcInfo.Valid" in source
+delivery = source.split("case 1:", 1)[1].split("case 2:", 1)[0]
+assert delivery.index('Observation("custom-deliveries-global"') < delivery.index("var matches")
+for reason in ["AgentUnavailable", "ManagerUnavailable", "InterfaceClosed", "NpcInvalid", "NpcUninitialized", "AddonNotUpdated", "ManagerInitializing", "ManagerUninitialized", "ResetUnavailable", "ClientCatalogMismatch", "ClientAllowanceMismatch", "ClientRankMismatch", "ClientCounterMismatch"]:
+    assert "DashboardDeliveryReadStatus." + reason in delivery
+assert "DashboardSources.AdmitCustomDeliveries(global, selected)" in delivery
+assert "DashboardSources.AdmitCustomDeliveries(global, null)" in delivery
+assert "deliveryDiagnostics.Reset()" in source and "deliveryDiagnostics.Text" in source
+assert "ImGui.TextWrapped(state.DeliveryStatus)" in source and "{state.DeliveryStatus}\\nAttempts" in source
+assert "NpcId" not in model.split("internal sealed class DashboardDeliveryDiagnostics", 1)[1].split("internal sealed class DashboardSchedule", 1)[0]
 assert "GetResetDateTime" in source and "NextChallengeLogResetTimestamp" in source
 assert "RequestResetTimestamps" not in source
 assert "if (!player->HasWeeklyBingoJournal) return []" in source
 assert "catalog.HasRow(order)" in source and "GetWeeklyBingoTaskStatus(index)" in source
 assert "GetNextLeveAllowancesUnixTimestamp" in source and "ToLocalTime" not in source
+assert '"ContentsTimer"' not in source and '"ContentsInfo" => 5' in source
+timers = source.split("case 5:", 1)[1].split("case 6:", 1)[0]
+assert "AgentContentsTimer.Instance()" in timers and "!timer->IsAgentActive()" in timers
+assert 'Visible("ContentsInfo", timer->AddonId)' in timers
+assert '"ContentsInfo"' in source.split("private static readonly string[] Addons", 1)[1].split(";", 1)[0]
+doman = source.split("case 7:", 1)[1].split("default:", 1)[0]
+assert "DomanEnclaveManager.Instance()" in doman and "!doma->IsLoaded" in doman
+assert "state.Allowance == 0" in doman and "state.Donated > state.Allowance" in doman
+assert "state.IsAcceptingDonations" in doman and "Completed:" not in doman
+assert 'Observation("doman-enclave-weekly"' in doman
 assert "client.Logout -= OnLogout" in source and "client.Login -= OnLogin" in source and "client.TerritoryChanged -= OnTerritoryChanged" in source
 assert "dashboardLocal.Tick(now);" in plugin and "dashboardLocal.Dispose();" in plugin
 assert plugin.index("dashboardLocal.Tick(now);") < plugin.index("if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;")
@@ -50,7 +69,7 @@ assert actual["privacy"] == "private-personal-activity"
 assert {r["system"] for r in actual["observations"]} == {
     "roulette-reward", "custom-deliveries-global", "custom-deliveries-client", "challenge-log", "weekly-tomestones",
     "wondrous-tails", "leve-allowance", "society-allowance", "map-availability", "squadron-mission", "squadron-training",
-    "frontline-weekly", "rival-wings-weekly"
+    "frontline-weekly", "rival-wings-weekly", "doman-enclave-weekly"
 }
 for observation in actual["observations"]:
     assert observation["gameVersion"] == "synthetic-game" and observation["nativeVersion"] == "synthetic-sdk"

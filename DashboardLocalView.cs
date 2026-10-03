@@ -24,7 +24,7 @@ namespace GillionsGameSync;
 // per-frame native scans. UI events enqueue managed notices only; existing
 // Plugin framework cadence reads at most one bounded source group / 5 seconds.
 internal sealed class DashboardLocalView : IDisposable {
-    private static readonly string[] Addons = ["ContentsFinder", "SatisfactionSupply", "ContentsNote", "ContentsTimer", "WeeklyBingo"];
+    private static readonly string[] Addons = ["ContentsFinder", "SatisfactionSupply", "ContentsNote", "ContentsInfo", "WeeklyBingo"];
     private static readonly AddonEvent[] Events = [AddonEvent.PostSetup, AddonEvent.PostRefresh, AddonEvent.PostRequestedUpdate];
     private readonly IDalamudPluginInterface ui;
     private readonly ICommandManager commands;
@@ -38,6 +38,7 @@ internal sealed class DashboardLocalView : IDisposable {
     private readonly DashboardRetentionPolicy policy;
     private readonly Action persist;
     private readonly DashboardSchedule schedule = new();
+    private readonly DashboardDeliveryDiagnostics deliveryDiagnostics = new();
     private readonly HashSet<string> observedThisSession = [];
     private readonly Dictionary<uint, string> rouletteNames = new();
     private uint[]? roulettes, challenges;
@@ -47,8 +48,8 @@ internal sealed class DashboardLocalView : IDisposable {
     private readonly string version = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "unavailable";
     private bool visible, disposed;
     private int attempts;
-    private sealed record View(bool Enabled, string Status, string[] Rows, double Milliseconds, int Attempts);
-    private volatile View view = new(false, "Dashboard fact retention OFF; no upload contract.", [], 0, 0);
+    private sealed record View(bool Enabled, string Status, string[] Rows, double Milliseconds, int Attempts, string DeliveryStatus);
+    private volatile View view = new(false, "Dashboard fact retention OFF; no upload contract.", [], 0, 0, "Custom Delivery read: not attempted.");
     internal DashboardLocalView(IDalamudPluginInterface ui, ICommandManager commands, IFramework framework,
         IClientState client, IDataManager data, IGameGui gameGui, ICondition conditions, IAddonLifecycle lifecycle,
         DashboardRetention store, Action persist) {
@@ -68,14 +69,14 @@ internal sealed class DashboardLocalView : IDisposable {
         var player = PlayerState.Instance();
         return player != null && player->IsLoaded && player->ContentId != 0 ? DashboardRetentionPolicy.CharacterKey(player->ContentId) : "";
     }
-    private void ResetSession(string status) { activeKey = ""; observedThisSession.Clear(); schedule.Reset(); Publish(status); }
+    private void ResetSession(string status) { ResetEvidence(); schedule.Reset(); Publish(status); }
     private void OnLogout(int _, int __) => ResetSession("Logged out: retained facts STALE, not proof of today's/this week's activity.");
     private void OnLogin() => ResetSession("New session: awaiting naturally loaded facts; prior state STALE.");
     private void OnTerritoryChanged(uint _) => ResetSession("Territory changed: awaiting fresh native evidence; prior state preserved.");
     private void OnAddon(AddonEvent _, AddonArgs args) {
         if (disposed || !store.LocalRetentionEnabled || !framework.IsInFrameworkUpdateThread) return;
         int group = args.AddonName switch { "ContentsFinder" => 0, "SatisfactionSupply" => 1, "ContentsNote" => 2,
-            "ContentsTimer" => 5, "WeeklyBingo" => 4, _ => -1 };
+            "ContentsInfo" => 5, "WeeklyBingo" => 4, _ => -1 };
         schedule.Notice(group); // managed notice, never opens/refreshes the interface
     }
     private unsafe bool Visible(string name, uint ownerId = 0) {
@@ -109,31 +110,45 @@ internal sealed class DashboardLocalView : IDisposable {
                     Completed: instance->IsRouletteComplete((byte)id))).ToArray())];
             }
             case 1: {
+                deliveryDiagnostics.Record(now, DashboardDeliveryReadStatus.Reading);
+                DashboardObservation[] Reject(DashboardDeliveryReadStatus status, DashboardObservation? global = null) {
+                    deliveryDiagnostics.Record(now, status);
+                    return global is null ? [] : DashboardSources.AdmitCustomDeliveries(global, null);
+                }
                 var agent = AgentSatisfactionSupply.Instance(); var manager = SatisfactionSupplyManager.Instance();
-                if (agent == null || manager == null || !agent->IsAgentActive() || !Visible("SatisfactionSupply", agent->AddonId)
-                    || !agent->NpcInfo.Valid || !agent->NpcInfo.Initialized || !agent->NpcInfo.AddonUpdated
-                    || manager->CurrentNpcInitInProgress || !manager->CurrentNpcInitDone) return [];
+                if (agent == null) return Reject(DashboardDeliveryReadStatus.AgentUnavailable);
+                if (manager == null) return Reject(DashboardDeliveryReadStatus.ManagerUnavailable);
+                if (!agent->IsAgentActive() || !Visible("SatisfactionSupply", agent->AddonId)) return Reject(DashboardDeliveryReadStatus.InterfaceClosed);
+                if (!agent->NpcInfo.Valid) return Reject(DashboardDeliveryReadStatus.NpcInvalid);
+                if (!agent->NpcInfo.Initialized) return Reject(DashboardDeliveryReadStatus.NpcUninitialized);
+                if (!agent->NpcInfo.AddonUpdated) return Reject(DashboardDeliveryReadStatus.AddonNotUpdated);
+                if (manager->CurrentNpcInitInProgress) return Reject(DashboardDeliveryReadStatus.ManagerInitializing);
+                if (!manager->CurrentNpcInitDone) return Reject(DashboardDeliveryReadStatus.ManagerUninitialized);
+                var next = Next(new DateTimeOffset(manager->GetResetDateTime()).ToUnixTimeSeconds(), now, 8);
+                if (next is null) return Reject(DashboardDeliveryReadStatus.ResetUnavailable);
+                int used = manager->GetUsedAllowances();
+                var global = Observation("custom-deliveries-global", now, [new(0, Progress: used, Limit: 12, Remaining: 12 - used)], next);
                 var npc = agent->NpcData;
                 var clients = data.GetExcelSheet<SatisfactionNpc>();
                 // Match ENpcResident identity; do not guess CurrentNpc index convention.
                 var matches = clients.Where(r => r.RowId is >= 1 and <= 12 && r.Npc.RowId == npc.NpcId).ToArray();
-                if (matches.Length != 1 || npc.MaxAllowances != matches[0].DeliveriesPerWeek || npc.RankMax != 5
-                    || npc.RemainingAllowances != npc.MaxAllowances - npc.UsedAllowances) return [];
-                var next = Next(new DateTimeOffset(manager->GetResetDateTime()).ToUnixTimeSeconds(), now, 8);
-                if (next is null) return [];
-                int used = manager->GetUsedAllowances();
-                var rows = new[] {
-                    Observation("custom-deliveries-global", now, [new(0, Progress: used, Limit: 12, Remaining: 12 - used)], next),
-                    Observation("custom-deliveries-client", now, [
+                if (matches.Length != 1) return Reject(DashboardDeliveryReadStatus.ClientCatalogMismatch, global);
+                if (npc.MaxAllowances != matches[0].DeliveriesPerWeek) return Reject(DashboardDeliveryReadStatus.ClientAllowanceMismatch, global);
+                if (npc.RankMax != 5) return Reject(DashboardDeliveryReadStatus.ClientRankMismatch, global);
+                if (npc.RemainingAllowances != npc.MaxAllowances - npc.UsedAllowances) return Reject(DashboardDeliveryReadStatus.ClientCounterMismatch, global);
+                var selected = Observation("custom-deliveries-client", now, [
                         new(0, Progress: npc.UsedAllowances, Limit: npc.MaxAllowances, Remaining: npc.RemainingAllowances),
                         npc.RankCur == 5 && npc.SatisfactionMax == 0 ? new(1)
                             : new(1, Progress: npc.SatisfactionCur, Limit: npc.SatisfactionMax),
                         new(2, Progress: npc.RankCur, Limit: npc.RankMax)
-                    ], next, matches[0].RowId)
-                };
+                    ], next, matches[0].RowId);
                 // A selected client's unavailable rank-progress detail must not
                 // erase or suppress a separately valid global allowance fact.
-                return rows.Where(DashboardRetentionPolicy.Valid).ToArray();
+                var rows = DashboardSources.AdmitCustomDeliveries(global, selected);
+                deliveryDiagnostics.Record(now, rows.Length == 2 ? DashboardDeliveryReadStatus.ObservedBoth
+                    : rows.Length == 0 ? DashboardDeliveryReadStatus.InvalidFacts
+                    : rows[0].System == "custom-deliveries-global" ? DashboardDeliveryReadStatus.ObservedGlobal : DashboardDeliveryReadStatus.ObservedClient);
+                return rows;
             }
             case 2: {
                 var note = FFXIVClientStructs.FFXIV.Client.Game.UI.ContentsNote.Instance();
@@ -179,7 +194,10 @@ internal sealed class DashboardLocalView : IDisposable {
                 return [Observation("wondrous-tails", now, values.ToArray(), next)];
             }
             case 5: {
-                if (!Visible("ContentsTimer")) return [];
+                // Agent type is ContentsTimer, but its actual UI addon is
+                // ContentsInfo. Require the active agent's matching visible UI.
+                var timer = AgentContentsTimer.Instance();
+                if (timer == null || !timer->IsAgentActive() || !Visible("ContentsInfo", timer->AddonId)) return [];
                 var quest = QuestManager.Instance(); var state = UIState.Instance();
                 if (quest == null || state == null) return [];
                 var rows = new List<DashboardObservation>(5);
@@ -205,6 +223,17 @@ internal sealed class DashboardLocalView : IDisposable {
                 ]), Observation("rival-wings-weekly", now, [
                     new(0, Progress: (int)profile->RivalWingsWeeklyMatches), new(1, Progress: (int)profile->RivalWingsWeeklyMatchesWon)
                 ])];
+            }
+            case 7: {
+                // Naturally populated typed manager; no donation/window action or
+                // game request. Loaded cache is still not reset/ownership proof.
+                var doma = DomanEnclaveManager.Instance();
+                if (doma == null || !doma->IsLoaded) return [];
+                var state = doma->State;
+                if (state.Allowance == 0 || state.Donated > state.Allowance) return [];
+                return [Observation("doman-enclave-weekly", now,
+                    [new(0, Progress: state.Donated, Limit: state.Allowance, Remaining: state.Allowance - state.Donated,
+                        Available: state.IsAcceptingDonations)])];
             }
             default: return [];
         }
@@ -235,16 +264,18 @@ internal sealed class DashboardLocalView : IDisposable {
             Publish(!valid ? $"Source group {group} UNAVAILABLE/UNKNOWN/invalid; prior state preserved, not zero."
                 : $"Observed {observations.Length} bounded fact groups; cache ownership/reset response unverified. No automatic checklist completion or uploads.",
                 Stopwatch.GetElapsedTime(started).TotalMilliseconds);
-        } catch (Exception) { ResetEvidence(); Publish("Read/save failed; retained facts preserved, new data may be memory-only. No live correctness claim."); }
+        } catch (Exception) { ResetEvidence();
+            if (group == 1) deliveryDiagnostics.Record(now, DashboardDeliveryReadStatus.ReadFailed);
+            Publish("Read/save failed; retained facts preserved, new data may be memory-only. No live correctness claim."); }
     }
-    private void ResetEvidence() { activeKey = ""; observedThisSession.Clear(); }
+    private void ResetEvidence() { activeKey = ""; observedThisSession.Clear(); deliveryDiagnostics.Reset(); }
     private void Publish(string status, double milliseconds = 0) {
         var now = DateTime.UtcNow;
         var rows = policy.Rows(activeKey).OrderBy(DashboardRetentionPolicy.Identity).SelectMany(o => new[] {
             $"{o.System} / scope {o.ScopeId}: {DashboardRetentionPolicy.Freshness(o, now, observedThisSession.Contains(DashboardRetentionPolicy.Identity(o)))} at {o.ObservedAtUtc:u}; next: {o.NextAtUtc?.ToString("u") ?? "UNKNOWN"}"
         }.Concat(o.Values.Select(v => $"  {(o.System == "roulette-reward" && rouletteNames.TryGetValue(v.Id, out var name) ? name : "Reference " + v.Id)} / related {v.RelatedId}: progress {v.Progress?.ToString() ?? "UNKNOWN"}, limit {v.Limit?.ToString() ?? "UNKNOWN"}, remaining {v.Remaining?.ToString() ?? "UNKNOWN"}, completed {v.Completed?.ToString() ?? "UNKNOWN"}, eligibility {v.Available?.ToString() ?? "UNKNOWN"}"))).ToArray();
         if (store.CapacityReached) status += " CAPACITY: new records paused; nothing evicted.";
-        view = new(store.LocalRetentionEnabled, status, rows, milliseconds, attempts);
+        view = new(store.LocalRetentionEnabled, status, rows, milliseconds, attempts, deliveryDiagnostics.Text);
     }
     private void Draw() {
         if (!visible || disposed) return;
@@ -257,6 +288,7 @@ internal sealed class DashboardLocalView : IDisposable {
                 _ = framework.RunOnFrameworkThread(() => { if (disposed) return; store.LocalRetentionEnabled = enabled;
                     ResetSession(enabled ? "Enabled: awaiting observations; retained state STALE." : "Disabled: no new reads/export; prior state preserved."); persist(); });
             ImGui.TextWrapped(state.Status);
+            ImGui.TextWrapped(state.DeliveryStatus);
             ImGui.TextWrapped($"Read/save: {state.Milliseconds:F2} ms; attempts {state.Attempts}. At most 16 characters / 24 latest groups each / 384 KiB; no history eviction. Data and activity times are PRIVATE. Configuration includes unrelated credentials: never share it.");
             if (state.Enabled && ImGui.Button("Copy PRIVATE facts JSON (no upload)"))
                 _ = framework.RunOnFrameworkThread(() => {
@@ -267,7 +299,7 @@ internal sealed class DashboardLocalView : IDisposable {
                         ImGui.SetClipboardText(policy.Export(key, DateTime.UtcNow, observedThisSession));
                     } catch (Exception) { Publish("Private export refused: off, unsupported or active character unavailable. Retention preserved."); }
                 });
-            if (ImGui.Button("Copy aggregate facts diagnostics")) ImGui.SetClipboardText($"Gillions Testing {version}\nGame {GameVersion()}; SDK {typeof(PlayerState).Assembly.GetName().Version}\nFacts local: {state.Enabled}\n{state.Status}\nAttempts {state.Attempts}; cadence 5 seconds, one group\nRead/save {state.Milliseconds:F2} ms\nNo upload; no live correctness claim.");
+            if (ImGui.Button("Copy aggregate facts diagnostics")) ImGui.SetClipboardText($"Gillions Testing {version}\nGame {GameVersion()}; SDK {typeof(PlayerState).Assembly.GetName().Version}\nFacts local: {state.Enabled}\n{state.Status}\n{state.DeliveryStatus}\nAttempts {state.Attempts}; cadence 5 seconds, one group\nRead/save {state.Milliseconds:F2} ms\nNo upload; no live correctness claim.");
             ImGui.PushTextWrapPos(0); foreach (var row in state.Rows) ImGui.TextUnformatted(row); ImGui.PopTextWrapPos();
         }
         ImGui.End();

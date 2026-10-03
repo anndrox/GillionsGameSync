@@ -1,6 +1,6 @@
 # Dashboard facts v1 — private local proposal, no server contract
 
-Status: Testing 0.0.71 prepared experiment. This is **not** an accepted HTTP
+Status: Testing local experiment, introduced in 0.0.71. This is **not** an accepted HTTP
 resource or production contract. No endpoint, capability, anonymous receiver or
 automatic upload is added. Site owns eventual authorization/intake and Dashboard
 configuration. Existing HTTPS pairing and ordinary sync are unchanged.
@@ -14,19 +14,31 @@ are required. Own ContentId is transient only, domain-separated SHA256 partition
 key local only; it is never exported. UI-gated sources must be visibly naturally
 open; roulette and Custom Delivery also require active owning agent AddonId.
 Custom Delivery needs agent validity/init/update and manager initialized/not
-loading, unique ENpcResident-to-SatisfactionNpc match and coherent limits.
+loading. Selected-client facts additionally require a unique
+ENpcResident-to-SatisfactionNpc match and coherent client limits. Since 0.0.72,
+unavailable/malformed selected-client detail cannot suppress separately valid
+global allowance facts (nor can malformed global counts suppress valid client
+facts). Shared UI/load/reset gates are unchanged; rejected facts preserve history.
 Challenge Log requires native Loaded state. Currency inventory and PvP profile
 require their explicit loaded flags. Held Wondrous Tails requires all 16 catalog
 objectives with valid statuses and coherent future expiration.
+Timers use active `AgentContentsTimer` and its matching visible `ContentsInfo`
+addon. 0.0.71 incorrectly looked for an addon named `ContentsTimer`; 0.0.72
+corrects lifecycle notices, visibility and exported source labels. No new resource
+or retained-field change; old unavailable readings never become zero.
 
 Cadence is one source group / five seconds on the existing Plugin scheduler,
-alternating queued managed UI notices and fair round-robin. Seven groups: roulette,
-deliveries, challenges, currency, journal, timers, PvP. With no notices every
-source gets a turn within 35 seconds; sustained notices cannot starve periodic
-sources (at most 70 seconds between round-robin turns). No native reads occur in
+alternating queued managed UI notices and fair round-robin. Eight groups: roulette,
+deliveries, challenges, currency, journal, timers, PvP, Doman. With no notices every
+source gets a turn within 40 seconds; sustained notices cannot starve periodic
+sources (at most 80 seconds between round-robin turns). No native reads occur in
 UI draw or event notice handlers. Static roulette/challenge/current currency
 catalogs are bounded/cached. Settings display contains frozen managed strings;
 private copied diagnostics include no per-system activity values or identity.
+Custom Delivery diagnostics retain only the latest read time and finite rejection
+reason within this session. Other source turns do not overwrite that reason;
+disable, zoning, logout or character changes reset it. No identifiers, values or
+exception text are included. Read acceptance is not proof of retention/freshness.
 
 ## Finite retained model
 
@@ -55,6 +67,7 @@ represented, not false/zero. `completed` never means a Site task is complete.
 | custom-deliveries-client | scope SatisfactionNpc; id0 weekly used/limit/remaining; id1 current-rank satisfaction/max (not lifetime total); id2 rank/max5 | Manager's weekly reset; does NOT reset permanent rank |
 | challenge-log | ContentsNote ID1–104 present in catalog with positive requirement; completion only, numeric progress unknown; Site joins static category/requirement | Cached next challenge reset if coherent; otherwise null |
 | weekly-tomestones | id current capped Item.RowId; earned `progress`, native cap `limit`, remaining subtraction; never balance | Unknown |
+| doman-enclave-weekly | id0 native `State.Donated` as progress, positive `State.Allowance` as limit (both native gratuity-value units), remaining subtraction; `available` is exactly native IsAcceptingDonations, NOT weekly completion; completed null | Unknown; requires DomanEnclaveManager.IsLoaded, cap1–65535, donated0–cap. Zero/unloaded cap does not fabricate an empty week |
 | wondrous-tails | id0 placed stickers/limit9, id1 Second Chance/limit9, available true proves only positive held journal context; ids2–17 are slots0–15, relatedId WeeklyBingoOrderData, progress native status0/1/2 and completed=1 or2 | Journal expiration, NOT weekly reset/turn-in timestamp |
 | leve-allowance | id0 remaining/limit100; progress/completion null | Native next regeneration |
 | society-allowance | id0 remaining shared allowance/limit12; no per-society quest completion | Unknown |
@@ -152,9 +165,12 @@ Bounded handoff to Site Operations:
    and matching reset-window proof: roulette reward, Challenge Log flags, selected
    Custom Delivery counts and journal task statuses are candidate factual inputs,
    not direct task updates. Rank/balance/timestamps alone remain display-only.
-5. Doman weekly donations, general duty/loot lockouts, Fashion reward/participation,
+5. General duty/loot lockouts, Fashion reward/participation,
    Carnivale weekly targets, Faux, lottery and unsupported systems remain manual.
    See the [full audit](../dashboard-capability-audit.md). Public static schedules
    do not make a stale private observation fresh.
+   Doman native counters are now display/progress only; loaded cache observation
+   has no native reset timestamp or current-server-week proof. Do not auto-complete
+   weekly donations from it or equate accepting donations with weekly eligibility.
 6. Implement Site's personal layout/tasks/recurrence/manual completion separately.
    No Site repository/deployment/schema changes were performed by this objective.

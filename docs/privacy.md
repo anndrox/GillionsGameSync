@@ -1,6 +1,6 @@
 # Privacy
 
-### Testing 0.0.71 private daily / weekly facts
+### Testing 0.0.71–0.0.72 private daily / weekly facts
 
 This separate OFF-by-default experiment retains private personal counters,
 flags and activity/next-boundary times locally. Own ContentId is transient;
@@ -14,7 +14,10 @@ reads/copy and preserves retention; copies already shared cannot be retracted.
 Configuration contains unrelated credentials and must never be shared.
 Unsupported retained members stay inert and are excluded from export. Source
 ownership/reset freshness remains unverified and explicitly disclosed; no automatic
-dated checklist completion is authorized. See [schema/retention](contracts/dashboard-facts-v1.md).
+dated checklist completion is authorized. 0.0.72 adds loaded Doman native donation
+totals under the same private opt-in and bounds. Finite Custom Delivery rejection
+reasons are session-local, with no identifiers, private counters or exception text.
+See [schema/retention](contracts/dashboard-facts-v1.md).
 
 ## Testing 0.0.69 personal observation experiments
 

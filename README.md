@@ -77,6 +77,19 @@ build/sector evidence remain unavailable. See [schema, examples and Site require
 
 ## Build and verify
 
+### Testing 0.0.72 Timers, Custom Deliveries and Doman
+
+The successor separates valid global allowance observations from rejected client
+details and adds a persistent, session-local **Custom Delivery read** reason to
+the facts window and aggregate diagnostics. It does not relax shared native
+load/reset gates or add uploads. Ameliance live capture remains unverified;
+[0.0.72 retest instructions](docs/releases/testing-0.0.72.md) identify the failed
+gate without another delivery, player data or configuration sharing. The Timers
+addon lookup is corrected to `ContentsInfo`. Loaded Doman Enclave native donation
+totals are retained locally, without inferring weekly completion or reset.
+See the [all-timer GitHub reference audit](docs/timer-plugin-references.md) for
+implemented versus unsupported categories and owner-waived live checks.
+
 ### Testing 0.0.71 daily / weekly facts
 
 Testing 0.0.71 supplies a separate default-OFF `/gillionsfacts` local experiment
