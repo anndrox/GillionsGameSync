@@ -13,6 +13,17 @@ Check(!state.Enabled && !state.Begin(now) && !state.Observe(1,Row(),now) && stat
 Check(!TravelContextState.TransportActivated,"no approved Site contract: transport dormant");
 state.SetEnabled(true);
 Check(state.Begin(now) && !state.Begin(now.AddSeconds(14)) && state.Begin(now.AddSeconds(15)),"bounded fallback");
+foreach(var lifecycle in new[] { "logout/login","OFF/ON","map/territory" }) {
+    var gate=new TravelContextState(); gate.SetEnabled(true);
+    Check(gate.Begin(now),"initial lifecycle read");
+    for(int i=0;i<15;i++) {
+        if(lifecycle=="OFF/ON") { gate.SetEnabled(false); gate.SetEnabled(true); }
+        else if(lifecycle=="logout/login") { gate.Clear(); gate.Invalidate(); }
+        else gate.Invalidate();
+        Check(!gate.Begin(now.AddSeconds(i)),"lifecycle bypassed15s: "+lifecycle);
+    }
+    Check(gate.Begin(now.AddSeconds(15)),"lifecycle suppressed due successor");
+}
 Check(state.Observe(1,Row(),now) && state.Current(1,now)!=null,"own logged-in location");
 Check(!state.Observe(0,Row(),now) && !state.Observe(1,Row(),now),"unowned/duplicate timestamp");
 Check(!state.Observe(1,Row() with { ObservedAtUtc=now.AddSeconds(-1) },now),"older rejected");

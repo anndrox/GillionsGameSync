@@ -53,7 +53,9 @@ internal sealed class TravelContextState {
     private DateTime nextReadUtc;
     internal bool Enabled { get; private set; }
     internal void SetEnabled(bool enabled) { if (enabled == Enabled) return; Clear(); Enabled = enabled; }
-    internal void Clear() { owner = 0; latest = null; nextReadUtc = DateTime.MinValue; }
+    // Lifecycle/consent clears private facts, not the per-load admission budget.
+    // Otherwise logout/login or OFF/ON could bypass the native read cadence.
+    internal void Clear() { owner = 0; latest = null; }
     internal void Invalidate() { latest = null; } // keep cadence bounded across rapid events
     internal bool Begin(DateTime now) {
         if (!Enabled || !PersonalObservationCompatibility.Utc(now) || now < nextReadUtc) return false;

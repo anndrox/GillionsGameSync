@@ -61,7 +61,9 @@ Every framework callback only checks a managed deadline when enabled. At most
 one travel read per15 seconds; event invalidation cannot bypass that cadence.
 No full sheet enumeration: cached Lumina sheets, bounded row lookups, one public
 player position. Draw uses a bounded immutable view and hides expired facts;
-at most five destination quote samples. Diagnostics report total read/validation/
+at most five destination quote samples with bounded public names and IDs.
+Logout/login and OFF/ON clear facts but retain the current plugin-load admission
+deadline, so they cannot bypass the15-second limit. Diagnostics report total read/validation/
 view ms and framework-thread allocations. Offline policy timing is separately
 identified; actual native read timing awaits owner test.
 

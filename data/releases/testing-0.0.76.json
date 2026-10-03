@@ -19,9 +19,9 @@
     "travel": "MISSING: permission/capability/intake/TTL/read model not activated"
   },
   "validation": {
-    "travelManaged": 2314,
+    "travelManaged": 2365,
     "previousMaintainedNumbered": 3333,
-    "totalNumbered": 5647,
+    "totalNumbered": 5698,
     "actualSdkAndConfig": "12 fixtures per product plus travel SDK/public map utility/serializer/isolation assertions",
     "live": "OUTSTANDING: no real player location or Teleport observation performed; no travel HTTP/auth/persistence claimed",
     "transport": "dormant send-boundary/source test PASS; real auth/nonce/receipt/server lifecycle needs agreed Site contract",

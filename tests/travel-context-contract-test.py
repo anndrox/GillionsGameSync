@@ -20,6 +20,11 @@ assert 'data.GetExcelSheet' not in source.split('private void Draw()',1)[1]
 assert 'TravelPolicy.Round(coordinates.X)' in source and 'Actual final charged cost UNSUPPORTED' in source
 assert 'TransportActivated => false' in model
 assert 'TravelObservation? latest;' in model and 'List<TravelObservation>' not in model
+clear=model.split('internal void Clear()',1)[1].split('internal void Invalidate',1)[0]
+assert 'nextReadUtc' not in clear
+assert 'private void Logout' in source and 'state.Clear(); Reset();' in source
+assert 'Math.Min(5,destinations.Length)' in source and 'label.Length>80' in source
+assert 'PlaceName.Value.Name.ExtractText()' in source
 assert 'public bool ShareHuntRoutingLocation { get; set; }' in plugin
 assert 'travelLocal.Tick(now)' in plugin and 'travelLocal.Dispose()' in plugin
 assert 'travelLocal.SetEnabled(routingLocation)' in plugin

@@ -111,7 +111,13 @@ internal sealed class TravelContextLocalView : IDisposable {
                 $"Observed UTC {now:yyyy-MM-dd HH:mm:ss}Z; expires after {TravelPolicy.TtlSeconds}s; {destinations.Length} public destinations observed (not a complete unlock list).",
                 "Actual final charged cost UNSUPPORTED; cached list Gil is diagnostic only. Current action usability UNKNOWN." };
             for (int i=0;i<Math.Min(5,destinations.Length);i++) {
-                var d=destinations[i]; rows.Add($"Aetheryte {d.AetheryteId}: list quote {d.ObservedListGil} Gil; Home {d.Home}; Free {d.Free}; Favored {d.Favored}");
+                var d=destinations[i];
+                var label=data.GetExcelSheet<Aetheryte>().GetRowOrDefault(d.AetheryteId)?.PlaceName.Value.Name.ExtractText() ?? "Unknown destination";
+                // Public catalog text is diagnostic only: bounded, no extra
+                // payload field, sheet scan, private house label or UI scraping.
+                label=label.Replace('\r',' ').Replace('\n',' ');
+                if (label.Length>80) label=label[..80];
+                rows.Add($"{label} (Aetheryte {d.AetheryteId}): list quote {d.ObservedListGil} Gil; Home {d.Home}; Free {d.Free}; Favored {d.Favored}");
             }
             view = new("Private current context observed locally. Site travel contract pending: NO UPLOADS.",rows.ToArray(),
                 Stopwatch.GetElapsedTime(start).TotalMilliseconds,GC.GetAllocatedBytesForCurrentThread()-allocated,now);
