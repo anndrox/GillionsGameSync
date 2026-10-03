@@ -65,14 +65,16 @@ custom plugin repositories:
 
 This installs the separate **Gillions Game Sync Testing** identity. It does not
 replace the stable plugin or update the existing `gillions.app` testing feed.
-Testing `0.0.73` preserves the published Testing lineage and corrects selected-client Custom Delivery counters using catalog-indexed manager/agent corroboration. Global weekly allowances remain independent; client remaining is residual capacity only, and ambiguous agent remaining is unsupported. Keep the existing custom-repository URL above: it is the rolling Testing update feed, despite its historical tag name. Refresh Dalamud's plugin list and update to `0.0.73.0`; do not replace the repository entry for each release. See [release and capability details](docs/releases/testing-0.0.73.md). No additional delivery or Ameliance action is required for publication. Do not downgrade or delete configuration. Ordinary HTTPS/PF pairing and consent are unchanged.
+Testing `0.0.74` adds independently consented private Hunt/Submarine sync to the approved secure TEST origin. Both upload switches default OFF, separately from local retention and existing feature permissions. Keep the existing custom-repository URL above: it is the rolling Testing update feed, despite its historical tag name. Refresh Dalamud's plugin list and update to `0.0.74.0`; do not replace the repository entry for each release. See [release, consent and live Hunt test](docs/releases/testing-0.0.74.md). Do not downgrade or delete configuration. Existing main-site pairings are not silently moved. Custom Delivery correction and ordinary/PF/Beastmaster/Market behavior are preserved; Dashboard facts remain local until Site provides an exact intake contract. Real Hunt transport and live FC validation remain outstanding.
 
 Open `/gillionssubs` or **Submarine voyage retention**. Use workshop interfaces
 manually; no submarine control, polling or third-party plugin is involved. Local
 history retains at most 400 voyage anchors/results and 32 snapshots below 4 MiB,
 with visible overflow and no silent eviction. A second community-preparation
 opt-in and explicit sanitized copy exclude names/FC/account/credential data; no
-submarine server endpoint or upload exists. Departure and missing producing-time
+public community submarine upload exists. Separately consented private TEST sync
+is available in74; see [transport semantics](docs/contracts/testing-personal-transport-v1.md).
+Departure and missing producing-time
 build/sector evidence remain unavailable. See [schema, examples and Site requirements](docs/contracts/submarine-voyages-v1.md).
 
 ## Build and verify
@@ -84,7 +86,7 @@ Published `0.0.73` corrects the selected-client counter source after a live72
 satisfaction with the active agent and calculates client residual capacity;
 the agent's ambiguous remaining field is unsupported. Global allowances remain
 unchanged. See [diagnosis and capability state](docs/releases/testing-0.0.73.md).
-The existing Testing feed advertises this exact approved package; no rebuild.
+The immutable73 package remains preserved; the rolling Testing feed now advertises74.
 
 The successor separates valid global allowance observations from rejected client
 details and adds a persistent, session-local **Custom Delivery read** reason to
@@ -114,7 +116,7 @@ The existing rolling Testing feed supplies this update; Stable is unchanged.
 
 Testing 0.0.67 was published October 1, 2026 at tag `v0.0.67-testing`, source
 `9821c92df8f51c9fef913a9e8294fd6ed3b4469c`. Its immutable assets are preserved;
-0.0.73 uses the same separate product identity. Publication is not live-game proof.
+0.0.74 uses the same separate product identity. Publication is not live-game proof.
 
 "Contribute observed market data to Gillions" is independently **on by default**,
 including older Testing configurations without that field. It has a persistent
@@ -141,7 +143,9 @@ Open `/gillionssubs` for off-by-default local submarine retention; selected visi
 planning interfaces can add positive unlocked/explored sector history, not a full
 unlock-set claim. Exact game/SDK gates stop these experiments after unknown patches.
 Each offers explicit **PRIVATE** export for trusted diagnostics, not community
-contribution. Neither uploads. See [draft fields and bounded Site handoff](docs/contracts/personal-observations-v1.md).
+contribution. In74, separate default-OFF private TEST sync controls can send these
+observations after explicit Testing enrollment/permission. See
+[current transport and bounded Site handoff](docs/contracts/testing-personal-transport-v1.md).
 No radar, game requests, UI opening, voyage actions or third-party dependency.
 
 Requirements are Windows, .NET 10 SDK and the Dalamud dependencies used by `Dalamud.NET.Sdk`.

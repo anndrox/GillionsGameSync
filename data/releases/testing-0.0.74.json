@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "version": "0.0.74",
   "assemblyVersion": "0.0.74.0",
-  "status": "PREPARED_REVIEWED_TESTING",
+  "status": "PUBLISHED_TESTING_FIXED_FEED_ANONYMOUSLY_VERIFIED",
   "startingSource": "d69ce4327c43de1fe01d74dff7ef8c7c5441afe9",
   "startingPublishedSource": "735bd17e77f959c103f59a465f047961c247465d",
   "sourceCommit": "052acbd1f30b20de6c4d36675ce92a90d8ba0980",
@@ -44,6 +44,16 @@
   "publication": {
     "authority": "Owner objective authorizes Testing successor after transport validation, with READY FOR OWNER END-TO-END HUNT TEST as end state; no Stable/production activation",
     "sourceTag": "v0.0.74-testing",
+    "annotatedTag": "10b9d5c9c0b06a946ac5be9de207af95035b7bcd",
+    "publicationStartingHead": "58fa563733086398c0055ff652a964b020d36882",
+    "publishedAt": "2026-10-03T13:51:22Z",
+    "zipAssetId": 607889956,
+    "manifestAssetId": 607889955,
+    "versionedVerifiedAt": "2026-10-03T13:51:46Z",
+    "fixedFeedAssetId": 607890640,
+    "fixedFeedReplacedAt": "2026-10-03T13:51:48Z",
+    "fixedFeedVerifiedAt": "2026-10-03T13:54:58Z",
+    "verification": "Anonymous exact unchanged original URL74/product/API15/four links and downloaded ZIP/embedded DLL/version/hashes PASS after predecessor cache cleared; no cache-buster/new URL/re-upload. Historical64 release notes preserved exactly after separator; only current prefix updated. Stable1.0.30 digest/date and both plugin main heads unchanged; immutable73 and66 retained.",
     "release": "https://github.com/anndrox/GillionsGameSync/releases/tag/v0.0.74-testing",
     "isPrerelease": true,
     "rebuilt": true,
@@ -54,6 +64,6 @@
   },
   "preservation": "Final ZIP/DLL/manifest byte-equal durable owner workspace Evidence/GameSync/Testing-0.0.74/052acbd1f30b20de6c4d36675ce92a90d8ba0980; no credentials/private player diagnostics committed",
   "dashboardHandoff": "docs/contracts/testing-personal-transport-v1.md#dashboard-readiness-and-bounded-site-handoff",
-  "effects": "Testing source and normal task-branch pushes; sanctioned TEST HTTP fixture observations only, no Site source/database/schema/deployment changes; no Stable/main/production/Market architecture/Wardrobe/game writes/TLS bypass",
+  "effects": "Owner-authorized Testing prerelease/tag and original rolling JSON replacement/current note-prefix only; source/evidence normal task-branch pushes. Sanctioned TEST HTTP fixture observations only, no direct Site database/schema/deployment or Site source changes; no Stable/main/production/Market architecture/Wardrobe/game writes/TLS bypass",
   "remaining": "READY FOR OWNER END-TO-END HUNT TEST; LIVE FC VALIDATION OUTSTANDING; separate exact Site Dashboard intake contract required before facts transport"
 }

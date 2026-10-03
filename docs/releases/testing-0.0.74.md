@@ -30,10 +30,10 @@ cannot retract an already accepted request.
 
 ## Exact behavior
 
-- `hunt_bills`: schema1 / `hunt-bills-v1`, authenticated paired-character scope.
+- `hunt_bills`: schema 1 / `hunt-bills-v1`, authenticated paired-character scope.
   Positive cached daily/weekly bills, targets and counters are provisional. No
   missing-data-as-empty, verified reset/acceptance, live sighting or B-rank position.
-- `submarine_personal`: schema1 / `submarine-personal-v1`, private scoped workshop
+- `submarine_personal`: schema 1 / `submarine-personal-v1`, private scoped workshop
   state from the active character's naturally loaded current observation batch.
   After reload or a character/territory transition, a naturally opened workshop
   is needed; old unassociated workshop snapshots are not reassigned.
@@ -46,7 +46,7 @@ cannot retract an already accepted request.
 - Normal TLS, exact TEST hostname, no redirects/direct-IP/HTTP retry/certificate bypass.
   Presence must acknowledge the exact product, contract, resource and capability.
 - Prepared nonce/body is durably saved before each eligible dispatch/retry. Save
-  failure suppresses sends. At most16 owner/resource entries and1,152KiB; no unsent
+  failure suppresses sends. At most 16 owner/resource entries and 1,152 KiB; no unsent
   eviction. Same nonce/body retries safely. Terminal HTTP errors stop unchanged
   input even if the error body is empty/HTML/malformed. Network errors use bounded
   backoff. Identity stays in authentication, not personal payloads.
@@ -55,11 +55,11 @@ See [exact transport/consent/retention contract and Dashboard handoff](../contra
 
 ## Validation and limitations
 
-Maintained `scripts/verify.ps1` PASS: **3,217** numbered checks (personal391,
-submarine542, Dashboard1,792, market224, prior268), plus Party Finder, configuration,
+Maintained `scripts/verify.ps1` PASS: **3,217** numbered checks (personal 391,
+submarine 542, Dashboard 1,792, market 224, prior 268), plus Party Finder, configuration,
 ownership, manifests, source contracts and performance checks. Both product builds
-have zero warnings/errors. Exact packaged Testing DLL passes12 actual Dalamud
-serializer/configuration fixtures, separate from12/channel verification fixtures.
+have zero warnings/errors. Exact packaged Testing DLL passes 12 actual Dalamud
+serializer/configuration fixtures, separate from 12/channel verification fixtures.
 Hunt/Submarine opt-outs preserve ordinary sync, Market preference and retained state.
 Beastmaster, Custom Deliveries and previous performance additions remain intact.
 
@@ -72,14 +72,14 @@ the synthetic-demo banner; these are still fixture data, NOT real game observati
 Only our temporary fixture devices were revoked; retained observations preserved.
 
 Current Site source/configuration is `9018a32b3101a50f8e4219b4f632f73f8934ec69`,
-baked TEST application `e6b30b65fdc9b83b4304a939f2a0305654fa1215`, TEST schema0019.
+baked TEST application `e6b30b65fdc9b83b4304a939f2a0305654fa1215`, TEST schema 0019.
 Normal trusted TLS/hostname validation and the authenticated HTTPS origin gate pass.
 Infrastructure review is not reopened. No Site source/schema/deployment was changed.
 
 Independent Security/Privacy and producer-consumer review accepted source
 `052acbd1f30b20de6c4d36675ce92a90d8ba0980`; both identified blockers corrected and
 re-reviewed with no remaining findings. Source/fixture evidence is not live success.
-Synthetic Dashboard validation averaged0.87ms in the final suite; no new native
+Synthetic Dashboard validation averaged 0.87 ms in the final suite; no new native
 polling/game requests were added and no live frame-time measurement is claimed.
 
 **READY FOR OWNER END-TO-END HUNT TEST.** Real Hunt HTTPS receipt-to-private-page
@@ -109,6 +109,10 @@ Manifest 665cc9a28f277ce3aa0d31e5339a7f4664ed389ace432fddb8ac948b2153fe33
 
 The previous preparation was rebuilt because review corrections changed code;
 the final exact ZIP/DLL/product/API15/version/hash/configuration checks passed.
+Published as a prerelease on 2026-10-03 at 13:51:22 UTC. The exact unchanged rolling
+repository URL anonymously resolved to 0.0.74.0 at 13:54:58 UTC; all four ZIP links,
+downloaded ZIP hash and embedded DLL/version/product/API15 match this candidate.
+Initial predecessor cache cleared without re-upload or changing the URL.
 Publication state and public chain checks are recorded in
 [durable release evidence](../../data/releases/testing-0.0.74.json).
 No Stable/main/production/Site source/Market architecture/Wardrobe/gameplay writes
