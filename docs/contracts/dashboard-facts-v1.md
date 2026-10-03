@@ -19,6 +19,11 @@ ENpcResident-to-SatisfactionNpc match and coherent client limits. Since 0.0.72,
 unavailable/malformed selected-client detail cannot suppress separately valid
 global allowance facts (nor can malformed global counts suppress valid client
 facts). Shared UI/load/reset gates are unchanged; rejected facts preserve history.
+Prepared 0.0.73 uses the uniquely matched SatisfactionNpc RowId minus one,
+bounds-checks the manager usage/rank/satisfaction arrays, and requires all three
+values to agree with the active agent. It does not use manager CurrentNpc's
+undocumented index convention or agent RemainingAllowances. That field's exact
+semantics are unsupported, not assumed to equal client cap minus usage.
 Challenge Log requires native Loaded state. Currency inventory and PvP profile
 require their explicit loaded flags. Held Wondrous Tails requires all 16 catalog
 objectives with valid statuses and coherent future expiration.
@@ -64,7 +69,7 @@ represented, not false/zero. `completed` never means a Site task is complete.
 | --- | --- | --- |
 | roulette-reward | `id=ContentRoulette.RowId`; completed native reward flag; eligibility null; all numeric fields null | Unknown; cadence daily reference only |
 | custom-deliveries-global | id0 used `progress`, limit12, remaining `12-used`; no completion/eligibility | Manager's weekly reset |
-| custom-deliveries-client | scope SatisfactionNpc; id0 weekly used/limit/remaining; id1 current-rank satisfaction/max (not lifetime total); id2 rank/max5 | Manager's weekly reset; does NOT reset permanent rank |
+| custom-deliveries-client | scope SatisfactionNpc; id0 corroborated manager weekly used/limit/residual capacity (`limit-used`); this residual is NOT actionable deliverability when global remaining is zero; id1 current-rank satisfaction/max (not lifetime total); id2 rank/max5 | Manager's weekly reset; does NOT reset permanent rank |
 | challenge-log | ContentsNote ID1–104 present in catalog with positive requirement; completion only, numeric progress unknown; Site joins static category/requirement | Cached next challenge reset if coherent; otherwise null |
 | weekly-tomestones | id current capped Item.RowId; earned `progress`, native cap `limit`, remaining subtraction; never balance | Unknown |
 | doman-enclave-weekly | id0 native `State.Donated` as progress, positive `State.Allowance` as limit (both native gratuity-value units), remaining subtraction; `available` is exactly native IsAcceptingDonations, NOT weekly completion; completed null | Unknown; requires DomanEnclaveManager.IsLoaded, cap1–65535, donated0–cap. Zero/unloaded cap does not fabricate an empty week |
@@ -81,6 +86,13 @@ Custom counters are coherent integers within caps; current-rank satisfaction is
 both satisfaction fields are unknown/null, not a fabricated zero progress bar;
 weekly allowance and rank remain independently observable. Invalid client detail
 does not suppress a separately valid global allowance observation.
+The field shape and subtraction invariant are unchanged. 0.0.73 corrects its
+native source/provenance, not the server market contract. No agent remaining
+value is exported or silently relabeled. New uncorroborated client readings
+preserve old client observations and remain unsupported for that read; global
+allowances continue independently. Diagnostic ClientCounterMismatch in 0.0.72
+was the agent-remaining equation; in 0.0.73 it means the new corroboration/bounds
+failed. ClientIndexUnavailable means the matched catalog index is out of bounds.
 Tomestone cap1..10000 and earned0..cap, native cap
 must equal the uniquely selected capped catalog item. PvP counters0..10000 (a
 defensive sanity bound, not a weekly goal). Journal order IDs1..255 must exist in

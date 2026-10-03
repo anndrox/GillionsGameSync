@@ -135,9 +135,17 @@ internal sealed class DashboardLocalView : IDisposable {
                 if (matches.Length != 1) return Reject(DashboardDeliveryReadStatus.ClientCatalogMismatch, global);
                 if (npc.MaxAllowances != matches[0].DeliveriesPerWeek) return Reject(DashboardDeliveryReadStatus.ClientAllowanceMismatch, global);
                 if (npc.RankMax != 5) return Reject(DashboardDeliveryReadStatus.ClientRankMismatch, global);
-                if (npc.RemainingAllowances != npc.MaxAllowances - npc.UsedAllowances) return Reject(DashboardDeliveryReadStatus.ClientCounterMismatch, global);
+                // References map SatisfactionNpc RowId - 1 to these manager
+                // arrays. Do not guess manager CurrentNpc's index convention.
+                int index = checked((int)matches[0].RowId - 1);
+                if (index < 0 || index >= manager->UsedAllowances.Length || index >= manager->SatisfactionRanks.Length
+                    || index >= manager->Satisfaction.Length) return Reject(DashboardDeliveryReadStatus.ClientIndexUnavailable, global);
+                var allowance = DashboardSources.ClientAllowance(matches[0].RowId, npc.MaxAllowances,
+                    manager->UsedAllowances[index], npc.UsedAllowances,
+                    manager->SatisfactionRanks[index], npc.RankCur, manager->Satisfaction[index], npc.SatisfactionCur);
+                if (allowance is null) return Reject(DashboardDeliveryReadStatus.ClientCounterMismatch, global);
                 var selected = Observation("custom-deliveries-client", now, [
-                        new(0, Progress: npc.UsedAllowances, Limit: npc.MaxAllowances, Remaining: npc.RemainingAllowances),
+                        allowance,
                         npc.RankCur == 5 && npc.SatisfactionMax == 0 ? new(1)
                             : new(1, Progress: npc.SatisfactionCur, Limit: npc.SatisfactionMax),
                         new(2, Progress: npc.RankCur, Limit: npc.RankMax)

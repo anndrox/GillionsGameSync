@@ -35,6 +35,15 @@ public sealed class DashboardRetention {
 }
 
 internal static class DashboardSources {
+    // The agent's RemainingAllowances has no verified per-client residual
+    // semantics. Use the catalog-indexed manager count only when its active
+    // agent copy corroborates usage/rank/satisfaction. Never clamp a mismatch.
+    internal static DashboardValue? ClientAllowance(uint scope, int cap, int managerUsed, int agentUsed,
+        int managerRank, int agentRank, int managerSatisfaction, int agentSatisfaction) =>
+        scope is >= 1 and <= 12 && cap is > 0 and <= 6 && managerUsed >= 0 && managerUsed <= cap
+        && managerUsed == agentUsed && managerRank is >= 1 and <= 5 && managerRank == agentRank
+        && managerSatisfaction is >= 0 and <= 65535 && managerSatisfaction == agentSatisfaction
+            ? new(0, Progress: managerUsed, Limit: cap, Remaining: cap - managerUsed) : null;
     // The global allowance fact and selected-client details have independent
     // bounds. An unavailable/malformed client must not suppress a valid global
     // fact, and a malformed global count must not poison valid client details.
@@ -45,7 +54,7 @@ internal static class DashboardSources {
     internal static (string Source, string Cadence)? Definition(string system) => system switch {
         "roulette-reward" => ("InstanceContent.IsRouletteComplete/natural-ContentsFinder", "daily"),
         "custom-deliveries-global" => ("SatisfactionSupplyManager/natural-SatisfactionSupply", "weekly"),
-        "custom-deliveries-client" => ("AgentSatisfactionSupply.NpcData/natural-SatisfactionSupply", "weekly-and-rank-progression"),
+        "custom-deliveries-client" => ("SatisfactionSupplyManager.catalog-index/AgentSatisfactionSupply.corroborated", "weekly-and-rank-progression"),
         "challenge-log" => ("ContentsNote.Loaded/natural-ContentsNote", "weekly"),
         "weekly-tomestones" => ("InventoryManager/loaded-Currency", "weekly"),
         "wondrous-tails" => ("PlayerState/held-journal", "journal-expiration"),
@@ -101,7 +110,7 @@ internal enum DashboardDeliveryReadStatus {
     Awaiting, Reading, AgentUnavailable, ManagerUnavailable, InterfaceClosed,
     NpcInvalid, NpcUninitialized, AddonNotUpdated, ManagerInitializing, ManagerUninitialized,
     ResetUnavailable, ClientCatalogMismatch, ClientAllowanceMismatch, ClientRankMismatch,
-    ClientCounterMismatch, ObservedBoth, ObservedGlobal, ObservedClient, InvalidFacts, ReadFailed
+    ClientCounterMismatch, ClientIndexUnavailable, ObservedBoth, ObservedGlobal, ObservedClient, InvalidFacts, ReadFailed
 }
 
 // Session-local, finite rejection reasons only: no NPC/player identifiers,

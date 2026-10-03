@@ -23,14 +23,20 @@ assert "IsRouletteComplete((byte)id)" in source and "player->ContentRouletteComp
 assert "r.CompletionArrayIndex >= 0" in source and "r.IsInDutyFinder" in source
 assert "GetWeeklyAcquiredTomestoneCount" in source and "GetTomestoneCount" not in source
 assert "GetLimitedTomestoneWeeklyLimit" in source and "cap != limitedCap" in source
-assert "npc.RemainingAllowances != npc.MaxAllowances - npc.UsedAllowances" in source
+assert "npc.RemainingAllowances" not in source
 assert "CurrentNpcInitInProgress" in source and "NpcInfo.Valid" in source
 delivery = source.split("case 1:", 1)[1].split("case 2:", 1)[0]
 assert delivery.index('Observation("custom-deliveries-global"') < delivery.index("var matches")
-for reason in ["AgentUnavailable", "ManagerUnavailable", "InterfaceClosed", "NpcInvalid", "NpcUninitialized", "AddonNotUpdated", "ManagerInitializing", "ManagerUninitialized", "ResetUnavailable", "ClientCatalogMismatch", "ClientAllowanceMismatch", "ClientRankMismatch", "ClientCounterMismatch"]:
+for reason in ["AgentUnavailable", "ManagerUnavailable", "InterfaceClosed", "NpcInvalid", "NpcUninitialized", "AddonNotUpdated", "ManagerInitializing", "ManagerUninitialized", "ResetUnavailable", "ClientCatalogMismatch", "ClientAllowanceMismatch", "ClientRankMismatch", "ClientCounterMismatch", "ClientIndexUnavailable"]:
     assert "DashboardDeliveryReadStatus." + reason in delivery
 assert "DashboardSources.AdmitCustomDeliveries(global, selected)" in delivery
 assert "DashboardSources.AdmitCustomDeliveries(global, null)" in delivery
+assert "r.Npc.RowId == npc.NpcId" in delivery and "checked((int)matches[0].RowId - 1)" in delivery
+for field in ["UsedAllowances", "SatisfactionRanks", "Satisfaction"]:
+    assert "index >= manager->" + field + ".Length" in delivery
+    assert "manager->" + field + "[index]" in delivery
+assert "DashboardSources.ClientAllowance" in delivery and "if (allowance is null)" in delivery
+assert "Math.Clamp" not in delivery and "Math.Min" not in delivery
 assert "deliveryDiagnostics.Reset()" in source and "deliveryDiagnostics.Text" in source
 assert "ImGui.TextWrapped(state.DeliveryStatus)" in source and "{state.DeliveryStatus}\\nAttempts" in source
 assert "NpcId" not in model.split("internal sealed class DashboardDeliveryDiagnostics", 1)[1].split("internal sealed class DashboardSchedule", 1)[0]

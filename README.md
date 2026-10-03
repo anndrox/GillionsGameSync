@@ -79,6 +79,13 @@ build/sector evidence remain unavailable. See [schema, examples and Site require
 
 ### Testing 0.0.72 Timers, Custom Deliveries and Doman
 
+Prepared `0.0.73` corrects the selected-client counter source after a live72
+`ClientCounterMismatch`. It corroborates catalog-indexed manager usage/rank/
+satisfaction with the active agent and calculates client residual capacity;
+the agent's ambiguous remaining field is unsupported. Global allowances remain
+unchanged. See [diagnosis and prepared capability state](docs/releases/testing-0.0.73.md).
+This prepared build is not advertised by the existing Testing feed yet.
+
 The successor separates valid global allowance observations from rejected client
 details and adds a persistent, session-local **Custom Delivery read** reason to
 the facts window and aggregate diagnostics. It does not relax shared native

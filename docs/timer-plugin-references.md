@@ -1,5 +1,12 @@
 # GitHub timer-source audit — Testing 0.0.72
 
+Follow-up: owner live72 evidence isolated `ClientCounterMismatch`. The earlier
+reference audit proved global allowances, not the agent per-client remaining
+equation. [Prepared73 diagnosis](releases/testing-0.0.73.md) documents new pinned
+Umbra/HaselDebug manager-array evidence, strict manager/agent corroboration and
+unsupported ambiguous agent remaining semantics. Prior publication and all
+unrelated timer classifications remain unchanged.
+
 Owner requested references for **all timer systems**, not only Custom Deliveries
 and societies, and accepted reference-backed validation instead of additional
 mandatory live tests. Completion means implemented in Gillions and validated

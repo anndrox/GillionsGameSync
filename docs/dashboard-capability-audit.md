@@ -1,5 +1,12 @@
 # Personal daily/weekly capability audit — Testing 0.0.71 candidate
 
+Prepared 0.0.73 correction: [selected-client diagnosis](releases/testing-0.0.73.md)
+classifies the agent remaining field unsupported, corrects the selected-client
+source to catalog-indexed manager usage corroborated against active agent
+usage/rank/satisfaction, and derives residual capacity without claiming
+deliverability. Global allowances are live-observed in72; corrected client detail
+is reference/SDK/fixture-backed, not live73 validated.
+
 0.0.72 correction: [GitHub timer reference audit](timer-plugin-references.md)
 found the actual Timers addon `ContentsInfo` and the omitted loaded
 DomanEnclaveManager source. The Doman row below is updated to implemented local
@@ -56,7 +63,7 @@ Classification is about available evidence, not a promise of live correctness.
 | Alliance Raid weekly reward/coin | Weekly/none depending patch | Same selected reward counts + static duty rules | UNAVAILABLE | PARTIALLY OBSERVABLE | No reliable reward-specific claimed/window evidence; unrestricted historical raid must not become a weekly obligation | — / not retained |
 | Duty unlock/lifetime clear | Permanent | UIState/PlayerState unlocks, ordinary quest/achievement/character data | ALREADY AVAILABLE ON SITE for existing supported facts | IMPLEMENTED ALREADY / STATIC REFERENCE ONLY | Reuse supported snapshots/catalogs; not weekly completion or loot proof | E / existing private |
 | Custom Delivery global allowance | Weekly | `SatisfactionSupplyManager.GetUsedAllowances`, `GetResetDateTime` | NEW COLLECTOR REQUIRED | COLLECTABLE ONLY AFTER NATURAL UI LOAD | Used/12/remaining and native next reset; own active initialized SatisfactionSupply, no forced request | U / private |
-| Custom Delivery selected client | Weekly counts + permanent rank | `AgentSatisfactionSupply.NpcData`, manager init flags, `SatisfactionNpc.Npc` | NEW COLLECTOR REQUIRED | COLLECTABLE ONLY AFTER NATURAL UI LOAD | Matched selected client only: used/max/remaining, satisfaction current/max, rank current/max. Other clients remain unknown | U+S / private |
+| Custom Delivery selected client | Weekly counts + permanent rank | Catalog-indexed `SatisfactionSupplyManager` usage/rank/satisfaction corroborated against active `AgentSatisfactionSupply.NpcData` | Prepared corrected collector73 | CONDITIONAL AFTER NATURAL UI LOAD; not live73 proven | Matched selected client only: corroborated used/cap/residual capacity, satisfaction current/max, rank current/max. Agent remaining is unsupported; residual is not deliverability. Mismatch preserves global/old client state. Other clients remain unknown | U+S / private |
 | All Custom Delivery client availability | Unlock/progression | Satisfaction NPC static requirements and quest data | ALREADY AVAILABLE ON SITE for prerequisite facts; native availability UNAVAILABLE | STATIC/REFERENCE ONLY | Site may display prerequisites; no fabricated visit recommendation or all-client availability flags | S / existing private prerequisites |
 | Doman weekly donated/cap/remaining | Weekly | `DomanEnclaveManager.IsLoaded/State.Donated/Allowance/IsAcceptingDonations` | NEW COLLECTOR in 0.0.72 | RELIABLY COLLECTABLE typed loaded cache; ownership/reset proof unverified | Positive cap and donated<=cap required; remaining subtraction, accepting flag distinct from completion. Native reset unknown. ReconstructionBox offered-item totals are NOT substituted | B / private |
 | Doman reconstruction unlock/progression | Permanent | Existing filtered normal quests | ALREADY AVAILABLE ON SITE where supported | IMPLEMENTED ALREADY | Reuse quest facts; never turn progression into weekly donation completion; multiplier not newly inferred | E / existing private |

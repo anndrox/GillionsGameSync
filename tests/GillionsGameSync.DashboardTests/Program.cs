@@ -8,7 +8,7 @@ int checks = 0;
 void Check(bool ok, string message) { checks++; if (!ok) throw new Exception(message); }
 bool Refused(Func<string> action) { try { action(); return false; } catch (InvalidOperationException) { return true; } }
 DashboardObservation Row(string system, DashboardValue[] values, DateTime? next = null, uint scope = 0) =>
-    new(system, scope, now, next, values, "synthetic-game", "synthetic-sdk", "0.0.72.0");
+    new(system, scope, now, next, values, "synthetic-game", "synthetic-sdk", "0.0.73.0");
 var future = now.AddDays(2);
 DashboardValue[] Journal() => new DashboardValue[] { new(0, Progress: 2, Limit: 9, Available: true), new(1, Progress: 0, Limit: 9, Available: true) }
     .Concat(Enumerable.Range(0, 16).Select(i => new DashboardValue((uint)i + 2, (uint)i + 1, Progress: i % 3, Completed: i % 3 > 0))).ToArray();
@@ -70,6 +70,28 @@ Check(rows[0].Values[0].Available is null && !rows[0].Values[0].Completed!.Value
 Check(DashboardRetentionPolicy.Valid(rows[2] with { Values = [new(0, Progress: 6, Limit: 6, Remaining: 0), new(1), new(2, Progress: 5, Limit: 5)] }), "max-rank unavailable satisfaction blocked allowance");
 Check(!DashboardRetentionPolicy.Valid(rows[2] with { Values = [new(0, Progress: 6, Limit: 6, Remaining: 0), new(1), new(2, Progress: 4, Limit: 5)] }), "unknown lower-rank progress admitted");
 var exhausted = rows[1] with { Values = [new(0, Progress: 12, Limit: 12, Remaining: 0)] };
+// Independent manager/agent corroboration, not the agent's ambiguous remaining
+// field. Exhausted global allowance does not imply every client used six.
+for (uint scope = 1; scope <= 12; scope++)
+    for (int used = -1; used <= 7; used++)
+        for (int agentUsed = 0; agentUsed <= 7; agentUsed++) {
+            var value = DashboardSources.ClientAllowance(scope, 6, used, agentUsed, 5, 5, 0, 0);
+            bool valid = used is >= 0 and <= 6 && used == agentUsed;
+            Check((value is not null) == valid, "client usage mismatch/out-of-range admitted");
+            if (valid) Check(value!.Progress == used && value.Limit == 6 && value.Remaining == 6 - used
+                && value.Available is null && value.Completed is null, "client residual invented eligibility/completion");
+        }
+foreach (var sample in new[] {
+    (0u, 6, 0, 0, 5, 5, 0, 0), (13u, 6, 0, 0, 5, 5, 0, 0),
+    (8u, 0, 0, 0, 5, 5, 0, 0), (8u, 7, 0, 0, 5, 5, 0, 0),
+    (8u, 6, 0, 0, 0, 0, 0, 0), (8u, 6, 0, 0, 6, 6, 0, 0),
+    (8u, 6, 0, 0, 4, 5, 0, 0), (8u, 6, 0, 0, 3, 3, 50, 51),
+    (8u, 6, 0, 0, 3, 3, -1, -1), (8u, 6, 0, 0, 3, 3, 65536, 65536)
+}) Check(DashboardSources.ClientAllowance(sample.Item1, sample.Item2, sample.Item3, sample.Item4,
+    sample.Item5, sample.Item6, sample.Item7, sample.Item8) is null, "uncorroborated client state admitted");
+var unspentClient = rows[2] with { ScopeId = 8, Values = [DashboardSources.ClientAllowance(8, 6, 0, 0, 5, 5, 0, 0)!, new(1), new(2, Progress: 5, Limit: 5)] };
+Check(DashboardSources.AdmitCustomDeliveries(exhausted, unspentClient).Length == 2
+    && unspentClient.Values[0].Remaining == 6, "global exhaustion fabricated selected-client completion");
 Check(DashboardSources.AdmitCustomDeliveries(exhausted, rows[2]).Length == 2, "exhausted allowance facts missing");
 Check(DashboardSources.AdmitCustomDeliveries(exhausted, null).SequenceEqual(new[] { exhausted }), "missing client suppressed global");
 foreach (var badClient in new[] {
