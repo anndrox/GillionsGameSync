@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "version": "0.0.74",
+  "assemblyVersion": "0.0.74.0",
+  "status": "PREPARED_REVIEWED_TESTING",
+  "startingSource": "d69ce4327c43de1fe01d74dff7ef8c7c5441afe9",
+  "startingPublishedSource": "735bd17e77f959c103f59a465f047961c247465d",
+  "sourceCommit": "052acbd1f30b20de6c4d36675ce92a90d8ba0980",
+  "branch": "codex/game-sync/beastmaster-party-finder-testing",
+  "artifact": "GillionsGameSyncTesting-0.0.74.zip",
+  "artifactSha256": "4f94ccd8033bf73f226082601c10d61c44d4b24d141c87b062095e3a5be82462",
+  "dllSha256": "473ef2b902ac4749359461cb0cd3b9497e85a78d917a654fed2dfe61494af24d",
+  "manifestSha256": "665cc9a28f277ce3aa0d31e5339a7f4664ed389ace432fddb8ac948b2153fe33",
+  "endpoint": "https://test.gillions.app/api/game-sync/sync",
+  "site": {
+    "sourceConfiguration": "9018a32b3101a50f8e4219b4f632f73f8934ec69",
+    "bakedApplication": "e6b30b65fdc9b83b4304a939f2a0305654fa1215",
+    "schemaHead": "0019",
+    "tls": "PASS normal trusted chain and exact hostname; no bypass or HTTP fallback",
+    "originGate": "PASS authenticated Testing HTTPS; anonymous/unpermitted/revoked credentials fail closed"
+  },
+  "capabilities": {
+    "hunt_bills": { "schemaVersion": 1, "collectorSchema": "hunt-bills-v1", "capability": "hunt_bills_v1", "localUploadDefault": false, "serverPermission": "server:game-sync:personal:hunt-bills:v1" },
+    "submarine_personal": { "schemaVersion": 1, "collectorSchema": "submarine-personal-v1", "capability": "submarine_personal_v1", "localUploadDefault": false, "serverPermission": "server:game-sync:personal:submarine-personal:v1" },
+    "dashboard": "LOCAL_ONLY_NO_ACTIVATED_SITE_INTAKE_CONTRACT"
+  },
+  "validation": {
+    "maintainedVerify": "PASS scripts/verify.ps1",
+    "numberedManagedChecks": 3217,
+    "personal": 391,
+    "submarines": 542,
+    "dashboard": 1792,
+    "market": 224,
+    "priorRegression": 268,
+    "additional": "Party Finder, Beastmaster, ordinary sync, configuration, retention, ownership, performance and source/manifest contracts PASS",
+    "configuration": "Actual Dalamud serializer12 fixtures per product plus final exact packaged Testing DLL12 fixtures PASS",
+    "build": "Stable-compatible and Testing builds plus74 package zero warnings/errors",
+    "sharedTestHttps": "36 sanitized fixture checks PASS: real authenticated routes, schema, receipt/idempotency/conflict, monotonic persistence, private pages, permission/anonymous/revoked and unowned-character rejection; fixture devices revoked through normal API",
+    "performance": "Prior maintained synthetic cadence/allocation guards PASS; Dashboard synthetic validation average0.87ms; no new native cadence/game request and no live frame-time claim",
+    "review": "Independent Security/Privacy and producer-consumer review accepted052acbd after both blockers and privacy/UI follow-up corrected;391 independent personal checks PASS",
+    "huntLive": "OUTSTANDING real client receipt/persistence/private page/state-change/reload/closure E2E; previous owner-confirmed local collector preserved",
+    "submarineLive": "LIVE FC VALIDATION OUTSTANDING; transport fixture proof is not a real workshop observation"
+  },
+  "publication": {
+    "authority": "Owner objective authorizes Testing successor after transport validation, with READY FOR OWNER END-TO-END HUNT TEST as end state; no Stable/production activation",
+    "sourceTag": "v0.0.74-testing",
+    "release": "https://github.com/anndrox/GillionsGameSync/releases/tag/v0.0.74-testing",
+    "isPrerelease": true,
+    "rebuilt": true,
+    "rebuildReason": "Review corrections changed functional source; exact final package/hash/configuration checks rerun",
+    "fixedFeed": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json",
+    "previousAdvertisedVersion": "0.0.73.0",
+    "previousManifestSha256": "2062725468b69db98c0afc61d4229850f5d5ddb1ac0d6339e10dd7399fba99c2"
+  },
+  "preservation": "Final ZIP/DLL/manifest byte-equal durable owner workspace Evidence/GameSync/Testing-0.0.74/052acbd1f30b20de6c4d36675ce92a90d8ba0980; no credentials/private player diagnostics committed",
+  "dashboardHandoff": "docs/contracts/testing-personal-transport-v1.md#dashboard-readiness-and-bounded-site-handoff",
+  "effects": "Testing source and normal task-branch pushes; sanctioned TEST HTTP fixture observations only, no Site source/database/schema/deployment changes; no Stable/main/production/Market architecture/Wardrobe/game writes/TLS bypass",
+  "remaining": "READY FOR OWNER END-TO-END HUNT TEST; LIVE FC VALIDATION OUTSTANDING; separate exact Site Dashboard intake contract required before facts transport"
+}
