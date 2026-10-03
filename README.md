@@ -65,7 +65,7 @@ custom plugin repositories:
 
 This installs the separate **Gillions Game Sync Testing** identity. It does not
 replace the stable plugin or update the existing `gillions.app` testing feed.
-Testing `0.0.71` preserves the published Testing lineage, including localized Hunt target names, and adds the default-OFF private daily/weekly facts experiment. Keep the existing custom-repository URL above: it is the rolling Testing update feed, despite its historical tag name. Refresh Dalamud's plugin list and update to `0.0.71.0`; do not replace the repository entry for each release. Follow the [live checklist and diagnostics](docs/releases/testing-0.0.71.md). Do not downgrade or delete configuration. Ordinary HTTPS/PF pairing and consent are unchanged.
+Testing `0.0.72` preserves the published Testing lineage, corrects the Timers lookup and Custom Delivery validation/diagnostics, and adds loaded Doman Enclave counters to the default-OFF private facts experiment. Keep the existing custom-repository URL above: it is the rolling Testing update feed, despite its historical tag name. Refresh Dalamud's plugin list and update to `0.0.72.0`; do not replace the repository entry for each release. Follow the [live checklist and diagnostics](docs/releases/testing-0.0.72.md). Do not downgrade or delete configuration. Ordinary HTTPS/PF pairing and consent are unchanged.
 
 Open `/gillionssubs` or **Submarine voyage retention**. Use workshop interfaces
 manually; no submarine control, polling or third-party plugin is involved. Local
@@ -107,7 +107,7 @@ The existing rolling Testing feed supplies this update; Stable is unchanged.
 
 Testing 0.0.67 was published October 1, 2026 at tag `v0.0.67-testing`, source
 `9821c92df8f51c9fef913a9e8294fd6ed3b4469c`. Its immutable assets are preserved;
-0.0.71 uses the same separate product identity. Publication is not live-game proof.
+0.0.72 uses the same separate product identity. Publication is not live-game proof.
 
 "Contribute observed market data to Gillions" is independently **on by default**,
 including older Testing configurations without that field. It has a persistent

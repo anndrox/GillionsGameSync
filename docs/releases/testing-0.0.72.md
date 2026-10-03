@@ -64,3 +64,29 @@ testing with source/SDK/fixture validation is not a live-success claim.
 
 Site owns future authenticated intake and page integration. This release adds no
 new server contract or upload path and does not modify Site or production.
+
+## Publication and validation evidence
+
+Published Testing `0.0.72.0`, source `8c812d88ef4e7841b2e68d5cadd5c733bc94e956`,
+tag `v0.0.72-testing`, on 2026-10-03 at 02:01:48 UTC. The exact unchanged
+owner-selected rolling URL returned 72 at 02:05:10 UTC after predecessor cache
+cleared. Its four links, downloaded ZIP, embedded product/API15/version and DLL
+hash match the exact validated package. No re-upload or repository-entry change.
+
+ZIP SHA256: `3328868520ab9395d5af67dcf4bc642e7236cb30280c4dce68f142a02ff3e31a`.
+Manifest SHA256: `e20db7000a2f51f9d79bc803b0ded487fb54b9576763bdbf35029043ac13902e`.
+DLL SHA256: `9189da12b99e71c4c8b742a290a5f072b9cde5153d05d8acc2ab6867e7125fd1`.
+
+Maintained `scripts/verify.ps1` PASS, including 2,150 numbered managed checks
+(832 Dashboard, 287 Hunt, 539 submarine, 224 market, 268 prior regressions),
+Party Finder, Beastmaster, ordinary sync, performance and package/source suites.
+Stable-compatible and Testing SDK builds: zero warnings/errors. Actual serializer
+configuration fixtures and exact packaged72 DLL checks PASS; new Doman private
+facts survive Save/load. Market default-on, off-stop and ordinary-sync isolation
+remain intact; no direct Gillions-to-Universalis uploader introduced.
+
+No live72 collection or frame-time claim. Owner-waived reference-backed checks
+are not live proof; the Ameliance rejection remains unresolved until new gate
+diagnostics. Historical64 notes/ZIP and published66 artifacts are unchanged.
+Stable1.0.30, canonical main, Site/server and production are unchanged. Detailed
+durable evidence is [Testing72](../../data/releases/testing-0.0.72.json).
