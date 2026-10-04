@@ -83,6 +83,12 @@ public sealed class Plugin : IDalamudPlugin {
     private PartyFinderLinkRequestProcessor partyFinderLinkProcessor = new();
     private bool observedPartyFinderLinks;
     private volatile string partyFinderLinkStatus = "Party Finder website links OFF; existing item links unchanged.";
+    private readonly IGameGui huntMapGui;
+    private HuntMapProcessor huntMapProcessor = new();
+    private CancellationTokenSource huntMapCancellation = new();
+    private bool observedHuntMapGuidance;
+    private DateTime nextHuntMapPollUtc;
+    private volatile string huntMapStatus = "Automatic Hunt maps OFF.";
 #endif
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private readonly HttpClient partyFinderHttp = PartyFinderHttp.CreateClient();
@@ -165,6 +171,7 @@ public sealed class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Automatic Hunt map guidance has its own default-OFF permission. Secure TEST requests consume the current Site revision before opening a public reference map; never teleport, move or target. Site v1 selects one candidate; alternative cycling is not yet supported.",
         "Testing PF contribution now uses the approved secure TEST paired origin, never production. Website PF links require a new separate opt-in and compatible Site request contract; they deliver a native chat link requiring a final in-game click, never join or apply.",
         "Hunt routing context has separate OFF-by-default location consent and server travel grant. Rounded location and naturally visible public Teleport cache use authenticated HTTPS TEST only, RAM-only, latest-only, 15-second read/send admission and 45-second expiry. Cached Gil is a quote, not final charge. OFF cancels travel only; no movement history.",
         "Private daily/weekly native facts are a separate OFF-by-default Testing experiment with bounded local retention and explicit PRIVATE export. No Dashboard configuration or uploads; unavailable sources preserve prior state, and reset/cache ownership remains unverified.",
@@ -244,6 +251,8 @@ public sealed class Plugin : IDalamudPlugin {
         chatGui.LogMessage += OnLogMessage;
         chatGui.ChatMessage += OnChatMessage;
 #if GILLIONS_TEST_BUILD
+        huntMapGui = gameGui;
+        observedHuntMapGuidance = configuration.AutomaticallyShowHuntMap;
         beastmasterLocal = new BeastmasterLocalView(pluginInterface, commands, framework, clientState, dataManager);
         configuration.SubmarineVoyages ??= new();
         submarineLocal = new SubmarineLocalView(pluginInterface, commands, framework, clientState, dataManager,
@@ -412,9 +421,17 @@ public sealed class Plugin : IDalamudPlugin {
 #endif
         var contentId = activeRetainerCharacterContentId;
         var state = CurrentState;
-        if (ItemLinkPollPolicy.ShouldPoll(configuration.EnableItemLinkRequests, true, configuration.DeviceToken, itemLinkPollInFlight, now, nextItemLinkPollUtc)) {
+        var websitePollingEnabled = configuration.EnableItemLinkRequests;
+#if GILLIONS_TEST_BUILD
+        websitePollingEnabled |= configuration.AutomaticallyShowHuntMap && configuration.ActiveSession?.Origin == HuntMapPolicy.Origin;
+#endif
+        if (ItemLinkPollPolicy.ShouldPoll(websitePollingEnabled, true, configuration.DeviceToken, itemLinkPollInFlight, now, nextItemLinkPollUtc)) {
             nextItemLinkPollUtc = now.AddSeconds(ItemLinkPollIntervalSeconds);
+#if GILLIONS_TEST_BUILD
+            _ = PollWebsiteRequestsAsync();
+#else
             _ = PollItemLinkRequestsAsync();
+#endif
         }
         if (pairedClientHydration.TryBeginCharacterSync(syncInFlight)) {
             _ = SyncAutomaticallyAsync([PairedClientHydrationState.CharacterResource], SyncRequestMode.Hydration);
@@ -501,7 +518,11 @@ public sealed class Plugin : IDalamudPlugin {
         var ownsPoll = false;
         try {
             permit = await framework.RunOnFrameworkThread(() => {
-                if (disposed || itemLinkPollInFlight) throw new OperationCanceledException();
+                if (disposed
+#if !GILLIONS_TEST_BUILD
+                    || itemLinkPollInFlight
+#endif
+                    ) throw new OperationCanceledException();
                 var result = CapturePermit(SyncRequestMode.ItemLink);
                 itemLinkPollInFlight = true; ownsPoll = true; processor = itemLinkRequestProcessor;
                 return result;
@@ -575,7 +596,11 @@ public sealed class Plugin : IDalamudPlugin {
             });
             log.Debug("Gillions item-link request did not complete ({Type}).", error.GetType().Name);
         } finally {
+#if !GILLIONS_TEST_BUILD
             if (ownsPoll && !disposed) await framework.RunOnFrameworkThread(() => { if (!disposed) itemLinkPollInFlight = false; });
+#else
+            _ = ownsPoll; // Testing's common request-loop owner releases the shared flight gate.
+#endif
         }
     }
 
@@ -587,6 +612,118 @@ public sealed class Plugin : IDalamudPlugin {
     });
 
 #if GILLIONS_TEST_BUILD
+    // One established five-second loop. Hunt advertisement and item/PF requests
+    // have independent permissions, but share the same serialized flight owner.
+    private async Task PollWebsiteRequestsAsync() {
+        var owns = false;
+        try {
+            var pollHunts = await framework.RunOnFrameworkThread(() => {
+                if (disposed || itemLinkPollInFlight) throw new OperationCanceledException();
+                itemLinkPollInFlight = true; owns = true;
+                return configuration.AutomaticallyShowHuntMap && configuration.ActiveSession?.Origin == HuntMapPolicy.Origin
+                    && DateTime.UtcNow >= nextHuntMapPollUtc;
+            });
+            if (pollHunts) await PollHuntMapRequestAsync();
+            var pollItems = await framework.RunOnFrameworkThread(() => !disposed && configuration.EnableItemLinkRequests && HasPairedSession);
+            if (pollItems) await PollItemLinkRequestsAsync();
+        } catch (OperationCanceledException) { }
+        finally {
+            if (owns && !disposed) await framework.RunOnFrameworkThread(() => { if (!disposed) itemLinkPollInFlight = false; });
+        }
+    }
+    private bool HuntMapPermitted(SyncRequestPermit permit, CancellationToken cancellation) => !cancellation.IsCancellationRequested
+        && HuntMapPolicy.Admit(configuration.AutomaticallyShowHuntMap, HasPairedSession, permit.Origin, PermitIsCurrent(permit))
+        && clientState.IsLoggedIn && objects.LocalPlayer is not null
+        && !marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas]
+        && !marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas51];
+    private void ClearHuntMapRequests() {
+        huntMapCancellation.Cancel(); huntMapCancellation.Dispose(); huntMapCancellation = new();
+        huntMapProcessor = new(); huntMapStatus = "No active Hunt map request; local observations preserved.";
+    }
+    private async Task PollHuntMapRequestAsync() {
+        SyncRequestPermit? permit = null;
+        try {
+            var context = await framework.RunOnFrameworkThread(() => {
+                var p = CapturePermit(SyncRequestMode.Personal);
+                var token = huntMapCancellation.Token;
+                if (!HuntMapPermitted(p, token)) throw new OperationCanceledException();
+                nextHuntMapPollUtc = DateTime.UtcNow.AddSeconds(ItemLinkPollIntervalSeconds);
+                return (Permit: p, Token: token, Processor: huntMapProcessor);
+            });
+            permit = context.Permit;
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation, context.Token);
+            var cancellation = linked.Token;
+            using var request = Request("/api/game-sync/item-links/poll", permit, new { capability = HuntMapPolicy.Capability });
+            using var response = await SendHuntMapAsync(request, permit, cancellation);
+            if (response.StatusCode != HttpStatusCode.OK) {
+                await framework.RunOnFrameworkThread(() => {
+                    if (!HuntMapPermitted(permit, cancellation)) return;
+                    huntMapStatus = "Hunt map unavailable or permission denied; no map opened.";
+                    nextHuntMapPollUtc = DateTime.UtcNow.AddSeconds(response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden ? 60 : 30);
+                });
+                return;
+            }
+            var json = await ReadHuntMapResponseAsync(response.Content, cancellation);
+            var parsed = HuntMapPolicy.Parse(json, DateTime.UtcNow);
+            var result = await context.Processor.ProcessAsync(parsed, () => DateTime.UtcNow,
+                () => framework.RunOnFrameworkThread(() => HuntMapPermitted(permit, cancellation)),
+                r => ConsumeHuntMapAsync(permit, r, cancellation),
+                r => framework.RunOnFrameworkThread(() => {
+                    if (!HuntMapPermitted(permit, cancellation) || !HuntMapPolicy.Valid(r, DateTime.UtcNow)) return false;
+                    // Supported public API, human-readable map XY. No native
+                    // offsets, callbacks, teleport, movement or targeting.
+                    var opened = huntMapGui.OpenMapWithMapLink(new MapLinkPayload(r.TerritoryId, r.MapId, r.MapX, r.MapY));
+                    if (opened) chatGui.Print(r.Guidance, "Gillions");
+                    return opened;
+                }));
+            await framework.RunOnFrameworkThread(() => {
+                if (HuntMapPermitted(permit, cancellation)) huntMapStatus = result;
+            });
+        } catch (Exception error) {
+            if (!disposed && permit is not null) await framework.RunOnFrameworkThread(() => {
+                if (PermitIsCurrent(permit)) { huntMapStatus = "Hunt map request interrupted; no retry of a consumed action."; nextHuntMapPollUtc = DateTime.UtcNow.AddSeconds(30); }
+            });
+            log.Debug("Gillions Hunt map request did not complete ({Type}).", error.GetType().Name);
+        }
+    }
+    private async Task<HttpResponseMessage> SendHuntMapAsync(HttpRequestMessage request, SyncRequestPermit permit, CancellationToken cancellation) {
+        Task<HttpResponseMessage>? pending = null;
+        await framework.RunOnFrameworkThread(() => {
+            if (!HuntMapPermitted(permit, cancellation)) throw new OperationCanceledException();
+            pending = personalHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation);
+        });
+        return await pending!;
+    }
+    private static async Task<string> ReadHuntMapResponseAsync(HttpContent content, CancellationToken cancellation) {
+        if (content.Headers.ContentLength > HuntMapPolicy.MaximumResponseBytes) throw new InvalidOperationException("Hunt response too large.");
+        using var stream = await content.ReadAsStreamAsync(cancellation);
+        var bytes = new byte[HuntMapPolicy.MaximumResponseBytes + 1];
+        var length = 0;
+        while (length < bytes.Length) {
+            var read = await stream.ReadAsync(bytes.AsMemory(length), cancellation);
+            if (read == 0) break;
+            length += read;
+        }
+        if (length > HuntMapPolicy.MaximumResponseBytes) throw new InvalidOperationException("Hunt response too large.");
+        return new UTF8Encoding(false, true).GetString(bytes, 0, length);
+    }
+    private async Task<bool> ConsumeHuntMapAsync(SyncRequestPermit permit, HuntMapRequest r, CancellationToken cancellation) {
+        var catalogValid = await framework.RunOnFrameworkThread(() => {
+            if (!HuntMapPermitted(permit, cancellation) || !HuntMapPolicy.Valid(r, DateTime.UtcNow)) return false;
+            var map = dataManager.GetExcelSheet<Lumina.Excel.Sheets.Map>().GetRowOrDefault(r.MapId);
+            return map is { RowId: > 0 } && map.Value.SizeFactor > 0 && map.Value.TerritoryType.RowId == r.TerritoryId
+                && dataManager.GetExcelSheet<TerritoryType>().HasRow(r.TerritoryId)
+                && dataManager.GetExcelSheet<MobHuntTarget>().HasRow(r.TargetId)
+                && (r.FateId is null || dataManager.GetExcelSheet<Fate>().HasRow(r.FateId.Value));
+        });
+        if (!catalogValid) return false;
+        using var request = Request("/api/game-sync/item-links/consume", permit, new {
+            requestType = HuntMapPolicy.RequestType, capability = HuntMapPolicy.Capability,
+            requestId = r.RequestId, claimToken = r.ClaimToken, revision = r.Revision,
+        });
+        using var response = await SendHuntMapAsync(request, permit, cancellation);
+        return response.StatusCode == HttpStatusCode.OK && HuntMapPolicy.Consumed(await ReadHuntMapResponseAsync(response.Content, cancellation));
+    }
     private bool PartyFinderLinksPermitted(SyncRequestPermit permit) => PermitIsCurrent(permit)
         && configuration.EnableItemLinkRequests && configuration.EnablePartyFinderLinkRequests
         && permit.Origin == GillionsPartyFinderContributor.ApprovedTestingOrigin;
@@ -1146,6 +1283,12 @@ public sealed class Plugin : IDalamudPlugin {
         });
         ImGui.TextWrapped("New action class: separately OFF for existing and new users. Secure TEST only; compatible Site request contract required. Never joins or applies. Item links retain their existing preference.");
         ImGui.TextWrapped(partyFinderLinkStatus);
+        var huntMapGuidance = configuration.AutomaticallyShowHuntMap;
+        if (ImGui.Checkbox("Automatically show my current Hunt in FFXIV", ref huntMapGuidance)) QueueUiAction(() => {
+            configuration.AutomaticallyShowHuntMap = huntMapGuidance; RefreshSessionContext(); RequestConfigurationSave();
+        });
+        ImGui.TextWrapped("Separate default-OFF map permission. Pair with secure TEST, then enable Hunt guidance and select this device on Site. Public Hunt areas are references, not sightings. No remote teleport. Site Show in FFXIV can retry a missed map; v1 does not support Next possible location.");
+        ImGui.TextWrapped(huntMapStatus);
 #endif
         ImGui.Separator();
         var enablePartyFinderContributions = view.PartyFinderContributions;
@@ -1319,6 +1462,7 @@ public sealed class Plugin : IDalamudPlugin {
         requestLifetime.Invalidate(); ClearTransientState(); ClearRetainerServerAcceptance();
 #if GILLIONS_TEST_BUILD
         travelAccepted = false; travelBinding = ""; ClearTravelPending(); travelLocal?.ClearSession();
+        ClearHuntMapRequests();
         foreach (var cancellation in personalCancellation.Values) { cancellation.Cancel(); cancellation.Dispose(); }
         personalCancellation.Clear(); nextPersonalUtc = DateTime.MinValue;
 #endif
@@ -1360,6 +1504,10 @@ public sealed class Plugin : IDalamudPlugin {
             requestLifetime.InvalidateItemLinks();
         }
 #if GILLIONS_TEST_BUILD
+        if (observedHuntMapGuidance != configuration.AutomaticallyShowHuntMap) {
+            observedHuntMapGuidance = configuration.AutomaticallyShowHuntMap;
+            ClearHuntMapRequests(); nextItemLinkPollUtc = DateTime.MinValue;
+        }
         if (observedPartyFinderLinks != configuration.EnablePartyFinderLinkRequests) {
             observedPartyFinderLinks = configuration.EnablePartyFinderLinkRequests;
             requestLifetime.InvalidateItemLinks();
@@ -1827,6 +1975,7 @@ public sealed class Plugin : IDalamudPlugin {
         huntLocal.Dispose();
         dashboardLocal.Dispose();
         travelLocal.Dispose();
+        huntMapCancellation.Cancel(); huntMapCancellation.Dispose();
         marketSource.Dispose(); marketContributor.Dispose(); marketHttp.Dispose();
 #endif
         if (framework.IsInFrameworkUpdateThread) FlushConfigurationSave();
@@ -1891,6 +2040,7 @@ public sealed class PluginConfiguration : IPluginConfiguration {
     public bool EnableItemLinkRequests { get; set; } = true;
 #if GILLIONS_TEST_BUILD
     public bool EnablePartyFinderLinkRequests { get; set; }
+    public bool AutomaticallyShowHuntMap { get; set; }
 #endif
     public bool EnablePartyFinderContributions { get; set; } = false;
     public bool EnableGillionsPartyFinderContributions { get; set; } = false;

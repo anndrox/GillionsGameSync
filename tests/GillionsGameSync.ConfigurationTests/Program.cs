@@ -86,6 +86,21 @@ var personalHuntSetting = configurationType.GetProperty("SyncPersonalHunts");
 var personalSubSetting = configurationType.GetProperty("SyncPersonalSubmarines");
 var pfLinkSetting = configurationType.GetProperty("EnablePartyFinderLinkRequests");
 var travelSetting = configurationType.GetProperty("ShareHuntRoutingLocation");
+var huntMapSetting = configurationType.GetProperty("AutomaticallyShowHuntMap");
+if (testingProduct) {
+    var huntMapOlder = JsonConvert.DeserializeObject("{\"ShareHuntRoutingLocation\":true,\"SyncPersonalHunts\":true,\"SyncPersonalSubmarines\":true,\"AutomaticSync\":true,\"EnableItemLinkRequests\":true,\"EnablePartyFinderLinkRequests\":true,\"ContributeObservedMarketData\":true}",configurationType)!;
+    Assert(!(bool)huntMapSetting!.GetValue(huntMapOlder)! && !(bool)huntMapSetting.GetValue(Activator.CreateInstance(configurationType))!,"Existing permissions must not grant Hunt map consent.");
+    huntMapSetting.SetValue(huntMapOlder,true); configurationType.GetMethod("Save")!.Invoke(huntMapOlder,[savedViaPlugin]);
+    var restored=load.Invoke(configurations,[product])!;
+    Assert((bool)huntMapSetting.GetValue(restored)!,"Actual serializer lost Hunt map opt-in.");
+    huntMapSetting.SetValue(restored,false); configurationType.GetMethod("Save")!.Invoke(restored,[savedViaPlugin]);
+    restored=load.Invoke(configurations,[product])!;
+    Assert(!(bool)huntMapSetting.GetValue(restored)! && new[] {"ShareHuntRoutingLocation","SyncPersonalHunts","SyncPersonalSubmarines","AutomaticSync","EnableItemLinkRequests","EnablePartyFinderLinkRequests","ContributeObservedMarketData"}.All(n=>(bool)configurationType.GetProperty(n)!.GetValue(restored)!),"Map OFF changed unrelated choices.");
+    Assert(pluginAssembly.GetType("GillionsGameSync.HuntMapRequest",true)!.GetMethod("ToString")!.DeclaringType==typeof(object),"Hunt claim dumps token.");
+    Assert(typeof(Dalamud.Plugin.Services.IGameGui).GetMethod("OpenMapWithMapLink",[typeof(Dalamud.Game.Text.SeStringHandling.Payloads.MapLinkPayload)])?.ReturnType==typeof(bool),"Public map presentation API changed.");
+    Assert(typeof(Dalamud.Game.Text.SeStringHandling.Payloads.MapLinkPayload).GetConstructor([typeof(uint),typeof(uint),typeof(float),typeof(float),typeof(float)])!=null,"Human-readable map link constructor changed.");
+    Console.WriteLine("Actual Hunt map default-OFF/serializer/independent consent/public SDK API PASS.");
+} else Assert(huntMapSetting is null && pluginAssembly.GetType("GillionsGameSync.HuntMapRequest") is null && pluginAssembly.GetType("GillionsGameSync.HuntMapProcessor") is null,"Stable gained Hunt map actions.");
 if (testingProduct) {
     var travelOlder = JsonConvert.DeserializeObject("{\"SyncPersonalHunts\":true,\"SyncPersonalSubmarines\":true,\"AutomaticSync\":true,\"EnablePartyFinderLinkRequests\":true,\"ContributeObservedMarketData\":false}",configurationType)!;
     Assert(!(bool)travelSetting!.GetValue(travelOlder)! && !(bool)travelSetting.GetValue(Activator.CreateInstance(configurationType))!,"Old/default permissions must not grant location consent.");

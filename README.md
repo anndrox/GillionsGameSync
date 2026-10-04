@@ -1,5 +1,14 @@
 # Gillions Game Sync
 
+Testing78 adds separate default-OFF automatic Site Hunt-map presentation using the
+existing bounded request channel. Enable **Automatically show my current Hunt in
+FFXIV** locally and select/grant your Testing device on the TEST Hunts page. The
+Site selects the current target; accepted Hunt progress can advance the native
+map without returning to Site between kills. Areas are reference locations, not
+sightings. FATE requirements remain explicit, activity unknown. No teleport or
+gameplay actions. V1 has no Next possible location operation; missed maps can be
+retried with Site's Show in FFXIV. See [Hunt-map contract](docs/contracts/hunt-map-v1.md).
+
 Testing77 activates the accepted shared TEST transport for the separate default-OFF
 private Hunt routing-context experiment introduced in76:
 rounded location and positive public teleport observations, RAM/latest-only.

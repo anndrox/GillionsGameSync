@@ -1,0 +1,101 @@
+using GillionsGameSync;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
+var now = new DateTime(2026, 10, 4, 2, 0, 0, DateTimeKind.Utc);
+var count = 0;
+void Check(bool value, string name) { count++; if (!value) throw new Exception(name); }
+JsonObject Fixture(string revision = "a", string? id = null) => new() {
+    ["ok"] = true, ["request"] = new JsonObject {
+        ["requestType"] = "hunt_map", ["requestId"] = id ?? Guid.NewGuid().ToString("D"), ["claimToken"] = new string('T', 43),
+        ["huntTargetId"] = 4, ["huntTargetName"] = "Daddy Longlegs", ["territoryId"] = 140, ["mapId"] = 20,
+        ["mapX"] = 14.41, ["mapY"] = 6.84, ["candidateId"] = new string('c', 24), ["revision"] = new string(revision[0], 64),
+        ["candidateIndex"] = 0, ["candidateCount"] = 1, ["expiresAt"] = now.AddSeconds(90).ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+        ["availability"] = new JsonObject { ["classification"] = "FATE_REQUIRED", ["fateId"] = 366, ["fateName"] = "He's Got Legs", ["activity"] = "UNKNOWN" },
+    },
+};
+HuntMapRequest? Parse(JsonObject x) => HuntMapPolicy.Parse(x.ToJsonString(), now);
+var aJson = Fixture(); var a = Parse(aJson)!;
+Check(a != null && a.MapX == 14.41f && a.MapY == 6.84f && a.CandidateIndex == 0, "exact Site payload XY/order");
+Check(a!.Guidance.Contains("FATE required: He's Got Legs") && a.Guidance.Contains("not currently known")
+    && a.Guidance.Contains("not a sighting") && !a.Guidance.Contains("FATE active"), "honest FATE reference");
+Check(typeof(HuntMapRequest).GetMethod("ToString")!.DeclaringType == typeof(object), "no token ToString");
+foreach (var field in aJson["request"]!.AsObject().Select(x => x.Key).ToArray()) {
+    var x = Fixture(); x["request"]!.AsObject().Remove(field); Check(Parse(x) == null, "missing " + field);
+    x = Fixture(); x["request"]![field] = null; Check(Parse(x) == null, "null " + field);
+}
+foreach (var field in new[] { "classification", "fateId", "fateName", "activity" }) {
+    var x = Fixture(); x["request"]!["availability"]!.AsObject().Remove(field); Check(Parse(x) == null, "availability missing " + field);
+}
+foreach (var (field, value) in new (string, JsonNode?)[] {
+    ("requestType", "item"), ("requestType", "party_finder"), ("requestType", "teleport"), ("capability", "wrong"),
+    ("requestId", "not UUID"), ("requestId", Guid.Empty.ToString("D")), ("claimToken", "bad\nclaim"),
+    ("claimToken", ""), ("claimToken", new string('x',101)), ("revision", "wrong"), ("revision", new string('A',64)),
+    ("candidateId", new string('a',23)), ("candidateIndex", 1), ("candidateIndex", -1), ("candidateCount", 0),
+    ("huntTargetId", 0), ("mapId", 0), ("territoryId", 0), ("mapX", -0.1), ("mapY", 100.1),
+    ("mapX", "12.5"), ("huntTargetName", "\u0002remote payload"), ("huntTargetName", new string('x',121)),
+    ("expiresAt", now.ToString("yyyy-MM-ddTHH:mm:ssZ")), ("expiresAt", now.AddSeconds(91).ToString("yyyy-MM-ddTHH:mm:ssZ")),
+    ("expiresAt", now.AddSeconds(90).ToString("o").Replace("Z","+00:00")), ("userId", 1), ("characterId", 1),
+}) { var x = Fixture(); x["request"]![field] = value?.DeepClone(); Check(Parse(x) == null, "reject " + field); }
+foreach (var (field, value) in new (string, JsonNode?)[] { ("activity","ACTIVE"), ("classification","bogus"),
+    ("fateId",0), ("fateName",null), ("fateName",new string('x',161)), ("extra",true) }) {
+    var x = Fixture(); x["request"]!["availability"]![field] = value?.DeepClone(); Check(Parse(x) == null, "reject availability " + field);
+}
+foreach (var extra in new[] { "nativeRequests", "acceptedClientProduct", "capability", "schemaVersion" }) {
+    var x = Fixture(); x[extra] = "GillionsGameSync"; Check(Parse(x) == null, "not invented ack " + extra);
+}
+foreach(var json in new[] {"{", "[]", "{\"ok\":true,\"request\":null}", "{\"ok\":false,\"request\":null}",
+    aJson.ToJsonString().Replace("\"ok\":true", "\"ok\":true,\"ok\":true"), new string('x',4097) })
+    Check(HuntMapPolicy.Parse(json,now)==null,"malformed/null/duplicate/oversized");
+foreach (var cls in new[] { "ALWAYS_AVAILABLE", "CONDITIONAL", "UNKNOWN" }) {
+    var x=Fixture(); x["request"]!["availability"]!["classification"]=cls; x["request"]!["availability"]!["fateId"]=null; x["request"]!["availability"]!["fateName"]=null;
+    var r=Parse(x); Check(r!=null && !r.Guidance.Contains("FATE active"),"classification " + cls);
+}
+Check(HuntMapPolicy.Consumed("{\"ok\":true,\"consumed\":true}"),"exact consume ack");
+foreach(var json in new[] {"{}","{\"ok\":true,\"consumed\":false}","{\"ok\":false,\"consumed\":true}",
+    "{\"ok\":true,\"consumed\":true,\"requestId\":\"extra\"}","{\"ok\":true,\"ok\":true,\"consumed\":true}","null"})
+    Check(!HuntMapPolicy.Consumed(json),"bad consume ack");
+for(int mask=0;mask<8;mask++) foreach(var origin in new[] { HuntMapPolicy.Origin,"http://test.gillions.app","https://10.10.2.1","https://gillions.app","https://test.gillions.app:443","https://test.gillions.app.attacker.invalid" })
+    Check(HuntMapPolicy.Admit((mask&1)!=0,(mask&2)!=0,origin,(mask&4)!=0)==(mask==7&&origin==HuntMapPolicy.Origin),"independent consent/pair/session/origin");
+
+// Server authority simulation: opaque revisions are not Native-derived or sortable.
+var processor=new HuntMapProcessor(); var current=a.Revision; var allowed=true; var opens=new List<string>(); var consumes=0;
+Task<bool> Permit()=>Task.FromResult(allowed);
+Task<bool> Consume(HuntMapRequest r) { consumes++; return Task.FromResult(r.Revision==current); }
+Task<bool> Present(HuntMapRequest r) { opens.Add(r.Revision); return Task.FromResult(true); }
+Check((await processor.ProcessAsync(a,()=>now,Permit,Consume,Present)).Contains("shown")&&opens.Count==1,"A first");
+Check((await processor.ProcessAsync(a,()=>now,Permit,Consume,Present)).Contains("already attempted")&&opens.Count==1&&consumes==1,"repeat A");
+// Same revision, new claim is Site-authorized manual retry. Auto duplicates are
+// prevented by the server's durable revision watermark, not by guessing a mode.
+var manual=Parse(Fixture())!;
+Check((await processor.ProcessAsync(manual,()=>now,Permit,Consume,Present)).Contains("shown")&&opens.Count==2,"manual same revision");
+var b=Parse(Fixture("b"))!; current=b.Revision;
+var stale=Parse(Fixture())!;
+Check((await processor.ProcessAsync(stale,()=>now,Permit,Consume,Present)).Contains("rejected")&&opens.Count==2,"A invalid after authoritative B before B poll");
+Check((await processor.ProcessAsync(b,()=>now,Permit,Consume,Present)).Contains("shown")&&opens.Count==3,"B exactly once");
+Check((await processor.ProcessAsync(Parse(Fixture())!,()=>now,Permit,Consume,Present)).Contains("rejected")&&opens.Count==3,"late A after B");
+Check((await processor.ProcessAsync(b,()=>now,Permit,Consume,Present)).Contains("already attempted")&&opens.Count==3,"repeated B");
+var changed=Fixture("c"); changed["request"]!["candidateId"]=new string('d',24); changed["request"]!["candidateCount"]=80;
+var c=Parse(changed)!;current=c.Revision;
+Check(c.CandidateCount==80&&(await processor.ProcessAsync(c,()=>now,Permit,Consume,Present)).Contains("shown"),"new candidate revision");
+foreach(var lifecycle in new[]{"logout","re-pair","revocation","unload","OFF","capability loss"}) {
+    allowed=false;var before=opens.Count;var n=consumes;
+    Check(!(await processor.ProcessAsync(Parse(Fixture("c"))!,()=>now,Permit,Consume,Present)).Contains("shown")&&opens.Count==before&&consumes==n,lifecycle);
+}
+allowed=true;
+var beforeCancelled=opens.Count;
+Check((await processor.ProcessAsync(Parse(Fixture("c"))!,()=>now,Permit,r=>{allowed=false;return Task.FromResult(true);},Present)).Contains("cancelled")&&opens.Count==beforeCancelled,"OFF after consume");
+allowed=true;
+Check((await processor.ProcessAsync(Parse(Fixture("c"))!,()=>now,Permit,r=>{now=now.AddSeconds(90);return Task.FromResult(true);},Present)).Contains("cancelled")&&opens.Count==beforeCancelled,"expired after consume");
+// A lost response burns the attempt even if the remote consume committed.
+now=now.AddSeconds(-90); var lost=Parse(Fixture("c"))!;
+try { await processor.ProcessAsync(lost,()=>now,Permit,r=>throw new HttpRequestException(),Present); Check(false,"lost response must throw"); } catch(HttpRequestException) { Check(true,"lost response"); }
+Check((await processor.ProcessAsync(lost,()=>now,Permit,Consume,Present)).Contains("already attempted"),"no uncertain replay");
+for(int i=0;i<300;i++) await processor.ProcessAsync(Parse(Fixture("c"))!,()=>now,Permit,Consume,Present);
+Check(((System.Collections.ICollection)typeof(HuntMapProcessor).GetField("order",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.GetValue(processor)!).Count==128,"bounded RAM watermark");
+if(args.Length==2&&args[0]=="--site-protocol") {
+    var proof=JsonNode.Parse(File.ReadAllText(args[1]))!.AsObject();
+    Check(HuntMapPolicy.Parse(proof["poll"]!.ToJsonString(),now)!=null,"actual Site generated payload");
+    Check(HuntMapPolicy.Consumed(proof["consume"]!.ToJsonString()),"actual Site consume ack");
+}
+Console.WriteLine($"Hunt map focused fixtures passed: {count}; no live game proof.");

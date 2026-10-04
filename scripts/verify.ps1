@@ -15,6 +15,11 @@ $partyFinderTests = Join-Path $root 'tests/GillionsGameSync.PartyFinderTests/Gil
 dotnet run --project $partyFinderTests -c Release
 if ($LASTEXITCODE -ne 0) { throw 'Party Finder contribution behavior fixture failed.' }
 
+dotnet run --project (Join-Path $root 'tests/GillionsGameSync.HuntMapTests/GillionsGameSync.HuntMapTests.csproj') -c Release
+if ($LASTEXITCODE -ne 0) { throw 'Hunt map contract/lifecycle/race fixtures failed.' }
+python (Join-Path $root 'tests/hunt-map-contract-test.py')
+if ($LASTEXITCODE -ne 0) { throw 'Hunt map source boundaries failed.' }
+
 $submarineTests = Join-Path $root 'tests/GillionsGameSync.SubmarineTests/GillionsGameSync.SubmarineTests.csproj'
 dotnet run --project $submarineTests -c Release -- --fixture (Join-Path $root 'artifacts/verification/submarine-policy/retained-fixture.json')
 if ($LASTEXITCODE -ne 0) { throw 'Submarine retention/consent fixtures failed.' }
