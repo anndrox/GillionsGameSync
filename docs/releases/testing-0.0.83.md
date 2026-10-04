@@ -46,6 +46,26 @@ If complete coverage cannot be established, finite loaded/stable/slot/symbolic/
 item consistency diagnostics identify the gate; do not weaken validation merely
 to produce absence. Publication/live-proof state and hashes are recorded separately.
 
+## Live completeness failure
+
+The initial owner run showed loaded, stable and initialized source with all124
+slots and no identity or symbolic mismatch, but one invalid item/quantity shape.
+All22 domains correctly remained unavailable. This establishes fail-closed
+behavior, not successful absence coverage; the exact shape remains unknown.
+
+The diagnostic successor distinguishes zero-ID/nonzero-quantity,
+positive-ID/zero-quantity and negative-quantity counts. At most8 structurally
+bound, non-symbolic invalid slots receive read-only IsEmpty, GetBaseItemId and
+GetQuantity probes, twice for consistency, only on the existing Hunt cadence.
+Null virtual tables/functions are not called. The UI and copied aggregate
+diagnostics expose finite counts only, never slot indices, item IDs or quantities
+from those probes. Probe results never authorize coverage and are not exported,
+logged as new history, persisted or uploaded. Completeness rules remain unchanged.
+
+The [pinned typed source](https://github.com/aers/FFXIVClientStructs/blob/6a562a1ef86b9acb22bda0726e28b0e23bb27552/FFXIVClientStructs/FFXIV/Client/Game/InventoryItem.cs)
+defines those getters but does not establish which condition caused this live
+mismatch. A new source rule must not be inferred from that aggregate alone.
+
 ## Site routing rule
 
 Only a fresh latest absent_confirmed in the authenticated exact character/type

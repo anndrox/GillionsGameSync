@@ -182,8 +182,32 @@ internal sealed class HuntBillLocalView : IDisposable {
                 && firstSlots.SequenceEqual(secondSlots) && keyItems->GetSize() == size
                 && firstSlots.All(s => s.ItemId == 0 || data.GetExcelSheet<EventItem>().HasRow(s.ItemId))
                 && Stopwatch.GetElapsedTime(started) <= TimeSpan.FromMilliseconds(100);
+            HuntItemProbeDiagnostics? probe = null;
+            if (stable) {
+                int probed=0, unavailable=0, empty=0, idZero=0, idMatch=0, qtyZero=0, qtyMatch=0, changed=0, mapped=0;
+                // Diagnose at most8 structurally bound non-symbolic invalid slots.
+                // Getters are read-only. Counts never admit a negative fact or leave RAM.
+                foreach (int i in Enumerable.Range(0,size).Where(i => !HuntBillItemCoverage.ItemShapeValid(firstSlots[i])).Take(8)) {
+                    if (keyItems->Items != pointer || keyItems->Size != size || keyItems->Type != container || !keyItems->IsLoaded) { unavailable++; continue; }
+                    var s=firstSlots[i]; var item=pointer+i;
+                    if (s.Slot != i || s.Container != (int)container || s.Symbolic || item->VirtualTable == null
+                        || item->VirtualTable->IsEmpty == null || item->VirtualTable->GetBaseItemId == null || item->VirtualTable->GetQuantity == null) { unavailable++; continue; }
+                    try {
+                        bool isEmpty=item->IsEmpty(); uint baseId=item->GetBaseItemId(), quantity=item->GetQuantity();
+                        bool same=isEmpty==item->IsEmpty() && baseId==item->GetBaseItemId() && quantity==item->GetQuantity()
+                            && new HuntKeyItemSlot(item->Slot,(int)item->Container,item->IsSymbolic,item->ItemId,item->Quantity)==s;
+                        probed++; if (!same) { changed++; continue; }
+                        if (isEmpty) empty++; if (baseId==0) idZero++; if (baseId==s.ItemId) idMatch++;
+                        if (quantity==0) qtyZero++; if (s.Quantity>=0 && quantity==(uint)s.Quantity) qtyMatch++;
+                        if (domains.Any(d=>d.KeyItemId==s.ItemId)) mapped++;
+                    } catch (Exception) { unavailable++; }
+                }
+                probe=new(probed,unavailable,empty,idZero,idMatch,qtyZero,qtyMatch,changed,mapped);
+            }
+            stable = stable && keyItems->Items == pointer && keyItems->Size == size && keyItems->Type == container && keyItems->IsLoaded
+                && Stopwatch.GetElapsedTime(started) <= TimeSpan.FromMilliseconds(100);
             itemCoverage.Observe(characterKey, CurrentCharacterKey(), !conditions[ConditionFlag.BetweenAreas] && !conditions[ConditionFlag.BetweenAreas51], true,
-                (int)container, size, firstSlots, stable, now, Stopwatch.GetTimestamp(), GameVersion(), collectorVersion, typeof(MobHunt).Assembly.GetName().Version!.ToString());
+                (int)container, size, firstSlots, stable, now, Stopwatch.GetTimestamp(), GameVersion(), collectorVersion, typeof(MobHunt).Assembly.GetName().Version!.ToString(), probe);
             var hunt = MobHunt.Instance();
             if (hunt == null || (hunt->ObtainedFlags & ~((1 << 22) - 1)) != 0) {
                 Publish("Hunt native source unavailable/incompatible; prior state preserved.", characterKey); return;
@@ -276,7 +300,7 @@ internal sealed class HuntBillLocalView : IDisposable {
                 });
             }
             if (enabled && export.Length > 0 && ImGui.Button("Copy PRIVATE Hunt JSON")) ImGui.SetClipboardText(export);
-            if (ImGui.Button("Copy aggregate Hunt diagnostics")) ImGui.SetClipboardText($"Gillions Game Sync Testing {collectorVersion}\nGame: {GameVersion()}; SDK: {typeof(MobHunt).Assembly.GetName().Version}\nHunts local: {state.Enabled}\n{state.Status}\n{LastDiagnostic}\nAttempts: {state.Attempts}; last attempt UTC: {state.LastAttemptUtc:u}; cadence: 3 seconds\nRead/save: {state.Milliseconds:F2} ms\nLocal collection diagnostics only; private TEST sync controls/status are in the main window. No live correctness claim.");
+            if (ImGui.Button("Copy aggregate Hunt diagnostics")) ImGui.SetClipboardText($"Gillions Game Sync Testing {collectorVersion}\nGame: {GameVersion()}; SDK: {typeof(MobHunt).Assembly.GetName().Version}\nHunts local: {state.Enabled}\n{state.Status}\n{(coverageFresh ? state.CoverageStatus : "Hunt item coverage UNAVAILABLE/expired")}\n{LastDiagnostic}\nAttempts: {state.Attempts}; last attempt UTC: {state.LastAttemptUtc:u}; cadence: 3 seconds\nRead/save: {state.Milliseconds:F2} ms\nLocal collection diagnostics only; private TEST sync controls/status are in the main window. No live correctness claim.");
             ImGui.PushTextWrapPos(0);
             foreach (var row in state.Rows) ImGui.TextUnformatted(row);
             ImGui.PopTextWrapPos();

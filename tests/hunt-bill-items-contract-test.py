@@ -18,6 +18,9 @@ assert 'CopySlots()' in native and 'firstSlots.SequenceEqual(secondSlots)' in na
 assert 'keyItems->GetSize() == size' in native and 'EventItem>().HasRow(s.ItemId)' in native
 assert 'itemCoverage.Observe(characterKey, CurrentCharacterKey()' in native
 assert 'TimeSpan.FromMilliseconds(100)' in native
+assert '.Take(8)' in native and 'item->VirtualTable->GetQuantity == null' in native
+assert 'probe?.Summary' in model and 'probe' not in model.split('var present = complete',1)[0].split('bool complete =',1)[1]
+assert 'quantity==(uint)s.Quantity' in native and 'GetBaseItemId()' in native
 assert 'huntCoverageSync.Clear(); huntLocal?.ClearCoverage();' in plugin
 assert 'huntCoverageAccepted' in plugin and 'PersonalSyncPolicy.HuntCoverageCompatible' in plugin
 assert 'coverage && !CoveragePreparedCurrent(prepared, permit)' in plugin

@@ -48,6 +48,13 @@ internal static class HuntBillItemCoverageTests {
             check(c.Current(key,now.AddSeconds(3),At(3))!.Domains.All(d=>d.State=="unavailable"),"C: unavailable source gained authority");
         }
         Observe(slots,4,after:other); check(c.Current(key,now.AddSeconds(4),At(4)) is null,"D: transition retained previous absence");
+        var badSlot=slots.ToArray(); badSlot[0]=badSlot[0] with {ItemId=2003509,Quantity=0};
+        c.Observe(key,key,true,true,2004,4,badSlot,true,now,mono,PersonalObservationCompatibility.GameBuild,"0.0.83.0",PersonalObservationCompatibility.NativeVersion,new(1,0,1,1,0,1,1,0,1));
+        check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="unavailable"),"Getter diagnostics weakened completeness");
+        check(c.Status.Contains("positive-id-zero-qty=1") && c.Status.Contains("getter-empty=1") && !c.Status.Contains("2003509"),"Finite raw/getter diagnostic shape/private-ID exclusion failed");
+        c.Observe(key,key,true,true,2004,4,[slots[0] with{Quantity=1},slots[1],slots[2],slots[3]],true,now,mono,PersonalObservationCompatibility.GameBuild,"0.0.83.0",PersonalObservationCompatibility.NativeVersion);
+        check(c.Status.Contains("zero-id-nonzero-qty=1"),"Zero-id mismatch conflated with positive-id mismatch");
+        check(new HuntItemProbeDiagnostics(99,-1,99,99,99,99,99,99,99).Summary.StartsWith("getter-probes=8/8, getter-unavailable=0"),"Local getter diagnostics unbounded");
         Observe(presentSlots,5); Observe(slots,6);
         check(c.Current(key,now.AddSeconds(6),At(6))!.Domains.Single(d=>d.BillTypeId==18).State=="absent_confirmed","I: removal not observed");
         check(c.Current(key,now.AddSeconds(22),At(22)) is null,"Expired UTC coverage remained current");

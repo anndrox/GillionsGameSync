@@ -20,7 +20,7 @@ internal static class HuntBillItemPackagedTests {
         const BindingFlags instance=BindingFlags.Instance|BindingFlags.NonPublic;
         coverage!.GetMethod("SetCatalog",instance)!.Invoke(current,[domains]);
         var key=new string('a',64); var other=new string('b',64); var now=DateTime.UtcNow; var mono=Stopwatch.GetTimestamp();
-        void Observe(string after,bool loaded) => coverage.GetMethod("Observe",instance)!.Invoke(current,[key,after,true,loaded,2004,2,slots,true,now,mono,"2026.09.15.0000.0000","0.0.83.0","7.56.2.9136"]);
+        void Observe(string after,bool loaded) => coverage.GetMethod("Observe",instance)!.Invoke(current,[key,after,true,loaded,2004,2,slots,true,now,mono,"2026.09.15.0000.0000","0.0.83.0","7.56.2.9136",null]);
         object? Current(string owner) => coverage.GetMethod("Current",instance)!.Invoke(current,[owner,now,mono]);
         Observe(key,true);
         var snapshot=Current(key)!;

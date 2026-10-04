@@ -10,6 +10,12 @@ namespace GillionsGameSync;
 // Catalog definitions, never order/acquisition or ownership identities.
 internal sealed record HuntBillItemDomain(byte BillTypeId, uint KeyItemId, byte NativeType, uint OrderStart, uint OrderAmount);
 internal readonly record struct HuntKeyItemSlot(int Slot, int Container, bool Symbolic, uint ItemId, int Quantity);
+// Local numeric diagnostics only, never a source-admission input or payload field.
+internal readonly record struct HuntItemProbeDiagnostics(int Probed, int Unavailable, int Empty,
+    int IdZero, int IdRawMatch, int QuantityZero, int QuantityRawMatch, int Changed, int MappedHunt) {
+    internal string Summary => $"getter-probes={Bound(Probed)}/8, getter-unavailable={Bound(Unavailable)}, getter-empty={Bound(Empty)}, getter-id-zero={Bound(IdZero)}, getter-id-raw-match={Bound(IdRawMatch)}, getter-qty-zero={Bound(QuantityZero)}, getter-qty-raw-match={Bound(QuantityRawMatch)}, getter-changed={Bound(Changed)}, mapped-hunt={Bound(MappedHunt)}";
+    private static int Bound(int value) => Math.Clamp(value, 0, 8);
+}
 internal sealed record HuntBillItemState(byte BillTypeId, uint KeyItemId, string State);
 internal sealed record HuntBillItemSnapshot(string ObservationId, DateTime ObservedAtUtc,
     string GameVersion, string CollectorVersion, string SdkVersion, HuntBillItemState[] Domains);
@@ -26,6 +32,7 @@ internal sealed class HuntBillItemCoverage {
     internal long Revision { get; private set; }
     internal long Epoch { get; private set; }
     internal string Status { get; private set; } = "Hunt item coverage UNAVAILABLE; no current-order/cycle proof.";
+    internal static bool ItemShapeValid(HuntKeyItemSlot s) => (s.ItemId == 0 && s.Quantity == 0) || (s.ItemId > 0 && s.Quantity > 0);
     internal static bool CatalogValid(HuntBillItemDomain[]? rows) => rows is { Length: 22 }
         && rows.All(r => r is not null && r.BillTypeId < 22 && r.KeyItemId > 0 && r.NativeType is 1 or 2
             && r.OrderStart > 0 && r.OrderAmount > 0 && (ulong)r.OrderStart + r.OrderAmount <= uint.MaxValue)
@@ -34,14 +41,14 @@ internal sealed class HuntBillItemCoverage {
     internal void SetCatalog(HuntBillItemDomain[] rows) { catalog = CatalogValid(rows) ? rows.OrderBy(r => r.BillTypeId).ToArray() : null; if (catalog is null) Clear(); }
     internal void Clear() { if (latest is not null || character.Length > 0) { Epoch++; Revision++; } latest = null; character = ""; observedMonotonic = 0; Status = "Hunt item coverage UNAVAILABLE; session/source cleared."; }
     internal void Observe(string before, string after, bool initialized, bool loaded, int container, int size,
-        HuntKeyItemSlot[] slots, bool stable, DateTime now, long monotonic, string game, string collector, string sdk) {
+        HuntKeyItemSlot[] slots, bool stable, DateTime now, long monotonic, string game, string collector, string sdk, HuntItemProbeDiagnostics? probe = null) {
         if (!PersonalObservationCompatibility.Key(before) || before != after
             || !PersonalObservationCompatibility.Utc(now) || !PersonalObservationCompatibility.Metadata(game)
             || !PersonalObservationCompatibility.Metadata(collector) || !PersonalObservationCompatibility.Metadata(sdk)
             || catalog is null) { Clear(); return; }
         bool complete = PersonalObservationCompatibility.Supports(game, sdk) && initialized && loaded && stable && container == KeyItemsContainer && size is >= 1 and <= 256
             && slots.Length == size && slots.Select((s, i) => s.Slot == i && s.Container == container && !s.Symbolic
-                && ((s.ItemId == 0 && s.Quantity == 0) || (s.ItemId > 0 && s.Quantity > 0))).All(v => v);
+                && ItemShapeValid(s)).All(v => v);
         var present = complete ? slots.Where(s => s.ItemId > 0).Select(s => s.ItemId).ToHashSet() : [];
         var domains = catalog.Select(d => new HuntBillItemState(d.BillTypeId, d.KeyItemId,
             !complete ? "unavailable" : present.Contains(d.KeyItemId) ? "present_unresolved" : "absent_confirmed")).ToArray();
@@ -51,7 +58,7 @@ internal sealed class HuntBillItemCoverage {
         latest = new(Guid.NewGuid().ToString("N"), now, game, collector, sdk, domains);
         if (changed) Revision++;
         Status = complete ? $"Complete Key Items snapshot: {domains.Count(d => d.State == "absent_confirmed")} ABSENT_CONFIRMED / {domains.Count(d => d.State == "present_unresolved")} PRESENT_UNRESOLVED. Exact order/cycle unsupported."
-            : $"Hunt item coverage UNAVAILABLE: loaded={loaded}, stable={stable}, initialized={initialized}, slots={slots.Length}/{size}, identity-mismatch={slots.Select((s,i) => s.Slot != i || s.Container != container).Count(v => v)}, symbolic={slots.Count(s => s.Symbolic)}, invalid-item={slots.Count(s => !((s.ItemId == 0 && s.Quantity == 0) || (s.ItemId > 0 && s.Quantity > 0)))}. No negative inference.";
+            : $"Hunt item coverage UNAVAILABLE: loaded={loaded}, stable={stable}, initialized={initialized}, slots={slots.Length}/{size}, identity-mismatch={slots.Select((s,i) => s.Slot != i || s.Container != container).Count(v => v)}, symbolic={slots.Count(s => s.Symbolic)}, invalid-item={slots.Count(s => !ItemShapeValid(s))}, zero-id-nonzero-qty={slots.Count(s => s.ItemId == 0 && s.Quantity != 0)}, positive-id-zero-qty={slots.Count(s => s.ItemId > 0 && s.Quantity == 0)}, negative-qty={slots.Count(s => s.Quantity < 0)}. {probe?.Summary ?? "Getter probes not run"}. No negative inference.";
     }
     internal HuntBillItemSnapshot? Current(string key, DateTime now, long monotonic) => character == key && latest is not null
         && now >= latest.ObservedAtUtc && now - latest.ObservedAtUtc <= TimeSpan.FromSeconds(MaximumAgeSeconds)
