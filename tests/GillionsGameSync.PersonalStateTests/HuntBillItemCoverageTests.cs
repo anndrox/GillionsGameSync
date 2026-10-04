@@ -60,6 +60,30 @@ internal static class HuntBillItemCoverageTests {
         check(!PersonalSyncPolicy.CanSend(false,true,PersonalSyncPolicy.Origin,true,first),"E: permission OFF sent coverage");
         check(!PersonalSyncPolicy.CanSend(true,true,"https://gillions.app",true,first),"Production coverage admitted");
         check(sync.Current(first,owner,payload,c.Epoch,now.AddSeconds(7),At(7)),"Current retry rejected");
+        check(!sync.Current(first,owner,payload,c.Epoch,now.AddSeconds(17),At(17)),"Delayed response fixture did not expire preparation");
+        foreach(var status in new[]{503,429,200}) {
+            // Malformed200 has no accepted receipt; classification remains retry
+            // even if body parsing/framework delivery occurs after the sample lease.
+            var disposition=PersonalSyncPolicy.Disposition(true,false,false,true,false,PersonalSyncPolicy.TerminalStatus(status));
+            check(disposition==PersonalResponseDisposition.Retry && !HuntBillItemSync.NeedsCurrentSample(disposition),"Expired503/429/malformed200 lost failure accounting");
+            check(PersonalSyncPolicy.RetrySeconds(1)==120 && PersonalSyncPolicy.RetrySeconds(4)==900,"Delayed failure bypassed established backoff");
+        }
+        check(!HuntBillItemSync.NeedsCurrentSample(PersonalResponseDisposition.Retry)
+            && !sync.Current(first,owner,presentPayload,c.Epoch,now.AddSeconds(7),At(7)),"Semantic successor suppressed failure backoff");
+        check(HuntBillItemSync.NeedsCurrentSample(PersonalResponseDisposition.Acknowledged),"Stale ACK no longer requires current sample");
+        check(PersonalSyncPolicy.Disposition(true,false,true,true,false,false)==PersonalResponseDisposition.Canceled
+            && PersonalSyncPolicy.Disposition(false,false,false,true,false,false)==PersonalResponseDisposition.Canceled,"OFF/session change committed old retry classification");
+        // Deterministic queued-worker cancellation pattern, not native/HTTP proof.
+        var cancellation=new CancellationTokenSource(); var capturedToken=cancellation.Token;
+        var start=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        bool flight=true; int dispatches=0;
+        var worker=Task.Run(async () => {
+            try { await start.Task; capturedToken.ThrowIfCancellationRequested(); dispatches++; }
+            catch(OperationCanceledException) { }
+            finally { flight=false; }
+        });
+        cancellation.Cancel(); cancellation.Dispose(); start.SetResult(); worker.GetAwaiter().GetResult();
+        check(!flight && dispatches==0,"Queued worker OFF/logout stranded flight or dispatched");
         check(!sync.Current(first,owner,presentPayload,c.Epoch,now.AddSeconds(7),At(7)),"Changed presence reused absence");
         c.Clear(); check(!sync.Current(first,owner,payload,c.Epoch,now.AddSeconds(7),At(7)),"Session epoch replayed absence");
         var next = sync.Prepare(owner,payload,c.Epoch,now.AddSeconds(7),At(7))!;

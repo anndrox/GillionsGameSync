@@ -40,6 +40,10 @@ internal static class HuntBillItemPackagedTests {
         var compatible=policy.GetMethod("HuntCoverageCompatible",BindingFlags.Static|BindingFlags.NonPublic)!;
         Require((bool)compatible.Invoke(null,[ack])!,"Exact DLL compatible v2 gate failed");
         Require(!(bool)compatible.Invoke(null,[ack.Replace("hunt_bills_v2","hunt_bills_v1")])!,"Exact DLL silently accepts v1 for absence");
+        var disposition=a.GetType("GillionsGameSync.PersonalResponseDisposition",true)!;
+        var needsCurrent=sync!.GetMethod("NeedsCurrentSample",BindingFlags.Static|BindingFlags.NonPublic)!;
+        foreach(var name in new[]{"Retry","Blocked","Canceled","Acknowledged"})
+            Require((bool)needsCurrent.Invoke(null,[Enum.Parse(disposition,name)])! == (name=="Acknowledged"),"Exact DLL expiry suppresses response classification");
         Console.WriteLine("Exact packaged absence-only source/completeness/character/unavailable/version/RAM boundaries PASS; pure managed calls, no live memory or HTTP.");
     }
     private static void Require(bool value,string message) { if(!value) throw new InvalidOperationException(message); }

@@ -160,6 +160,9 @@ an error; established UUID snapshotId/receivedAt/unchanged receipt is required.
 An ACKed current assertion refreshes after6s when the existing5s personal cadence
 next runs. Failure uses existing60..900s backoff, not faster gameplay observation.
 Unchanged terminal input stays stopped in RAM until semantics/session changes.
+Classified retry/backoff is committed for the still-authorized request even when
+its sample expires or changes during response delivery; only ACK acceptance
+requires the same current sample. OFF/session cancellation suppresses old callbacks.
 The server must not extend observation freshness based on retries or receipt time.
 
 ## Site validation and supersession rule

@@ -87,6 +87,9 @@ internal sealed class HuntBillItemCoverage {
 // Expired/transitioned samples are abandoned, not replayed after reload. Historical
 // positives remain durably retained and are included again in the next fresh payload.
 internal sealed class HuntBillItemSync {
+    // Dispatch freshness and response classification are separate: a delayed
+    // failure still requires backoff; only accepting an assertion needs a live sample.
+    internal static bool NeedsCurrentSample(PersonalResponseDisposition disposition) => disposition == PersonalResponseDisposition.Acknowledged;
     private PersonalPreparedSnapshot? pending;
     private long preparedMonotonic;
     private DateTime preparedUtc;

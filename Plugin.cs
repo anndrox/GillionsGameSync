@@ -1890,8 +1890,9 @@ public sealed class Plugin : IDalamudPlugin {
                 if (!personalCancellation.TryGetValue(resource, out var coverageCancellation)) {
                     coverageCancellation = new CancellationTokenSource(); personalCancellation.Add(resource, coverageCancellation);
                 }
+                var coverageToken = coverageCancellation.Token; // Capture before OFF/logout can dispose its source.
                 personalInFlight = true;
-                _ = Task.Run(() => SendPersonalAsync(coveragePermit, current, coverageCancellation.Token, coverage: true));
+                _ = Task.Run(() => SendPersonalAsync(coveragePermit, current, coverageToken, coverage: true));
                 return;
             }
             string? payload;
@@ -1965,7 +1966,7 @@ public sealed class Plugin : IDalamudPlugin {
                     personalStatus = $"Hunt v2: HTTP {(int)response.StatusCode}; unchanged terminal input stopped in RAM. Historical progress and ordinary sync unchanged.";
                     return;
                 }
-                if (coverage && !CoveragePreparedCurrent(prepared, permit)) return;
+                if (coverage && HuntBillItemSync.NeedsCurrentSample(disposition) && !CoveragePreparedCurrent(prepared, permit)) return;
                 if (disposition == PersonalResponseDisposition.Acknowledged) {
                     prepared.Acknowledged = true; personalFailures = 0; personalRetryUtc = DateTime.MinValue;
                     nextPersonalUtc = DateTime.MinValue; // Drain a newer semantic successor immediately after this receipt.

@@ -21,6 +21,10 @@ assert 'TimeSpan.FromMilliseconds(100)' in native
 assert 'huntCoverageSync.Clear(); huntLocal?.ClearCoverage();' in plugin
 assert 'huntCoverageAccepted' in plugin and 'PersonalSyncPolicy.HuntCoverageCompatible' in plugin
 assert 'coverage && !CoveragePreparedCurrent(prepared, permit)' in plugin
+assert 'var coverageToken = coverageCancellation.Token;' in plugin
+assert 'SendPersonalAsync(coveragePermit, current, coverageToken, coverage: true)' in plugin
+assert 'SendPersonalAsync(coveragePermit, current, coverageCancellation.Token' not in plugin
+assert 'HuntBillItemSync.NeedsCurrentSample(disposition) && !CoveragePreparedCurrent' in plugin
 assert 'if (!coverage) RequestConfigurationSave();' in plugin
 assert 'huntCoverageSync' not in plugin.split('public sealed class PluginConfiguration',1)[1]
 assert 'itemCoverage' not in plugin.split('public sealed class PluginConfiguration',1)[1]
