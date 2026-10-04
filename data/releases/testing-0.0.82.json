@@ -63,6 +63,7 @@
     "fixtureOnly": "B-rank Next/racing/no-wrap and reconnect/backoff recovery; exact package/current Site modules with simulated SQL. Not live fault injection.",
     "limitations": "Action dispatch not exact browser POST; map invocation not rendered pixels. Browser POST→queue UNKNOWN. DB transaction-start stamps not HTTP arrival/commit. Consume precedes map; presentation→consume N/A. Original>30s request attribution UNKNOWN; corrected mechanisms verified independently, finite after run not universal latency guarantee.",
     "publication": "Anonymous immutable/rolling manifest+ZIP+DLL exact-byte match. All prior immutable release assets and historical64 notes suffix unchanged; only rolling64 JSON/current notes prefix replaced."
+    ,"postPublication": "Stale81 manifest-test/feed-evidence pins corrected to published82; maintained suite rerun PASS. Separate dummy-version validation builds only, not a released82 rebuild. Released package hashes rechecked unchanged."
   },
   "reviews": {
     "source": "42cf0b11f1c499261bf56dec11d851d08dfe6d70",

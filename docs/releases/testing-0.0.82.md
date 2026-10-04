@@ -155,6 +155,12 @@ match accepted bytes. The unchanged rolling64 JSON now resolves82. Prior
 immutable release assets and historical64 notes suffix are unchanged. See
 [publication record](../../data/releases/testing-0.0.82.json) for full hashes.
 
+Post-publication verification caught the manifest fixture's stale81 feed pin.
+Only its version/link expectations and the rolling-feed evidence were advanced
+to the actually published82. The complete maintained suite passed again.
+Validation rebuilt separate dummy-version fixtures, not the released82 package;
+anonymous downloaded82 hashes were rechecked unchanged afterwards.
+
 Stable/main/production/Site source/schema/deployment/Market architecture/Wardrobe
 were not changed. No game writes, extra sensitive reads or TLS bypass. Testing
 command polling alone changed; existing backoff and permissions remain intact.
