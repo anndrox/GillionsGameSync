@@ -244,7 +244,7 @@ if(args.Length==2&&args[0]=="--site-protocol") {
     var proof=JsonNode.Parse(File.ReadAllText(args[1]))!.AsObject();
     var siteNow=DateTime.Parse(proof["now"]!.GetValue<string>()).ToUniversalTime();
     Check(HuntMapPolicy.Parse(proof["poll"]!.ToJsonString(),siteNow)!=null,"running Site generated V1 payload");
-    Check(HuntMapPolicy.TryPoll(proof["pollV2"]!.ToJsonString(),siteNow,HuntMapPolicy.CapabilityV2,out var siteOrdinary)&&siteOrdinary?.CandidateKind=="ORDINARY_AREA","running Site generated V2 ordinary anchor");
+    Check(HuntMapPolicy.TryPoll(proof["pollV2"]!.ToJsonString(),siteNow.AddSeconds(6),HuntMapPolicy.CapabilityV2,out var siteOrdinary)&&siteOrdinary?.CandidateKind=="ORDINARY_AREA","running Site generated V2 ordinary anchor");
     Check(HuntMapPolicy.TryPoll(proof["pollNext"]!.ToJsonString(),DateTime.Parse(proof["nextNow"]!.GetValue<string>()).ToUniversalTime(),HuntMapPolicy.CapabilityV2,out var siteNext)&&siteNext?.CandidateIndex==1,"running Site browser Next normal V2 command");
     var siteFocus=new HuntFocusState();
     Check(siteFocus.Apply(proof["focus"]!.ToJsonString(),siteNow.AddSeconds(6),true)&&siteFocus.Active(siteNow.AddSeconds(6),true),"running Site exact focus lease");
