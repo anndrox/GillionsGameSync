@@ -47,3 +47,25 @@ no wrap and unchanged automatic watermark. PostgreSQL is inspected READ ONLY;
 no dedicated/owner rows are written and authenticated HTTP acceptance is not claimed.
 Normal trusted HTTPS anonymous V1/V2 requests return401. Current Site source's
 focus/candidate/product tests pass23. These do not prove new81 live gameplay.
+
+## Exact reviewed publication
+
+Published `2026-10-04T20:49:06Z`, tag `v0.0.81-testing`, artifact source
+`49a7c7ae77b54fc753787f750a52f0cfbc576253`, tree
+`6c9ce52cf19f298453ba9051fefa4b5c513cd3fb`. Security/Privacy and Compatibility
+independently accepted this exact candidate with no findings. Package built once;
+no rebuild after acceptance. Exact packaged12 serializer,16 pure policies and5
+running-Site wire checks passed. Actual Uktena V2 availability UNKNOWN is preserved;
+discrete geography never implies guaranteed/live availability.
+
+- ZIP: `bd284752158dec56db5071f66cef00d8526de79bb6ed85f75996e44a64a55162`
+- DLL: `5e10b5aa81f5be519c7983b0e02ad359ece90a86ab65ea76b5d38c24776f3217`
+- Manifest: `17043da10f6282d27bf6514237ff88fafd56fffa76c0b2a86fd8021fc92cfec5`
+
+Anonymous immutable and unchanged rolling64 manifest→ZIP→DLL byte equality
+verified `2026-10-04T20:49:21.674554Z`. All29 prior immutable release assets and
+historical64 notes suffix preserved. Durable identity is in
+`data/releases/testing-0.0.81.json`; later publication-record commits are not
+replacement artifact source. Site70bc/schema0025, Stable/main/production untouched.
+
+HUNT V2 / ACTIVE HUNT FOCUS PUBLISHED TO TESTING — READY FOR OWNER LIVE ACCEPTANCE
