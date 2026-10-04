@@ -124,6 +124,10 @@ Check(ordinary2.Guidance.Contains("primary reference anchor") && !ordinary2.Guid
 Check(Parse2(V2("FATE_REQUIRED"))!.Guidance.Contains("activity not currently known"), "V2 FATE reference no fake activity");
 var brank2 = Parse2(V2("DISCRETE_SPAWN_LOCATIONS", 3, 8))!;
 Check(brank2.CandidateIndex == 3 && brank2.Guidance.Contains("Possible location 4 of 8"), "Site B-rank specific candidate");
+foreach(var availability in new[]{"ALWAYS_AVAILABLE","UNKNOWN","CONDITIONAL"}) {
+    var x=V2("DISCRETE_SPAWN_LOCATIONS",1,17);x["request"]!["availability"]!["classification"]=availability;
+    Check(Parse2(x) is not null,"B-rank geography independent of availability " + availability);
+}
 Check(brank2.WalkExpiresAtUtc < now && HuntMapPolicy.Valid(brank2, now), "expired historical walk metadata does not erase valid cursor/request");
 Check(HuntMapPolicy.Parse(V2().ToJsonString(), now) is null, "V1 never accepts richer V2");
 Check(Parse2(Fixture()) is null, "V2 never reconstructs missing V1 fields");

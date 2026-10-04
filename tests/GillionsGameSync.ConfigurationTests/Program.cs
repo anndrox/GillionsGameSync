@@ -5,7 +5,7 @@ using Dalamud.Plugin;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-if (args.Length != 3) throw new ArgumentException("Expected plugin binary, Dalamud library directory, and synthetic fixture directory.");
+if (args.Length is not (3 or 4)) throw new ArgumentException("Expected plugin binary, Dalamud library directory, synthetic fixture directory, and optional running-Site proof.");
 var assemblyPath = Path.GetFullPath(args[0]);
 var libraryPath = Path.GetFullPath(args[1]);
 var fixturePath = Path.GetFullPath(args[2]);
@@ -22,7 +22,7 @@ Assert(!(bool)partyFinderOptIn.GetValue(Activator.CreateInstance(configurationTy
 var endpoint = (Uri)pluginAssembly.GetType("GillionsGameSync.XivpfEndpoints", true)!
     .GetProperty("ContributionUrl", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
 var testingProduct = pluginAssembly.GetName().Name == "GillionsGameSyncTest";
-HuntV2PackagedTests.Run(pluginAssembly, testingProduct);
+HuntV2PackagedTests.Run(pluginAssembly, testingProduct, args.Length == 4 ? args[3] : null);
 var intakeOptIn = configurationType.GetProperty("EnableGillionsPartyFinderContributions")!;
 var legacyOptedIn = Activator.CreateInstance(configurationType)!;
 partyFinderOptIn.SetValue(legacyOptedIn, true);

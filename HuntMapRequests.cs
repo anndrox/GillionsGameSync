@@ -84,7 +84,9 @@ internal static class HuntMapPolicy {
         && r.CandidateCount is >= 1 and <= 128 && r.CandidateIndex >= 0 && r.CandidateIndex < r.CandidateCount
         // Walk timestamps are presentation metadata, NOT cursor lifetime/authority.
         && r.WalkExpiresAtUtc is { Kind: DateTimeKind.Utc }
-        && (r.CandidateKind == "DISCRETE_SPAWN_LOCATIONS" ? r.Classification == "ALWAYS_AVAILABLE" && r.FateId is null
+        // Geography and availability are separate. Site B-rank references can
+        // honestly have UNKNOWN/CONDITIONAL availability, not guaranteed live.
+        && (r.CandidateKind == "DISCRETE_SPAWN_LOCATIONS" ? r.Classification != "FATE_REQUIRED" && r.FateId is null
             : r.CandidateKind == "ORDINARY_AREA" ? r.CandidateIndex == 0 && r.CandidateCount == 1 && r.Classification != "FATE_REQUIRED"
             : r.CandidateKind == "FATE_REQUIRED" && r.CandidateIndex == 0 && r.CandidateCount == 1 && r.Classification == "FATE_REQUIRED")
         && (r.RecommendedAetheryteId is null ? r.RecommendedAetheryteName is null

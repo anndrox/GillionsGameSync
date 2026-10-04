@@ -38,7 +38,7 @@ Publication evidence will record exact reviewed source/package and rolling feed.
 
 ## Preparation evidence
 
-Maintained suite: 6,241 counted checks; Stable/Testing validation builds with zero
+Maintained suite: 6,244 counted checks; Stable/Testing validation builds with zero
 warnings/errors; actual configuration preservation fixtures12 per product.
 New packaged-policy coverage adds16 pure reflection checks. Running Site modules
 with simulated SQL prove exact V1/V2 commands, one-time consume, stale/replay/grant

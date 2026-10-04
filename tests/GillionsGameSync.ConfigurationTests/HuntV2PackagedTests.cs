@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 
 internal static class HuntV2PackagedTests {
-    internal static void Run(Assembly assembly, bool testing) {
+    internal static void Run(Assembly assembly, bool testing, string? siteProof) {
         var flags = BindingFlags.Static | BindingFlags.NonPublic;
         var instanceFlags = BindingFlags.Instance | BindingFlags.NonPublic;
         void Check(bool value) { if (!value) throw new InvalidOperationException("Exact packaged Hunt V2/focus invariant failed."); }
@@ -15,7 +15,7 @@ internal static class HuntV2PackagedTests {
         var request = new Dictionary<string, object?> {
             ["requestType"]="hunt_map", ["requestId"]="b025d639-8779-492c-8cba-f07d79ccf860",
             ["claimToken"]="synthetic_claim_only_123456", ["huntTargetId"]=7957, ["huntTargetName"]="Synthetic B rank",
-            ["availability"]=new { classification="ALWAYS_AVAILABLE", fateId=(int?)null, fateName=(string?)null, activity="UNKNOWN" },
+            ["availability"]=new { classification="UNKNOWN", fateId=(int?)null, fateName=(string?)null, activity="UNKNOWN" },
             ["territoryId"]=148, ["mapId"]=30, ["mapX"]=21.5, ["mapY"]=22.5,
             ["candidateId"]=new string('b',24), ["revision"]=new string('a',64), ["candidateIndex"]=1,
             ["candidateCount"]=7, ["expiresAt"]="2026-10-04T18:01:00Z", ["contractVersion"]=2,
@@ -50,5 +50,16 @@ internal static class HuntV2PackagedTests {
         Check((string)capability.Invoke(negotiation,[now])! == "native_hunt_map_v1");
         Check((string)capability.Invoke(negotiation,[now.AddMinutes(5)])! == "native_hunt_map_v2");
         Console.WriteLine("Exact packaged Hunt V2/focus: 16 pure contract/lease/fallback checks PASS; no game or HTTP invocation.");
+        if (siteProof is not null) {
+            using var proof=JsonDocument.Parse(File.ReadAllText(siteProof)); var root=proof.RootElement;
+            var observed=DateTime.Parse(root.GetProperty("now").GetString()!).ToUniversalTime();
+            foreach(var (name,wire,time) in new[]{("poll","native_hunt_map_v1",observed),("pollV2","native_hunt_map_v2",observed.AddSeconds(6)),("pollNext","native_hunt_map_v2",observed.AddSeconds(43))}) {
+                object?[] values=[root.GetProperty(name).GetRawText(),time,wire,null];
+                Check((bool)poll.Invoke(null,values)! && values[3] is not null);
+            }
+            Check((bool)apply.Invoke(focus,[root.GetProperty("focus").GetRawText(),observed.AddSeconds(6),true])!);
+            Check((bool)consumed.Invoke(null,[root.GetProperty("consume").GetRawText()])!);
+            Console.WriteLine("Exact packaged DLL accepts 5 running-Site V1/V2/browser-Next/focus/consume wire cross-checks; simulated SQL, not authenticated HTTP or gameplay proof.");
+        }
     }
 }
