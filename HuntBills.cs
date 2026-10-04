@@ -215,16 +215,16 @@ internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
         LastSemanticChange = semantic;
         return true;
     }
-    internal string PreparePrivateExport(string characterKey) {
+    internal string PreparePrivateExport(string characterKey, bool allowEmpty = false) {
         if (!Supported || !store.LocalRetentionEnabled || !PersonalObservationCompatibility.Key(characterKey))
             throw new InvalidOperationException("Retention off or unsupported.");
         var current = store.Characters.SingleOrDefault(c => c.LocalCharacterKey == characterKey);
-        if (current is null || current.Bills.Count == 0) throw new InvalidOperationException("No retained Hunt observations for this character.");
+        if (!allowEmpty && (current is null || current.Bills.Count == 0)) throw new InvalidOperationException("No retained Hunt observations for this character.");
         return JsonSerializer.Serialize(new {
             schemaVersion = 1, collectorSchema = "hunt-bills-v1", uploadState = "local-only-no-server-contract",
             source = "naturally-loaded-mob-hunt-client-cache", completeness = "positive-observations-only",
             characterAssociation = "active-character-context-cache-ownership-unverified",
-            resetAtUtc = (DateTime?)null, resetApplicability = "unavailable", bills = current.Bills.OrderBy(b => b.BillTypeId).Select(b => new {
+            resetAtUtc = (DateTime?)null, resetApplicability = "unavailable", bills = (current?.Bills ?? []).OrderBy(b => b.BillTypeId).Select(b => new {
                 b.ObservationId, b.BillTypeId, b.Category, b.Tier, b.OrderId, b.EventItemId, b.ObservedAtUtc, b.GameVersion, b.CollectorVersion, b.SourceEvidence,
                 acceptance = "obtained-flag-observed-not-current-acceptance-proof", targets = b.Targets.Select(t => new {
                     t.TargetIndex, t.TargetId, t.NpcNameId, t.MapId, t.PlaceNameId, t.FateId, t.RequiredKills, t.ObservedKills,

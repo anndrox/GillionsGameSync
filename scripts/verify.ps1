@@ -29,6 +29,8 @@ dotnet run --project (Join-Path $root 'tests/GillionsGameSync.PersonalStateTests
 if ($LASTEXITCODE -ne 0) { throw 'Hunt/private-state/patch fixtures failed.' }
 python (Join-Path $root 'tests/personal-state-contract-test.py')
 if ($LASTEXITCODE -ne 0) { throw 'Personal-state source contracts failed.' }
+python (Join-Path $root 'tests/hunt-bill-items-contract-test.py')
+if ($LASTEXITCODE -ne 0) { throw 'Hunt bill item coverage source contracts failed.' }
 
 dotnet run --project (Join-Path $root 'tests/GillionsGameSync.DashboardTests/GillionsGameSync.DashboardTests.csproj') -c Release -- --fixture (Join-Path $root 'artifacts/verification/dashboard/dashboard-facts-v1.json')
 if ($LASTEXITCODE -ne 0) { throw 'Dashboard private-fact policy fixtures failed.' }

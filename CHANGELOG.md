@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.83 - Testing Hunt bill item coverage
+
+- Complete loaded Key Items snapshots report explicit absent_confirmed,
+  present_unresolved or unavailable for all22 catalog bill types. Exact order,
+  acquisition/reset and completion remain unsupported by this coverage.
+- Keep latest coverage/preparation in RAM, invalidate on transitions/OFF/expiry,
+  and preserve historical positive progress unchanged. No new game requests or
+  increased observation cadence.
+- Negotiate hunt_bills_v2 on the existing authenticated private TEST path and
+  existing Hunt permission. Older Site retains unchanged positive-only v1 sync;
+  new coverage cannot upload until Site explicitly admits its exact contract.
+- Preserve accepted80 final completion,82 command responsiveness, V1/V2 maps,
+  item/PF links, Market, Submarines, Dashboard/travel and Stable separation.
+
 ## 0.0.80 - Testing supported Hunt progress events
 
 - Compare installed SDK raw/accessor counters and expose bounded numeric stage

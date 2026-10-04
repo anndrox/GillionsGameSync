@@ -74,6 +74,8 @@ public sealed class Plugin : IDalamudPlugin {
     private DateTime nextMarketMaintenanceUtc;
     private readonly HttpClient personalHttp = PartyFinderHttp.CreateClient();
     private readonly HashSet<string> personalAccepted = new(StringComparer.Ordinal);
+    private bool huntCoverageAccepted;
+    private readonly HuntBillItemSync huntCoverageSync = new();
     private readonly Dictionary<string, CancellationTokenSource> personalCancellation = new(StringComparer.Ordinal);
     private bool personalInFlight;
     private DateTime nextPersonalUtc;
@@ -181,6 +183,8 @@ public sealed class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Testing83 reports private Hunt bill Key Item absence only after a complete loaded snapshot. Presence remains unresolved; unavailable state never supersedes history. Exact order/acquisition/reset is unsupported, and historical progress is unchanged.",
+        "Hunt item coverage uses latest-only RAM, existing Hunt consent and unchanged three-second reads. It uploads only after Site explicitly admits hunt_bills_v2; older Site keeps positive-only v1 sync. No new local history, public sharing or travel permission.",
         "Testing80 binds typed numeric Hunt progress to a recent exact bill/order/target. Raw/accessor disagreement fails closed; stale same-order reads never undo positive progress. No localized chat parsing or completion from absence.",
         "Hunts use three-second bounded reads and prompt semantic-change sync. Sync now refreshes eligible Hunt data without bypassing consent/backoff. Recent same-session final counters can survive bill-item removal; disappearance alone remains UNKNOWN.",
         "Automatic Hunt map guidance has its own default-OFF permission. Secure TEST V2 requests consume the current Site revision before opening a public reference map; never teleport, move or target. Site Next intentionally selects the next possible B-rank location; V1 remains a single-anchor fallback.",
@@ -357,6 +361,7 @@ public sealed class Plugin : IDalamudPlugin {
             if (permit.Origin == PersonalSyncPolicy.Origin) {
                 request.Headers.Add("X-Gillions-Personal-Contract", PersonalSyncPolicy.Contract);
                 request.Headers.Add("X-Gillions-Personal-Capability", TravelSyncPolicy.Capability);
+                request.Headers.Add(PersonalSyncPolicy.HuntCoverageHeader, PersonalSyncPolicy.HuntCoverageCapability);
             }
 #endif
 #if GILLIONS_TEST_BUILD
@@ -383,8 +388,10 @@ public sealed class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
                 marketAcceptedGeneration = MarketContributor.Compatible(responseJson) ? permit.Session!.Generation : "";
                 personalAccepted.Clear();
+                huntCoverageAccepted = permit.Origin == PersonalSyncPolicy.Origin && PersonalSyncPolicy.HuntCoverageCompatible(responseJson);
                 if (permit.Origin == PersonalSyncPolicy.Origin) foreach (var resource in PersonalSyncPolicy.Resources)
                     if (PersonalSyncPolicy.Compatible(responseJson, resource)) personalAccepted.Add(resource);
+                if (huntCoverageAccepted) personalAccepted.Add("hunt_bills");
                 travelAccepted = permit.Origin == TravelSyncPolicy.Origin && TravelSyncPolicy.Compatible(responseJson);
                 if (!travelAccepted) ClearTravelPending();
                 if (requestFocus && focusClock is not null) huntFocus.Apply(responseJson, focusClock.UtcNow, HuntFocusEligible() && personalAccepted.Contains("hunt_bills"), DateTime.UtcNow);
@@ -419,6 +426,7 @@ public sealed class Plugin : IDalamudPlugin {
         retainerUploadServerSupported = false;
 #if GILLIONS_TEST_BUILD
         personalAccepted.Clear();
+        huntCoverageAccepted = false;
 #endif
     }
 
@@ -443,10 +451,11 @@ public sealed class Plugin : IDalamudPlugin {
         partyFinderContributor.Tick(now);
 #if GILLIONS_TEST_BUILD
         var huntRevision = huntLocal.SemanticRevision;
+        var coverageRevision = huntLocal.CoverageRevision;
         var huntRawRevision = huntLocal.RawRevision;
         huntLocal.Tick(now); // Three-second bounded read; semantic changes bypass only routine upload cadence.
-        var huntChanged = huntLocal.SemanticRevision != huntRevision;
-        if (huntChanged || huntRawRevision != huntLocal.RawRevision) RecordDiagnostic(huntLocal.LastDiagnostic);
+        var huntChanged = huntLocal.SemanticRevision != huntRevision || huntLocal.CoverageRevision != coverageRevision;
+        if (huntLocal.SemanticRevision != huntRevision || huntRawRevision != huntLocal.RawRevision) RecordDiagnostic(huntLocal.LastDiagnostic);
         dashboardLocal.Tick(now); // Independent, off-by-default; one bounded source group per due check.
         travelLocal.Tick(now); // Independent default-OFF, latest-only RAM, bounded 15-second read.
         TickTravelSync(now); // Also clears invalid/expired pending state while unpaired.
@@ -1578,6 +1587,7 @@ public sealed class Plugin : IDalamudPlugin {
         huntFocus.Clear(); nextHuntFocusPresenceUtc = DateTime.MinValue;
         foreach (var cancellation in personalCancellation.Values) { cancellation.Cancel(); cancellation.Dispose(); }
         personalCancellation.Clear(); nextPersonalUtc = DateTime.MinValue; personalRetryUtc = DateTime.MinValue;
+        huntCoverageSync.Clear(); huntLocal?.ClearCoverage();
 #endif
         activeOwnedState = null; activeRetainerCharacterContentId = 0; activeGeneration = "";
         nextRetainerPresenceUtc = DateTime.MinValue; nextRetainerUploadUtc = DateTime.MinValue;
@@ -1842,6 +1852,7 @@ public sealed class Plugin : IDalamudPlugin {
         if (resource == "hunt_bills") configuration.SyncPersonalHunts = enabled;
         else configuration.SyncPersonalSubmarines = enabled;
         if (personalCancellation.Remove(resource, out var previous)) { previous.Cancel(); previous.Dispose(); }
+        if (resource == "hunt_bills") huntCoverageSync.Clear();
         nextPersonalUtc = DateTime.MinValue; nextRetainerPresenceUtc = DateTime.MinValue;
         personalStatus = enabled ? "Awaiting compatible TEST permission and positive current-character observations."
             : "Private resource sync OFF; retained/pending state preserved. Ordinary sync unchanged.";
@@ -1850,6 +1861,7 @@ public sealed class Plugin : IDalamudPlugin {
     private void TickPersonalSync(DateTime now, bool prompt = false) {
         foreach (var resource in PersonalSyncPolicy.Resources) {
             var enabled = PersonalEnabled(resource);
+            if (resource == "hunt_bills" && !enabled) huntCoverageSync.Clear();
             var before = resource == "hunt_bills" ? observedPersonalHunts : observedPersonalSubmarines;
             if (before && !enabled && personalCancellation.Remove(resource, out var canceled)) { canceled.Cancel(); canceled.Dispose(); }
             if (resource == "hunt_bills") observedPersonalHunts = enabled; else observedPersonalSubmarines = enabled;
@@ -1869,6 +1881,19 @@ public sealed class Plugin : IDalamudPlugin {
         var owner = PersonalSyncPolicy.Owner(configuration.ActiveSession.Generation, HuntBillRetentionPolicy.CharacterKey(activeRetainerCharacterContentId));
         foreach (var resource in PersonalSyncPolicy.Resources) {
             if (!PersonalEnabled(resource) || !personalAccepted.Contains(resource)) continue;
+            if (resource == "hunt_bills" && huntCoverageAccepted) {
+                var coveragePayload = huntLocal.CoveragePayload(HuntBillRetentionPolicy.CharacterKey(activeRetainerCharacterContentId), now);
+                if (coveragePayload is null) { huntCoverageSync.Clear(); continue; }
+                var current = huntCoverageSync.Prepare(owner, coveragePayload, huntLocal.CoverageEpoch, now, System.Diagnostics.Stopwatch.GetTimestamp());
+                if (current is null || current.Acknowledged || current.Blocked) continue;
+                var coveragePermit = CapturePermit(SyncRequestMode.Personal);
+                if (!personalCancellation.TryGetValue(resource, out var coverageCancellation)) {
+                    coverageCancellation = new CancellationTokenSource(); personalCancellation.Add(resource, coverageCancellation);
+                }
+                personalInFlight = true;
+                _ = Task.Run(() => SendPersonalAsync(coveragePermit, current, coverageCancellation.Token, coverage: true));
+                return;
+            }
             string? payload;
             try {
                 payload = resource == "hunt_bills"
@@ -1904,7 +1929,14 @@ public sealed class Plugin : IDalamudPlugin {
         }
         personalStatus = "Private sync waiting for explicit server permission/new positive observations, or retained state already acknowledged. No empty replacement.";
     }
-    private async Task SendPersonalAsync(SyncRequestPermit permit, PersonalPreparedSnapshot prepared, CancellationToken featureToken) {
+    private bool CoveragePreparedCurrent(PersonalPreparedSnapshot prepared, SyncRequestPermit permit) {
+        if (!huntCoverageAccepted || !PermitIsCurrent(permit) || !PersonalEnabled("hunt_bills")) return false;
+        var now = DateTime.UtcNow;
+        var key = HuntBillRetentionPolicy.CharacterKey(permit.ContentId);
+        var owner = PersonalSyncPolicy.Owner(permit.Session!.Generation, key);
+        return huntCoverageSync.Current(prepared, owner, huntLocal.CoveragePayload(key, now), huntLocal.CoverageEpoch, now, System.Diagnostics.Stopwatch.GetTimestamp());
+    }
+    private async Task SendPersonalAsync(SyncRequestPermit permit, PersonalPreparedSnapshot prepared, CancellationToken featureToken, bool coverage = false) {
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation, featureToken);
         cancellation.CancelAfter(TimeSpan.FromSeconds(30)); // Bound headers AND receipt; no indefinitely held private flight.
         var token = cancellation.Token;
@@ -1915,6 +1947,7 @@ public sealed class Plugin : IDalamudPlugin {
             await framework.RunOnFrameworkThread(() => {
                 RequirePermit(permit); token.ThrowIfCancellationRequested();
                 if (!PersonalEnabled(prepared.Resource) || permit.Origin != PersonalSyncPolicy.Origin || !personalAccepted.Contains(prepared.Resource)) throw new OperationCanceledException();
+                if (coverage && !CoveragePreparedCurrent(prepared, permit)) throw new OperationCanceledException();
                 pending = personalHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
             });
             using var response = await pending!;
@@ -1927,10 +1960,17 @@ public sealed class Plugin : IDalamudPlugin {
                 var disposition = PersonalSyncPolicy.Disposition(PermitIsCurrent(permit), permit.Cancellation.IsCancellationRequested,
                     featureToken.IsCancellationRequested, PersonalEnabled(prepared.Resource), receipt, terminal);
                 if (disposition == PersonalResponseDisposition.Canceled) return;
+                if (coverage && disposition == PersonalResponseDisposition.Blocked) {
+                    huntCoverageSync.Block(prepared);
+                    personalStatus = $"Hunt v2: HTTP {(int)response.StatusCode}; unchanged terminal input stopped in RAM. Historical progress and ordinary sync unchanged.";
+                    return;
+                }
+                if (coverage && !CoveragePreparedCurrent(prepared, permit)) return;
                 if (disposition == PersonalResponseDisposition.Acknowledged) {
                     prepared.Acknowledged = true; personalFailures = 0; personalRetryUtc = DateTime.MinValue;
                     nextPersonalUtc = DateTime.MinValue; // Drain a newer semantic successor immediately after this receipt.
-                    personalStatus = $"{prepared.Resource}: TEST receipt accepted. Positive retained observations only; current ownership/reset/completion claims remain limited.";
+                    personalStatus = coverage ? "Hunt v2 receipt accepted: bounded item absence/presence facts only. Historical progress unchanged; exact order/cycle unsupported."
+                        : $"{prepared.Resource}: TEST receipt accepted. Positive retained observations only; current ownership/reset/completion claims remain limited.";
                     RecordDiagnostic($"Uploaded private {prepared.Resource} to shared TEST: HTTP {(int)response.StatusCode}; valid receipt. No live correctness claim.");
                 } else if (disposition == PersonalResponseDisposition.Blocked) {
                     prepared.Blocked = true;
@@ -1939,7 +1979,7 @@ public sealed class Plugin : IDalamudPlugin {
                     personalFailures++; personalRetryUtc = DateTime.UtcNow.AddSeconds(PersonalSyncPolicy.RetrySeconds(personalFailures)); nextPersonalUtc = personalRetryUtc;
                     personalStatus = $"{prepared.Resource}: bounded retry; same nonce/payload preserved. Ordinary sync unchanged.";
                 }
-                RequestConfigurationSave();
+                if (!coverage) RequestConfigurationSave();
             });
         } catch (Exception) {
             if (!disposed) await framework.RunOnFrameworkThread(() => {

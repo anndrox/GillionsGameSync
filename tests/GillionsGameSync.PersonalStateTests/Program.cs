@@ -308,4 +308,5 @@ if (args.Length == 2 && args[0] == "--fixture") {
     File.WriteAllText(args[1], restartPolicy.PreparePrivateExport(key));
 }
 PersonalSyncTests.Run(Check);
+HuntBillItemCoverageTests.Run(Check);
 Console.WriteLine($"Hunt/private-state/patch/retention/transport fixtures passed: {checks}; synthetic only, no live-game claim.");

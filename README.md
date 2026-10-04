@@ -1,5 +1,11 @@
 # Gillions Game Sync
 
+Testing83 prepares explicit private Hunt bill-item coverage: absent confirmed,
+present unresolved or unavailable. Complete Key Items absence can exclude a
+historical bill type from current routing without changing progress, but only
+after Site admits the new version. No exact current order/cycle claim, new history,
+faster gameplay reads or Stable change. See the [Site contract and mapping](docs/contracts/hunt-bill-items-v1.md).
+
 Testing81 adds exact Site Hunt V2 requests and ephemeral Active Hunt focus on
 secure TEST. B-rank Next remains an intentional Site action; ordinary hunts use
 one reference anchor. Focus is priority, not consent, travel sharing or faster
@@ -55,7 +61,7 @@ Keep that URL when updating through Dalamud's plugin installer. Existing users m
 
 The testing feed is separate and should be installed only when a Gillions test is requested:
 
-`https://gillions.app/plugins/GillionsGameSyncTesting.json`
+`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
 
 Updating this plugin does not cancel external AutoRetainer plans or guarantee cancellation of callbacks already queued by an older loaded plugin. Use AutoRetainer's own controls when you need that automation to stop. See the [release notes](docs/releases/v1.0.30.md).
 

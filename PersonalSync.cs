@@ -27,6 +27,8 @@ internal static class PersonalSyncPolicy {
     internal const string Origin = "https://test.gillions.app";
     internal const string Endpoint = Origin + "/api/game-sync/sync";
     internal const string Contract = "personal-observations-v1";
+    internal const string HuntCoverageCapability = "hunt_bills_v2";
+    internal const string HuntCoverageHeader = "X-Gillions-Hunt-Item-Coverage";
     internal const int MaximumPayloadBytes = 65536;
     internal const int MaximumPrepared = 16;
     internal const int MaximumStateBytes = 1152 * 1024;
@@ -69,6 +71,47 @@ internal static class PersonalSyncPolicy {
                 && matches[0].GetProperty("capability").GetString() == Capability(resource)
                 && matches[0].GetProperty("maxPayloadBytes").GetInt32() == MaximumPayloadBytes;
         } catch (Exception error) when (error is JsonException or InvalidOperationException or KeyNotFoundException or FormatException) { return false; }
+    }
+    internal static bool HuntCoverageCompatible(string json) {
+        try {
+            using var doc = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 16 });
+            var r = doc.RootElement;
+            var a = r.GetProperty("personalObservations");
+            var entries = a.GetProperty("resources").EnumerateArray().Where(e => e.GetProperty("resourceType").GetString() == "hunt_bills").ToArray();
+            return r.GetProperty("ok").ValueKind == JsonValueKind.True && r.GetProperty("acceptedClientProduct").GetString() == "GillionsGameSyncTest"
+                && a.GetProperty("contractVersion").GetInt32() == 1 && a.GetProperty("endpoint").GetString() == Endpoint
+                && entries.Length == 1 && entries[0].GetProperty("schemaVersion").GetInt32() == 2
+                && entries[0].GetProperty("collectorSchema").GetString() == "hunt-bills-v2"
+                && entries[0].GetProperty("capability").GetString() == HuntCoverageCapability
+                && entries[0].GetProperty("maxPayloadBytes").GetInt32() == MaximumPayloadBytes;
+        } catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException) { return false; }
+    }
+    internal static bool HuntCoverageFresh(string payload, DateTime now) {
+        try {
+            using var doc = JsonDocument.Parse(payload);
+            var time = doc.RootElement.GetProperty("billItemCoverage").GetProperty("observedAtUtc").GetDateTime();
+            return PersonalObservationCompatibility.Utc(now) && PersonalObservationCompatibility.Utc(time)
+                && now >= time && now - time <= TimeSpan.FromSeconds(HuntBillItemCoverage.MaximumAgeSeconds);
+        } catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException) { return false; }
+    }
+    internal static bool HuntCoveragePayloadValid(string payload) {
+        try {
+            if (Encoding.UTF8.GetByteCount(payload) > MaximumPayloadBytes) return false;
+            using var doc = JsonDocument.Parse(payload, new JsonDocumentOptions { MaxDepth = 16 });
+            var r = doc.RootElement; var c = r.GetProperty("billItemCoverage");
+            var domains = c.GetProperty("domains").EnumerateArray().ToArray();
+            return r.GetProperty("schemaVersion").GetInt32() == 2 && r.GetProperty("collectorSchema").GetString() == "hunt-bills-v2"
+                && r.GetProperty("uploadState").GetString() == "local-only-no-server-contract" && r.GetProperty("bills").GetArrayLength() <= 22
+                && c.GetProperty("collectorSchema").GetString() == "hunt-bill-items-v1" && c.GetProperty("domainKind").GetString() == HuntBillItemCoverage.DomainKind
+                && c.GetProperty("maximumAgeSeconds").GetInt32() == HuntBillItemCoverage.MaximumAgeSeconds
+                && c.GetProperty("orderOwnership").GetString() == "unsupported" && c.GetProperty("acquisitionIdentity").GetString() == "unsupported"
+                && Guid.TryParseExact(c.GetProperty("observationId").GetString(), "N", out _)
+                && PersonalObservationCompatibility.Utc(c.GetProperty("observedAtUtc").GetDateTime())
+                && new[] { "gameVersion", "collectorVersion", "sdkVersion" }.All(k => PersonalObservationCompatibility.Metadata(c.GetProperty(k).GetString()))
+                && domains.Length == 22 && domains.Select(d => d.GetProperty("billTypeId").GetInt32()).OrderBy(i => i).SequenceEqual(Enumerable.Range(0,22))
+                && domains.Select(d => d.GetProperty("keyItemId").GetUInt32()).Distinct().Count() == 22
+                && domains.All(d => d.GetProperty("keyItemId").GetUInt32() > 0 && d.GetProperty("state").GetString() is "absent_confirmed" or "present_unresolved" or "unavailable");
+        } catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException) { return false; }
     }
     internal static bool PayloadValid(string resource, string payload) {
         try {

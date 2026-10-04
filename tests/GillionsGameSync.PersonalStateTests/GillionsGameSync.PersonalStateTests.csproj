@@ -12,6 +12,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\HuntBills.cs" Link="HuntBills.cs" />
+    <Compile Include="..\..\HuntBillItemCoverage.cs" Link="HuntBillItemCoverage.cs" />
     <Compile Include="..\..\PersonalObservationPolicy.cs" Link="PersonalObservationPolicy.cs" />
     <Compile Include="..\..\PersonalSync.cs" Link="PersonalSync.cs" />
     <Reference Include="Lumina" HintPath="$(DalamudLibPath)/Lumina.dll" />

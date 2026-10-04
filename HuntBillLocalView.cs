@@ -35,6 +35,12 @@ internal sealed class HuntBillLocalView : IDisposable {
     private readonly Dictionary<uint, HuntBillTarget[]> targets = new();
     private readonly HuntObservationSchedule schedule = new();
     private readonly HuntSessionProgress session = new();
+    private readonly HuntBillItemCoverage itemCoverage = new();
+    internal long CoverageRevision => itemCoverage.Revision;
+    internal long CoverageEpoch => itemCoverage.Epoch;
+    internal void ClearCoverage() => itemCoverage.Clear();
+    internal string? CoveragePayload(string key, DateTime now) => store.LocalRetentionEnabled
+        ? itemCoverage.Payload(policy, key, now, Stopwatch.GetTimestamp()) : null;
     private string rawFingerprint = "";
     private string lastProgressDiagnostic = "Structured Hunt progress not observed in this session.";
     internal long SemanticRevision { get; private set; }
@@ -45,7 +51,8 @@ internal sealed class HuntBillLocalView : IDisposable {
     private bool visible, disposed;
     private string export = "";
     private sealed record View(bool Enabled, string Status, string[] Rows, double Milliseconds,
-        int Attempts = 0, DateTime? LastAttemptUtc = null);
+        int Attempts = 0, DateTime? LastAttemptUtc = null, string CoverageStatus = "Hunt item coverage UNAVAILABLE.",
+        DateTime? CoverageObservedAtUtc = null, string[]? CoverageRows = null);
     private volatile View view = new(false, "Hunt retention off. Private TEST sync is controlled separately in the main window.", [], 0);
 
     internal HuntBillLocalView(IDalamudPluginInterface ui, ICommandManager commands, IFramework framework,
@@ -75,7 +82,7 @@ internal sealed class HuntBillLocalView : IDisposable {
             ? HuntBillRetentionPolicy.CharacterKey(player->ContentId) : "";
     }
     private void OnLogout(int _, int __) { ClearLiveBaseline(); Publish("Logged out; retained Hunt state is historical, not current. Private sync paused."); }
-    private void ClearLiveBaseline() { export = ""; schedule.Reset(); session.Reset(); rawFingerprint = ""; lastProgressDiagnostic = "Structured Hunt progress cleared on session/transition."; }
+    private void ClearLiveBaseline() { export = ""; schedule.Reset(); session.Reset(); itemCoverage.Clear(); rawFingerprint = ""; lastProgressDiagnostic = "Structured Hunt progress cleared on session/transition."; }
     private void OnProgressMessage(ILogMessage message) {
         // The event wrapper is borrowed. Copy only three typed numeric values
         // synchronously; never retain it, strings, entity data or chat content.
@@ -104,7 +111,9 @@ internal sealed class HuntBillLocalView : IDisposable {
                 $"Bill {b.BillTypeId} ({b.Category}, tier {b.Tier}) | order {b.OrderId}",
                 $"Retained observation {b.ObservedAtUtc:u}; current acceptance/cache ownership unverified"
             }.Concat(b.Targets.OrderBy(t => t.TargetIndex).Select(presentation.TargetLine))).ToArray() ?? [] : [];
-        view = new(store.LocalRetentionEnabled, status, rows, milliseconds, attempts, lastAttemptUtc);
+        var coverage = itemCoverage.Current(characterKey, DateTime.UtcNow, Stopwatch.GetTimestamp());
+        view = new(store.LocalRetentionEnabled, status, rows, milliseconds, attempts, lastAttemptUtc, itemCoverage.Status,
+            coverage?.ObservedAtUtc, coverage?.Domains.Select(d => $"Bill item {d.BillTypeId} / key item {d.KeyItemId}: {d.State}").ToArray());
     }
     private HuntBillTarget[]? CatalogTargets(uint orderId, MobHuntOrderType type) {
         if (targets.TryGetValue(orderId, out var cached)) return cached;
@@ -131,34 +140,54 @@ internal sealed class HuntBillLocalView : IDisposable {
     // all native access; no new polling subscription, requests or interface dependency.
     // Supported lifecycle subscriptions only invalidate the RAM admission baseline.
     internal unsafe void Tick(DateTime now, bool force = false) {
-        if (!store.LocalRetentionEnabled) session.Reset();
+        if (!store.LocalRetentionEnabled) { session.Reset(); itemCoverage.Clear(); }
         if (force) LastDiagnostic = "Hunt read not due/eligible (one-second manual admission bound); retained state preserved.";
         if (disposed || !schedule.TryBegin(now, store.LocalRetentionEnabled, force)) return;
         LastDiagnostic = "Hunt fresh source unavailable; retained state preserved, no completion inferred.";
-        if (!framework.IsInFrameworkUpdateThread) { Publish("Hunt read requires framework thread; no native access."); return; }
+        if (!framework.IsInFrameworkUpdateThread) { itemCoverage.Clear(); Publish("Hunt read requires framework thread; no native access."); return; }
         attempts++; lastAttemptUtc = now;
         if (!PersonalObservationCompatibility.Supports(GameVersion(), typeof(MobHunt).Assembly.GetName().Version?.ToString())) {
+            itemCoverage.Clear();
             Publish("Unsupported game/SDK build; no Hunt native read. Retained state preserved."); return;
         }
         long started = Stopwatch.GetTimestamp();
         try {
-            if (!policy.Supported) { Publish(policy.Status); return; }
+            if (!policy.Supported) { itemCoverage.Clear(); Publish(policy.Status); return; }
             var characterKey = CurrentCharacterKey();
             if (characterKey.Length == 0 || conditions[ConditionFlag.BetweenAreas] || conditions[ConditionFlag.BetweenAreas51]) {
-                session.Reset(); rawFingerprint = "";
+                session.Reset(); itemCoverage.Clear(); rawFingerprint = "";
                 export = ""; Publish("Hunt player unavailable or transitioning; prior observations preserved, not empty."); return;
             }
             session.Bind(characterKey);
+            types ??= data.GetExcelSheet<MobHuntOrderType>().Where(t => t.RowId < 22).ToDictionary(t => t.RowId);
+            var domains = types.Values.Select(t => new HuntBillItemDomain((byte)t.RowId, t.EventItem.RowId, t.Type, t.OrderStart.RowId, t.OrderAmount)).ToArray();
+            itemCoverage.SetCatalog(domains.All(d => data.GetExcelSheet<EventItem>().HasRow(d.KeyItemId)) ? domains : []);
             var manager = InventoryManager.Instance();
             var keyItems = manager == null ? null : manager->GetInventoryContainer(InventoryType.KeyItems);
             if (keyItems == null || !keyItems->IsLoaded || keyItems->Items == null || keyItems->Size is < 1 or > 256) {
+                itemCoverage.Observe(characterKey, CurrentCharacterKey(), true, false, 0, 0, [], false, now, Stopwatch.GetTimestamp(), GameVersion(), collectorVersion, typeof(MobHunt).Assembly.GetName().Version!.ToString());
                 export = ""; Publish("Key Items unavailable/not loaded; no Hunt cache admitted. Prior state preserved.", characterKey); return;
             }
+            // Two complete copies, same pointer/header and current character.
+            // Validate every slot before a negative fact; symbolic items fail closed.
+            var pointer = keyItems->Items; var size = keyItems->Size; var container = keyItems->Type;
+            HuntKeyItemSlot[] CopySlots() {
+                var result = new HuntKeyItemSlot[size];
+                for (int i = 0; i < size; i++) { var s = pointer[i]; result[i] = new(s.Slot, (int)s.Container, s.IsSymbolic, s.ItemId, s.Quantity); }
+                return result;
+            }
+            var firstSlots = CopySlots();
+            var secondSlots = keyItems->Items == pointer && keyItems->Size == size && keyItems->Type == container && keyItems->IsLoaded ? CopySlots() : [];
+            bool stable = keyItems->Items == pointer && keyItems->Size == size && keyItems->Type == container && keyItems->IsLoaded
+                && firstSlots.SequenceEqual(secondSlots) && keyItems->GetSize() == size
+                && firstSlots.All(s => s.ItemId == 0 || data.GetExcelSheet<EventItem>().HasRow(s.ItemId))
+                && Stopwatch.GetElapsedTime(started) <= TimeSpan.FromMilliseconds(100);
+            itemCoverage.Observe(characterKey, CurrentCharacterKey(), !conditions[ConditionFlag.BetweenAreas] && !conditions[ConditionFlag.BetweenAreas51], true,
+                (int)container, size, firstSlots, stable, now, Stopwatch.GetTimestamp(), GameVersion(), collectorVersion, typeof(MobHunt).Assembly.GetName().Version!.ToString());
             var hunt = MobHunt.Instance();
             if (hunt == null || (hunt->ObtainedFlags & ~((1 << 22) - 1)) != 0) {
                 Publish("Hunt native source unavailable/incompatible; prior state preserved.", characterKey); return;
             }
-            types ??= data.GetExcelSheet<MobHuntOrderType>().Where(t => t.RowId < 22).ToDictionary(t => t.RowId);
             var presentItems = new HashSet<uint>();
             for (int slot = 0; slot < keyItems->Size; slot++) {
                 var item = keyItems->Items[slot];
@@ -218,7 +247,7 @@ internal sealed class HuntBillLocalView : IDisposable {
                 : $"Observed {observations.Count} positive bill cache snapshots; {partial} partial/unmatched. Admission uses current Key Item corroboration or a bounded same-session final-counter transition. Bill windows not required. Current order/cache ownership/reset unverified. Private TEST sync status is in the main window.";
             if (store.CapacityReached) status += " Retention capacity reached: new character observations paused; existing history preserved.";
             Publish(status, characterKey, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
-        } catch (Exception) { Publish("Hunt read/save failed; history preserved. New data may be memory-only. No live correctness claim."); }
+        } catch (Exception) { itemCoverage.Clear(); Publish("Hunt read/save failed; history preserved. New data may be memory-only. No live correctness claim."); }
     }
     private void Draw() {
         if (!visible || disposed) return;
@@ -232,12 +261,17 @@ internal sealed class HuntBillLocalView : IDisposable {
                 _ = framework.RunOnFrameworkThread(() => { if (disposed) return; store.LocalRetentionEnabled = enabled; schedule.Reset(); session.Reset(); persist(); Publish(policy.Status); });
             }
             ImGui.TextWrapped(state.Status);
+            bool coverageFresh = state.CoverageObservedAtUtc is DateTime observed && DateTime.UtcNow >= observed
+                && DateTime.UtcNow - observed <= TimeSpan.FromSeconds(HuntBillItemCoverage.MaximumAgeSeconds);
+            ImGui.TextWrapped(coverageFresh ? state.CoverageStatus + $" Observed {state.CoverageObservedAtUtc:u}; current character/session context."
+                : "Hunt item coverage UNAVAILABLE/expired; retained progress unchanged.");
+            if (coverageFresh && state.CoverageRows is not null) foreach (var row in state.CoverageRows) ImGui.TextUnformatted(row);
             ImGui.TextWrapped($"Last cache read/save: {state.Milliseconds:F2} ms. Up to 16 characters / 22 bill categories each / 256 KiB. Latest positive observation per bill; no reset, absence or cache-owner proof.");
             ImGui.TextWrapped("Private export contains your targets, counters and activity times. No credential, account/character ID or name. Copy only to a trusted diagnostic recipient; this is not community contribution or a server upload.");
             if (enabled && ImGui.Button("Prepare PRIVATE Hunt JSON (no upload)")) {
                 _ = framework.RunOnFrameworkThread(() => {
                     if (disposed) return;
-                    try { export = policy.PreparePrivateExport(CurrentCharacterKey()); }
+                    try { export = CoveragePayload(CurrentCharacterKey(), DateTime.UtcNow) ?? policy.PreparePrivateExport(CurrentCharacterKey()); }
                     catch (Exception) { export = ""; Publish("Private export unavailable: no retained observation for active character, retention off or unsupported format."); }
                 });
             }
