@@ -1,6 +1,6 @@
 # Testing 0.0.78 - automatic Hunt map guidance
 
-Prepared successor of published77, preserving its travel transport and all prior
+Published successor of immutable77, preserving its travel transport and all prior
 capabilities. Stable/main/Site/production remain untouched. Same rolling Testing
 URL, immutable prior releases. See [exact contract](../contracts/hunt-map-v1.md).
 
@@ -32,3 +32,13 @@ guidance for this TEST device once (with existing Hunt upload enabled); stay in
 game, see target A's reference map automatically, kill A and observe B's map
 after accepted progress. Close A's map and confirm it never reopens after B.
 No return to Site between kills, full Hunt set or unrelated gameplay required.
+
+Published2026-10-04T02:39:09Z as `v0.0.78-testing`, source
+`b4148b990105fca8c27ca8b639422a70e1ea37f3`. Both independent exact-package reviews
+accepted the corrected candidate, no remaining findings.6053 maintained checks,
+2 running-Site shape crosschecks, actual SDK/config and12 final packaged fixtures
+pass. No rebuild after corrected final validation. Versioned and unchanged rolling
+URL anonymously verified with matching manifest/ZIP/contained DLL hashes.
+All prior immutable assets, historical64 notes suffix, Stable/main/Site/production
+remain unchanged. See [durable publication evidence](../../data/releases/testing-0.0.78.json).
+Final state: **READY FOR OWNER LIVE AUTOMATIC HUNT MAP VALIDATION**.
