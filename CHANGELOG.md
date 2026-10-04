@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.0.79 - Testing Hunt final-kill progression and prompt sync
+
+- Three-second bounded local Hunt reads; retained semantic changes immediately
+  make personal uploads eligible, preserving failure backoff and immutable retries.
+- Sync now refreshes eligible Hunt data and prompts independently enabled personal
+  resources; ordinary sync remains independent. No permission/capability bypass.
+- A same-session, same-order final counter transition can survive item/flag removal
+  within six seconds of positive corroboration. All explicit counters must equal
+  requirements; disappearance, partial/malformed/stale data never imply completion.
+- Suppress Hunt timestamp/observation-ID-only upload successors. Bound private
+  headers/receipt flight to30s; diagnostics distinguish raw/retained/prepared/receipt.
+- Preserve all78 capabilities, Stable/main/Site/production and prior releases.
+
 ## 0.0.78 - Testing automatic Hunt map guidance
 
 - Separate default-OFF Site-to-game Hunt map consent, independent of location

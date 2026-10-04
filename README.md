@@ -1,5 +1,14 @@
 # Gillions Game Sync
 
+Testing79 corrects Hunt final-counter retention and responsiveness. Bounded local
+reads run every three seconds; semantic changes prompt enabled private TEST sync
+without another periodic phase. Sync now requests an eligible fresh Hunt read and
+personal send without bypassing OFF/capability/backoff gates. Explicit complete
+counters can bridge bill-item removal only for the same order corroborated in
+this session within six seconds; missing data alone never means completion.
+Routine timestamp refreshes no longer create Hunt upload successors. See
+[correction and live retest](docs/releases/testing-0.0.79.md).
+
 Testing78 adds separate default-OFF automatic Site Hunt-map presentation using the
 existing bounded request channel. Enable **Automatically show my current Hunt in
 FFXIV** locally and select/grant your Testing device on the TEST Hunts page. The

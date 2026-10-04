@@ -77,6 +77,7 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly Dictionary<string, CancellationTokenSource> personalCancellation = new(StringComparer.Ordinal);
     private bool personalInFlight;
     private DateTime nextPersonalUtc;
+    private DateTime personalRetryUtc;
     private int personalFailures;
     private bool observedPersonalHunts, observedPersonalSubmarines;
     private volatile string personalStatus = "Private Hunt/submarine sync OFF. Local retention and ordinary sync are independent.";
@@ -171,6 +172,7 @@ public sealed class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Hunts use three-second bounded reads and prompt semantic-change sync. Sync now refreshes eligible Hunt data without bypassing consent/backoff. Recent same-session final counters can survive bill-item removal; disappearance alone remains UNKNOWN.",
         "Automatic Hunt map guidance has its own default-OFF permission. Secure TEST requests consume the current Site revision before opening a public reference map; never teleport, move or target. Site v1 selects one candidate; alternative cycling is not yet supported.",
         "Testing PF contribution now uses the approved secure TEST paired origin, never production. Website PF links require a new separate opt-in and compatible Site request contract; they deliver a native chat link requiring a final in-game click, never join or apply.",
         "Hunt routing context has separate OFF-by-default location consent and server travel grant. Rounded location and naturally visible public Teleport cache use authenticated HTTPS TEST only, RAM-only, latest-only, 15-second read/send admission and 45-second expiry. Cached Gil is a quote, not final charge. OFF cancels travel only; no movement history.",
@@ -405,7 +407,11 @@ public sealed class Plugin : IDalamudPlugin {
         RefreshSessionContext(); MaintainTransientState(now);
         partyFinderContributor.Tick(now);
 #if GILLIONS_TEST_BUILD
-        huntLocal.Tick(now); // Independent local retention; five-second due check before native access.
+        var huntRevision = huntLocal.SemanticRevision;
+        var huntRawRevision = huntLocal.RawRevision;
+        huntLocal.Tick(now); // Three-second bounded read; semantic changes bypass only routine upload cadence.
+        var huntChanged = huntLocal.SemanticRevision != huntRevision;
+        if (huntChanged || huntRawRevision != huntLocal.RawRevision) RecordDiagnostic(huntLocal.LastDiagnostic);
         dashboardLocal.Tick(now); // Independent, off-by-default; one bounded source group per due check.
         travelLocal.Tick(now); // Independent default-OFF, latest-only RAM, bounded 15-second read.
         TickTravelSync(now); // Also clears invalid/expired pending state while unpaired.
@@ -417,7 +423,7 @@ public sealed class Plugin : IDalamudPlugin {
 #endif
         if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;
 #if GILLIONS_TEST_BUILD
-        TickPersonalSync(now);
+        TickPersonalSync(now, prompt: huntChanged);
 #endif
         var contentId = activeRetainerCharacterContentId;
         var state = CurrentState;
@@ -1098,6 +1104,19 @@ public sealed class Plugin : IDalamudPlugin {
         try {
             captured = await framework.RunOnFrameworkThread(() => {
                 var captureStopwatch = Stopwatch.StartNew();
+#if GILLIONS_TEST_BUILD
+                // Manual personal refresh is independent of ordinary-sync flight
+                // and opt-out. It never overrides a failure backoff or permissions.
+                if (!disposed && force && mode == SyncRequestMode.Manual) {
+                    RefreshSessionContext();
+                    if (PersonalEnabled("hunt_bills")) {
+                        huntLocal.Tick(DateTime.UtcNow, force: true);
+                        RecordDiagnostic(huntLocal.LastDiagnostic);
+                    }
+                    if (HasPairedSession && activeOwnedState is not null && clientState.IsLoggedIn)
+                        TickPersonalSync(DateTime.UtcNow, prompt: true);
+                }
+#endif
                 if (disposed || syncInFlight) throw new OperationCanceledException();
                 var permit = CapturePermit(mode);
                 operationPermit = permit;
@@ -1455,7 +1474,7 @@ public sealed class Plugin : IDalamudPlugin {
         travelAccepted = false; travelBinding = ""; ClearTravelPending(); travelLocal?.ClearSession();
         ClearHuntMapRequests();
         foreach (var cancellation in personalCancellation.Values) { cancellation.Cancel(); cancellation.Dispose(); }
-        personalCancellation.Clear(); nextPersonalUtc = DateTime.MinValue;
+        personalCancellation.Clear(); nextPersonalUtc = DateTime.MinValue; personalRetryUtc = DateTime.MinValue;
 #endif
         activeOwnedState = null; activeRetainerCharacterContentId = 0; activeGeneration = "";
         nextRetainerPresenceUtc = DateTime.MinValue; nextRetainerUploadUtc = DateTime.MinValue;
@@ -1706,14 +1725,15 @@ public sealed class Plugin : IDalamudPlugin {
             : "Private resource sync OFF; retained/pending state preserved. Ordinary sync unchanged.";
         RequestConfigurationSave();
     }
-    private void TickPersonalSync(DateTime now) {
+    private void TickPersonalSync(DateTime now, bool prompt = false) {
         foreach (var resource in PersonalSyncPolicy.Resources) {
             var enabled = PersonalEnabled(resource);
             var before = resource == "hunt_bills" ? observedPersonalHunts : observedPersonalSubmarines;
             if (before && !enabled && personalCancellation.Remove(resource, out var canceled)) { canceled.Cancel(); canceled.Dispose(); }
             if (resource == "hunt_bills") observedPersonalHunts = enabled; else observedPersonalSubmarines = enabled;
         }
-        if (personalInFlight || now < nextPersonalUtc || (!configuration.SyncPersonalHunts && !configuration.SyncPersonalSubmarines)) return;
+        if (!PersonalSyncPolicy.Due(now, nextPersonalUtc, personalRetryUtc, personalInFlight, prompt,
+            configuration.SyncPersonalHunts || configuration.SyncPersonalSubmarines)) return;
         nextPersonalUtc = now.AddSeconds(5);
         if (configuration.ActiveSession!.Origin != PersonalSyncPolicy.Origin) {
             personalStatus = "Private sync requires pairing at https://test.gillions.app; no personal data sent. Ordinary sync unchanged."; return;
@@ -1739,14 +1759,17 @@ public sealed class Plugin : IDalamudPlugin {
             var prior = configuration.PersonalSync.Prepared.SingleOrDefault(p => p.OwnerKey == owner && p.Resource == resource);
             var prepared = PersonalSyncPolicy.Prepare(configuration.PersonalSync, owner, resource, payload);
             if (prepared is null) { personalStatus = "Private preparation capacity/validation gate: existing pending state preserved; no new admission."; continue; }
-            if (!ReferenceEquals(prior, prepared)) RequestConfigurationSave();
+            if (!ReferenceEquals(prior, prepared)) {
+                RequestConfigurationSave();
+                RecordDiagnostic($"Private {resource}: new semantic snapshot prepared; immutable nonce/body, no identifiers logged.");
+            }
             if (!PersonalSyncPolicy.CanSend(true, true, configuration.ActiveSession.Origin, true, prepared)) continue;
             // A prior in-memory entry might be a preparation whose save failed.
             // Require actual successful persistence, not save scheduling, before
             // every first/retry dispatch. Preserve its exact nonce/body on failure.
             if (!PersonalSyncPolicy.PersistBeforeSend(() => FlushConfigurationSave(force: true))) {
                 personalStatus = "Private snapshot save unavailable; no dispatch. Exact in-memory nonce/body preserved; durable local state not erased.";
-                nextPersonalUtc = now.AddSeconds(60); return;
+                personalRetryUtc = now.AddSeconds(60); nextPersonalUtc = personalRetryUtc; return;
             }
             var permit = CapturePermit(SyncRequestMode.Personal);
             if (!personalCancellation.TryGetValue(resource, out var featureCancellation)) {
@@ -1761,6 +1784,7 @@ public sealed class Plugin : IDalamudPlugin {
     }
     private async Task SendPersonalAsync(SyncRequestPermit permit, PersonalPreparedSnapshot prepared, CancellationToken featureToken) {
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation, featureToken);
+        cancellation.CancelAfter(TimeSpan.FromSeconds(30)); // Bound headers AND receipt; no indefinitely held private flight.
         var token = cancellation.Token;
         try {
             using var request = SnapshotRequest("/api/game-sync/sync", permit, prepared.Resource, prepared.Nonce, Encoding.UTF8.GetBytes(prepared.Payload));
@@ -1780,22 +1804,23 @@ public sealed class Plugin : IDalamudPlugin {
             await framework.RunOnFrameworkThread(() => {
                 if (!PermitIsCurrent(permit) || token.IsCancellationRequested || !PersonalEnabled(prepared.Resource)) return;
                 if (receipt) {
-                    prepared.Acknowledged = true; personalFailures = 0; nextPersonalUtc = DateTime.UtcNow.AddSeconds(5);
+                    prepared.Acknowledged = true; personalFailures = 0; personalRetryUtc = DateTime.MinValue;
+                    nextPersonalUtc = DateTime.MinValue; // Drain a newer semantic successor immediately after this receipt.
                     personalStatus = $"{prepared.Resource}: TEST receipt accepted. Positive retained observations only; current ownership/reset/completion claims remain limited.";
                     RecordDiagnostic($"Uploaded private {prepared.Resource} to shared TEST: HTTP {(int)response.StatusCode}; valid receipt. No live correctness claim.");
                 } else if (terminal) {
                     prepared.Blocked = true;
                     personalStatus = $"{prepared.Resource}: HTTP {(int)response.StatusCode}; private snapshot stopped/preserved. Ordinary sync unchanged.";
                 } else {
-                    personalFailures++; nextPersonalUtc = DateTime.UtcNow.AddSeconds(PersonalSyncPolicy.RetrySeconds(personalFailures));
+                    personalFailures++; personalRetryUtc = DateTime.UtcNow.AddSeconds(PersonalSyncPolicy.RetrySeconds(personalFailures)); nextPersonalUtc = personalRetryUtc;
                     personalStatus = $"{prepared.Resource}: bounded retry; same nonce/payload preserved. Ordinary sync unchanged.";
                 }
                 RequestConfigurationSave();
             });
         } catch (Exception) {
             if (!disposed) await framework.RunOnFrameworkThread(() => {
-                if (!PermitIsCurrent(permit) || token.IsCancellationRequested) return;
-                personalFailures++; nextPersonalUtc = DateTime.UtcNow.AddSeconds(PersonalSyncPolicy.RetrySeconds(personalFailures));
+                if (!PermitIsCurrent(permit) || featureToken.IsCancellationRequested || permit.Cancellation.IsCancellationRequested) return;
+                personalFailures++; personalRetryUtc = DateTime.UtcNow.AddSeconds(PersonalSyncPolicy.RetrySeconds(personalFailures)); nextPersonalUtc = personalRetryUtc;
                 personalStatus = "Private HTTPS send/receipt unavailable; pending nonce/payload retained, bounded backoff. No TLS fallback; ordinary sync unchanged.";
             });
         } finally {

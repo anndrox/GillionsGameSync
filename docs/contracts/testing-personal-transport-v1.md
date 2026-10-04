@@ -68,6 +68,22 @@ prepared snapshot. Correct permission/contract/input and use a corrected forward
 candidate/fresh pairing as appropriate; do not retry unchanged terminal input.
 Pending records for previous pairing generations remain inactive/preserved.
 
+Testing79: Hunt successor comparison ignores only bill observationId/observedAtUtc
+refreshes. Exact prepared payload hash/nonce remains immutable, including after
+restart. Counts, order, provenance and every other field still participate. Thus
+unchanged periodic reads/provenance-time refreshes do not send network snapshots.
+Retained semantic changes immediately bypass the routine five-second preparation
+cadence, never failure backoff. After a receipt, the next framework turn can drain
+a changed successor or the other enabled resource. A whole private HTTP/receipt
+flight is bounded to30s; timeout retains the same nonce/body with60–900s backoff.
+Sync now requests a fresh eligible Hunt read and prompts independently enabled,
+compatible personal resources, even when ordinary sync is already in flight.
+Submarine state still requires naturally observed current-session workshop data;
+no manual action opens/requests an interface or reassigns historical workshops.
+OFF, exact TEST origin, pairing/character scope and capability checks remain.
+Aggregate stages distinguish raw counter/gate change, retained semantic change,
+new preparation and accepted receipt; no payload/IDs/authentication are logged.
+
 Site performs nonce conflict and monotonic observation admission: old observations
 cannot replace newer, equal-time semantic conflict fails closed, omission never
 deletes. Receipt identity is device/character/resource/nonce. Submarine positive

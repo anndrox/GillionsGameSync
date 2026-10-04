@@ -21,13 +21,25 @@ live memory layout, cache ownership or freshness. No supported Hunt Bill getter
 exists in the installed Dalamud service API; the collector uses its existing
 FFXIVClientStructs `MobHunt` definition, not bespoke offsets or packet hooks.
 
-Hunts read naturally loaded `MobHunt` caches at most once every five seconds on
+Hunts read naturally loaded `MobHunt` caches every three seconds on
 the existing framework loop, independently of pairing, ordinary sync and whether
 a bill window is open. Admission requires loaded current PlayerState, no zoning,
 a loaded/bounded Key Items container, and a positive obtained flag with a matching
 MobHuntOrderType.EventItem actually present (positive quantity). This corroborates
 the bill type, not the cached order's character ownership or current freshness.
 No coherent positive evidence means unavailable/preserved, never no bills.
+Testing79 additionally captures a narrowly bounded final-counter transition after
+bill-item/flag removal: a bill positively corroborated in this character's current
+session within six seconds, unchanged obtained order/item/catalog target identity,
+previously incomplete, and ALL explicitly read counters exactly equal requirements.
+No absent=>complete inference, counter clamping, available-board substitution,
+extra completion flag, hook or request. Stale/partial/malformed/order-changed reads
+are rejected. Session baselines are RAM-only, cleared on logout/character change,
+zoning and local opt-out; restart history alone cannot establish this admission.
+The nullable existing sourceEvidence is null when current Key Item corroboration
+is absent; prior positive baseline does not become current acceptance proof.
+Sync now can force one eligible read before its normal deadline, with a one-second
+manual admission floor. Only ordinary scheduled reads use the three-second cadence.
 Submarines retain their existing workshop events;
 positive unlock/exploration getters run only when the selected planning agent
 owns the visible interface in the loaded current workshop. Both require local
@@ -69,7 +81,7 @@ Root fields are exactly `schemaVersion:1`, `collectorSchema:"hunt-bills-v1"`,
 | orderId, eventItemId | Native obtained order row getter, validated against type OrderStart/OrderAmount; type EventItem row ID | Unknown/out-of-range order rejects that bill; never substitute available board order | Matching loaded bill item corroborates type only; cached-order ownership remains unverified |
 | observedAtUtc, gameVersion, collectorVersion | Framework observation UTC, Lumina base repository version, actual assembly version | UTC only; not server receipt, reset or fresh network response | Private activity/provenance, retained |
 | acceptance | Always `obtained-flag-observed-not-current-acceptance-proof` | Cache does not clear completed marks; no independent cache-owner/generation flag | No active-assignment claim |
-| sourceEvidence | Additive nullable observation provenance: `loaded-key-item-and-obtained-flag-cache-unverified` for new corroborated reads | null for older UI-only records; never retrospectively claim key-item evidence | Private snapshot; does not prove current cached order or ownership |
+| sourceEvidence | Additive nullable observation provenance: `loaded-key-item-and-obtained-flag-cache-unverified` for currently corroborated reads | null for older UI-only or bounded same-session final-counter observations without current Key Item evidence; never retrospectively claim current key-item evidence | Private snapshot; does not prove current cached order or ownership |
 | targets[].targetIndex | Order subrow index, 0–4 | Whole bill rejected for partial/invalid targets | Snapshot |
 | targetId, npcNameId | MobHuntOrder.Target -> MobHuntTarget -> BNpcName, known rows required | Unknown IDs rejected | Numeric reference join keys; no mob sighting |
 | mapId, placeNameId, fateId | MobHuntTarget sheet reference IDs, verbatim | 0 is the sheet's absent reference sentinel, not a coordinate or empty personal state | Static references; no live positions |

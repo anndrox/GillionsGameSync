@@ -20,6 +20,12 @@ if (args.Length == 1 && args[0] == "--dashboard-sdk") {
     }
     return;
 }
+if (args.Length == 1 && args[0] == "--hunt-sdk") {
+    var type = typeof(FFXIVClientStructs.FFXIV.Client.Game.UI.MobHunt);
+    Console.WriteLine(type.Assembly.GetName());
+    foreach (var m in type.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)) Console.WriteLine(m);
+    return;
+}
 if (args.Length == 2 && args[0] == "--dashboard-catalog") {
     using var game = new Lumina.GameData(args[1]);
     Console.WriteLine("Game version: " + game.Repositories["ffxiv"].Version);
@@ -85,9 +91,12 @@ Check(boundedNames.TargetLine(displayTarget).Contains("target ID 1") && boundedR
 var cadence = new HuntObservationSchedule();
 Check(!cadence.TryBegin(now, false), "Disabled cadence admitted.");
 Check(cadence.TryBegin(now, true), "First loaded-cache check not immediate.");
-for (int ms = 0; ms < 5000; ms += 25)
+for (int ms = 0; ms < 3000; ms += 25)
     Check(!cadence.TryBegin(now.AddMilliseconds(ms), true), "Per-frame/native read cadence exceeded.");
-Check(cadence.TryBegin(now.AddSeconds(5), true), "Five-second refresh missing.");
+Check(cadence.TryBegin(now.AddSeconds(3), true), "Three-second refresh missing.");
+Check(!cadence.TryBegin(now.AddSeconds(3.5), true, force: true), "Manual click flood bypassed one-second native bound.");
+Check(cadence.TryBegin(now.AddSeconds(4), true, force: true), "Sync now did not force eligible fresh read before periodic deadline.");
+Check(!cadence.TryBegin(now.AddSeconds(5), false, force: true), "Manual refresh bypassed local retention OFF.");
 Check(!cadence.TryBegin(now.AddSeconds(10), false), "Opt-out did not stop due read.");
 Check(!cadence.TryBegin(now.AddSeconds(-1), true), "Backwards clock triggered repeated reads.");
 cadence.Reset(); Check(cadence.TryBegin(now, true), "Enable/session reset failed.");
@@ -105,6 +114,58 @@ Check(PersonalObservationCompatibility.Supports("2026.09.15.0000.0000", "7.56.2.
 foreach (var pair in new[] { ("unknown", "7.56.2.9136"), ("2026.09.15.0000.0000", "7.56.3.0"), ("2026.10.01.0000.0000", "7.56.2.9136") })
     Check(!PersonalObservationCompatibility.Supports(pair.Item1, pair.Item2), "Unsupported patch/SDK admitted.");
 var store = new HuntBillRetention(); var policy = new HuntBillRetentionPolicy(store);
+var progressionStore = new HuntBillRetention { LocalRetentionEnabled = true };
+var progression = new HuntBillRetentionPolicy(progressionStore);
+var session = new HuntSessionProgress(); session.Bind(key);
+HuntBillObservation Progress(int kills, int seconds) => Bill(kills: kills) with {
+    ObservedAtUtc = now.AddSeconds(seconds), SourceEvidence = HuntObservationAdmission.KeyItemEvidence,
+    Targets = [new(0, 1, 100, 200, 300, 0, 2, kills, 1, 1), new(1, 2, 101, 200, 300, 0, 1, 1, 1, 1)]
+};
+for (int kills = 0; kills <= 2; kills++) {
+    var observation = Progress(kills, kills * 3);
+    Check(progression.Observe(key, [observation]) && progression.LastSemanticChange, "0->1->2 retained semantic progression missing.");
+    session.Record(observation);
+    using var exportJson = JsonDocument.Parse(progression.PreparePrivateExport(key));
+    Check(exportJson.RootElement.GetProperty("bills")[0].GetProperty("targets")[0].GetProperty("completed").GetBoolean() == (kills == 2), "2/2 exact completion edge missing.");
+    Check(exportJson.RootElement.GetProperty("bills")[0].GetProperty("targets")[1].GetProperty("completed").GetBoolean(), "Multi-target 1/1 completion lost.");
+}
+Check(!progression.Observe(key, [Progress(2, 9)]) && !progression.LastSemanticChange, "No-change creates semantic dispatch.");
+Check(progression.Observe(key, [Progress(2, 70)]) && !progression.LastSemanticChange, "Provenance refresh mistaken for semantic change.");
+session.Reset(); session.Bind(key); session.Record(Progress(1, 3));
+var final = Progress(2, 6) with { SourceEvidence = null };
+Check(session.MayReadFinal(0, now.AddSeconds(6)) && session.CanObserveFinal(final), "Explicit same-order final counters lost when key item/flag disappears.");
+Check(!session.CanObserveFinal(Progress(1, 6) with { SourceEvidence = null }), "Disappearance alone fabricated final kill.");
+Check(!session.CanObserveFinal(final with { OrderId = 2 }), "Different order inherited completion.");
+Check(!session.CanObserveFinal(final with { ObservedAtUtc = now.AddSeconds(10) }), "Stale session counter baseline admitted.");
+Check(!session.CanObserveFinal(final with { Targets = final.Targets.Take(1).ToArray() }), "Partial bill fabricated completion.");
+Check(!session.CanObserveFinal(final with { Targets = [final.Targets[0] with { ObservedKills = 3 }, final.Targets[1]] }), "Out-of-range counter clamped into completion.");
+session.Bind(HuntBillRetentionPolicy.CharacterKey(999));
+Check(!session.CanObserveFinal(final), "Character transition inherited live bill baseline.");
+session.Bind(key);
+Check(!session.CanObserveFinal(final), "Reload/history alone established final native evidence.");
+session.Record(Progress(1, 3)); session.Reset();
+Check(!session.CanObserveFinal(final), "Opt-out/logout preserved completion admission baseline.");
+// Complete producing->retention->export->immutable preparation->receipt->successor path.
+var wireStore = new HuntBillRetention { LocalRetentionEnabled = true };
+var wireRetention = new HuntBillRetentionPolicy(wireStore);
+var wireState = new PersonalSyncState();
+var wireOwner = PersonalSyncPolicy.Owner("synthetic-session", key);
+string previousNonce = "";
+for (int kills = 0; kills <= 2; kills++) {
+    Check(wireRetention.Observe(key, [Progress(kills, kills * 3)]) && wireRetention.LastSemanticChange, "Pipeline lost semantic progress.");
+    Check(PersonalSyncPolicy.Due(now, now.AddSeconds(5), DateTime.MinValue, false, wireRetention.LastSemanticChange, true), "Pipeline waited a second periodic phase.");
+    var payload = wireRetention.PreparePrivateExport(key);
+    var prepared = PersonalSyncPolicy.Prepare(wireState, wireOwner, "hunt_bills", payload)!;
+    Check(prepared.Nonce != previousNonce && PersonalSyncPolicy.CanSend(true,true,PersonalSyncPolicy.Origin,true,prepared), "Changed final kill did not prepare/send successor.");
+    Check(!PersonalSyncPolicy.CanSend(false,true,PersonalSyncPolicy.Origin,true,prepared), "Pipeline sent disabled personal resource.");
+    Check(PersonalSyncPolicy.Receipt(JsonSerializer.Serialize(new { ok=true, snapshotId=Guid.NewGuid(), receivedAt=now, unchanged=false })), "Pipeline receipt rejected.");
+    prepared.Acknowledged = true; previousNonce = prepared.Nonce;
+    Check(!PersonalSyncPolicy.CanSend(true,true,PersonalSyncPolicy.Origin,true,prepared), "Acknowledged pipeline resends without change.");
+}
+wireRetention.Observe(key, [Progress(2, 70)]);
+Check(PersonalSyncPolicy.Prepare(wireState, wireOwner, "hunt_bills", wireRetention.PreparePrivateExport(key))!.Nonce == previousNonce, "Same semantic final payload creates endless successor.");
+var completeBeforeMissing = wireRetention.PreparePrivateExport(key);
+Check(!wireRetention.Observe(key, []) && wireRetention.PreparePrivateExport(key) == completeBeforeMissing, "Interface closure/unavailable replaced complete state.");
 Check(!store.LocalRetentionEnabled && !policy.Observe(key, [Bill()]) && store.Characters.Count == 0, "Default opt-in bypass.");
 Check(Refused(() => policy.PreparePrivateExport(key)), "Off export bypass.");
 store.LocalRetentionEnabled = true;

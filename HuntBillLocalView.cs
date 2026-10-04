@@ -32,6 +32,11 @@ internal sealed class HuntBillLocalView : IDisposable {
     private Dictionary<uint, MobHuntOrderType>? types;
     private readonly Dictionary<uint, HuntBillTarget[]> targets = new();
     private readonly HuntObservationSchedule schedule = new();
+    private readonly HuntSessionProgress session = new();
+    private string rawFingerprint = "";
+    internal long SemanticRevision { get; private set; }
+    internal long RawRevision { get; private set; }
+    internal string LastDiagnostic { get; private set; } = "Hunt observation not attempted.";
     private int attempts;
     private DateTime? lastAttemptUtc;
     private bool visible, disposed;
@@ -62,7 +67,7 @@ internal sealed class HuntBillLocalView : IDisposable {
         return client.IsLoggedIn && player != null && player->IsLoaded && player->ContentId != 0
             ? HuntBillRetentionPolicy.CharacterKey(player->ContentId) : "";
     }
-    private void OnLogout(int _, int __) { export = ""; schedule.Reset(); Publish("Logged out; retained Hunt state is historical, not current. Private sync paused."); }
+    private void OnLogout(int _, int __) { export = ""; schedule.Reset(); session.Reset(); rawFingerprint = ""; Publish("Logged out; retained Hunt state is historical, not current. Private sync paused."); }
     private void Publish(string status, string characterKey = "", double milliseconds = 0) {
         var rows = policy.Supported ? store.Characters.SingleOrDefault(c => c.LocalCharacterKey == characterKey)?.Bills
             .OrderBy(b => b.BillTypeId).SelectMany(b => new[] {
@@ -94,8 +99,11 @@ internal sealed class HuntBillLocalView : IDisposable {
     }
     // Called by the plugin's existing framework update. The due check precedes
     // all native access; no new subscription, requests or interface dependency.
-    internal unsafe void Tick(DateTime now) {
-        if (disposed || !schedule.TryBegin(now, store.LocalRetentionEnabled)) return;
+    internal unsafe void Tick(DateTime now, bool force = false) {
+        if (!store.LocalRetentionEnabled) session.Reset();
+        if (force) LastDiagnostic = "Hunt read not due/eligible (one-second manual admission bound); retained state preserved.";
+        if (disposed || !schedule.TryBegin(now, store.LocalRetentionEnabled, force)) return;
+        LastDiagnostic = "Hunt fresh source unavailable; retained state preserved, no completion inferred.";
         if (!framework.IsInFrameworkUpdateThread) { Publish("Hunt read requires framework thread; no native access."); return; }
         attempts++; lastAttemptUtc = now;
         if (!PersonalObservationCompatibility.Supports(GameVersion(), typeof(MobHunt).Assembly.GetName().Version?.ToString())) {
@@ -106,8 +114,10 @@ internal sealed class HuntBillLocalView : IDisposable {
             if (!policy.Supported) { Publish(policy.Status); return; }
             var characterKey = CurrentCharacterKey();
             if (characterKey.Length == 0 || conditions[ConditionFlag.BetweenAreas] || conditions[ConditionFlag.BetweenAreas51]) {
+                session.Reset(); rawFingerprint = "";
                 export = ""; Publish("Hunt player unavailable or transitioning; prior observations preserved, not empty."); return;
             }
+            session.Bind(characterKey);
             var manager = InventoryManager.Instance();
             var keyItems = manager == null ? null : manager->GetInventoryContainer(InventoryType.KeyItems);
             if (keyItems == null || !keyItems->IsLoaded || keyItems->Items == null || keyItems->Size is < 1 or > 256) {
@@ -124,25 +134,35 @@ internal sealed class HuntBillLocalView : IDisposable {
                 if (item.Quantity > 0 && item.ItemId > 0) presentItems.Add(item.ItemId);
             }
             var observations = new List<HuntBillObservation>(22);
+            var raw = new List<string>(22);
             int partial = 0;
             for (byte index = 0; index < 22; index++) {
-                if ((hunt->ObtainedFlags & (1 << index)) == 0) continue; // Not proof of absent/completed/reset bill.
                 if (!types.TryGetValue(index, out var type) || type.Type is not (1 or 2) || type.EventItem.RowId == 0) { partial++; continue; }
-                if (!HuntObservationAdmission.CanUseBillCache(index, hunt->ObtainedFlags, true,
-                    type.EventItem.RowId, presentItems.Contains(type.EventItem.RowId))) { partial++; continue; }
+                bool corroborated = HuntObservationAdmission.CanUseBillCache(index, hunt->ObtainedFlags, true,
+                    type.EventItem.RowId, presentItems.Contains(type.EventItem.RowId));
+                if (!corroborated && !session.MayReadFinal(index, now)) continue;
                 int obtained = hunt->GetObtainedHuntOrderRowId(index); // Existing read-only row-ID getter, no request.
                 var catalog = obtained > 0 ? CatalogTargets((uint)obtained, type) : null;
                 if (catalog is null) { partial++; continue; }
                 var read = catalog.Select(t => t with { ObservedKills = hunt->CurrentKills[index].Counts[t.TargetIndex] }).ToArray();
+                raw.Add($"{index}:{obtained}:{corroborated}:{string.Join(',', read.Select(t => t.ObservedKills))}");
                 bool weekly = type.Type == 2;
                 byte tier = weekly || index == 0 ? (byte)1 : (byte)((index <= 3 ? index - 1 : (index - 6) % 4) + 1);
                 var observation = new HuntBillObservation(index, weekly ? "weekly" : "daily", tier,
                     (uint)obtained, type.EventItem.RowId, read, now, GameVersion(), collectorVersion) {
-                    SourceEvidence = HuntObservationAdmission.KeyItemEvidence
+                    SourceEvidence = corroborated ? HuntObservationAdmission.KeyItemEvidence : null
                 };
-                if (HuntBillRetentionPolicy.BillValid(observation)) observations.Add(observation); else partial++;
+                if (HuntBillRetentionPolicy.BillValid(observation) && (corroborated || session.CanObserveFinal(observation))) {
+                    observations.Add(observation);
+                    if (corroborated) session.Record(observation);
+                } else partial++;
             }
             if (policy.Observe(characterKey, observations.ToArray())) { export = ""; persist(); }
+            if (policy.LastSemanticChange) SemanticRevision++;
+            var fingerprint = string.Join('|', raw);
+            if (fingerprint != rawFingerprint) RawRevision++;
+            LastDiagnostic = $"Hunt supported raw counter/gate state {(fingerprint != rawFingerprint ? "changed" : "unchanged")}; retained semantics {(policy.LastSemanticChange ? "changed" : "unchanged")}; admitted bills={observations.Count}; rejected/unavailable={partial}. Missing state is UNKNOWN.";
+            rawFingerprint = fingerprint;
             var status = observations.Count == 0 ? $"No corroborated bills observed; {partial} partial/unmatched. NOT proof of no bills. Prior state preserved."
                 : $"Observed {observations.Count} bill caches with matching loaded Key Items; {partial} partial. Bill windows not required. Current order/cache ownership/reset unverified. Private TEST sync status is in the main window.";
             if (store.CapacityReached) status += " Retention capacity reached: new character observations paused; existing history preserved.";
@@ -154,11 +174,11 @@ internal sealed class HuntBillLocalView : IDisposable {
         var state = view;
         ImGui.SetNextWindowSize(new Vector2(780, 500), ImGuiCond.FirstUseEver);
         if (ImGui.Begin("My Hunt Bills local test###GillionsHuntBills", ref visible)) {
-            ImGui.TextWrapped("Testing, read-only, local-first. Every five seconds, observe naturally loaded bill caches corroborated by loaded Key Items. No bill window required. No radar, mob scans, UI opening or game requests. Missing data never clears retained bills. Private TEST uploads require separate permission; see the main window for sync controls/status.");
+            ImGui.TextWrapped("Testing, read-only, local-first. Every three seconds, observe naturally loaded bill caches corroborated by loaded Key Items. A same-session final-counter transition can be retained within six seconds of corroboration; disappearance alone is UNKNOWN. No bill window, radar, mob scans, UI opening or game requests. Missing data never clears retained bills. Private TEST uploads require separate permission; see the main window.");
             bool enabled = state.Enabled;
             if (ImGui.Checkbox("Retain naturally loaded Hunt Bill observations locally", ref enabled)) {
                 export = "";
-                _ = framework.RunOnFrameworkThread(() => { if (disposed) return; store.LocalRetentionEnabled = enabled; schedule.Reset(); persist(); Publish(policy.Status); });
+                _ = framework.RunOnFrameworkThread(() => { if (disposed) return; store.LocalRetentionEnabled = enabled; schedule.Reset(); session.Reset(); persist(); Publish(policy.Status); });
             }
             ImGui.TextWrapped(state.Status);
             ImGui.TextWrapped($"Last cache read/save: {state.Milliseconds:F2} ms. Up to 16 characters / 22 bill categories each / 256 KiB. Latest positive observation per bill; no reset, absence or cache-owner proof.");
@@ -171,7 +191,7 @@ internal sealed class HuntBillLocalView : IDisposable {
                 });
             }
             if (enabled && export.Length > 0 && ImGui.Button("Copy PRIVATE Hunt JSON")) ImGui.SetClipboardText(export);
-            if (ImGui.Button("Copy aggregate Hunt diagnostics")) ImGui.SetClipboardText($"Gillions Game Sync Testing {collectorVersion}\nGame: {GameVersion()}; SDK: {typeof(MobHunt).Assembly.GetName().Version}\nHunts local: {state.Enabled}\n{state.Status}\nAttempts: {state.Attempts}; last attempt UTC: {state.LastAttemptUtc:u}; cadence: 5 seconds\nRead/save: {state.Milliseconds:F2} ms\nLocal collection diagnostics only; private TEST sync controls/status are in the main window. No live correctness claim.");
+            if (ImGui.Button("Copy aggregate Hunt diagnostics")) ImGui.SetClipboardText($"Gillions Game Sync Testing {collectorVersion}\nGame: {GameVersion()}; SDK: {typeof(MobHunt).Assembly.GetName().Version}\nHunts local: {state.Enabled}\n{state.Status}\n{LastDiagnostic}\nAttempts: {state.Attempts}; last attempt UTC: {state.LastAttemptUtc:u}; cadence: 3 seconds\nRead/save: {state.Milliseconds:F2} ms\nLocal collection diagnostics only; private TEST sync controls/status are in the main window. No live correctness claim.");
             ImGui.PushTextWrapPos(0);
             foreach (var row in state.Rows) ImGui.TextUnformatted(row);
             ImGui.PopTextWrapPos();

@@ -35,7 +35,14 @@ draw = hunt.split("private void Draw()", 1)[1]
 assert "GetExcelSheet" not in draw and "presentation.TargetLine" not in draw
 assert "ImGui.PushTextWrapPos(0)" in draw and "ImGui.PopTextWrapPos()" in draw
 assert "foreach (var row in state.Rows) ImGui.TextUnformatted(row)" in draw
-assert "if ((hunt->ObtainedFlags & (1 << index)) == 0) continue" in hunt
+assert "!session.MayReadFinal(index, now)" in hunt and "session.CanObserveFinal(observation)" in hunt
+assert "corroborated ? HuntObservationAdmission.KeyItemEvidence : null" in hunt
+assert "session.Reset()" in hunt and "session.Bind(characterKey)" in hunt
+assert "TickPersonalSync(now, prompt: huntChanged)" in plugin
+manual = plugin.split("private async Task SyncAsync",1)[1].split("var snapshots = captured.Snapshots",1)[0]
+assert "PersonalEnabled(\"hunt_bills\")" in manual and "huntLocal.Tick(DateTime.UtcNow, force: true)" in manual
+assert "TickPersonalSync(DateTime.UtcNow, prompt: true)" in manual
+assert "cancellation.CancelAfter(TimeSpan.FromSeconds(30))" in plugin
 assert "characterAssociation =" in (root / "HuntBills.cs").read_text()
 assert "IsSubmarineExplorationUnlocked" in sub and "IsSubmarineExplorationExplored" in sub
 assert sub.index("planning->AddonId == args.Addon.Id") < sub.index("HousingManager.IsSubmarineExplorationUnlocked")

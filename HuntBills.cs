@@ -35,12 +35,40 @@ internal sealed class HuntTargetPresentation(Func<uint, string?> resolveName) {
 // Managed admission/cadence only. No native pointers, requests or ownership inference.
 internal sealed class HuntObservationSchedule {
     private DateTime nextReadUtc;
-    internal bool TryBegin(DateTime now, bool enabled) {
-        if (!enabled || !PersonalObservationCompatibility.Utc(now) || now < nextReadUtc) return false;
-        nextReadUtc = now.AddSeconds(5);
+    private DateTime lastReadUtc;
+    internal bool TryBegin(DateTime now, bool enabled, bool force = false) {
+        if (!enabled || !PersonalObservationCompatibility.Utc(now)
+            || (force ? now - lastReadUtc < TimeSpan.FromSeconds(1) : now < nextReadUtc)) return false;
+        lastReadUtc = now; nextReadUtc = now.AddSeconds(3);
         return true;
     }
-    internal void Reset() => nextReadUtc = default;
+    internal void Reset() { nextReadUtc = default; lastReadUtc = default; }
+}
+// Only bridges the final transition of a bill positively corroborated in this
+// session. No durable baseline, absent=>complete inference or cache-owner claim.
+internal sealed class HuntSessionProgress {
+    private string character = "";
+    private readonly Dictionary<byte, HuntBillObservation> positive = new();
+    internal void Reset() { character = ""; positive.Clear(); }
+    internal void Bind(string key) { if (character != key) { Reset(); character = key; } }
+    internal void Record(HuntBillObservation observation) {
+        if (HuntBillRetentionPolicy.BillValid(observation)
+            && observation.SourceEvidence == HuntObservationAdmission.KeyItemEvidence)
+            positive[observation.BillTypeId] = observation;
+    }
+    internal bool MayReadFinal(byte index, DateTime now) => positive.TryGetValue(index, out var prior)
+        && now >= prior.ObservedAtUtc && now - prior.ObservedAtUtc <= TimeSpan.FromSeconds(6)
+        && prior.Targets.Any(t => t.ObservedKills < t.RequiredKills);
+    internal bool CanObserveFinal(HuntBillObservation observation) =>
+        HuntBillRetentionPolicy.BillValid(observation)
+        && positive.TryGetValue(observation.BillTypeId, out var prior)
+        && observation.OrderId == prior.OrderId && observation.EventItemId == prior.EventItemId
+        && observation.ObservedAtUtc >= prior.ObservedAtUtc
+        && observation.ObservedAtUtc - prior.ObservedAtUtc <= TimeSpan.FromSeconds(6)
+        && prior.Targets.Any(t => t.ObservedKills < t.RequiredKills)
+        && observation.Targets.Length == prior.Targets.Length
+        && observation.Targets.All(t => t.ObservedKills == t.RequiredKills
+            && prior.Targets.Any(p => p with { ObservedKills = t.ObservedKills } == t && p.ObservedKills <= t.ObservedKills));
 }
 internal static class HuntObservationAdmission {
     internal const string KeyItemEvidence = "loaded-key-item-and-obtained-flag-cache-unverified";
@@ -59,6 +87,7 @@ public sealed class HuntBillRetention {
     public bool CapacityReached { get; set; }
 }
 internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
+    internal bool LastSemanticChange { get; private set; }
     internal const int MaximumCharacters = 16;
     internal const int MaximumBytes = 256 * 1024;
     internal static string CharacterKey(ulong ownContentId) => Convert.ToHexString(SHA256.HashData(
@@ -93,19 +122,23 @@ internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
     // Missing/cleared obtained flags do NOT delete bills. Complete cache ownership
     // and reset/absence cannot be established from these native fields alone.
     internal bool Observe(string characterKey, HuntBillObservation[] observations) {
+        LastSemanticChange = false;
         if (!store.LocalRetentionEnabled || !Supported || !PersonalObservationCompatibility.Key(characterKey)
             || observations.Length is 0 or > 22 || !observations.All(BillValid)
             || observations.Select(b => b.BillTypeId).Distinct().Count() != observations.Length) return false;
         var current = store.Characters.SingleOrDefault(c => c.LocalCharacterKey == characterKey);
         var candidate = new RetainedHuntCharacter { LocalCharacterKey = characterKey, Bills = current?.Bills.ToList() ?? [] };
         bool changed = false;
+        bool semantic = false;
         foreach (var observation in observations) {
             var prior = candidate.Bills.SingleOrDefault(b => b.BillTypeId == observation.BillTypeId);
             if (prior is not null && observation.ObservedAtUtc < prior.ObservedAtUtc) continue;
             var comparison = prior is null ? null : prior with { ObservedAtUtc = observation.ObservedAtUtc, ObservationId = observation.ObservationId };
+            bool same = comparison is not null && JsonSerializer.Serialize(comparison) == JsonSerializer.Serialize(observation);
             // Refresh provenance at most once/minute; semantic changes save promptly.
-            if (comparison is not null && JsonSerializer.Serialize(comparison) == JsonSerializer.Serialize(observation)
+            if (same
                 && observation.ObservedAtUtc - prior!.ObservedAtUtc < TimeSpan.FromMinutes(1)) continue;
+            semantic |= !same;
             if (prior is not null) candidate.Bills.Remove(prior);
             candidate.Bills.Add(observation); changed = true;
         }
@@ -115,6 +148,7 @@ internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
             bool signal = !store.CapacityReached; store.CapacityReached = true; return signal;
         }
         store.Characters = candidates;
+        LastSemanticChange = semantic;
         return true;
     }
     internal string PreparePrivateExport(string characterKey) {

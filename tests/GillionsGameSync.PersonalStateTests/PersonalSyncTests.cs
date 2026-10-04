@@ -27,6 +27,15 @@ internal static class PersonalSyncTests {
         check(!PersonalSyncPolicy.CanSend(true,true,PersonalSyncPolicy.Origin,true,prepared),"receipt stops duplicate maintenance");
         var successor = PersonalSyncPolicy.Prepare(state,owner,"hunt_bills",changed)!;
         check(successor.Nonce != prepared.Nonce && successor.Payload == changed,"changed content receives successor nonce only after ACK");
+        var timestampOnly = changed.Replace("{\"changed\":true}", "{\"changed\":true,\"observedAtUtc\":\"2026-10-04T00:00:00Z\",\"observationId\":\"refresh\"}");
+        successor.Acknowledged = true;
+        check(ReferenceEquals(successor,PersonalSyncPolicy.Prepare(state,owner,"hunt_bills",timestampOnly)),"minute observation identity/time refresh creates no network successor");
+        var clock = DateTime.UtcNow;
+        check(!PersonalSyncPolicy.Due(clock,clock.AddSeconds(5),DateTime.MinValue,false,false,true),"routine cadence retained");
+        check(PersonalSyncPolicy.Due(clock,clock.AddSeconds(5),DateTime.MinValue,false,true,true),"semantic/manual prompt bypasses periodic phase");
+        check(!PersonalSyncPolicy.Due(clock,clock.AddSeconds(5),clock.AddSeconds(60),false,true,true),"prompt cannot bypass failure backoff");
+        check(!PersonalSyncPolicy.Due(clock,clock.AddSeconds(5),DateTime.MinValue,true,true,true),"prompt cannot duplicate flight");
+        check(!PersonalSyncPolicy.Due(clock,DateTime.MinValue,DateTime.MinValue,false,true,false),"Sync now cannot enable OFF resources");
         for (int i=1;i<PersonalSyncPolicy.MaximumPrepared;i++)
             check(PersonalSyncPolicy.Prepare(state,PersonalSyncPolicy.Hash(i.ToString()),"hunt_bills",payload) is not null,"bounded owner admission");
         var before = JsonSerializer.Serialize(state);

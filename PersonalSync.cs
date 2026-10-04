@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 
 namespace GillionsGameSync;
@@ -30,6 +31,22 @@ internal static class PersonalSyncPolicy {
     internal const int MaximumStateBytes = 1152 * 1024;
     internal static string Owner(string generation, string characterKey) => Hash(generation + ":" + characterKey);
     internal static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
+    // Payload/nonce custody still uses the EXACT hash. Only admission of an ACKed
+    // Hunt successor ignores routine observation identity/time refreshes.
+    internal static bool SameObservation(string resource, string first, string second) {
+        if (first == second) return true;
+        if (resource != "hunt_bills") return false;
+        JsonNode? Semantic(string payload) {
+            var node = JsonNode.Parse(payload);
+            if (node?["bills"] is JsonArray bills)
+                foreach (var bill in bills.OfType<JsonObject>()) {
+                    bill.Remove("observationId"); bill.Remove("observedAtUtc");
+                }
+            return node;
+        }
+        try { return JsonNode.DeepEquals(Semantic(first), Semantic(second)); }
+        catch (JsonException) { return false; }
+    }
     internal static string? Schema(string resource) => resource switch {
         "hunt_bills" => "hunt-bills-v1", "submarine_personal" => "submarine-personal-v1", _ => null
     };
@@ -77,7 +94,7 @@ internal static class PersonalSyncPolicy {
     internal static PersonalPreparedSnapshot? Prepare(PersonalSyncState state, string owner, string resource, string payload) {
         if (!Valid(state) || !PersonalObservationCompatibility.Key(owner) || !PayloadValid(resource, payload)) return null;
         var prior = state.Prepared.SingleOrDefault(p => p.OwnerKey == owner && p.Resource == resource);
-        if (prior is not null && (!prior.Acknowledged || prior.PayloadHash == Hash(payload))) return prior;
+        if (prior is not null && (!prior.Acknowledged || SameObservation(resource, prior.Payload, payload))) return prior;
         if (prior is null && state.Prepared.Count >= MaximumPrepared) return null;
         var next = new PersonalPreparedSnapshot(owner, resource, Guid.NewGuid().ToString("N"), payload, Hash(payload));
         var candidate = new PersonalSyncState { Prepared = state.Prepared.Where(p => p != prior).Append(next).ToList() };
@@ -87,6 +104,8 @@ internal static class PersonalSyncPolicy {
     }
     internal static bool CanSend(bool sync, bool retain, string origin, bool accepted, PersonalPreparedSnapshot? prepared) =>
         sync && retain && origin == Origin && accepted && prepared is { Acknowledged: false, Blocked: false };
+    internal static bool Due(DateTime now, DateTime next, DateTime retry, bool inFlight, bool prompt, bool enabled) =>
+        enabled && !inFlight && now >= retry && (prompt || now >= next);
     internal static bool Receipt(string json) {
         try {
             using var doc = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 16 });
