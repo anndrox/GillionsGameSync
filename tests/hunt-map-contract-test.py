@@ -73,4 +73,6 @@ assert 'HuntMapPolicy.TryPoll(json, commandClock.UtcNow' in hunt
 assert 'HuntMapPolicy.Valid(r, commandClock.UtcNow)' in hunt
 assert 'Stopwatch.GetElapsedTime(observed) < remaining' in focus
 assert 'ClearHuntMapRequests(); websiteItemPoll.Reset()' not in p
+assert 'if (!commandClock.Unexpired(request.ExpiresAtUtc)) return false;' in p
+assert 'request => ConsumeItemLinkRequestAsync(permit, request\n#if GILLIONS_TEST_BUILD\n                    , commandClock' in p
 print('Exact-origin bounded issuer timeline/parser/consume/presentation/monotonic focus boundaries PASS')

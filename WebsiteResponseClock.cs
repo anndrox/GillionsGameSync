@@ -14,6 +14,7 @@ internal sealed class WebsiteResponseClock {
     internal bool IssuerTime { get; }
     private WebsiteResponseClock(DateTime value, bool issuer) { reference = value; IssuerTime = issuer; }
     internal DateTime UtcNow => reference.Add(Stopwatch.GetElapsedTime(received));
+    internal bool Unexpired(DateTime expiresAtUtc) => UtcNow < expiresAtUtc;
     internal static WebsiteResponseClock Capture(DateTimeOffset? date, DateTime localNow, TimeSpan headerRoundTrip) {
         if (localNow.Kind != DateTimeKind.Utc) throw new InvalidOperationException("UTC reference required.");
         // Missing Date preserves the old strict local-clock policy for V1;

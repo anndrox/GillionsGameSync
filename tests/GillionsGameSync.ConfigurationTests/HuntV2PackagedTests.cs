@@ -69,6 +69,10 @@ internal static class HuntV2PackagedTests {
         Check((bool)apply.Invoke(focus,[focusJson,issuerNow,true,now.AddSeconds(-2)])! && (bool)active.Invoke(focus,[now.AddSeconds(-2),true])!);
         Check(!(bool)active.Invoke(focus,[now.AddSeconds(28),true])!);
         Console.WriteLine("Exact packaged issuer clock/focus: 3 conservative-precision/skew/lease-expiry checks PASS; no live timing proof.");
+        var unexpired=issuerClockType.GetMethod("Unexpired",instanceFlags)!;
+        Check((bool)unexpired.Invoke(issuerClock,[now.AddSeconds(2)])!);
+        Check(!(bool)unexpired.Invoke(issuerClock,[now.AddSeconds(1)])!);
+        Console.WriteLine("Exact packaged item consume clock: 2 near-expiry/expired issuer checks PASS; no HTTP invocation.");
         // Exercise the actual packaged caller: response Date is trusted only
         // on the same exact HTTPS TEST origin, never a redirected/other host.
         var plugin=assembly.GetType("GillionsGameSync.Plugin",true)!;

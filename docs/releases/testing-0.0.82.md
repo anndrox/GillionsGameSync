@@ -43,6 +43,9 @@ checks use that reference. Missing Date preserves prior strict local validation;
 malformed/unbounded clock fails closed. The same exact TEST response reference
 covers PF/item expiry; Stable/other origins remain unchanged. Focus failures do
 not break ordinary sync and consent changes do not reset unrelated lane backoff.
+Review also corrected Testing item pre-consume to use the same request clock as
+admission/presentation; near-expiry issuer fixtures cover PC-ahead false rejection.
+Stable behavior is unchanged.
 
 Consumption remains BEFORE presentation. Request identity/token/revision,
 consume-once, replay reservation, V1 fallback and Site-owned automatic watermark
@@ -79,12 +82,12 @@ remain required. Do not relabel the owner verdict or infer unmeasured stages.
 
 ## Publication hold
 
-Maintained verification passes:796 Hunt-map,542 Submarine,454 personal-state,
+Maintained verification passes:799 Hunt-map,542 Submarine,454 personal-state,
 1792 Dashboard,2551 travel,224 Market,116 PF and268 orchestration named checks
-(6743 total in those counted groups), plus ordinary item-link/Beastmaster/source/
+(6746 total in those counted groups), plus ordinary item-link/Beastmaster/source/
 manifest/performance checks. Stable and Testing builds have zero warnings/errors;
 12 actual Dalamud configuration fixtures pass for each. Packaged checks include
-16 V2/focus,9 command-clock,3 issuer/focus,6 actual issuer-caller boundaries and
+16 V2/focus,9 command-clock,3 issuer/focus,2 item consume clock,6 issuer-caller and
 5 running-Site wire cross-checks. These are synthetic/offline checks, not after
 latency measurements or owner-live acceptance.
 

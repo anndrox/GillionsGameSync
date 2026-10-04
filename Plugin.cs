@@ -627,7 +627,11 @@ public sealed class Plugin : IDalamudPlugin {
                 DateTime.UtcNow,
 #endif
                 itemId => ResolveItemNameAsync(itemId, permit),
-                request => ConsumeItemLinkRequestAsync(permit, request),
+                request => ConsumeItemLinkRequestAsync(permit, request
+#if GILLIONS_TEST_BUILD
+                    , commandClock
+#endif
+                ),
                 link => framework.RunOnFrameworkThread(() => {
                     RequirePermit(permit);
                     if (
@@ -840,8 +844,16 @@ public sealed class Plugin : IDalamudPlugin {
         return await pending!;
     }
 #endif
-    private async Task<bool> ConsumeItemLinkRequestAsync(SyncRequestPermit permit, ItemLinkRequest request) {
+    private async Task<bool> ConsumeItemLinkRequestAsync(SyncRequestPermit permit, ItemLinkRequest request
+#if GILLIONS_TEST_BUILD
+        , WebsiteResponseClock commandClock
+#endif
+    ) {
+#if GILLIONS_TEST_BUILD
+        if (!commandClock.Unexpired(request.ExpiresAtUtc)) return false;
+#else
         if (DateTime.UtcNow >= request.ExpiresAtUtc) return false;
+#endif
         using var consumeRequest = Request("/api/game-sync/item-links/consume", permit, new { requestId = request.RequestId, claimToken = request.ClaimToken });
         using var consumeResponse = await SendAsync(consumeRequest, permit);
         if (!consumeResponse.IsSuccessStatusCode) return false;
