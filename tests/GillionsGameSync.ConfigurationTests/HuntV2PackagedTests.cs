@@ -8,7 +8,9 @@ internal static class HuntV2PackagedTests {
         void Check(bool value) { if (!value) throw new InvalidOperationException("Exact packaged Hunt V2/focus invariant failed."); }
         var focusType = assembly.GetType("GillionsGameSync.HuntFocusState");
         var negotiationType = assembly.GetType("GillionsGameSync.HuntMapNegotiation");
-        if (!testing) { Check(focusType is null && negotiationType is null); return; }
+        var clockType = assembly.GetType("GillionsGameSync.WebsiteCommandPollClock");
+        var timingType = assembly.GetType("GillionsGameSync.WebsiteCommandTrace");
+        if (!testing) { Check(focusType is null && negotiationType is null && clockType is null && timingType is null); return; }
         var policy = assembly.GetType("GillionsGameSync.HuntMapPolicy", true)!;
         var poll = policy.GetMethod("TryPoll", flags)!;
         var now = new DateTime(2026, 10, 4, 18, 0, 0, DateTimeKind.Utc);
@@ -50,6 +52,16 @@ internal static class HuntV2PackagedTests {
         Check((string)capability.Invoke(negotiation,[now])! == "native_hunt_map_v1");
         Check((string)capability.Invoke(negotiation,[now.AddMinutes(5)])! == "native_hunt_map_v2");
         Console.WriteLine("Exact packaged Hunt V2/focus: 16 pure contract/lease/fallback checks PASS; no game or HTTP invocation.");
+        var clock=Activator.CreateInstance(clockType!,nonPublic:true)!;
+        var begin=clockType!.GetMethod("TryBegin",instanceFlags)!;
+        bool Begin(DateTime time,bool focused)=>(bool)begin.Invoke(clock,[time,focused])!;
+        Check(Begin(now,false)&&!Begin(now.AddSeconds(4),false)&&Begin(now.AddSeconds(5),false));
+        clockType.GetMethod("Reset",instanceFlags)!.Invoke(clock,null);
+        Check(Begin(now,true)&&!Begin(now.AddMilliseconds(999),true)&&Begin(now.AddSeconds(1),true));
+        clockType.GetMethod("Backoff",instanceFlags)!.Invoke(clock,[now,TimeSpan.FromSeconds(30)]);
+        Check(!Begin(now.AddSeconds(29),true)&&Begin(now.AddSeconds(30),true));
+        Check(timingType is not null&&timingType.GetMethod("PollDispatched",instanceFlags) is not null);
+        Console.WriteLine("Exact packaged command clocks: 9 background/focus/no-double-deadline/backoff/timing checks PASS; not live latency proof.");
         if (siteProof is not null) {
             using var proof=JsonDocument.Parse(File.ReadAllText(siteProof)); var root=proof.RootElement;
             var observed=DateTime.Parse(root.GetProperty("now").GetString()!).ToUniversalTime();

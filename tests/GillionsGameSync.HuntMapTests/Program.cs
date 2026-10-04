@@ -5,6 +5,37 @@ using System.Text.Json.Nodes;
 var now = new DateTime(2026, 10, 4, 2, 0, 0, DateTimeKind.Utc);
 var count = 0;
 void Check(bool value, string name) { count++; if (!value) throw new Exception(name); }
+// Baseline double-deadline defect: a later reservation skips an entire turn.
+foreach(var seconds in new[]{3,5}) {
+    var outerDue=now.AddSeconds(seconds);
+    var innerDue=now.AddMilliseconds(.5).AddSeconds(seconds);
+    Check(outerDue < innerDue, "baseline inner deadline later than first eligible outer turn");
+    Check(outerDue.AddSeconds(seconds)>=innerDue, "baseline entire second nominal interval required");
+}
+var commandClock=new WebsiteCommandPollClock();
+Check(commandClock.TryBegin(now,false),"initial background poll");
+Check(!commandClock.TryBegin(now.AddSeconds(4.999),false),"bounded background wait");
+Check(commandClock.TryBegin(now.AddSeconds(5),false),"one background deadline not doubled");
+commandClock.Reset();
+for(var i=0;i<=30;i++) {
+    Check(commandClock.TryBegin(now.AddSeconds(i),true),"focused one second exact deadline "+i);
+    Check(!commandClock.TryBegin(now.AddSeconds(i).AddMilliseconds(999),true),"no faster focused poll "+i);
+}
+commandClock.Reset();commandClock.TryBegin(now,false);
+Check(!commandClock.TryBegin(now.AddMilliseconds(100),true),"focus acquisition shortens routine wait without immediate replay");
+Check(commandClock.TryBegin(now.AddMilliseconds(1100),true),"focus acquisition not stuck behind previous five second deadline");
+foreach(var seconds in new[]{30,60,300}) {
+    commandClock.Backoff(now,TimeSpan.FromSeconds(seconds));
+    for(var i=0;i<seconds;i++) Check(!commandClock.TryBegin(now.AddSeconds(i),true),"focus must not bypass retry "+seconds+"/"+i);
+    Check(commandClock.TryBegin(now.AddSeconds(seconds),true),"backoff recovery bounded");
+}
+commandClock.Reset();commandClock.TryBegin(now,true);
+Check(commandClock.TryBegin(now.AddSeconds(1),false),"expiry can finish previously reserved turn");
+Check(!commandClock.TryBegin(now.AddSeconds(5.999),false)&&commandClock.TryBegin(now.AddSeconds(6),false),"expired focus returns to background");
+var otherClock=new WebsiteCommandPollClock();otherClock.Backoff(now,TimeSpan.FromMinutes(5));
+commandClock.Reset();Check(commandClock.TryBegin(now,true)&&!otherClock.TryBegin(now,true),"independent lane denial and flight scheduling");
+var trace=new WebsiteCommandTrace();trace.PollDispatched();trace.Claimed();trace.ConsumeStarted();trace.ConsumeFinished();trace.MapStarted();trace.MapFinished();
+Check(trace.Describe().Contains("poll UTC")&&trace.Describe().Contains("claim-to-map")&&!trace.Describe().Contains("claimToken"),"numeric stage timings no private payload/token");
 JsonObject Fixture(string revision = "a", string? id = null) => new() {
     ["ok"] = true, ["request"] = new JsonObject {
         ["requestType"] = "hunt_map", ["requestId"] = id ?? Guid.NewGuid().ToString("D"), ["claimToken"] = new string('T', 43),

@@ -5,8 +5,10 @@ p=(root/'Plugin.cs').read_text(encoding='utf-8')
 m=(root/'HuntMapRequests.cs').read_text(encoding='utf-8')
 assert m.startswith('#if GILLIONS_TEST_BUILD || GILLIONS_HUNT_MAP_TESTS')
 assert 'public bool AutomaticallyShowHuntMap { get; set; }' in p
-loop=p.split('private async Task PollWebsiteRequestsAsync()',1)[1].split('private bool HuntMapPermitted',1)[0]
-assert 'itemLinkPollInFlight = true' in loop and 'finally' in loop
+loop=p.split('private void PollWebsiteRequests(DateTime now)',1)[1].split('private bool HuntMapPermitted',1)[0]
+assert '!huntMapPollInFlight && huntMapPoll.TryBegin(now, focused)' in loop
+assert '!itemLinkPollInFlight' in loop and 'websiteItemPoll.TryBegin(now, focused)' in loop
+assert 'await' not in loop # unrelated item/PF cannot serialize Hunt behind it
 assert 'PollHuntMapRequestAsync' in loop and 'PollItemLinkRequestsAsync' in loop
 assert 'EnableItemLinkRequests && HasPairedSession' in loop
 hunt=p.split('private bool HuntMapPermitted',1)[1].split('private bool PartyFinderLinksPermitted',1)[0]
@@ -18,7 +20,9 @@ assert 'BodyTimeoutSeconds = 10' in m and 'RequestTimeoutSeconds = 15' in m and 
 assert 'stream.ReadAsync(bytes.AsMemory(length), token)' in m
 assert 'HuntMapPolicy.Admit' in hunt and 'PermitIsCurrent(permit)' in hunt
 assert 'personalHttp.SendAsync' in hunt and 'HttpStatusCode.OK' in hunt and 'HuntMapPolicy.Consumed' in hunt
-assert 'nextItemLinkPollUtc' not in hunt and 'nextHuntMapPollUtc' in hunt # Hunt denial cannot throttle unrelated item/PF traffic.
+assert 'websiteItemPoll' not in hunt and 'huntMapPoll.Backoff' in hunt # independent lane denial
+assert 'huntMapPoll.TryBegin' not in hunt and 'AddSeconds(HuntFocusActive' not in hunt # no second deadline
+assert 'huntMapPollInFlight = true' in hunt and 'finally' in hunt and 'huntMapPollInFlight = false' in hunt
 assert 'new { capability = context.Capability }' in hunt
 assert 'capability = r.Capability' in hunt and 'HuntMapPolicy.TryPoll(json' in hunt
 assert 'huntMapNegotiation.LegacyEmpty' in hunt and 'huntMapNegotiation.Unsupported' in hunt
@@ -51,3 +55,13 @@ assert 'huntFocusActiveDiagnostic ? "active (ephemeral)"' in p # Draw reads mana
 assert 'HuntMapTransport.Deadline(permit.Cancellation, CancellationToken.None)' in p
 assert 'SyncResponsePolicy.ReadAsync(response.Content, responseCancellation)' in p
 print('Hunt V2/focus source/priority/independent permission/ephemeral privacy/compatibility boundaries PASS')
+
+clock=(root/'WebsiteCommandPollClock.cs').read_text(encoding='utf-8')
+trace=(root/'WebsiteCommandTrace.cs').read_text(encoding='utf-8')
+assert 'focused ? 1 : 5' in clock and 'focused && !retry' in clock
+assert 'Stopwatch.GetElapsedTime' in trace and 'CultureInfo.InvariantCulture' in trace
+assert 'PollDispatched' in hunt and 'Hunt command timing' in hunt
+for forbidden in ['Capture', 'RequestConfigurationSave', 'HttpClient', 'File.', 'claimToken']:
+    assert forbidden not in clock+trace,forbidden
+assert 'if (diagnostics.Count > 40)' in p # unchanged retention cap
+print('Command-only independent deadline/finite focus/backoff/numeric local timing boundaries PASS')

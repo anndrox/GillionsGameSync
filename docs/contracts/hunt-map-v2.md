@@ -27,7 +27,9 @@ Consume uses existing `/api/game-sync/item-links/consume`, exact returned
 requestId/claimToken/revision and capability for the parsed version. Only exact200
 `{ok:true,consumed:true}` may present once.409/replay/stale/malformed/network
 uncertainty never presents. Existing128-entry RAM attempted-request reservation,
-session cancellation, body10s/whole-turn15s limits and serial polling remain.
+session cancellation and body10s/whole-turn15s limits remain. Testing0.0.82
+preparation gives Hunt and item/PF independent single-flight polls; requests
+within each lane stay serialized. Maximum two simultaneous command polls.
 Explicit unsupported V2 or exact empty legacy response backs off to unchanged V1
 for five minutes; a V1 claim is never interpreted as a V2 command.
 
@@ -37,8 +39,18 @@ private Hunt sync. Its body is unchanged. Exact additive
 is RAM-only, permission-gated and hard-expired locally at <=30s. Active lease
 refreshes existing presence at12s, supported inactive probes at20s; failures keep
 existing backoff. Focus skips personal in-flight work and prioritizes the existing
-serialized website poll at3s instead of5s, without faster Hunt/travel reads.
+command polls at1s instead of5s, without faster Hunt/travel reads. Each lane
+reserves one deadline before dispatch (no outer/inner deadline quantization).
+Focus may shorten a routine wait, never existing30/60/300s failure backoff.
 Missing/failed/false/OFF/session change stops priority, not ordinary Game Sync.
+
+This cadence is preparation, not evidence of live latency acceptance. Initial
+focus discovery still depends on unchanged presence; an unavailable network or
+retry backoff cannot promise interactive delivery. Existing40-entry local
+diagnostics add numeric command-stage timings and bounded failure summaries;
+no upload, new telemetry store, tokens, account IDs or coordinates are added.
+Consume acknowledgment precedes map invocation by design. A map API returning
+true is invocation evidence, not a measurement of pixels becoming visible.
 
 Site attribution recommendation remains **Data provided by xivpf.com**, with the
 clickable xivpf.com link. No contribution contract or technical identifier change.
