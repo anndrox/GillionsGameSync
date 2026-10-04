@@ -36,6 +36,24 @@ internal static class PersonalSyncTests {
         check(!PersonalSyncPolicy.Due(clock,clock.AddSeconds(5),clock.AddSeconds(60),false,true,true),"prompt cannot bypass failure backoff");
         check(!PersonalSyncPolicy.Due(clock,clock.AddSeconds(5),DateTime.MinValue,true,true,true),"prompt cannot duplicate flight");
         check(!PersonalSyncPolicy.Due(clock,DateTime.MinValue,DateTime.MinValue,false,true,false),"Sync now cannot enable OFF resources");
+        // Simulate response classification followed by deadline expiry while its
+        // framework disposition is queued. Actual ownership tokens remain live.
+        using(var sessionCancellation = new CancellationTokenSource())
+        using(var featureCancellation = new CancellationTokenSource())
+        using(var deadline = CancellationTokenSource.CreateLinkedTokenSource(sessionCancellation.Token,featureCancellation.Token)) {
+            var classifiedReceipt = PersonalSyncPolicy.Receipt(JsonSerializer.Serialize(new {ok=true,snapshotId=Guid.NewGuid(),receivedAt=clock,unchanged=false}));
+            var terminal403 = PersonalSyncPolicy.TerminalStatus(403);
+            deadline.Cancel();
+            check(deadline.IsCancellationRequested && !sessionCancellation.IsCancellationRequested && !featureCancellation.IsCancellationRequested,"deadline-only expiry fixture");
+            check(PersonalSyncPolicy.Disposition(true,sessionCancellation.IsCancellationRequested,featureCancellation.IsCancellationRequested,true,classifiedReceipt,false)==PersonalResponseDisposition.Acknowledged,"classified receipt survives delayed framework deadline");
+            check(PersonalSyncPolicy.Disposition(true,false,false,true,false,terminal403)==PersonalResponseDisposition.Blocked,"terminal403 survives delayed framework deadline, no unchanged retry");
+            check(PersonalSyncPolicy.Disposition(true,false,false,true,false,false)==PersonalResponseDisposition.Retry,"deadline-only failure requires bounded retry/backoff disposition");
+            sessionCancellation.Cancel();
+            check(PersonalSyncPolicy.Disposition(true,true,false,true,true,false)==PersonalResponseDisposition.Canceled,"session cancellation cannot commit old receipt");
+            check(PersonalSyncPolicy.Disposition(true,false,true,true,false,true)==PersonalResponseDisposition.Canceled,"feature cancellation cannot commit old terminal result");
+            check(PersonalSyncPolicy.Disposition(false,false,false,true,true,false)==PersonalResponseDisposition.Canceled,"re-pair/character ownership cancels old response");
+            check(PersonalSyncPolicy.Disposition(true,false,false,false,true,false)==PersonalResponseDisposition.Canceled,"OFF cannot commit queued response");
+        }
         for (int i=1;i<PersonalSyncPolicy.MaximumPrepared;i++)
             check(PersonalSyncPolicy.Prepare(state,PersonalSyncPolicy.Hash(i.ToString()),"hunt_bills",payload) is not null,"bounded owner admission");
         var before = JsonSerializer.Serialize(state);

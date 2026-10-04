@@ -27,6 +27,11 @@ must finish first; retry backoff/capability/consent gates remain. Ordinary sync 
 unchanged. Existing naturally observed submarine batch may send; no workshop is
 opened. Timestamp/observation-ID-only Hunt refreshes create no new upload successor.
 Private header/receipt work is bounded30s and retries preserve exact nonce/body.
+Review correction: preserve classified receipt/terminal/retry disposition if the
+HTTP deadline expires while framework commit waits; real ownership/OFF still
+cancels. Supported territory/transition lifecycle events reset the final-counter
+baseline even between due reads. Status no longer implies every final snapshot
+has currently matching Key Items. All three review findings are corrected together.
 
 Preserve automatic Hunt map v1, travel, PF contribution/native links, Market,
 Submarines, Dashboard/Custom Delivery, item links, Beastmaster and ordinary sync.

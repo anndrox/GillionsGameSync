@@ -55,6 +55,8 @@ internal sealed class HuntBillLocalView : IDisposable {
             return id > 0 && sheet.HasRow(id) ? sheet.GetRow(id).Singular.ExtractText() : null;
         });
         client.Logout += OnLogout;
+        client.TerritoryChanged += OnTerritoryChanged;
+        conditions.ConditionChange += OnConditionChange;
         commands.AddHandler("/gillionshunts", new CommandInfo((_, _) => Show()) { HelpMessage = "Testing read-only Hunt Bill local observations (no uploads)." });
         ui.UiBuilder.Draw += Draw;
         Publish(policy.Status);
@@ -68,6 +70,11 @@ internal sealed class HuntBillLocalView : IDisposable {
             ? HuntBillRetentionPolicy.CharacterKey(player->ContentId) : "";
     }
     private void OnLogout(int _, int __) { export = ""; schedule.Reset(); session.Reset(); rawFingerprint = ""; Publish("Logged out; retained Hunt state is historical, not current. Private sync paused."); }
+    private void ClearLiveBaseline() { export = ""; schedule.Reset(); session.Reset(); rawFingerprint = ""; }
+    private void OnTerritoryChanged(uint _) { ClearLiveBaseline(); Publish("Territory changed; prior Hunt observations preserved. Await fresh corroboration."); }
+    private void OnConditionChange(ConditionFlag flag, bool value) {
+        if (value && flag is ConditionFlag.BetweenAreas or ConditionFlag.BetweenAreas51) ClearLiveBaseline();
+    }
     private void Publish(string status, string characterKey = "", double milliseconds = 0) {
         var rows = policy.Supported ? store.Characters.SingleOrDefault(c => c.LocalCharacterKey == characterKey)?.Bills
             .OrderBy(b => b.BillTypeId).SelectMany(b => new[] {
@@ -98,7 +105,8 @@ internal sealed class HuntBillLocalView : IDisposable {
         return result.ToArray();
     }
     // Called by the plugin's existing framework update. The due check precedes
-    // all native access; no new subscription, requests or interface dependency.
+    // all native access; no new polling subscription, requests or interface dependency.
+    // Supported lifecycle subscriptions only invalidate the RAM admission baseline.
     internal unsafe void Tick(DateTime now, bool force = false) {
         if (!store.LocalRetentionEnabled) session.Reset();
         if (force) LastDiagnostic = "Hunt read not due/eligible (one-second manual admission bound); retained state preserved.";
@@ -164,7 +172,7 @@ internal sealed class HuntBillLocalView : IDisposable {
             LastDiagnostic = $"Hunt supported raw counter/gate state {(fingerprint != rawFingerprint ? "changed" : "unchanged")}; retained semantics {(policy.LastSemanticChange ? "changed" : "unchanged")}; admitted bills={observations.Count}; rejected/unavailable={partial}. Missing state is UNKNOWN.";
             rawFingerprint = fingerprint;
             var status = observations.Count == 0 ? $"No corroborated bills observed; {partial} partial/unmatched. NOT proof of no bills. Prior state preserved."
-                : $"Observed {observations.Count} bill caches with matching loaded Key Items; {partial} partial. Bill windows not required. Current order/cache ownership/reset unverified. Private TEST sync status is in the main window.";
+                : $"Observed {observations.Count} positive bill cache snapshots; {partial} partial/unmatched. Admission uses current Key Item corroboration or a bounded same-session final-counter transition. Bill windows not required. Current order/cache ownership/reset unverified. Private TEST sync status is in the main window.";
             if (store.CapacityReached) status += " Retention capacity reached: new character observations paused; existing history preserved.";
             Publish(status, characterKey, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         } catch (Exception) { Publish("Hunt read/save failed; history preserved. New data may be memory-only. No live correctness claim."); }
@@ -201,6 +209,7 @@ internal sealed class HuntBillLocalView : IDisposable {
     public void Dispose() {
         if (disposed) return; disposed = true; export = "";
         client.Logout -= OnLogout; ui.UiBuilder.Draw -= Draw; commands.RemoveHandler("/gillionshunts");
+        client.TerritoryChanged -= OnTerritoryChanged; conditions.ConditionChange -= OnConditionChange;
     }
 }
 #endif

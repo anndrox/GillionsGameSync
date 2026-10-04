@@ -21,6 +21,7 @@ public sealed record PersonalPreparedSnapshot(string OwnerKey, string Resource, 
     public bool Acknowledged { get; set; }
     public bool Blocked { get; set; }
 }
+internal enum PersonalResponseDisposition { Canceled, Acknowledged, Blocked, Retry }
 internal static class PersonalSyncPolicy {
     internal static readonly string[] Resources = ["hunt_bills", "submarine_personal"];
     internal const string Origin = "https://test.gillions.app";
@@ -122,6 +123,14 @@ internal static class PersonalSyncPolicy {
         try { save(); return true; } catch (Exception) { return false; }
     }
     internal static bool TerminalStatus(int status) => status is 400 or 401 or 403 or 404 or 409 or 413 or 415;
+    // HTTP deadline ends I/O, not ownership of an already classified response.
+    // A delayed framework commit still records its receipt/terminal/backoff unless
+    // the actual session or feature has ended. No linked HTTP token gate here.
+    internal static PersonalResponseDisposition Disposition(bool current, bool sessionCanceled,
+        bool featureCanceled, bool enabled, bool receipt, bool terminal) =>
+        !current || sessionCanceled || featureCanceled || !enabled ? PersonalResponseDisposition.Canceled
+        : receipt ? PersonalResponseDisposition.Acknowledged
+        : terminal ? PersonalResponseDisposition.Blocked : PersonalResponseDisposition.Retry;
     internal static async Task<bool> ReadReceiptAsync(int status, Func<Task<string>> read) =>
         status is >= 200 and <= 299 && Receipt(await read());
 }

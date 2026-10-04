@@ -76,6 +76,10 @@ Retained semantic changes immediately bypass the routine five-second preparation
 cadence, never failure backoff. After a receipt, the next framework turn can drain
 a changed successor or the other enabled resource. A whole private HTTP/receipt
 flight is bounded to30s; timeout retains the same nonce/body with60–900s backoff.
+If a classified response waits for a framework commit beyond that deadline, the
+network timeout does not silently discard its disposition: a completed valid
+receipt is acknowledged, a terminal response blocks, and other outcomes back off.
+Actual session/feature cancellation or OFF still prevents an old-state commit.
 Sync now requests a fresh eligible Hunt read and prompts independently enabled,
 compatible personal resources, even when ordinary sync is already in flight.
 Submarine state still requires naturally observed current-session workshop data;

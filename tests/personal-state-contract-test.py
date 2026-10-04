@@ -38,11 +38,17 @@ assert "foreach (var row in state.Rows) ImGui.TextUnformatted(row)" in draw
 assert "!session.MayReadFinal(index, now)" in hunt and "session.CanObserveFinal(observation)" in hunt
 assert "corroborated ? HuntObservationAdmission.KeyItemEvidence : null" in hunt
 assert "session.Reset()" in hunt and "session.Bind(characterKey)" in hunt
+for event in ("client.TerritoryChanged", "conditions.ConditionChange"):
+    assert event + " +=" in hunt and event + " -=" in hunt
+assert "if (value && flag is ConditionFlag.BetweenAreas or ConditionFlag.BetweenAreas51) ClearLiveBaseline()" in hunt
 assert "TickPersonalSync(now, prompt: huntChanged)" in plugin
 manual = plugin.split("private async Task SyncAsync",1)[1].split("var snapshots = captured.Snapshots",1)[0]
 assert "PersonalEnabled(\"hunt_bills\")" in manual and "huntLocal.Tick(DateTime.UtcNow, force: true)" in manual
 assert "TickPersonalSync(DateTime.UtcNow, prompt: true)" in manual
 assert "cancellation.CancelAfter(TimeSpan.FromSeconds(30))" in plugin
+disposition = plugin.split("var disposition = PersonalSyncPolicy.Disposition",1)[1].split("RequestConfigurationSave();",1)[0]
+assert "featureToken.IsCancellationRequested" in disposition and "permit.Cancellation.IsCancellationRequested" in disposition
+assert "token.IsCancellationRequested" not in disposition
 assert "characterAssociation =" in (root / "HuntBills.cs").read_text()
 assert "IsSubmarineExplorationUnlocked" in sub and "IsSubmarineExplorationExplored" in sub
 assert sub.index("planning->AddonId == args.Addon.Id") < sub.index("HousingManager.IsSubmarineExplorationUnlocked")

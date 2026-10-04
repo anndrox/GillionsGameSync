@@ -1802,13 +1802,15 @@ public sealed class Plugin : IDalamudPlugin {
             var receipt = await PersonalSyncPolicy.ReadReceiptAsync((int)response.StatusCode,
                 () => SyncResponsePolicy.ReadAsync(response.Content, token));
             await framework.RunOnFrameworkThread(() => {
-                if (!PermitIsCurrent(permit) || token.IsCancellationRequested || !PersonalEnabled(prepared.Resource)) return;
-                if (receipt) {
+                var disposition = PersonalSyncPolicy.Disposition(PermitIsCurrent(permit), permit.Cancellation.IsCancellationRequested,
+                    featureToken.IsCancellationRequested, PersonalEnabled(prepared.Resource), receipt, terminal);
+                if (disposition == PersonalResponseDisposition.Canceled) return;
+                if (disposition == PersonalResponseDisposition.Acknowledged) {
                     prepared.Acknowledged = true; personalFailures = 0; personalRetryUtc = DateTime.MinValue;
                     nextPersonalUtc = DateTime.MinValue; // Drain a newer semantic successor immediately after this receipt.
                     personalStatus = $"{prepared.Resource}: TEST receipt accepted. Positive retained observations only; current ownership/reset/completion claims remain limited.";
                     RecordDiagnostic($"Uploaded private {prepared.Resource} to shared TEST: HTTP {(int)response.StatusCode}; valid receipt. No live correctness claim.");
-                } else if (terminal) {
+                } else if (disposition == PersonalResponseDisposition.Blocked) {
                     prepared.Blocked = true;
                     personalStatus = $"{prepared.Resource}: HTTP {(int)response.StatusCode}; private snapshot stopped/preserved. Ordinary sync unchanged.";
                 } else {
