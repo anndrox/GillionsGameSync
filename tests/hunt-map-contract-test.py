@@ -11,7 +11,11 @@ assert 'PollHuntMapRequestAsync' in loop and 'PollItemLinkRequestsAsync' in loop
 assert 'EnableItemLinkRequests && HasPairedSession' in loop
 hunt=p.split('private bool HuntMapPermitted',1)[1].split('private bool PartyFinderLinksPermitted',1)[0]
 assert 'EnableItemLinkRequests' not in hunt and 'AutomaticSync' not in hunt and 'ShareHuntRoutingLocation' not in hunt
-assert 'CapturePermit(SyncRequestMode.Personal)' in hunt and 'CreateLinkedTokenSource' in hunt
+assert 'CapturePermit(SyncRequestMode.Personal)' in hunt and 'HuntMapTransport.Deadline(permit.Cancellation, context.Token)' in hunt
+assert 'HuntMapTransport.Deadline(cancellation, CancellationToken.None, r.ExpiresAtUtc)' in hunt
+assert 'HuntMapTransport.ReadAsync(response.Content, cancellation)' in hunt
+assert 'BodyTimeoutSeconds = 10' in m and 'RequestTimeoutSeconds = 15' in m and 'deadline.CancelAfter' in m
+assert 'stream.ReadAsync(bytes.AsMemory(length), token)' in m
 assert 'HuntMapPolicy.Admit' in hunt and 'PermitIsCurrent(permit)' in hunt
 assert 'personalHttp.SendAsync' in hunt and 'HttpStatusCode.OK' in hunt and 'HuntMapPolicy.Consumed' in hunt
 assert 'nextItemLinkPollUtc' not in hunt and 'nextHuntMapPollUtc' in hunt # Hunt denial cannot throttle unrelated item/PF traffic.

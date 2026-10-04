@@ -3,8 +3,10 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace GillionsGameSync;
@@ -101,6 +103,36 @@ internal static class HuntMapPolicy {
             return Exact(doc.RootElement, "ok", "consumed") && doc.RootElement.GetProperty("ok").ValueKind == JsonValueKind.True
                 && doc.RootElement.GetProperty("consumed").ValueKind == JsonValueKind.True;
         } catch (JsonException) { return false; }
+    }
+}
+
+internal static class HuntMapTransport {
+    internal const int RequestTimeoutSeconds = 15;
+    internal const int BodyTimeoutSeconds = 10;
+    internal static CancellationTokenSource Deadline(CancellationToken session, CancellationToken feature, DateTime? expiry = null) {
+        var source = CancellationTokenSource.CreateLinkedTokenSource(session, feature);
+        var remaining = expiry is null ? TimeSpan.FromSeconds(RequestTimeoutSeconds) : expiry.Value - DateTime.UtcNow;
+        if (remaining <= TimeSpan.Zero) source.Cancel();
+        else source.CancelAfter(remaining < TimeSpan.FromSeconds(RequestTimeoutSeconds) ? remaining : TimeSpan.FromSeconds(RequestTimeoutSeconds));
+        return source;
+    }
+    internal static async Task<string> ReadAsync(HttpContent content, CancellationToken cancellation) {
+        // ResponseHeadersRead ends HttpClient.Timeout at headers. Bound actual
+        // body reads independently, including chunked/slow/stalled responses.
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+        deadline.CancelAfter(TimeSpan.FromSeconds(BodyTimeoutSeconds));
+        var token = deadline.Token;
+        if (content.Headers.ContentLength > HuntMapPolicy.MaximumResponseBytes) throw new InvalidOperationException("Hunt response too large.");
+        using var stream = await content.ReadAsStreamAsync(token);
+        var bytes = new byte[HuntMapPolicy.MaximumResponseBytes + 1];
+        var length = 0;
+        while (length < bytes.Length) {
+            var read = await stream.ReadAsync(bytes.AsMemory(length), token);
+            if (read == 0) break;
+            length += read;
+        }
+        if (length > HuntMapPolicy.MaximumResponseBytes) throw new InvalidOperationException("Hunt response too large.");
+        return new UTF8Encoding(false, true).GetString(bytes, 0, length);
     }
 }
 

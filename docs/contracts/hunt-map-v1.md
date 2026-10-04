@@ -40,6 +40,10 @@ capability=`native_hunt_map_v1`, requestId, claimToken, revision.
 Only HTTP200 and exact `{"ok":true,"consumed":true}` authorizes presentation.
 409/stale/expired/revoked/unauthorized/redirect/network failure: no map action,
 discard coordinates, no consume retry. Ordinary sync/local observations survive.
+The whole Hunt poll/consume turn has a15-second linked deadline, each streamed
+body a10-second deadline, and known claim expiry can only shorten the consume
+lifetime. Stalled200 headers/bodies cannot indefinitely hold the shared request
+loop or retain expired claims. Failure releases its flight owner for item/PF.
 
 ## Revision and presentation
 

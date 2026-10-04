@@ -6,6 +6,8 @@
   sharing, Hunt uploads and item/PF links. Use the existing five-second request loop.
 - Exact authenticated TEST hunt_map/native_hunt_map_v1 claim/consume contract;
   server current-revision check immediately before supported public map presentation.
+- Finite whole-turn/body deadlines and claim-expiry cancellation prevent stalled
+  responses from holding the shared item/PF request loop; uncertain consumes never retry.
 - Single-use requests, manual same-target retry, explicit FATE/unknown availability,
   reference areas not sightings. Site v1 selects candidate 0; no alternative cycling.
 - No remote teleport, movement, targeting, game requests, TLS bypass or new history.

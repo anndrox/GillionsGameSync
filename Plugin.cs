@@ -651,7 +651,7 @@ public sealed class Plugin : IDalamudPlugin {
                 return (Permit: p, Token: token, Processor: huntMapProcessor);
             });
             permit = context.Permit;
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation, context.Token);
+            using var linked = HuntMapTransport.Deadline(permit.Cancellation, context.Token);
             var cancellation = linked.Token;
             using var request = Request("/api/game-sync/item-links/poll", permit, new { capability = HuntMapPolicy.Capability });
             using var response = await SendHuntMapAsync(request, permit, cancellation);
@@ -663,7 +663,7 @@ public sealed class Plugin : IDalamudPlugin {
                 });
                 return;
             }
-            var json = await ReadHuntMapResponseAsync(response.Content, cancellation);
+            var json = await HuntMapTransport.ReadAsync(response.Content, cancellation);
             var parsed = HuntMapPolicy.Parse(json, DateTime.UtcNow);
             var result = await context.Processor.ProcessAsync(parsed, () => DateTime.UtcNow,
                 () => framework.RunOnFrameworkThread(() => HuntMapPermitted(permit, cancellation)),
@@ -694,19 +694,6 @@ public sealed class Plugin : IDalamudPlugin {
         });
         return await pending!;
     }
-    private static async Task<string> ReadHuntMapResponseAsync(HttpContent content, CancellationToken cancellation) {
-        if (content.Headers.ContentLength > HuntMapPolicy.MaximumResponseBytes) throw new InvalidOperationException("Hunt response too large.");
-        using var stream = await content.ReadAsStreamAsync(cancellation);
-        var bytes = new byte[HuntMapPolicy.MaximumResponseBytes + 1];
-        var length = 0;
-        while (length < bytes.Length) {
-            var read = await stream.ReadAsync(bytes.AsMemory(length), cancellation);
-            if (read == 0) break;
-            length += read;
-        }
-        if (length > HuntMapPolicy.MaximumResponseBytes) throw new InvalidOperationException("Hunt response too large.");
-        return new UTF8Encoding(false, true).GetString(bytes, 0, length);
-    }
     private async Task<bool> ConsumeHuntMapAsync(SyncRequestPermit permit, HuntMapRequest r, CancellationToken cancellation) {
         var catalogValid = await framework.RunOnFrameworkThread(() => {
             if (!HuntMapPermitted(permit, cancellation) || !HuntMapPolicy.Valid(r, DateTime.UtcNow)) return false;
@@ -717,12 +704,16 @@ public sealed class Plugin : IDalamudPlugin {
                 && (r.FateId is null || dataManager.GetExcelSheet<Fate>().HasRow(r.FateId.Value));
         });
         if (!catalogValid) return false;
+        // Parent bounds the whole poll/consume turn; known claim expiry may
+        // shorten it, never extend it or retain a stale claim while reading.
+        using var claimDeadline = HuntMapTransport.Deadline(cancellation, CancellationToken.None, r.ExpiresAtUtc);
+        cancellation = claimDeadline.Token;
         using var request = Request("/api/game-sync/item-links/consume", permit, new {
             requestType = HuntMapPolicy.RequestType, capability = HuntMapPolicy.Capability,
             requestId = r.RequestId, claimToken = r.ClaimToken, revision = r.Revision,
         });
         using var response = await SendHuntMapAsync(request, permit, cancellation);
-        return response.StatusCode == HttpStatusCode.OK && HuntMapPolicy.Consumed(await ReadHuntMapResponseAsync(response.Content, cancellation));
+        return response.StatusCode == HttpStatusCode.OK && HuntMapPolicy.Consumed(await HuntMapTransport.ReadAsync(response.Content, cancellation));
     }
     private bool PartyFinderLinksPermitted(SyncRequestPermit permit) => PermitIsCurrent(permit)
         && configuration.EnableItemLinkRequests && configuration.EnablePartyFinderLinkRequests

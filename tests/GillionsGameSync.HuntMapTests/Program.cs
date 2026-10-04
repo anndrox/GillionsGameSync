@@ -93,9 +93,67 @@ try { await processor.ProcessAsync(lost,()=>now,Permit,r=>throw new HttpRequestE
 Check((await processor.ProcessAsync(lost,()=>now,Permit,Consume,Present)).Contains("already attempted"),"no uncertain replay");
 for(int i=0;i<300;i++) await processor.ProcessAsync(Parse(Fixture("c"))!,()=>now,Permit,Consume,Present);
 Check(((System.Collections.ICollection)typeof(HuntMapProcessor).GetField("order",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.GetValue(processor)!).Count==128,"bounded RAM watermark");
+// Actual linked transport and stream reader, not HttpClient's header-only
+// timeout. One real10s body deadline, plus short known-expiry/lifecycle tests.
+var flight = false;
+var elapsed = System.Diagnostics.Stopwatch.StartNew();
+try {
+    flight=true;
+    using var stalledPoll=new StreamContent(new StalledStream());
+    await HuntMapTransport.ReadAsync(stalledPoll,CancellationToken.None);
+    Check(false,"stalled poll must timeout");
+} catch(OperationCanceledException) {
+    Check(elapsed.Elapsed>=TimeSpan.FromSeconds(9)&&elapsed.Elapsed<TimeSpan.FromSeconds(14),"finite stalled poll body deadline");
+} finally { flight=false; }
+Check(!flight&&opens.Count==304,"stalled poll releases flight/no map");
+var stalledClaim=Parse(Fixture("c"))!;var stalledConsumes=0;var stalledOpens=0;var stalledProcessor=new HuntMapProcessor();
+try {
+    flight=true;
+    await stalledProcessor.ProcessAsync(stalledClaim,()=>now,Permit,async r=>{
+        stalledConsumes++;
+        using var deadline=HuntMapTransport.Deadline(CancellationToken.None,CancellationToken.None,DateTime.UtcNow.AddMilliseconds(100));
+        using var content=new StreamContent(new StalledStream());
+        await HuntMapTransport.ReadAsync(content,deadline.Token);return true;
+    },r=>{stalledOpens++;return Task.FromResult(true);});
+    Check(false,"stalled consume must cancel at claim expiry");
+} catch(OperationCanceledException) { Check(true,"stalled consume expiry"); } finally { flight=false; }
+Check(!flight&&stalledConsumes==1&&stalledOpens==0,"stalled consume releases flight/no map");
+Check((await stalledProcessor.ProcessAsync(stalledClaim,()=>now,Permit,Consume,Present)).Contains("already attempted")&&stalledConsumes==1,"no uncertain stalled consume retry");
+using(var cancel=new CancellationTokenSource()) {
+    using var deadline=HuntMapTransport.Deadline(cancel.Token,CancellationToken.None);cancel.Cancel();
+    Check(deadline.IsCancellationRequested,"session cancel deadline");
+}
+using(var cancel=new CancellationTokenSource()) {
+    using var deadline=HuntMapTransport.Deadline(CancellationToken.None,cancel.Token);cancel.Cancel();
+    Check(deadline.IsCancellationRequested,"consent cancel deadline");
+}
+using(var deadline=HuntMapTransport.Deadline(CancellationToken.None,CancellationToken.None,DateTime.UtcNow.AddMilliseconds(-1))) Check(deadline.IsCancellationRequested,"past claim cancels immediately");
+using(var deadline=HuntMapTransport.Deadline(CancellationToken.None,CancellationToken.None)) {
+    var requestElapsed=System.Diagnostics.Stopwatch.StartNew();
+    try { await Task.Delay(Timeout.InfiniteTimeSpan,deadline.Token); Check(false,"whole turn deadline"); }
+    catch(OperationCanceledException) { Check(requestElapsed.Elapsed>=TimeSpan.FromSeconds(14)&&requestElapsed.Elapsed<TimeSpan.FromSeconds(20),"15s whole turn deadline"); }
+}
+using(var oversize=new ByteArrayContent(new byte[4097])) {
+    try { await HuntMapTransport.ReadAsync(oversize,CancellationToken.None);Check(false,"oversize"); } catch(InvalidOperationException) { Check(true,"bounded response length"); }
+}
+using(var good=new StringContent("{\"ok\":true,\"consumed\":true}")) Check(HuntMapPolicy.Consumed(await HuntMapTransport.ReadAsync(good,CancellationToken.None)),"normal streamed consume");
 if(args.Length==2&&args[0]=="--site-protocol") {
     var proof=JsonNode.Parse(File.ReadAllText(args[1]))!.AsObject();
     Check(HuntMapPolicy.Parse(proof["poll"]!.ToJsonString(),now)!=null,"actual Site generated payload");
     Check(HuntMapPolicy.Consumed(proof["consume"]!.ToJsonString()),"actual Site consume ack");
 }
 Console.WriteLine($"Hunt map focused fixtures passed: {count}; no live game proof.");
+
+sealed class StalledStream : Stream {
+    public override bool CanRead=>true;
+    public override bool CanSeek=>false;
+    public override bool CanWrite=>false;
+    public override long Length=>throw new NotSupportedException();
+    public override long Position { get=>0;set=>throw new NotSupportedException(); }
+    public override int Read(byte[] b,int offset,int count)=>throw new NotSupportedException();
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer,CancellationToken token=default) { await Task.Delay(Timeout.InfiniteTimeSpan,token);return 0; }
+    public override void Flush()=>throw new NotSupportedException();
+    public override long Seek(long o,SeekOrigin origin)=>throw new NotSupportedException();
+    public override void SetLength(long l)=>throw new NotSupportedException();
+    public override void Write(byte[] b,int offset,int count)=>throw new NotSupportedException();
+}

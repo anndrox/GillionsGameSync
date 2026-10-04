@@ -10,6 +10,9 @@ authenticated TEST-only claim/atomic consume before public map presentation.
 Stale A fails after authoritative B commits; duplicate polls do not reopen a map.
 Site manual Show creates a legitimately new request for the same current revision.
 No delayed map replay, offline action queue, TLS bypass or game automation.
+Independent review identified a stalled-body blocker before publication. The
+corrected candidate bounds the whole Hunt turn15s, bodies10s and known claim expiry;
+stalled poll/consume tests prove cancellation, flight release and no uncertain replay.
 
 Hunt areas are public references, not sightings. FATE-required names and unknown
 activity remain honest. Site v1 selects candidate0 with identity/order/count; it
