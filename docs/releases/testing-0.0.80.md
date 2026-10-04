@@ -87,3 +87,23 @@ copy aggregate Hunt plus main diagnostics only. No reset/re-pair/private JSON ne
 **READY FOR OWNER HUNT FINAL-COMPLETION RETEST** only after exact reviewed publication.
 No corrected live success is claimed. Stable/main/Site/production, all79 capabilities
 and prior immutable releases remain outside mutation scope.
+
+## Exact reviewed publication
+
+Published Testing80 at `2026-10-04T15:15:44Z`; artifact source
+`0330f229953ca7e6e656f8211744ebe2dfa95fab`, tag `v0.0.80-testing`.
+Compatibility and Security/Privacy accepted this exact source/package with no
+blocker; only the inherited Site map follow-up above remains. 6,121 maintained
+checks, Stable/Testing validation builds and12 exact packaged serializer fixtures
+passed. This candidate was packaged once; no rebuild after validation/review.
+
+- ZIP: `2f01799e58c83a2f702cb9c6a72f2aada1a24bad8cd92cffa25b6ed5c0a34f60`
+- DLL: `5d0cfc72938e6fbca00167c9c86709ce0068ac9f1ff25661bd8886def01e8124`
+- Manifest: `255bf37154b571f3cacdefd4b2c39b540e2346ae39a0af650b620325bacafa37`
+
+Anonymous immutable and unchanged rolling64manifest -> ZIP -> DLL byte equality
+verified at `2026-10-04T15:15:55.153262Z`. All28 prior immutable release assets and
+historical64 notes suffix preserved; only the authorized mutable64manifest and
+current notes prefix changed. Durable release/feed records are in
+`data/releases/testing-0.0.80.json` and `data/releases/testing-update-feed.json`.
+The later record commit is not a replacement artifact source.
