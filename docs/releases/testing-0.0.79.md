@@ -49,3 +49,14 @@ retention/personal TEST permission ON, and finish one currently available multi-
 target (preferably the last incomplete target on its bill). Check final count and
 completion on TEST; if still stale, press Sync now once and copy aggregate Hunt
 and main-window diagnostics only. No configuration reset/private JSON/credentials.
+
+Published2026-10-04T09:45:30Z as `v0.0.79-testing`, corrected source
+`58f6570c627f4a2f9a390029fc3dbdd5f1cb44cc`. Both independent reviews accepted
+the exact corrected package with all findings resolved.6,030 maintained numbered
+checks,368 personal checks, installed SDK/Stable+Testing builds and12 final packaged
+configuration fixtures pass. No rebuild after final exact validation.
+Anonymous versioned and rolling manifests/ZIP/contained DLL verified; the same
+rolling URL resolves0.0.79.0. All prior immutable assets and historical64 notes
+suffix unchanged. See [publication record](../../data/releases/testing-0.0.79.json).
+Site inspection was read-only; Site advanced independently in its own lane.
+Final: **READY FOR OWNER HUNT PROGRESSION RETEST**, not corrected live success.
