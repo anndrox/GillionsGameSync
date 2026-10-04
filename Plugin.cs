@@ -172,6 +172,7 @@ public sealed class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Testing80 binds typed numeric Hunt progress to a recent exact bill/order/target. Raw/accessor disagreement fails closed; stale same-order reads never undo positive progress. No localized chat parsing or completion from absence.",
         "Hunts use three-second bounded reads and prompt semantic-change sync. Sync now refreshes eligible Hunt data without bypassing consent/backoff. Recent same-session final counters can survive bill-item removal; disappearance alone remains UNKNOWN.",
         "Automatic Hunt map guidance has its own default-OFF permission. Secure TEST requests consume the current Site revision before opening a public reference map; never teleport, move or target. Site v1 selects one candidate; alternative cycling is not yet supported.",
         "Testing PF contribution now uses the approved secure TEST paired origin, never production. Website PF links require a new separate opt-in and compatible Site request contract; they deliver a native chat link requiring a final in-game click, never join or apply.",
@@ -261,7 +262,7 @@ public sealed class Plugin : IDalamudPlugin {
             addonLifecycle, configuration.SubmarineVoyages, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
         configuration.HuntBills ??= new();
         huntLocal = new HuntBillLocalView(pluginInterface, commands, framework, clientState, dataManager,
-            marketConditions, configuration.HuntBills, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
+            marketConditions, chatGui, configuration.HuntBills, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
         configuration.DashboardFacts ??= new();
         configuration.PersonalSync ??= new();
         dashboardLocal = new DashboardLocalView(pluginInterface, commands, framework, clientState, dataManager,
@@ -679,6 +680,7 @@ public sealed class Plugin : IDalamudPlugin {
                     // Supported public API, human-readable map XY. No native
                     // offsets, callbacks, teleport, movement or targeting.
                     var opened = huntMapGui.OpenMapWithMapLink(new MapLinkPayload(r.TerritoryId, r.MapId, r.MapX, r.MapY));
+                    RecordDiagnostic($"Hunt map: new one-time Site request consumed; target ID {r.TargetId}, candidate {r.CandidateId}, revision {r.Revision[..12]}; presentation={(opened ? "shown" : "unavailable")}. No Native target inference.");
                     if (opened) chatGui.Print(r.Guidance, "Gillions");
                     return opened;
                 }));

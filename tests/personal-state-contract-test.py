@@ -28,6 +28,16 @@ assert "huntLocal.Tick(now);" in plugin
 assert plugin.index("huntLocal.Tick(now);") < plugin.index("if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;")
 assert "ObtainedFlags" in hunt and "GetObtainedHuntOrderRowId(index)" in hunt
 assert "CurrentKills[index].Counts" in hunt and "CatalogTargets" in hunt
+assert "hunt->GetKillCount(index, t.TargetIndex)" in hunt and "!c.Valid(catalog[n].RequiredKills)" in hunt
+assert "GetAvailableHuntOrderRowId(index)" in hunt
+assert "chat.LogMessage += OnProgressMessage" in hunt and "chat.LogMessage -= OnProgressMessage" in hunt
+progress = hunt.split("private void OnProgressMessage",1)[1].split("private void OnTerritoryChanged",1)[0]
+assert "!store.LocalRetentionEnabled" in progress and "!framework.IsInFrameworkUpdateThread" in progress
+assert "message.LogMessageId != HuntProgressMessage.LogId" in progress and "message.ParameterCount != 4" in progress
+assert all(f"TryGetIntParameter({n}," in progress for n in (1,2,3))
+assert not re.search("TryGetStringParameter|SourceEntity|TargetEntity|FormatLogMessage|ChatMessage|PreventOriginal|Address", progress)
+assert "session.Apply(observation" in hunt and "session.Record(nativeObservation)" in hunt
+assert "raw=" in hunt and "accessor=" in hunt and "retained-before=" in hunt
 assert "orders.HasRow(orderId)" in hunt and "catalog.HasRow(row.Target.RowId)" in hunt
 assert "presentation = new(id =>" in hunt and "sheet.GetRow(id).Singular.ExtractText()" in hunt
 assert "b.Targets.OrderBy(t => t.TargetIndex).Select(presentation.TargetLine)" in hunt

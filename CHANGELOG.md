@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.80 - Testing supported Hunt progress events
+
+- Compare installed SDK raw/accessor counters and expose bounded numeric stage
+  diagnostics. Disagreements and unavailable reads fail closed.
+- Bind typed LogMessage4411 NPC/count/required parameters to one recent exact
+  character/session bill/order/target and recheck native order before retention.
+  No chat text, entity identifiers, packet hooks or completion-by-absence.
+- Preserve positive same-order progress against stale counter regression, including
+  reload. Repeated same-order reset is unverified, not inferred from lower counts.
+- Keep three-second reads, prompt changed personal uploads, eligible Sync now,
+  immutable nonce/retry/permissions and all79 capabilities. Map diagnostics identify
+  new one-time Site target/candidate revisions; explicit manual Show remains valid.
+- Live final capture remains an owner retest, not a fixture-based success claim.
+
 ## 0.0.79 - Testing Hunt final-kill progression and prompt sync
 
 - Three-second bounded local Hunt reads; retained semantic changes immediately

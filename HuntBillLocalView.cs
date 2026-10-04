@@ -6,6 +6,7 @@ using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Command;
+using Dalamud.Game.Chat;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
@@ -24,6 +25,7 @@ internal sealed class HuntBillLocalView : IDisposable {
     private readonly IClientState client;
     private readonly IDataManager data;
     private readonly ICondition conditions;
+    private readonly IChatGui chat;
     private readonly HuntBillRetention store;
     private readonly HuntBillRetentionPolicy policy;
     private readonly HuntTargetPresentation presentation;
@@ -34,6 +36,7 @@ internal sealed class HuntBillLocalView : IDisposable {
     private readonly HuntObservationSchedule schedule = new();
     private readonly HuntSessionProgress session = new();
     private string rawFingerprint = "";
+    private string lastProgressDiagnostic = "Structured Hunt progress not observed in this session.";
     internal long SemanticRevision { get; private set; }
     internal long RawRevision { get; private set; }
     internal string LastDiagnostic { get; private set; } = "Hunt observation not attempted.";
@@ -46,9 +49,10 @@ internal sealed class HuntBillLocalView : IDisposable {
     private volatile View view = new(false, "Hunt retention off. Private TEST sync is controlled separately in the main window.", [], 0);
 
     internal HuntBillLocalView(IDalamudPluginInterface ui, ICommandManager commands, IFramework framework,
-        IClientState client, IDataManager data, ICondition conditions, HuntBillRetention store, System.Action persist) {
+        IClientState client, IDataManager data, ICondition conditions, IChatGui chat, HuntBillRetention store, System.Action persist) {
         this.ui = ui; this.commands = commands; this.framework = framework; this.client = client;
         this.data = data; this.conditions = conditions; this.store = store; this.persist = persist;
+        this.chat = chat;
         policy = new(store);
         presentation = new(id => {
             var sheet = data.GetExcelSheet<BNpcName>();
@@ -57,6 +61,7 @@ internal sealed class HuntBillLocalView : IDisposable {
         client.Logout += OnLogout;
         client.TerritoryChanged += OnTerritoryChanged;
         conditions.ConditionChange += OnConditionChange;
+        chat.LogMessage += OnProgressMessage;
         commands.AddHandler("/gillionshunts", new CommandInfo((_, _) => Show()) { HelpMessage = "Testing read-only Hunt Bill local observations (no uploads)." });
         ui.UiBuilder.Draw += Draw;
         Publish(policy.Status);
@@ -69,8 +74,26 @@ internal sealed class HuntBillLocalView : IDisposable {
         return client.IsLoggedIn && player != null && player->IsLoaded && player->ContentId != 0
             ? HuntBillRetentionPolicy.CharacterKey(player->ContentId) : "";
     }
-    private void OnLogout(int _, int __) { export = ""; schedule.Reset(); session.Reset(); rawFingerprint = ""; Publish("Logged out; retained Hunt state is historical, not current. Private sync paused."); }
-    private void ClearLiveBaseline() { export = ""; schedule.Reset(); session.Reset(); rawFingerprint = ""; }
+    private void OnLogout(int _, int __) { ClearLiveBaseline(); Publish("Logged out; retained Hunt state is historical, not current. Private sync paused."); }
+    private void ClearLiveBaseline() { export = ""; schedule.Reset(); session.Reset(); rawFingerprint = ""; lastProgressDiagnostic = "Structured Hunt progress cleared on session/transition."; }
+    private void OnProgressMessage(ILogMessage message) {
+        // The event wrapper is borrowed. Copy only three typed numeric values
+        // synchronously; never retain it, strings, entity data or chat content.
+        if (disposed || !store.LocalRetentionEnabled || !framework.IsInFrameworkUpdateThread
+            || message.LogMessageId != HuntProgressMessage.LogId) return;
+        if (!PersonalObservationCompatibility.Supports(GameVersion(), typeof(MobHunt).Assembly.GetName().Version?.ToString())
+            || conditions[ConditionFlag.BetweenAreas] || conditions[ConditionFlag.BetweenAreas51]) return;
+        var key = CurrentCharacterKey();
+        if (key.Length == 0) return;
+        session.Bind(key);
+        if (message.ParameterCount != 4 || !message.TryGetIntParameter(1, out var npc) || npc <= 0
+            || !message.TryGetIntParameter(2, out var count) || !message.TryGetIntParameter(3, out var required)) {
+            lastProgressDiagnostic = "Hunt log4411 parameter shape unsupported; no progress inferred."; return;
+        }
+        var proof = new HuntProgressMessage((uint)npc, count, required, DateTime.UtcNow);
+        bool bound = session.Queue(proof);
+        lastProgressDiagnostic = $"Hunt log4411 at {proof.ObservedAtUtc:u}: NPC name ID {npc}; count {count}/{required}; {(bound ? "uniquely bound to recent session bill; awaiting fresh order/gate check" : "rejected: invalid/ambiguous/unassociated session proof")}.";
+    }
     private void OnTerritoryChanged(uint _) { ClearLiveBaseline(); Publish("Territory changed; prior Hunt observations preserved. Await fresh corroboration."); }
     private void OnConditionChange(ConditionFlag flag, bool value) {
         if (value && flag is ConditionFlag.BetweenAreas or ConditionFlag.BetweenAreas51) ClearLiveBaseline();
@@ -143,6 +166,7 @@ internal sealed class HuntBillLocalView : IDisposable {
             }
             var observations = new List<HuntBillObservation>(22);
             var raw = new List<string>(22);
+            var details = new List<string>(132);
             int partial = 0;
             for (byte index = 0; index < 22; index++) {
                 if (!types.TryGetValue(index, out var type) || type.Type is not (1 or 2) || type.EventItem.RowId == 0) { partial++; continue; }
@@ -150,26 +174,45 @@ internal sealed class HuntBillLocalView : IDisposable {
                     type.EventItem.RowId, presentItems.Contains(type.EventItem.RowId));
                 if (!corroborated && !session.MayReadFinal(index, now)) continue;
                 int obtained = hunt->GetObtainedHuntOrderRowId(index); // Existing read-only row-ID getter, no request.
+                int available = hunt->GetAvailableHuntOrderRowId(index); // Diagnostic identity only; never substitute for obtained.
                 var catalog = obtained > 0 ? CatalogTargets((uint)obtained, type) : null;
                 if (catalog is null) { partial++; continue; }
-                var read = catalog.Select(t => t with { ObservedKills = hunt->CurrentKills[index].Counts[t.TargetIndex] }).ToArray();
-                raw.Add($"{index}:{obtained}:{corroborated}:{string.Join(',', read.Select(t => t.ObservedKills))}");
+                var counters = catalog.Select(t => new HuntCounterReading(hunt->CurrentKills[index].Counts[t.TargetIndex],
+                    hunt->GetKillCount(index, t.TargetIndex))).ToArray();
+                var read = catalog.Select((t, n) => t with { ObservedKills = counters[n].Accessor }).ToArray();
+                raw.Add($"{index}:{obtained}:{available}:{corroborated}:{string.Join(',', counters.Select(c => $"{c.Raw}/{c.Accessor}"))}");
+                details.Add($"Bill {index}: obtained order {obtained}; available order {available}; flag={((hunt->ObtainedFlags & (1 << index)) != 0)}; item={presentItems.Contains(type.EventItem.RowId)}; current corroboration={corroborated}.");
+                var retained = store.Characters.SingleOrDefault(c => c.LocalCharacterKey == characterKey)?.Bills.SingleOrDefault(b => b.BillTypeId == index);
+                for (int n = 0; n < catalog.Length; n++) {
+                    var t = catalog[n];
+                    var previous = retained?.OrderId == (uint)obtained ? retained.Targets.SingleOrDefault(p => p.TargetIndex == t.TargetIndex)?.ObservedKills : null;
+                    details.Add($"  Target index {t.TargetIndex}, ID {t.TargetId}, NPC {t.NpcNameId}: required={t.RequiredKills}; raw={counters[n].Raw}; accessor={counters[n].Accessor}; retained-before={previous?.ToString() ?? "UNKNOWN"}.");
+                }
+                if (counters.Where((c, n) => !c.Valid(catalog[n].RequiredKills)).Any()) { partial++; details.Add("  Counter disagreement/out-of-range: bill rejected, no clamping or source preference."); continue; }
                 bool weekly = type.Type == 2;
                 byte tier = weekly || index == 0 ? (byte)1 : (byte)((index <= 3 ? index - 1 : (index - 6) % 4) + 1);
                 var observation = new HuntBillObservation(index, weekly ? "weekly" : "daily", tier,
                     (uint)obtained, type.EventItem.RowId, read, now, GameVersion(), collectorVersion) {
                     SourceEvidence = corroborated ? HuntObservationAdmission.KeyItemEvidence : null
                 };
+                var nativeObservation = observation;
+                observation = session.Apply(observation, out bool messageApplied);
+                if (messageApplied) details.Add("  Exact typed log4411 progress applied after fresh same-order check; not disappearance inference.");
                 if (HuntBillRetentionPolicy.BillValid(observation) && (corroborated || session.CanObserveFinal(observation))) {
                     observations.Add(observation);
-                    if (corroborated) session.Record(observation);
+                    if (corroborated) session.Record(nativeObservation);
                 } else partial++;
             }
             if (policy.Observe(characterKey, observations.ToArray())) { export = ""; persist(); }
             if (policy.LastSemanticChange) SemanticRevision++;
+            foreach (var observation in observations) {
+                var saved = store.Characters.SingleOrDefault(c => c.LocalCharacterKey == characterKey)?.Bills.SingleOrDefault(b => b.BillTypeId == observation.BillTypeId);
+                if (saved is not null) details.Add($"Retained after: bill {saved.BillTypeId}, order {saved.OrderId}; "
+                    + string.Join(", ", saved.Targets.Select(t => $"target index {t.TargetIndex}={t.ObservedKills}/{t.RequiredKills}")) + ".");
+            }
             var fingerprint = string.Join('|', raw);
             if (fingerprint != rawFingerprint) RawRevision++;
-            LastDiagnostic = $"Hunt supported raw counter/gate state {(fingerprint != rawFingerprint ? "changed" : "unchanged")}; retained semantics {(policy.LastSemanticChange ? "changed" : "unchanged")}; admitted bills={observations.Count}; rejected/unavailable={partial}. Missing state is UNKNOWN.";
+            LastDiagnostic = $"Hunt supported raw/accessor counter/gate state {(fingerprint != rawFingerprint ? "changed" : "unchanged")}; retained semantics {(policy.LastSemanticChange ? "changed" : "unchanged")}; semantic revision={SemanticRevision}; admitted bills={observations.Count}; rejected/unavailable={partial}. Missing state is UNKNOWN.\n{lastProgressDiagnostic}\n" + string.Join('\n', details.Take(176));
             rawFingerprint = fingerprint;
             var status = observations.Count == 0 ? $"No corroborated bills observed; {partial} partial/unmatched. NOT proof of no bills. Prior state preserved."
                 : $"Observed {observations.Count} positive bill cache snapshots; {partial} partial/unmatched. Admission uses current Key Item corroboration or a bounded same-session final-counter transition. Bill windows not required. Current order/cache ownership/reset unverified. Private TEST sync status is in the main window.";
@@ -210,6 +253,7 @@ internal sealed class HuntBillLocalView : IDisposable {
         if (disposed) return; disposed = true; export = "";
         client.Logout -= OnLogout; ui.UiBuilder.Draw -= Draw; commands.RemoveHandler("/gillionshunts");
         client.TerritoryChanged -= OnTerritoryChanged; conditions.ConditionChange -= OnConditionChange;
+        chat.LogMessage -= OnProgressMessage;
     }
 }
 #endif

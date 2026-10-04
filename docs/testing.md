@@ -1,5 +1,14 @@
 # Testing
 
+## Testing 0.0.80 Hunt final-completion retest
+
+See [exact source correction, evidence limits and Site map handoff](releases/testing-0.0.80.md).
+Use one ordinarily available multi-kill target while80 is loaded. Compare final
+counts/Site progression; if stale, Sync now once and copy aggregate Hunt/main
+diagnostics, not private JSON/configuration. Source/catalog/compiled fixtures are
+not corrected live proof. Publication identity is recorded separately under
+`data/releases`; the repository URL stays unchanged.
+
 ## Fixed Testing update URL
 
 Keep `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`

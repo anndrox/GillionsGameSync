@@ -17,5 +17,6 @@
     <Reference Include="Lumina" HintPath="$(DalamudLibPath)/Lumina.dll" />
     <Reference Include="Lumina.Excel" HintPath="$(DalamudLibPath)/Lumina.Excel.dll" />
     <Reference Include="FFXIVClientStructs" HintPath="$(DalamudLibPath)/FFXIVClientStructs.dll" />
+    <Reference Include="Iced" HintPath="$(DalamudLibPath)/Iced.dll" />
   </ItemGroup>
 </Project>

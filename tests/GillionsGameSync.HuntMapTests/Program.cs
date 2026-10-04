@@ -75,6 +75,19 @@ Check((await processor.ProcessAsync(stale,()=>now,Permit,Consume,Present)).Conta
 Check((await processor.ProcessAsync(b,()=>now,Permit,Consume,Present)).Contains("shown")&&opens.Count==3,"B exactly once");
 Check((await processor.ProcessAsync(Parse(Fixture())!,()=>now,Permit,Consume,Present)).Contains("rejected")&&opens.Count==3,"late A after B");
 Check((await processor.ProcessAsync(b,()=>now,Permit,Consume,Present)).Contains("already attempted")&&opens.Count==3,"repeated B");
+// Native-controlled partial progress cannot create a request or replay an old
+// one. New Site request IDs (including explicit manual Show) still work.
+var progressProcessor = new HuntMapProcessor(); int progressOpens = 0, progressConsumes = 0;
+Task<bool> ProgressConsume(HuntMapRequest r) { progressConsumes++; return Task.FromResult(true); }
+Task<bool> ProgressPresent(HuntMapRequest r) { progressOpens++; return Task.FromResult(true); }
+Check((await progressProcessor.ProcessAsync(a,()=>now,Permit,ProgressConsume,ProgressPresent)).Contains("shown"), "Initial current target not shown once.");
+for (int kills = 0; kills <= 1; kills++)
+    Check((await progressProcessor.ProcessAsync(a,()=>now,Permit,ProgressConsume,ProgressPresent)).Contains("already attempted")
+        && progressOpens == 1 && progressConsumes == 1, "Partial0/2->1/2 replayed consumed request.");
+Check((await progressProcessor.ProcessAsync(Parse(Fixture())!,()=>now,Permit,ProgressConsume,ProgressPresent)).Contains("shown") && progressOpens == 2,
+    "Explicit manual same-target Show incorrectly deduped.");
+Check((await progressProcessor.ProcessAsync(b,()=>now,Permit,ProgressConsume,ProgressPresent)).Contains("shown") && progressOpens == 3,
+    "Next authoritative target blocked.");
 var changed=Fixture("c"); changed["request"]!["candidateId"]=new string('d',24); changed["request"]!["candidateCount"]=80;
 var c=Parse(changed)!;current=c.Revision;
 Check(c.CandidateCount==80&&(await processor.ProcessAsync(c,()=>now,Permit,Consume,Present)).Contains("shown"),"new candidate revision");

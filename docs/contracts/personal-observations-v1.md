@@ -1,6 +1,13 @@
 # Testing personal observations v1 — local draft and bounded Site handoff
 
 Current transport successor: [Testing personal transport](testing-personal-transport-v1.md).
+Testing80 adds exact numeric LogMessage4411 corroboration and monotonic retained
+same-order progress; see [producer correction](../releases/testing-0.0.80.md).
+This changes neither the payload shape nor the agreed server contract. Raw/accessor
+disagreement fails closed. Typed events require unique recent session bill binding
+and fresh exact obtained-order/catalog recheck, never localized chat parsing.
+Lower same-order counts do not erase positive progress; repeated identical-order
+reset generation remains unverified. New orders remain independently admitted.
 The sections below describe the original producing local v1 format and proposal;
 Testing 0.0.74 adds independently consented shared-TEST transport without changing
 these payload fields or granting public sharing. Dashboard remains local-only.

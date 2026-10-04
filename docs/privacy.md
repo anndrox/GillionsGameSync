@@ -1,5 +1,24 @@
 # Privacy
 
+## Testing 0.0.80 Hunt progress evidence and diagnostics
+
+Existing separate Hunt local-retention consent also covers narrowly filtered
+LogMessage4411 typed NPC/count/required parameters. Only three integers and event
+time can enter bounded session RAM; raw chat, strings, entities, names, account/
+character identifiers and borrowed message objects are not retained. Exact current
+bill/session binding and fresh obtained-order checks fail closed; reset generation
+remains unknown. Transient proof clears on session/transition/OFF; positive retained
+counts use the existing bounded private Hunt store and existing upload permission.
+No new upload dataset, public contribution, endpoint, credential or gameplay action.
+
+Aggregate Hunt diagnostics now deliberately include public bill/order/target IDs,
+required/raw/accessor/retained progress and event time (<=176 numeric rows plus
+summary), unlike the historical69 summary described below. These are private
+gameplay/activity observations: review before copying to a trusted recipient.
+Main diagnostics may record public target/candidate/revision of a newly consumed
+Site map request, never request/claim token or private coordinates. No automatic
+diagnostic upload. Never share full configuration or raw private exports.
+
 Testing76's Hunt routing-context setting is separate and OFF by default. Current
 map coordinates are rounded to0.1 map units; only the latest observation lives in
 RAM, expires after45 seconds and is invalidated on session/map changes. No raw

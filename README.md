@@ -1,5 +1,11 @@
 # Gillions Game Sync
 
+Testing80 adds supported numeric Hunt progress events when the native counter cache
+does not advance. It binds LogMessage4411 to one recently observed exact bill,
+rechecks the obtained order, and preserves positive progress against stale same-order
+reads. No localized chat parsing or completion-by-disappearance. See
+[correction, Site map handoff and live retest](docs/releases/testing-0.0.80.md).
+
 Testing79 corrects Hunt final-counter retention and responsiveness. Bounded local
 reads run every three seconds; semantic changes prompt enabled private TEST sync
 without another periodic phase. Sync now requests an eligible fresh Hunt read and

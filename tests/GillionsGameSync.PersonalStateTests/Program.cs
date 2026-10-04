@@ -3,6 +3,34 @@ using Lumina.Excel.Sheets;
 using System.Text.Json;
 using GillionsGameSync;
 
+// Offline disassembly of the installed executable, never process memory. Uses
+// Dalamud's existing Iced dependency; does not resolve/invoke runtime functions.
+if (args.Length == 2 && args[0] == "--hunt-binary") {
+    var bytes = File.ReadAllBytes(args[1]);
+    Console.WriteLine("EXE SHA256: " + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)));
+    foreach (var pattern in new[] { Convert.FromHexString("80FA167319") }) {
+        var offsets = Enumerable.Range(0, bytes.Length - pattern.Length).Where(i => bytes.AsSpan(i, pattern.Length).SequenceEqual(pattern)).ToArray();
+        Console.WriteLine($"Pattern {Convert.ToHexString(pattern)} matches {offsets.Length}");
+        foreach (var offset in offsets) {
+            var start = offset;
+            var decoder = Iced.Intel.Decoder.Create(64, new Iced.Intel.ByteArrayCodeReader(bytes[start..Math.Min(bytes.Length, offset + 33)]));
+            decoder.IP = (ulong)start;
+            var formatter = new Iced.Intel.IntelFormatter(); var output = new Iced.Intel.StringOutput();
+            while (decoder.IP < (ulong)Math.Min(bytes.Length, offset + 33)) { decoder.Decode(out var instruction); output.Reset(); formatter.Format(instruction, output); Console.WriteLine($"{instruction.IP:X}: {output}"); }
+        }
+    }
+    return;
+}
+
+// Static game catalog inspection only; no runtime pointers, chat or server access.
+if (args.Length == 2 && args[0] == "--hunt-logs") {
+    using var game = new Lumina.GameData(args[1]);
+    Console.WriteLine("Game version: " + game.Repositories["ffxiv"].Version);
+    foreach (var row in game.GetExcelSheet<LogMessage>()!.Where(r => r.Text.ExtractText().Contains("slain", StringComparison.OrdinalIgnoreCase)))
+        Console.WriteLine($"Log {row.RowId}: {row.Text.ToMacroString()}");
+    return;
+}
+
 // Offline SDK/catalog capability inventory only; no live pointers or requests.
 if (args.Length == 1 && args[0] == "--dashboard-sdk") {
     var assembly = typeof(FFXIVClientStructs.FFXIV.Client.Game.UI.PlayerState).Assembly;
@@ -145,6 +173,64 @@ session.Bind(key);
 Check(!session.CanObserveFinal(final), "Reload/history alone established final native evidence.");
 session.Record(Progress(1, 3)); session.Reset();
 Check(!session.CanObserveFinal(final), "Opt-out/logout preserved completion admission baseline.");
+// Both supported native reads are compared and fail closed on disagreement.
+var accessor = typeof(FFXIVClientStructs.FFXIV.Client.Game.UI.MobHunt).GetMethod("GetKillCount", [typeof(byte), typeof(byte)]);
+Check(accessor is not null && accessor.ReturnType == typeof(int), "Installed supported accessor signature unavailable.");
+foreach (var required in new[] { 1, 2, 3 }) foreach (var count in Enumerable.Range(0, required + 1))
+    Check(new HuntCounterReading(count, count).Valid(required), "Raw/accessor agreement rejected.");
+foreach (var pair in new[] { (0, 1), (1, 0), (1, 2), (-1, -1), (3, 3) })
+    Check(!new HuntCounterReading(pair.Item1, pair.Item2).Valid(2), "Disagreement/invalid native counter preferred or clamped.");
+HuntProgressMessage Message(int count, int required = 2, uint npc = 100, int seconds = 4) => new(npc, count, required, now.AddSeconds(seconds));
+Check(HuntProgressMessage.LogId == 4411, "Structured progress message identity changed.");
+foreach (var message in new[] { Message(-1), Message(3), Message(1, 0), Message(1, 256), Message(1, npc: 0), Message(1) with { ObservedAtUtc = DateTime.SpecifyKind(now, DateTimeKind.Local) } })
+    Check(!message.Valid, "Malformed structured progress admitted.");
+foreach (var required in new[] { 1, 2, 3 }) {
+    var eventSession = new HuntSessionProgress(); eventSession.Bind(key);
+    var eventStore = new HuntBillRetention { LocalRetentionEnabled = true }; var eventRetention = new HuntBillRetentionPolicy(eventStore);
+    HuntBillObservation Native(int count, int seconds) => Progress(count, seconds) with {
+        Targets = [Progress(0, 0).Targets[0] with { RequiredKills = (byte)required, ObservedKills = count }, Progress(0, 0).Targets[1]]
+    };
+    var initial = Native(0, 0); eventSession.Record(initial); Check(eventRetention.Observe(key, [initial]), "Initial event bill missing.");
+    for (int count = 1; count <= required; count++) {
+        var rawBill = Native(count - 1, count * 3);
+        eventSession.Record(rawBill);
+        Check(eventSession.Queue(Message(count, required, seconds: count * 3 + 1)), "Exact recent event did not bind.");
+        var readBill = rawBill with { ObservedAtUtc = now.AddSeconds(count * 3 + 2) };
+        var corrected = eventSession.Apply(readBill, out var applied);
+        Check(applied && corrected.Targets[0].ObservedKills == count, "Typed count failed to correct stale raw count.");
+        Check(eventRetention.Observe(key, [corrected]) && eventRetention.LastSemanticChange, "Corrected count not persisted promptly.");
+        Check(!eventSession.Apply(readBill, out _).Equals(corrected), "Borrowed event proof replayed.");
+        Check(!eventRetention.Observe(key, [readBill with { ObservedAtUtc = readBill.ObservedAtUtc.AddSeconds(1) }]) && !eventRetention.LastSemanticChange,
+            "Stale same-order native counter undid positive event progress.");
+    }
+    using var completedJson = JsonDocument.Parse(eventRetention.PreparePrivateExport(key));
+    Check(completedJson.RootElement.GetProperty("bills")[0].GetProperty("targets")[0].GetProperty("completed").GetBoolean(), "1/1,2/2,3/3 final event missing.");
+    var reloaded = JsonSerializer.Deserialize<HuntBillRetention>(JsonSerializer.Serialize(eventStore))!;
+    Check(!new HuntBillRetentionPolicy(reloaded).Observe(key, [Native(required - 1, 60)]), "Restart stale count erased retained positive completion.");
+    Check(eventRetention.Observe(key, [Native(0, 61) with { OrderId = 2 }]), "New obtained order incorrectly inherits old progress.");
+}
+session.Reset(); session.Bind(key); session.Record(Progress(1, 3));
+Check(session.Queue(Message(2)), "Bound final event not queued.");
+var eventFinal = session.Apply(Progress(1, 6) with { SourceEvidence = null }, out var finalEventApplied);
+Check(finalEventApplied && session.CanObserveFinal(eventFinal), "Explicit bound event final lost during bill-item transition.");
+foreach (var broken in new[] { final with { OrderId = 2 }, final with { EventItemId = 2000002 }, final with { Targets = [final.Targets[0] with { TargetId = 99 }, final.Targets[1]] }, final with { ObservedAtUtc = now.AddSeconds(11) }, Progress(0, 6) }) {
+    session.Reset(); session.Bind(key); session.Record(Progress(1, 3)); Check(session.Queue(Message(2)), "Negative proof setup failed.");
+    Check(session.Apply(broken, out var applied) == broken && !applied, "Mismatched/stale/regressive source inherited log proof.");
+}
+session.Reset(); session.Bind(key); session.Record(Progress(1, 3)); session.Record(Progress(1, 3) with { BillTypeId = 1 });
+Check(!session.Queue(Message(2)), "Ambiguous NPC/requirement bound to arbitrary bill.");
+session.Reset(); session.Bind(key); session.Record(Progress(1, 3)); Check(session.Queue(Message(2)), "Character reset setup failed.");
+session.Bind(HuntBillRetentionPolicy.CharacterKey(999)); Check(!session.Apply(final, out var foreignApplied).Equals(final) || !foreignApplied, "Cross-character event survived.");
+session.Reset(); session.Bind(key); Check(!session.Queue(Message(2)), "History/reload alone authorized event association.");
+session.Record(Progress(1, 3)); Check(!session.Queue(Message(2, seconds: 10)), "Stale bill baseline associated new event.");
+Check(!session.Queue(Message(2, seconds: 2)), "Event predates baseline.");
+session.Reset(); session.Bind(key); session.Record(Progress(0, 0) with { Targets = [Progress(0, 0).Targets[0], Progress(0, 0).Targets[1] with { ObservedKills = 0 }] });
+Check(session.Queue(Message(1, seconds: 1)) && session.Queue(Message(1, required: 1, npc: 101, seconds: 2)), "Two target events in one interval collided.");
+var multiple = session.Apply(Progress(0, 3) with { Targets = [Progress(0, 0).Targets[0], Progress(0, 0).Targets[1] with { ObservedKills = 0 }] }, out var multiApplied);
+Check(multiApplied && multiple.Targets.All(t => t.ObservedKills == 1), "Bounded multi-target interval lost positive event.");
+var weekly = Progress(0, 0) with { BillTypeId = 4, Category = "weekly", Targets = [Progress(0, 0).Targets[0] with { RequiredKills = 1, ObservedKills = 0 }] };
+session.Reset(); session.Bind(key); session.Record(weekly); Check(session.Queue(Message(1, required: 1, seconds: 1)), "Weekly event unassociated.");
+Check(session.Apply(weekly with { ObservedAtUtc = now.AddSeconds(3) }, out var weeklyApplied).Targets[0].ObservedKills == 1 && weeklyApplied, "Weekly/B-rank completion lost.");
 // Complete producing->retention->export->immutable preparation->receipt->successor path.
 var wireStore = new HuntBillRetention { LocalRetentionEnabled = true };
 var wireRetention = new HuntBillRetentionPolicy(wireStore);

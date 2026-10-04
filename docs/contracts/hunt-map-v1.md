@@ -57,7 +57,9 @@ after response, rechecking session/consent/expiry. It does not schedule delayed 
 Server retains one revision watermark per account/character and never auto-replays
 equivalent observations, page refreshes, repeated polls or unchanged travel updates.
 Native retains at most128 attempted request IDs in RAM; no claim/coordinates or
-history persisted/logged. Reserve before consume; a lost response sacrifices delivery
+request history persisted/logged. Testing80 records only public target/candidate/
+revision and presentation outcome after a new one-time consume in bounded local
+diagnostics, never request/claim token or private position. Reserve before consume; a lost response sacrifices delivery
 rather than replaying an uncertain side effect. New manual Show request ID may
 intentionally re-present the same revision; Native cannot invent an automatic/manual
 flag absent from v1. A revision hash is opaque and never sorted locally.

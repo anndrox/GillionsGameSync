@@ -49,12 +49,55 @@ internal sealed class HuntObservationSchedule {
 internal sealed class HuntSessionProgress {
     private string character = "";
     private readonly Dictionary<byte, HuntBillObservation> positive = new();
-    internal void Reset() { character = ""; positive.Clear(); }
+    private readonly Dictionary<(byte Bill, byte Target), (uint Order, HuntProgressMessage Message)> pending = new();
+    internal void Reset() { character = ""; positive.Clear(); pending.Clear(); }
     internal void Bind(string key) { if (character != key) { Reset(); character = key; } }
     internal void Record(HuntBillObservation observation) {
         if (HuntBillRetentionPolicy.BillValid(observation)
-            && observation.SourceEvidence == HuntObservationAdmission.KeyItemEvidence)
+            && observation.SourceEvidence == HuntObservationAdmission.KeyItemEvidence) {
+            foreach (var entry in pending.Where(p => p.Key.Bill == observation.BillTypeId
+                && (p.Value.Order != observation.OrderId || observation.ObservedAtUtc - p.Value.Message.ObservedAtUtc > TimeSpan.FromSeconds(6))).ToArray())
+                pending.Remove(entry.Key);
             positive[observation.BillTypeId] = observation;
+        }
+    }
+    // Numeric installed LogMessage4411 parameters, NOT localized chat text.
+    // Uniqueness binds the event to one exact, recent session bill/order/target.
+    internal bool Queue(HuntProgressMessage message) {
+        if (character.Length == 0 || !message.Valid) return false;
+        var matches = positive.Values.Where(b => message.ObservedAtUtc >= b.ObservedAtUtc
+            && message.ObservedAtUtc - b.ObservedAtUtc <= TimeSpan.FromSeconds(6))
+            .SelectMany(b => b.Targets.Where(t => t.NpcNameId == message.NpcNameId
+                && t.RequiredKills == message.Required && t.ObservedKills <= message.Count)
+                .Select(t => (Bill: b, Target: t))).ToArray();
+        if (matches.Length != 1) return false;
+        var match = matches[0];
+        var key = (match.Bill.BillTypeId, match.Target.TargetIndex);
+        if (pending.TryGetValue(key, out var old)
+            && (old.Order != match.Bill.OrderId || old.Message.Count > message.Count || old.Message.ObservedAtUtc > message.ObservedAtUtc)) return false;
+        pending[key] = (match.Bill.OrderId, message);
+        return true;
+    }
+    internal HuntBillObservation Apply(HuntBillObservation observation, out bool applied) {
+        applied = false;
+        var proofs = pending.Where(p => p.Key.Bill == observation.BillTypeId).ToArray();
+        foreach (var proof in proofs) pending.Remove(proof.Key);
+        if (proofs.Length == 0 || !HuntBillRetentionPolicy.BillValid(observation)
+            || !positive.TryGetValue(observation.BillTypeId, out var prior)
+            || prior.OrderId != observation.OrderId || prior.EventItemId != observation.EventItemId
+            || !HuntBillRetentionPolicy.SameTargets(prior, observation)
+            || observation.Targets.Any(t => t.ObservedKills < prior.Targets.Single(p => p.TargetIndex == t.TargetIndex).ObservedKills)) return observation;
+        foreach (var (key, proof) in proofs) {
+            var target = observation.Targets.SingleOrDefault(t => t.TargetIndex == key.Target);
+            if (proof.Order != observation.OrderId || observation.ObservedAtUtc < proof.Message.ObservedAtUtc
+                || observation.ObservedAtUtc - proof.Message.ObservedAtUtc > TimeSpan.FromSeconds(6)
+                || target is null || target.NpcNameId != proof.Message.NpcNameId
+                || target.RequiredKills != proof.Message.Required || target.ObservedKills > proof.Message.Count) continue;
+            applied = true;
+            observation = observation with { Targets = observation.Targets.Select(t => t.TargetIndex == key.Target
+                ? t with { ObservedKills = proof.Message.Count } : t).ToArray() };
+        }
+        return observation;
     }
     internal bool MayReadFinal(byte index, DateTime now) => positive.TryGetValue(index, out var prior)
         && now >= prior.ObservedAtUtc && now - prior.ObservedAtUtc <= TimeSpan.FromSeconds(6)
@@ -69,6 +112,14 @@ internal sealed class HuntSessionProgress {
         && observation.Targets.Length == prior.Targets.Length
         && observation.Targets.All(t => t.ObservedKills == t.RequiredKills
             && prior.Targets.Any(p => p with { ObservedKills = t.ObservedKills } == t && p.ObservedKills <= t.ObservedKills));
+}
+internal readonly record struct HuntProgressMessage(uint NpcNameId, int Count, int Required, DateTime ObservedAtUtc) {
+    internal const uint LogId = 4411;
+    internal bool Valid => NpcNameId > 0 && Required is >= 1 and <= 255
+        && Count > 0 && Count <= Required && PersonalObservationCompatibility.Utc(ObservedAtUtc);
+}
+internal readonly record struct HuntCounterReading(int Raw, int Accessor) {
+    internal bool Valid(int required) => required > 0 && Raw == Accessor && Raw >= 0 && Raw <= required;
 }
 internal static class HuntObservationAdmission {
     internal const string KeyItemEvidence = "loaded-key-item-and-obtained-flag-cache-unverified";
@@ -103,6 +154,8 @@ internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
         && bill.Targets.Select(t => t.TargetIndex).Distinct().Count() == bill.Targets.Length
         && bill.Targets.All(t => t is not null && t.TargetIndex < 5 && t.TargetId > 0 && t.NpcNameId > 0
             && t.RequiredKills > 0 && t.ObservedKills >= 0 && t.ObservedKills <= t.RequiredKills);
+    internal static bool SameTargets(HuntBillObservation a, HuntBillObservation b) => a.Targets.Length == b.Targets.Length
+        && a.Targets.All(t => b.Targets.Any(p => p with { ObservedKills = t.ObservedKills } == t));
     internal bool Supported {
         get {
             try {
@@ -130,9 +183,20 @@ internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
         var candidate = new RetainedHuntCharacter { LocalCharacterKey = characterKey, Bills = current?.Bills.ToList() ?? [] };
         bool changed = false;
         bool semantic = false;
-        foreach (var observation in observations) {
+        foreach (var input in observations) {
+            var observation = input;
             var prior = candidate.Bills.SingleOrDefault(b => b.BillTypeId == observation.BillTypeId);
             if (prior is not null && observation.ObservedAtUtc < prior.ObservedAtUtc) continue;
+            // A stale cache cannot undo positively observed progress for the same
+            // exact order. A decreased same-order count is not reset proof.
+            // New orders remain independently admitted; reset generation is unknown.
+            if (prior is not null && prior.OrderId == observation.OrderId && prior.EventItemId == observation.EventItemId
+                && SameTargets(prior, observation)) {
+                observation = observation with { Targets = observation.Targets.Select(t => {
+                    var known = prior.Targets.Single(p => p.TargetIndex == t.TargetIndex);
+                    return t.ObservedKills < known.ObservedKills ? known : t;
+                }).ToArray() };
+            }
             var comparison = prior is null ? null : prior with { ObservedAtUtc = observation.ObservedAtUtc, ObservationId = observation.ObservationId };
             bool same = comparison is not null && JsonSerializer.Serialize(comparison) == JsonSerializer.Serialize(observation);
             // Refresh provenance at most once/minute; semantic changes save promptly.
