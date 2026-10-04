@@ -11,6 +11,27 @@ static ItemLinkRequest Request(string id = "request-1", long itemId = 4555, Date
     new(id, itemId, expires ?? DateTime.UtcNow.AddMinutes(1), claim);
 
 const string currentPublicOrigin = "https://gillions.app";
+var customize = Enumerable.Range(0, 26).Select(value => (byte)value).ToArray();
+customize[0] = 1; customize[1] = 0; customize[2] = 1; customize[4] = 2;
+var appearance = CharacterAppearanceObservation.Capture(customize, "2026.09.01.0000.0000", new DateTime(2026,10,4,12,0,0,DateTimeKind.Utc), true, 1, 2, 0, false);
+if (args.Contains("--appearance-wire-fixture")) {
+    Console.WriteLine(JsonSerializer.Serialize(appearance));
+    return;
+}
+Assert(appearance.State == "complete" && appearance.CustomizationHex == Convert.ToHexString(customize).ToLowerInvariant(), "appearance must preserve every byte in order");
+using (var appearanceJson = JsonDocument.Parse(JsonSerializer.Serialize(appearance))) {
+    Assert(appearanceJson.RootElement.GetProperty("schemaVersion").GetInt32() == 1
+        && appearanceJson.RootElement.GetProperty("race").GetInt32() == 1
+        && appearanceJson.RootElement.GetProperty("modelSex").GetInt32() == 0, "wire names and numeric identity must be stable");
+}
+foreach (var invalidAppearance in new[] {
+    CharacterAppearanceObservation.Capture([], "2026.09.01.0000.0000", DateTime.UtcNow, true, 1, 2, 0, false),
+    CharacterAppearanceObservation.Capture(customize, "", DateTime.UtcNow, true, 1, 2, 0, false),
+    CharacterAppearanceObservation.Capture(customize, "2026.09.01.0000.0000", DateTime.UtcNow, false, 1, 2, 0, false),
+    CharacterAppearanceObservation.Capture(customize, "2026.09.01.0000.0000", DateTime.UtcNow, true, 1, 1, 0, false),
+    CharacterAppearanceObservation.Capture(customize, "2026.09.01.0000.0000", DateTime.UtcNow, true, 1, 2, 0, true),
+}) Assert(invalidAppearance.State == "unavailable" && invalidAppearance.CustomizationHex == null && invalidAppearance.Race == null, "unavailable must carry no invented customization/identity");
+Console.WriteLine("appearance observation tests passed");
 Assert(PublicUrlConfiguration.TryUseCompiledDefault("", currentPublicOrigin, out var initialOrigin)
     && initialOrigin == currentPublicOrigin, "a new configuration must use the compiled public origin");
 Assert(PublicUrlConfiguration.TryUseCompiledDefault(PublicUrlConfiguration.LegacyPublicBaseUrl + "/", currentPublicOrigin + "/", out var migratedOrigin)

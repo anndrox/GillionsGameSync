@@ -168,6 +168,12 @@ public sealed class Plugin : IDalamudPlugin {
         this.gameInventory = gameInventory;
         this.chatGui = chatGui;
         this.log = log;
+#if GILLIONS_APPEARANCE_PROOF_ONLY
+        // Do not load/save existing credentials, subscribe collectors or hydrate.
+        // This local build is incapable of uploading to the configured server.
+        configuration = new PluginConfiguration();
+        commands.AddHandler(CommandName, new CommandInfo(OnAppearanceProofCommand) { HelpMessage = "Local read-only appearance-proof <new-json-file>; no pairing or network." });
+#else
         configuration = pluginInterface.GetPluginConfig() as PluginConfiguration ?? new PluginConfiguration();
         uiServerAddress = configuration.ServerUrl;
         configuration.OwnedCharacters ??= new(StringComparer.Ordinal);
@@ -189,7 +195,45 @@ public sealed class Plugin : IDalamudPlugin {
         gameInventory.InventoryChangedRaw += OnInventoryChangedRaw;
         chatGui.LogMessage += OnLogMessage;
         chatGui.ChatMessage += OnChatMessage;
+#endif
     }
+
+#if GILLIONS_APPEARANCE_PROOF_ONLY
+    private void OnAppearanceProofCommand(string command, string arguments) {
+        const string prefix = "appearance-proof ";
+        if (!arguments.StartsWith(prefix, StringComparison.Ordinal)) {
+            chatGui.Print("Local appearance proof only. Use appearance-proof followed by a new absolute .json file path. No sync or pairing is enabled.");
+            return;
+        }
+        _ = CaptureAppearanceProofAsync(arguments[prefix.Length..].Trim());
+    }
+
+    private async Task CaptureAppearanceProofAsync(string destination) {
+        try {
+            if (!System.IO.Path.IsPathFullyQualified(destination) || System.IO.Path.GetExtension(destination) != ".json"
+                || !System.IO.Directory.Exists(System.IO.Path.GetDirectoryName(destination))) throw new InvalidOperationException();
+            var packet = await framework.RunOnFrameworkThread(() => {
+                if (disposed) throw new OperationCanceledException();
+                var snapshot = DirectGameSnapshotCollector.Collect(pluginInterface, clientState, objects, dataManager,
+                    unlockState, null, null, ["character"]).Single();
+                var payload = JsonSerializer.SerializeToElement(snapshot.Payload);
+                if (payload.GetProperty("appearance").GetProperty("state").GetString() != "complete") throw new InvalidOperationException();
+                return JsonSerializer.SerializeToUtf8Bytes(new {
+                    resourceType = "character", nonce = Guid.NewGuid().ToString("N"),
+                    payload,
+                });
+            });
+            if (disposed) return;
+            // A new explicitly requested private evidence file; never overwrite.
+            using var output = new System.IO.FileStream(destination, System.IO.FileMode.CreateNew, System.IO.FileAccess.Write, System.IO.FileShare.None);
+            await output.WriteAsync(packet);
+            chatGui.Print("Appearance proof saved locally. No network request, credential/configuration write, actor change or GPose was used.");
+        } catch {
+            // Never echo names, customization bytes, destination or arbitrary errors.
+            chatGui.Print("Appearance proof not saved. Log in on a normal playable character; use a new absolute .json path in an existing private directory.");
+        }
+    }
+#endif
 
     private void OnCommand(string command, string arguments) {
         settingsVisible = true;
@@ -1104,6 +1148,9 @@ public sealed class Plugin : IDalamudPlugin {
         if (!PermitIsCurrent(permit)) throw new OperationCanceledException("The connection or sync settings changed.");
     }
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, SyncRequestPermit permit) {
+#if GILLIONS_APPEARANCE_PROOF_ONLY
+        return await Task.FromException<HttpResponseMessage>(new InvalidOperationException("Network disabled in local appearance proof build."));
+#else
         if (disposed) throw new OperationCanceledException();
         Task<HttpResponseMessage>? pending = null;
         await framework.RunOnFrameworkThread(() => {
@@ -1111,6 +1158,7 @@ public sealed class Plugin : IDalamudPlugin {
             pending = http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, permit.Cancellation);
         });
         return await pending!;
+#endif
     }
     private async Task CommitAsync(SyncRequestPermit permit, Action<OwnedCharacterState> change) {
         if (disposed) throw new OperationCanceledException();

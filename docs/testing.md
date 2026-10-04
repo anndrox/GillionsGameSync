@@ -6,6 +6,21 @@ Run `./scripts/verify.ps1`. It executes the linked-production policy suite, sour
 
 ## Corrected boundaries
 
+Appearance v1 fixtures prove ordered lossless 26-byte hex transport, numeric
+race/tribe/model sex and unavailable reads without fabricated bytes. The native
+collector uses LocalPlayer customization corroborated against loaded PlayerState
+on the framework thread and retains the existing owned-session dispatch permit.
+This is observed runtime state, not a claim about unmodded saved appearance.
+
+For local runtime validation, build with `GillionsTestBuild=true` and
+`GillionsAppearanceProofOnly=true`. The same `GillionsGameSyncTest.dll` identity
+registers only `appearance-proof <new-absolute-json-path>`; it neither loads/saves
+existing configuration nor subscribes normal collectors, and shared transport
+fails closed. No pairing or deployed Site is required for capture. Keep the
+intentional private proof file out of sanitized reports. Normal builds do not
+enable this command/mode. A local capture and authenticated disposable replay
+must be reported separately from direct live network acceptance.
+
 The managed suite exercises canonical HTTPS origins and bound credentials; A-B-A character changes; re-pair, automatic/item-link opt-out and disposal permits; exact sent/current Retainer and Gil versions; delayed/subset/foreign acknowledgements; preservation of unrelated and equal-value ambiguous sales; unchanged/unavailable roster semantics; a 60-second freshness-save clock; native result-view tuple deduplication; and transient expiry without new input.
 
 Storage fixtures cover 10,000 records across characters, capacity plus one, exact 8 MiB serialized accounting, a same-ID replacement that exceeds the byte limit, acknowledged drainage, re-pairing and reload. The accounting document includes owner and queue metadata. One ordinary synthetic Gil row occupies 404 bytes; 10,000 such rows across two fixture characters occupy 4,030,001 bytes. These examples establish accounting consistency, not typical player accumulation, FPS or hours of offline coverage.

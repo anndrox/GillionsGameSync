@@ -18,6 +18,19 @@ namespace GillionsGameSync;
 // inspect client state already resident in the game and never automate UI,
 // capture packets, or depend on another plugin.
 public static class DirectGameSnapshotCollector {
+    // Called only by framework-thread capture; never persist pointers or content IDs.
+    internal static unsafe CharacterAppearanceObservation ReadCharacterAppearance(IObjectTable objects) {
+        var player = objects.LocalPlayer;
+        var state = PlayerState.Instance();
+        var game = FFXIVClientStructs.FFXIV.Client.System.Framework.Framework.Instance();
+        var build = game == null ? null : game->GameVersionString;
+        var owned = player != null && player.Address != 0 && state != null && state->IsLoaded
+            && state->ContentId != 0 && state->EntityId == player.EntityId;
+        if (!owned) return CharacterAppearanceObservation.Capture([], build, DateTime.UtcNow, false, 0, 0, 0, false);
+        var native = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)player!.Address;
+        return CharacterAppearanceObservation.Capture(player.Customize.ToArray(), build, DateTime.UtcNow, true,
+            state->Race, state->Tribe, state->Sex, native->TransformationId != 0);
+    }
     private static readonly RetainerResultViewCache ResultView = new();
     internal static void ClearTransientState() { ResultView.Clear(); NativeInventoryCollector.ClearTransientState(); }
     internal static void ResetResultView() => ResultView.Clear();
@@ -79,7 +92,7 @@ public static class DirectGameSnapshotCollector {
         }
         if (selected.Contains("character")) {
             var progress = CharacterProgressCollector.Read(dataManager, unlockState);
-            yield return new GameSnapshot("character", new { character = identity, currentJobId = progress.CurrentJobId, jobs = progress.Jobs, equippedItems = progress.EquippedItems, craftingRecipeIds = progress.CraftingRecipeIds, gatheringLogIds = progress.GatheringLogIds });
+            yield return new GameSnapshot("character", new { character = identity, appearance = ReadCharacterAppearance(objects), currentJobId = progress.CurrentJobId, jobs = progress.Jobs, equippedItems = progress.EquippedItems, craftingRecipeIds = progress.CraftingRecipeIds, gatheringLogIds = progress.GatheringLogIds });
         }
         if (selected.Contains("quest_journal")) {
             var quests = QuestJournalCollector.Read(dataManager, unlockState);

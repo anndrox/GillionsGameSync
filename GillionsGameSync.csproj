@@ -27,6 +27,21 @@
          local workspace path in distributed assemblies. -->
     <PathMap>$(MSBuildProjectDirectory)=/_/GillionsGameSync</PathMap>
   </PropertyGroup>
+  <!-- Local read-only runtime proof, never a feed/release build. Same Testing DLL identity. -->
+  <PropertyGroup Condition="'$(GillionsAppearanceProofOnly)' == 'true'">
+    <DefineConstants>$(DefineConstants);GILLIONS_APPEARANCE_PROOF_ONLY</DefineConstants>
+    <Punchline>Local appearance proof only. Network disabled.</Punchline>
+    <Description>Read-only local character appearance capture. No pairing, uploads, configuration or game writes.</Description>
+  </PropertyGroup>
+  <Target Name="ValidateAppearanceProofBuild" BeforeTargets="CoreCompile" Condition="'$(GillionsAppearanceProofOnly)' == 'true'">
+    <Error Condition="'$(GillionsTestBuild)' != 'true'" Text="Appearance proof-only builds require the Testing product." />
+  </Target>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>GillionsAppearanceProofOnly</_Parameter1>
+      <_Parameter2>$(GillionsAppearanceProofOnly)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
   <ItemGroup>
     <Compile Remove="tests\**\*.cs" />
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">

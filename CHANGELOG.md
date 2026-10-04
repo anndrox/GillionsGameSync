@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — observed appearance candidate
+
+- Add an optional versioned character appearance observation with lossless
+  customization bytes, corroborated native identity and explicit unavailable
+  reads. Preserve existing opt-in, owned-session transport and diagnostics privacy.
+- Add a Testing-only local proof build using the same assembly identity, with
+  network/configuration access disabled. No feed publication or live acceptance.
+
 ## 1.0.30 - 2026-09-08
 
 - Remove venture-plan delivery, apply/restore controls and AutoRetainer discovery/read/write IPC from both products. Retain native observations, inventory, listings and venture results under the existing account/product gates.

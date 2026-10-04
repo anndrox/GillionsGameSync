@@ -4,6 +4,19 @@ Gillions Game Sync is opt-in and account-linked. Automatic sync is a global swit
 
 ## Connection and ownership
 
+Character snapshots may now contain a versioned private appearance observation:
+the local player's exact 26 customization bytes, corroborated race/tribe/model
+sex, game build and timestamp. This uses the existing character opt-in and
+owned-session upload permit; it does not send content IDs or change appearance.
+Missing, transformed or mismatched reads report unavailable, never a default.
+No raw customization is added to diagnostics or public artifacts.
+
+Local Testing proof-only builds disable transport and configuration access.
+Their explicit `appearance-proof <new-absolute-json-path>` command writes one
+private character snapshot for offline validation, without overwriting a file.
+That file contains character/private gameplay data: keep it private, do not
+share it as a diagnostic report, and remove it only through deliberate cleanup.
+
 Pairing sends the plugin version and a one-time pairing code to the HTTPS origin displayed in the pairing form. It no longer collects or submits a machine name or a machine/user-domain hash. The returned device credential is bound locally to that origin, server-issued device ID and a fresh pairing generation. Editing the next-pair server address does not transfer an existing bearer credential to another origin. HTTPS self-hosted origins, including explicit ports, remain supported; credentials, query strings and non-root paths are not accepted in server addresses.
 
 Older credentials lack that binding and must be paired again once. Their original configuration fields, unscoped queues/maps and opaque planner history remain preserved but inactive. New data uses separate pairing-generation and character-content-ID partitions. A new pairing does not infer ownership of former records or delete website history. Internally valid pairings created by this version can resume after reload without another pairing.
