@@ -56,10 +56,16 @@ after response, rechecking session/consent/expiry. It does not schedule delayed 
 
 Server retains one revision watermark per account/character and never auto-replays
 equivalent observations, page refreshes, repeated polls or unchanged travel updates.
-Native retains at most128 attempted request IDs in RAM; no claim/coordinates or
-request history persisted/logged. Testing80 records only public target/candidate/
+Native retains at most128 attempted request IDs in RAM; no claim tokens or
+coordinates are persisted/logged. Testing80 records only public target/candidate/
 revision and presentation outcome after a new one-time consume in bounded local
-diagnostics, never request/claim token or private position. Reserve before consume; a lost response sacrifices delivery
+diagnostics, never a claim token or private position. Testing82 adds numeric
+command timings and an eight-character request-ID correlation prefix to the
+existing40-entry local diagnostic list and the existing Dalamud diagnostic log.
+The prefix is not a claim credential; no full request ID, payload or personal
+location is logged. Platform log retention remains unchanged (the40-entry limit
+only applies to the plugin UI list). No automatic diagnostic upload or new store.
+Reserve before consume; a lost response sacrifices delivery
 rather than replaying an uncertain side effect. New manual Show request ID may
 intentionally re-present the same revision; Native cannot invent an automatic/manual
 flag absent from v1. A revision hash is opaque and never sorted locally.

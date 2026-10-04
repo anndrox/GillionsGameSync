@@ -2,7 +2,7 @@
 import json, subprocess, shlex, urllib.request, urllib.error
 from pathlib import Path
 root=Path(__file__).resolve().parents[1]
-expected='70bc0d7a45ba9e54d44647df72b47f735fe9042a'
+expected='36327f9cf624ca44d535a30e71fade2853762e74'
 labels=json.loads(subprocess.run(['ssh','gillions-codex',"docker inspect --format '{{json .Config.Labels}}' ffxiv-gillions-test-web-1"],check=True,capture_output=True,text=True).stdout)
 assert labels['org.opencontainers.image.revision']==expected,'Rediscover changed TEST before validation.'
 script=r'''
@@ -59,7 +59,7 @@ assert.equal(await native.consume(device,consume(first.request),true),false);ass
 row.hunt_walk.index=row.hunt_walk.candidateIds.length-1;row.hunt_payload.candidateIndex=row.hunt_walk.index;row.hunt_payload.candidateId=row.hunt_walk.candidateIds.at(-1);clock+=6000;s=await native.read(1,99000001);
 const exhausted=await native.edit(1,99000001,{action:'next',target:huntTargetKey(s.route.bill,s.route.target),revision:s.revision,candidate_id:row.hunt_payload.candidateId});assert.equal(exhausted.progression,'exhausted');assert.equal(JSON.stringify(route),before);
 native.focus.close();const clean=r=>({...r,claimToken:'S'.repeat(43)});
-console.log(JSON.stringify({ok:true,siteSource:'70bc0d7a45ba9e54d44647df72b47f735fe9042a',identity,simulatedSql:true,databaseWrites:0,authenticatedHttp:false,poll:{ok:true,request:clean(v1)},pollV2:{ok:true,...ordinary,request:clean(ordinary.request)},pollNext:{ok:true,...next,request:clean(next.request)},focus:{ok:true,huntFocus:focused},consume:{ok:true,consumed:true},now:'2026-10-04T02:00:00Z',nextNow:'2026-10-04T02:00:43Z',checks:'Running Site V1/V2/consume/replay/stale/grants/partial/focus-expiry/browser Next/no-wrap/watermark PASS'}));
+console.log(JSON.stringify({ok:true,siteSource:'36327f9cf624ca44d535a30e71fade2853762e74',identity,simulatedSql:true,databaseWrites:0,authenticatedHttp:false,poll:{ok:true,request:clean(v1)},pollV2:{ok:true,...ordinary,request:clean(ordinary.request)},pollNext:{ok:true,...next,request:clean(next.request)},focus:{ok:true,huntFocus:focused},consume:{ok:true,consumed:true},now:'2026-10-04T02:00:00Z',nextNow:'2026-10-04T02:00:43Z',checks:'Running Site V1/V2/consume/replay/stale/grants/partial/focus-expiry/browser Next/no-wrap/watermark PASS'}));
 '''
 run=subprocess.run(['ssh','gillions-codex','docker exec -i -w /app/apps/web ffxiv-gillions-test-web-1 node --input-type=module -e '+shlex.quote(script)],capture_output=True,text=True)
 if run.returncode:raise RuntimeError('Read-only contract check failed: '+run.stderr[-1800:])

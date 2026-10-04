@@ -169,9 +169,9 @@ internal static class HuntMapPolicy {
 internal static class HuntMapTransport {
     internal const int RequestTimeoutSeconds = 15;
     internal const int BodyTimeoutSeconds = 10;
-    internal static CancellationTokenSource Deadline(CancellationToken session, CancellationToken feature, DateTime? expiry = null) {
+    internal static CancellationTokenSource Deadline(CancellationToken session, CancellationToken feature, DateTime? expiry = null, DateTime? referenceUtc = null) {
         var source = CancellationTokenSource.CreateLinkedTokenSource(session, feature);
-        var remaining = expiry is null ? TimeSpan.FromSeconds(RequestTimeoutSeconds) : expiry.Value - DateTime.UtcNow;
+        var remaining = expiry is null ? TimeSpan.FromSeconds(RequestTimeoutSeconds) : expiry.Value - (referenceUtc ?? DateTime.UtcNow);
         if (remaining <= TimeSpan.Zero) source.Cancel();
         else source.CancelAfter(remaining < TimeSpan.FromSeconds(RequestTimeoutSeconds) ? remaining : TimeSpan.FromSeconds(RequestTimeoutSeconds));
         return source;

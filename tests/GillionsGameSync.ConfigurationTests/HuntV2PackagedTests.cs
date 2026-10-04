@@ -10,7 +10,8 @@ internal static class HuntV2PackagedTests {
         var negotiationType = assembly.GetType("GillionsGameSync.HuntMapNegotiation");
         var clockType = assembly.GetType("GillionsGameSync.WebsiteCommandPollClock");
         var timingType = assembly.GetType("GillionsGameSync.WebsiteCommandTrace");
-        if (!testing) { Check(focusType is null && negotiationType is null && clockType is null && timingType is null); return; }
+        var issuerClockType = assembly.GetType("GillionsGameSync.WebsiteResponseClock");
+        if (!testing) { Check(focusType is null && negotiationType is null && clockType is null && timingType is null && issuerClockType is null); return; }
         var policy = assembly.GetType("GillionsGameSync.HuntMapPolicy", true)!;
         var poll = policy.GetMethod("TryPoll", flags)!;
         var now = new DateTime(2026, 10, 4, 18, 0, 0, DateTimeKind.Utc);
@@ -41,10 +42,10 @@ internal static class HuntV2PackagedTests {
         var focus=Activator.CreateInstance(focusType!,nonPublic:true)!;
         var apply=focusType!.GetMethod("Apply",instanceFlags)!; var active=focusType.GetMethod("Active",instanceFlags)!;
         var focusJson="{\"ok\":true,\"huntFocus\":{\"contract\":\"active_hunt_focus_v1\",\"focused\":true,\"expiresAt\":\"2026-10-04T18:00:30Z\"}}";
-        Check((bool)apply.Invoke(focus,[focusJson,now,true])! && (bool)active.Invoke(focus,[now,true])!);
+        Check((bool)apply.Invoke(focus,[focusJson,now,true,null])! && (bool)active.Invoke(focus,[now,true])!);
         Check(!(bool)active.Invoke(focus,[now,false])! && !(bool)active.Invoke(focus,[now.AddSeconds(30),true])!);
-        Check(!(bool)apply.Invoke(focus,["{\"ok\":true}",now,true])! && !(bool)active.Invoke(focus,[now,true])!);
-        Check(!(bool)apply.Invoke(focus,[focusJson,now,false])!);
+        Check(!(bool)apply.Invoke(focus,["{\"ok\":true}",now,true,null])! && !(bool)active.Invoke(focus,[now,true])!);
+        Check(!(bool)apply.Invoke(focus,[focusJson,now,false,null])!);
         var negotiation=Activator.CreateInstance(negotiationType!,nonPublic:true)!;
         var capability=negotiationType!.GetMethod("Capability",instanceFlags)!;
         Check((string)capability.Invoke(negotiation,[now])! == "native_hunt_map_v2");
@@ -62,6 +63,40 @@ internal static class HuntV2PackagedTests {
         Check(!Begin(now.AddSeconds(29),true)&&Begin(now.AddSeconds(30),true));
         Check(timingType is not null&&timingType.GetMethod("PollDispatched",instanceFlags) is not null);
         Console.WriteLine("Exact packaged command clocks: 9 background/focus/no-double-deadline/backoff/timing checks PASS; not live latency proof.");
+        var issuerClock=issuerClockType!.GetMethod("Capture",flags)!.Invoke(null,[new DateTimeOffset(now),now.AddSeconds(-2),TimeSpan.FromMilliseconds(20)])!;
+        var issuerNow=(DateTime)issuerClockType.GetProperty("UtcNow",instanceFlags)!.GetValue(issuerClock)!;
+        Check(issuerNow>=now.AddMilliseconds(1020)&&issuerNow<now.AddSeconds(2));
+        Check((bool)apply.Invoke(focus,[focusJson,issuerNow,true,now.AddSeconds(-2)])! && (bool)active.Invoke(focus,[now.AddSeconds(-2),true])!);
+        Check(!(bool)active.Invoke(focus,[now.AddSeconds(28),true])!);
+        Console.WriteLine("Exact packaged issuer clock/focus: 3 conservative-precision/skew/lease-expiry checks PASS; no live timing proof.");
+        // Exercise the actual packaged caller: response Date is trusted only
+        // on the same exact HTTPS TEST origin, never a redirected/other host.
+        var plugin=assembly.GetType("GillionsGameSync.Plugin",true)!;
+        var responseClock=plugin.GetMethod("CommandResponseClock",flags)!;
+        var lifetime=Activator.CreateInstance(assembly.GetType("GillionsGameSync.SyncRequestLifetime",true)!)!;
+        try {
+            var mode=Enum.Parse(assembly.GetType("GillionsGameSync.SyncRequestMode",true)!,"Personal");
+            var permit=lifetime.GetType().GetMethod("Capture")!.Invoke(lifetime,[mode,(ulong)1,null,"https://test.gillions.app","synthetic-token-only"])!;
+            bool Issuer(HttpResponseMessage response) {
+                var value=responseClock.Invoke(null,[response,permit,TimeSpan.FromMilliseconds(20)])!;
+                return (bool)issuerClockType.GetProperty("IssuerTime",instanceFlags)!.GetValue(value)!;
+            }
+            using var trusted=new HttpResponseMessage(System.Net.HttpStatusCode.OK){RequestMessage=new HttpRequestMessage(HttpMethod.Post,"https://test.gillions.app/api/game-sync/item-links/poll")};
+            trusted.Headers.Date=DateTimeOffset.UtcNow;Check(Issuer(trusted));
+            using var redirected=new HttpResponseMessage(System.Net.HttpStatusCode.OK){RequestMessage=new HttpRequestMessage(HttpMethod.Post,"https://example.com/api/game-sync/item-links/poll")};
+            redirected.Headers.Date=DateTimeOffset.UtcNow;Check(!Issuer(redirected));
+            using var plain=new HttpResponseMessage(System.Net.HttpStatusCode.OK){RequestMessage=new HttpRequestMessage(HttpMethod.Post,"http://test.gillions.app/api/game-sync/item-links/poll")};
+            plain.Headers.Date=DateTimeOffset.UtcNow;Check(!Issuer(plain));
+            using var absent=new HttpResponseMessage(System.Net.HttpStatusCode.OK){RequestMessage=new HttpRequestMessage(HttpMethod.Post,"https://test.gillions.app/api/game-sync/item-links/poll")};
+            Check(!Issuer(absent));
+            foreach(var dates in new[]{new[]{"not-a-date"},new[]{DateTimeOffset.UtcNow.ToString("R"),DateTimeOffset.UtcNow.ToString("R")}}) {
+                using var malformed=new HttpResponseMessage(System.Net.HttpStatusCode.OK){RequestMessage=new HttpRequestMessage(HttpMethod.Post,"https://test.gillions.app/api/game-sync/item-links/poll")};
+                malformed.Headers.TryAddWithoutValidation("Date",dates);
+                try {Issuer(malformed);Check(false);}
+                catch(TargetInvocationException e) when(e.InnerException is InvalidOperationException or FormatException) {Check(true);}
+            }
+        } finally {((IDisposable)lifetime).Dispose();}
+        Console.WriteLine("Exact packaged issuer caller: 6 HTTPS-origin/redirect/plaintext/missing/malformed/duplicate Date checks PASS; synthetic response objects only.");
         if (siteProof is not null) {
             using var proof=JsonDocument.Parse(File.ReadAllText(siteProof)); var root=proof.RootElement;
             var observed=DateTime.Parse(root.GetProperty("now").GetString()!).ToUniversalTime();
@@ -69,7 +104,7 @@ internal static class HuntV2PackagedTests {
                 object?[] values=[root.GetProperty(name).GetRawText(),time,wire,null];
                 Check((bool)poll.Invoke(null,values)! && values[3] is not null);
             }
-            Check((bool)apply.Invoke(focus,[root.GetProperty("focus").GetRawText(),observed.AddSeconds(6),true])!);
+            Check((bool)apply.Invoke(focus,[root.GetProperty("focus").GetRawText(),observed.AddSeconds(6),true,null])!);
             Check((bool)consumed.Invoke(null,[root.GetProperty("consume").GetRawText()])!);
             Console.WriteLine("Exact packaged DLL accepts 5 running-Site V1/V2/browser-Next/focus/consume wire cross-checks; simulated SQL, not authenticated HTTP or gameplay proof.");
         }

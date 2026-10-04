@@ -360,12 +360,21 @@ public sealed class Plugin : IDalamudPlugin {
             }
 #endif
 #if GILLIONS_TEST_BUILD
+            var focusRequestStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             using var response = await SendPresenceAsync(request, permit, responseCancellation);
+            var focusHeaderRoundTrip = System.Diagnostics.Stopwatch.GetElapsedTime(focusRequestStarted);
 #else
             using var response = await SendAsync(request, permit);
             var responseCancellation = permit.Cancellation;
 #endif
             await EnsureSuccessfulResponse(response, responseCancellation);
+#if GILLIONS_TEST_BUILD
+            WebsiteResponseClock? focusClock = null;
+            if (requestFocus) {
+                try { focusClock = CommandResponseClock(response, permit, focusHeaderRoundTrip); }
+                catch (Exception e) when (e is InvalidOperationException or FormatException or ArgumentOutOfRangeException) { /* Focus fails closed; ordinary presence remains independent. */ }
+            }
+#endif
             var responseJson = await SyncResponsePolicy.ReadAsync(response.Content, responseCancellation);
             if (!RetainerPresenceResponsePolicy.TryParse(responseJson, RetainerClient, out var uploadSupported))
                 throw new InvalidOperationException("Invalid presence response.");
@@ -378,7 +387,7 @@ public sealed class Plugin : IDalamudPlugin {
                     if (PersonalSyncPolicy.Compatible(responseJson, resource)) personalAccepted.Add(resource);
                 travelAccepted = permit.Origin == TravelSyncPolicy.Origin && TravelSyncPolicy.Compatible(responseJson);
                 if (!travelAccepted) ClearTravelPending();
-                if (requestFocus) huntFocus.Apply(responseJson, DateTime.UtcNow, HuntFocusEligible() && personalAccepted.Contains("hunt_bills"));
+                if (requestFocus && focusClock is not null) huntFocus.Apply(responseJson, focusClock.UtcNow, HuntFocusEligible() && personalAccepted.Contains("hunt_bills"), DateTime.UtcNow);
                 else huntFocus.Clear();
 #endif
                 nextRetainerPresenceUtc = DateTime.UtcNow.Add(RetainerPresencePolicy.NextSuccessDelay(Random.Shared.Next(-5, 6)));
@@ -563,9 +572,11 @@ public sealed class Plugin : IDalamudPlugin {
             using var pollRequest = Request("/api/game-sync/item-links/poll", permit, new { capability = "native_item_link", pluginVersion = PluginVersion });
 #endif
 #if GILLIONS_TEST_BUILD
+            var commandPollStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             using var pollResponse = pfAllowed
                 ? await SendNativePartyFinderAsync(pollRequest, permit)
                 : await SendAsync(pollRequest, permit);
+            var commandHeaderRoundTrip = System.Diagnostics.Stopwatch.GetElapsedTime(commandPollStarted);
 #else
             using var pollResponse = await SendAsync(pollRequest, permit);
 #endif
@@ -578,6 +589,9 @@ public sealed class Plugin : IDalamudPlugin {
                 return;
             }
             await EnsureSuccessfulResponse(pollResponse, permit.Cancellation);
+#if GILLIONS_TEST_BUILD
+            var commandClock = CommandResponseClock(pollResponse, permit, commandHeaderRoundTrip);
+#endif
             var pollJson = await SyncResponsePolicy.ReadAsync(pollResponse.Content, permit.Cancellation);
 #if GILLIONS_TEST_BUILD
             using var pollDocument = JsonDocument.Parse(pollJson);
@@ -587,12 +601,12 @@ public sealed class Plugin : IDalamudPlugin {
                 if (requestType.ValueKind == JsonValueKind.String && requestType.GetString() == PartyFinderLinkPolicy.RequestType) {
                     var pfRequest = PartyFinderLinkPolicy.Parse(pollDocument.RootElement);
                     var pfProcessor = await framework.RunOnFrameworkThread(() => { RequirePermit(permit); return partyFinderLinkProcessor; });
-                    var pfResult = await pfProcessor.ProcessAsync(pfRequest, () => DateTime.UtcNow,
+                    var pfResult = await pfProcessor.ProcessAsync(pfRequest, () => commandClock.UtcNow,
                         () => !permit.Cancellation.IsCancellationRequested,
-                        r => ConsumePartyFinderLinkAsync(permit, r),
+                        r => ConsumePartyFinderLinkAsync(permit, r, commandClock),
                         r => framework.RunOnFrameworkThread(() => {
                             RequirePermit(permit);
-                            if (!PartyFinderLinksPermitted(permit) || !PartyFinderLinkPolicy.Valid(r, DateTime.UtcNow)) throw new OperationCanceledException();
+                            if (!PartyFinderLinksPermitted(permit) || !PartyFinderLinkPolicy.Valid(r, commandClock.UtcNow)) throw new OperationCanceledException();
                             chatGui.Print(NativePartyFinderLinkFactory.Create(r), "Gillions");
                         }));
                     await CommitAsync(permit, _ => { partyFinderLinkStatus = pfResult; RecordDiagnostic($"Party Finder link: {pfResult}."); });
@@ -606,12 +620,23 @@ public sealed class Plugin : IDalamudPlugin {
             var response = JsonSerializer.Deserialize<ItemLinkPollResponse>(pollJson, SyncResponsePolicy.Options);
             if (response?.Ok != true) throw new InvalidOperationException("Invalid item-link response.");
             if (response.Request is null) return;
-            var result = await processor!.ProcessAsync(response.Request, DateTime.UtcNow,
+            var result = await processor!.ProcessAsync(response.Request,
+#if GILLIONS_TEST_BUILD
+                commandClock.UtcNow,
+#else
+                DateTime.UtcNow,
+#endif
                 itemId => ResolveItemNameAsync(itemId, permit),
                 request => ConsumeItemLinkRequestAsync(permit, request),
                 link => framework.RunOnFrameworkThread(() => {
                     RequirePermit(permit);
-                    if (DateTime.UtcNow >= response.Request.ExpiresAtUtc) throw new OperationCanceledException();
+                    if (
+#if GILLIONS_TEST_BUILD
+                        commandClock.UtcNow
+#else
+                        DateTime.UtcNow
+#endif
+                        >= response.Request.ExpiresAtUtc) throw new OperationCanceledException();
                     chatGui.Print(link, "Gillions");
                 }));
             await CommitAsync(permit, _ => RecordDiagnostic($"Item-link request: {result}."));
@@ -654,6 +679,15 @@ public sealed class Plugin : IDalamudPlugin {
             && websiteItemPoll.TryBegin(now, focused))
             _ = PollItemLinkRequestsAsync();
     }
+    private static WebsiteResponseClock CommandResponseClock(HttpResponseMessage response, SyncRequestPermit permit, TimeSpan roundTrip) {
+        // Never trust a Date value from an unrelated redirect or origin.
+        var trusted = permit.Origin == HuntMapPolicy.Origin
+            && response.RequestMessage?.RequestUri?.GetLeftPart(UriPartial.Authority) == HuntMapPolicy.Origin;
+        var date = trusted ? response.Headers.Date : null;
+        if (trusted && response.Headers.TryGetValues("Date", out var values) && (values.Count() != 1 || date is null))
+            throw new InvalidOperationException("Malformed issuer clock.");
+        return WebsiteResponseClock.Capture(date, DateTime.UtcNow, roundTrip);
+    }
     private bool HuntMapPermitted(SyncRequestPermit permit, CancellationToken cancellation) => !cancellation.IsCancellationRequested
         && HuntMapPolicy.Admit(configuration.AutomaticallyShowHuntMap, HasPairedSession, permit.Origin, PermitIsCurrent(permit))
         && clientState.IsLoggedIn && objects.LocalPlayer is not null
@@ -683,7 +717,9 @@ public sealed class Plugin : IDalamudPlugin {
             using var linked = HuntMapTransport.Deadline(permit.Cancellation, context.Token);
             var cancellation = linked.Token;
             using var request = Request("/api/game-sync/item-links/poll", permit, new { capability = context.Capability });
+            var headersStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             using var response = await SendHuntMapAsync(request, permit, cancellation, timing);
+            var headerRoundTrip = System.Diagnostics.Stopwatch.GetElapsedTime(headersStarted);
             if (response.StatusCode != HttpStatusCode.OK) {
                 await framework.RunOnFrameworkThread(() => {
                     if (!HuntMapPermitted(permit, cancellation)) return;
@@ -695,11 +731,12 @@ public sealed class Plugin : IDalamudPlugin {
                 });
                 return;
             }
+            var commandClock = CommandResponseClock(response, permit, headerRoundTrip);
             var json = await HuntMapTransport.ReadAsync(response.Content, cancellation);
-            if (!HuntMapPolicy.TryPoll(json, DateTime.UtcNow, context.Capability, out var parsed)) {
+            if (!HuntMapPolicy.TryPoll(json, commandClock.UtcNow, context.Capability, out var parsed)) {
                 await framework.RunOnFrameworkThread(() => {
                     if (!HuntMapPermitted(permit, cancellation)) return;
-                    if (context.Capability == HuntMapPolicy.CapabilityV2 && huntMapNegotiation.LegacyEmpty(json, DateTime.UtcNow)) {
+                    if (context.Capability == HuntMapPolicy.CapabilityV2 && huntMapNegotiation.LegacyEmpty(json, commandClock.UtcNow)) {
                         huntMapNegotiation.Unsupported(DateTime.UtcNow);
                         huntMapStatus = "Site V1-only response; next normal poll uses unchanged V1. No V2 claim interpreted.";
                     } else { huntMapStatus = "Unsupported/malformed Hunt response; no command consumed or presented."; huntMapPoll.Backoff(DateTime.UtcNow, TimeSpan.FromSeconds(30)); RecordDiagnostic($"Hunt command poll: malformed response; {timing.PollSummary()}; retry 30 seconds. No map."); }
@@ -707,11 +744,11 @@ public sealed class Plugin : IDalamudPlugin {
                 return;
             }
             if (parsed is not null) timing.Claimed();
-            var result = await context.Processor.ProcessAsync(parsed, () => DateTime.UtcNow,
+            var result = await context.Processor.ProcessAsync(parsed, () => commandClock.UtcNow,
                 () => framework.RunOnFrameworkThread(() => HuntMapPermitted(permit, cancellation)),
-                async r => { timing.ConsumeStarted(); try { return await ConsumeHuntMapAsync(permit, r, cancellation); } finally { timing.ConsumeFinished(); } },
+                async r => { timing.ConsumeStarted(); try { return await ConsumeHuntMapAsync(permit, r, cancellation, commandClock, timing); } finally { timing.ConsumeFinished(); } },
                 r => framework.RunOnFrameworkThread(() => {
-                    if (!HuntMapPermitted(permit, cancellation) || !HuntMapPolicy.Valid(r, DateTime.UtcNow)) return false;
+                    if (!HuntMapPermitted(permit, cancellation) || !HuntMapPolicy.Valid(r, commandClock.UtcNow)) return false;
                     // Supported public API, human-readable map XY. No native
                     // offsets, callbacks, teleport, movement or targeting.
                     timing.MapStarted();
@@ -738,18 +775,20 @@ public sealed class Plugin : IDalamudPlugin {
             if (ownsPoll && !disposed) await framework.RunOnFrameworkThread(() => { if (!disposed) huntMapPollInFlight = false; });
         }
     }
-    private async Task<HttpResponseMessage> SendHuntMapAsync(HttpRequestMessage request, SyncRequestPermit permit, CancellationToken cancellation, WebsiteCommandTrace? timing = null) {
+    private async Task<HttpResponseMessage> SendHuntMapAsync(HttpRequestMessage request, SyncRequestPermit permit, CancellationToken cancellation, WebsiteCommandTrace? timing = null, bool consume = false) {
         Task<HttpResponseMessage>? pending = null;
         await framework.RunOnFrameworkThread(() => {
             if (!HuntMapPermitted(permit, cancellation)) throw new OperationCanceledException();
-            timing?.PollDispatched();
+            if (consume) timing?.ConsumeDispatched(); else timing?.PollDispatched();
             pending = personalHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation);
         });
-        return await pending!;
+        var response = await pending!;
+        if (consume) timing?.ConsumeHeadersReceived();
+        return response;
     }
-    private async Task<bool> ConsumeHuntMapAsync(SyncRequestPermit permit, HuntMapRequest r, CancellationToken cancellation) {
+    private async Task<bool> ConsumeHuntMapAsync(SyncRequestPermit permit, HuntMapRequest r, CancellationToken cancellation, WebsiteResponseClock commandClock, WebsiteCommandTrace timing) {
         var catalogValid = await framework.RunOnFrameworkThread(() => {
-            if (!HuntMapPermitted(permit, cancellation) || !HuntMapPolicy.Valid(r, DateTime.UtcNow)) return false;
+            if (!HuntMapPermitted(permit, cancellation) || !HuntMapPolicy.Valid(r, commandClock.UtcNow)) return false;
             var map = dataManager.GetExcelSheet<Lumina.Excel.Sheets.Map>().GetRowOrDefault(r.MapId);
             return map is { RowId: > 0 } && map.Value.SizeFactor > 0 && map.Value.TerritoryType.RowId == r.TerritoryId
                 && dataManager.GetExcelSheet<TerritoryType>().HasRow(r.TerritoryId)
@@ -760,20 +799,22 @@ public sealed class Plugin : IDalamudPlugin {
         if (!catalogValid) return false;
         // Parent bounds the whole poll/consume turn; known claim expiry may
         // shorten it, never extend it or retain a stale claim while reading.
-        using var claimDeadline = HuntMapTransport.Deadline(cancellation, CancellationToken.None, r.ExpiresAtUtc);
+        using var claimDeadline = HuntMapTransport.Deadline(cancellation, CancellationToken.None, r.ExpiresAtUtc, commandClock.UtcNow);
         cancellation = claimDeadline.Token;
         using var request = Request("/api/game-sync/item-links/consume", permit, new {
             requestType = HuntMapPolicy.RequestType, capability = r.Capability,
             requestId = r.RequestId, claimToken = r.ClaimToken, revision = r.Revision,
         });
-        using var response = await SendHuntMapAsync(request, permit, cancellation);
-        return response.StatusCode == HttpStatusCode.OK && HuntMapPolicy.Consumed(await HuntMapTransport.ReadAsync(response.Content, cancellation));
+        using var response = await SendHuntMapAsync(request, permit, cancellation, timing, consume: true);
+        var consumed = response.StatusCode == HttpStatusCode.OK && HuntMapPolicy.Consumed(await HuntMapTransport.ReadAsync(response.Content, cancellation));
+        if (consumed) timing.ConsumeAcknowledged();
+        return consumed;
     }
     private bool PartyFinderLinksPermitted(SyncRequestPermit permit) => PermitIsCurrent(permit)
         && configuration.EnableItemLinkRequests && configuration.EnablePartyFinderLinkRequests
         && permit.Origin == GillionsPartyFinderContributor.ApprovedTestingOrigin;
-    private async Task<bool> ConsumePartyFinderLinkAsync(SyncRequestPermit permit, PartyFinderLinkRequest request) {
-        if (!await framework.RunOnFrameworkThread(() => PartyFinderLinksPermitted(permit) && PartyFinderLinkPolicy.Valid(request, DateTime.UtcNow))) return false;
+    private async Task<bool> ConsumePartyFinderLinkAsync(SyncRequestPermit permit, PartyFinderLinkRequest request, WebsiteResponseClock commandClock) {
+        if (!await framework.RunOnFrameworkThread(() => PartyFinderLinksPermitted(permit) && PartyFinderLinkPolicy.Valid(request, commandClock.UtcNow))) return false;
         using var consumeRequest = Request("/api/game-sync/item-links/consume", permit, new {
             requestId = request.RequestId, claimToken = request.ClaimToken, requestType = PartyFinderLinkPolicy.RequestType,
             listingKey = request.ListingKey, contract = PartyFinderLinkPolicy.Contract
@@ -1566,7 +1607,7 @@ public sealed class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         if (observedHuntMapGuidance != configuration.AutomaticallyShowHuntMap) {
             observedHuntMapGuidance = configuration.AutomaticallyShowHuntMap;
-            ClearHuntMapRequests(); websiteItemPoll.Reset();
+            ClearHuntMapRequests(); // Hunt consent cannot erase unrelated item/PF retry backoff.
         }
         if (observedPartyFinderLinks != configuration.EnablePartyFinderLinkRequests) {
             observedPartyFinderLinks = configuration.EnablePartyFinderLinkRequests;

@@ -34,8 +34,9 @@ Check(commandClock.TryBegin(now.AddSeconds(1),false),"expiry can finish previous
 Check(!commandClock.TryBegin(now.AddSeconds(5.999),false)&&commandClock.TryBegin(now.AddSeconds(6),false),"expired focus returns to background");
 var otherClock=new WebsiteCommandPollClock();otherClock.Backoff(now,TimeSpan.FromMinutes(5));
 commandClock.Reset();Check(commandClock.TryBegin(now,true)&&!otherClock.TryBegin(now,true),"independent lane denial and flight scheduling");
-var trace=new WebsiteCommandTrace();trace.PollDispatched();trace.Claimed();trace.ConsumeStarted();trace.ConsumeFinished();trace.MapStarted();trace.MapFinished();
+var trace=new WebsiteCommandTrace();trace.PollDispatched();trace.Claimed();trace.ConsumeStarted();trace.ConsumeDispatched();trace.ConsumeHeadersReceived();trace.ConsumeAcknowledged();trace.ConsumeFinished();trace.MapStarted();trace.MapFinished();
 Check(trace.Describe().Contains("poll UTC")&&trace.Describe().Contains("claim-to-map")&&!trace.Describe().Contains("claimToken"),"numeric stage timings no private payload/token");
+Check(trace.Describe().Contains("claim-to-consume-dispatch")&&trace.Describe().Contains("consume headers-to-ack")&&trace.Describe().Contains("consume-ack-to-map"),"actual HTTP stages distinguished from consume callback");
 JsonObject Fixture(string revision = "a", string? id = null) => new() {
     ["ok"] = true, ["request"] = new JsonObject {
         ["requestType"] = "hunt_map", ["requestId"] = id ?? Guid.NewGuid().ToString("D"), ["claimToken"] = new string('T', 43),
@@ -47,6 +48,47 @@ JsonObject Fixture(string revision = "a", string? id = null) => new() {
 };
 HuntMapRequest? Parse(JsonObject x) => HuntMapPolicy.Parse(x.ToJsonString(), now);
 var aJson = Fixture(); var a = Parse(aJson)!;
+// Actual environment has ~2s issuer/PC skew. Fresh wire TTLs must be evaluated
+// on the issuer timeline, NOT enlarged90/30s ceilings on the PC timeline.
+foreach(var skew in new[]{-2,0,2}) {
+    var local=now.AddSeconds(skew);
+    var clock=WebsiteResponseClock.Capture(new DateTimeOffset(now),local,TimeSpan.FromMilliseconds(20));
+    Check(clock.IssuerTime&&clock.UtcNow>=now.AddMilliseconds(1020),"conservative issuer Date precision/transit");
+    Check(HuntMapPolicy.Valid(a!,clock.UtcNow),"fresh claim valid both skew directions "+skew);
+    Check(a!.ExpiresAtUtc-clock.UtcNow<=TimeSpan.FromSeconds(90),"claim lifetime cap not widened");
+    var leaseJson=JsonSerializer.Serialize(new{ok=true,huntFocus=new{contract=HuntFocusState.Contract,focused=true,expiresAt=now.AddSeconds(30).ToString("yyyy-MM-ddTHH:mm:ssZ")}});
+    var leaseState=new HuntFocusState();
+    Check(leaseState.Apply(leaseJson,clock.UtcNow,true,local)&&leaseState.Active(local,true),"fresh focus translates bounded remaining duration");
+    Check(!leaseState.Active(local.AddSeconds(30),true)&&!leaseState.Active(local,false),"focus still hard expires and grants no consent");
+    using var issuerDeadline=HuntMapTransport.Deadline(CancellationToken.None,CancellationToken.None,clock.UtcNow.AddMilliseconds(-1),clock.UtcNow);
+    Check(issuerDeadline.IsCancellationRequested,"consume expiry uses same issuer reference");
+}
+Check(!HuntMapPolicy.Valid(a!,now.AddSeconds(-2)),"old PC clock reproduces fresh-claim rejection");
+var noDate=WebsiteResponseClock.Capture(null,now,TimeSpan.Zero);
+Check(!noDate.IssuerTime&&HuntMapPolicy.Valid(a!,noDate.UtcNow),"missing Date preserves old strict V1 local clock policy");
+foreach(var skew in new[]{-31,31}) {
+    try { WebsiteResponseClock.Capture(new DateTimeOffset(now.AddSeconds(skew)),now,TimeSpan.Zero);Check(false,"unbounded issuer skew"); }
+    catch(InvalidOperationException){Check(true,"unbounded issuer skew fails closed");}
+}
+foreach(var delay in new[]{-1,31000}) {
+    try { WebsiteResponseClock.Capture(new DateTimeOffset(now),now,TimeSpan.FromMilliseconds(delay));Check(false,"bad RTT"); }
+    catch(InvalidOperationException){Check(true,"bad RTT fails closed");}
+}
+var delayedClock=WebsiteResponseClock.Capture(new DateTimeOffset(now),now.AddSeconds(-2),TimeSpan.FromSeconds(14));
+Check(!HuntMapPolicy.Valid(a!,delayedClock.UtcNow.AddSeconds(80)),"delayed body cannot resurrect expired claim");
+var nearJson=Fixture();nearJson["request"]!["expiresAt"]=now.AddSeconds(1).ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+var nearExpired=Parse(nearJson)!;
+Check(!HuntMapPolicy.Valid(nearExpired,noDate.UtcNow.AddSeconds(1)),"expired local fallback remains rejected");
+var conservativeClock=WebsiteResponseClock.Capture(new DateTimeOffset(now),now.AddSeconds(-2),TimeSpan.FromMilliseconds(20));
+Check(!HuntMapPolicy.Valid(nearExpired,conservativeClock.UtcNow),"Date precision and transit never extend near-expired claim");
+var clockBefore=conservativeClock.UtcNow;
+Thread.Sleep(25);
+Check(conservativeClock.UtcNow>=clockBefore.AddMilliseconds(20),"body/framework elapsed advances issuer clock monotonically");
+var shortFocus=new HuntFocusState();
+var shortJson=JsonSerializer.Serialize(new{ok=true,huntFocus=new{contract=HuntFocusState.Contract,focused=true,expiresAt=now.AddMilliseconds(10).ToString("yyyy-MM-ddTHH:mm:ss.fffZ")}});
+Check(shortFocus.Apply(shortJson,now,true,now),"short valid focus accepted");
+Thread.Sleep(25);
+Check(!shortFocus.Active(now.AddHours(-1),true),"local clock rollback cannot extend focus after monotonic expiry");
 Check(a != null && a.MapX == 14.41f && a.MapY == 6.84f && a.CandidateIndex == 0, "exact Site payload XY/order");
 Check(a!.Guidance.Contains("FATE required: He's Got Legs") && a.Guidance.Contains("not currently known")
     && a.Guidance.Contains("not a sighting") && !a.Guidance.Contains("FATE active"), "honest FATE reference");

@@ -14,7 +14,7 @@ assert 'EnableItemLinkRequests && HasPairedSession' in loop
 hunt=p.split('private bool HuntMapPermitted',1)[1].split('private bool PartyFinderLinksPermitted',1)[0]
 assert 'EnableItemLinkRequests' not in hunt and 'AutomaticSync' not in hunt and 'ShareHuntRoutingLocation' not in hunt
 assert 'CapturePermit(SyncRequestMode.Personal)' in hunt and 'HuntMapTransport.Deadline(permit.Cancellation, context.Token)' in hunt
-assert 'HuntMapTransport.Deadline(cancellation, CancellationToken.None, r.ExpiresAtUtc)' in hunt
+assert 'HuntMapTransport.Deadline(cancellation, CancellationToken.None, r.ExpiresAtUtc, commandClock.UtcNow)' in hunt
 assert 'HuntMapTransport.ReadAsync(response.Content, cancellation)' in hunt
 assert 'BodyTimeoutSeconds = 10' in m and 'RequestTimeoutSeconds = 15' in m and 'deadline.CancelAfter' in m
 assert 'stream.ReadAsync(bytes.AsMemory(length), token)' in m
@@ -65,3 +65,12 @@ for forbidden in ['Capture', 'RequestConfigurationSave', 'HttpClient', 'File.', 
     assert forbidden not in clock+trace,forbidden
 assert 'if (diagnostics.Count > 40)' in p # unchanged retention cap
 print('Command-only independent deadline/finite focus/backoff/numeric local timing boundaries PASS')
+issuer=(root/'WebsiteResponseClock.cs').read_text(encoding='utf-8')
+assert 'TimeSpan.FromSeconds(30)' in issuer and 'AddSeconds(1).Add(headerRoundTrip)' in issuer
+assert 'Stopwatch.GetElapsedTime' in issuer and 'ServerCertificate' not in issuer
+assert 'response.RequestMessage?.RequestUri?.GetLeftPart(UriPartial.Authority) == HuntMapPolicy.Origin' in p
+assert 'HuntMapPolicy.TryPoll(json, commandClock.UtcNow' in hunt
+assert 'HuntMapPolicy.Valid(r, commandClock.UtcNow)' in hunt
+assert 'Stopwatch.GetElapsedTime(observed) < remaining' in focus
+assert 'ClearHuntMapRequests(); websiteItemPoll.Reset()' not in p
+print('Exact-origin bounded issuer timeline/parser/consume/presentation/monotonic focus boundaries PASS')

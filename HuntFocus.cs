@@ -1,6 +1,7 @@
 #if GILLIONS_TEST_BUILD || GILLIONS_HUNT_MAP_TESTS
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 
@@ -12,12 +13,15 @@ internal sealed class HuntFocusState {
     internal const string Header = "X-Gillions-Hunt-Focus";
     internal bool Supported { get; private set; }
     private DateTime expiresAtUtc;
-    internal void Clear() { Supported = false; expiresAtUtc = default; }
+    private long observed;
+    private TimeSpan remaining;
+    internal void Clear() { Supported = false; expiresAtUtc = default; remaining = default; }
     internal bool Active(DateTime now, bool separatelyPermitted) => separatelyPermitted && Supported
-        && now.Kind == DateTimeKind.Utc && expiresAtUtc > now;
-    internal bool Apply(string json, DateTime now, bool separatelyPermitted) {
+        && now.Kind == DateTimeKind.Utc && expiresAtUtc > now && Stopwatch.GetElapsedTime(observed) < remaining;
+    internal bool Apply(string json, DateTime now, bool separatelyPermitted, DateTime? localNow = null) {
         Clear();
-        if (!separatelyPermitted || now.Kind != DateTimeKind.Utc || Encoding.UTF8.GetByteCount(json) > 131072) return false;
+        var local = localNow ?? now;
+        if (!separatelyPermitted || now.Kind != DateTimeKind.Utc || local.Kind != DateTimeKind.Utc || Encoding.UTF8.GetByteCount(json) > 131072) return false;
         try {
             using var doc = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 16 });
             var root = doc.RootElement;
@@ -31,7 +35,8 @@ internal sealed class HuntFocusState {
             var expiry = focus.GetProperty("expiresAt");
             if (!focused) { if (expiry.ValueKind != JsonValueKind.Null) return false; Supported = true; return true; }
             if (!HuntMapPolicy.Utc(expiry.GetString(), out var time) || time <= now || time - now > TimeSpan.FromSeconds(30)) return false;
-            expiresAtUtc = time; Supported = true; return true;
+            remaining = time-now; observed = Stopwatch.GetTimestamp();
+            expiresAtUtc = local.Add(remaining); Supported = true; return true;
         } catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException or OverflowException) { return false; }
     }
 }
