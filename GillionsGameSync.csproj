@@ -30,8 +30,6 @@
   <!-- Local read-only runtime proof, never a feed/release build. Same Testing DLL identity. -->
   <PropertyGroup Condition="'$(GillionsAppearanceProofOnly)' == 'true'">
     <DefineConstants>$(DefineConstants);GILLIONS_APPEARANCE_PROOF_ONLY</DefineConstants>
-    <Punchline>Local appearance proof only. Network disabled.</Punchline>
-    <Description>Read-only local character appearance capture. No pairing, uploads, configuration or game writes.</Description>
   </PropertyGroup>
   <Target Name="ValidateAppearanceProofBuild" BeforeTargets="CoreCompile" Condition="'$(GillionsAppearanceProofOnly)' == 'true'">
     <Error Condition="'$(GillionsTestBuild)' != 'true'" Text="Appearance proof-only builds require the Testing product." />
@@ -61,5 +59,10 @@
          testing feed. Stable GitHub distribution does not publish test builds. -->
     <RepoUrl>$(GillionsPublicBaseUrl)</RepoUrl>
     <IconUrl>$(GillionsPublicBaseUrl)/downloads/plugins/GillionsGameSync-icon-v4.png</IconUrl>
+  </PropertyGroup>
+  <!-- Apply proof labeling after the ordinary Testing product's metadata. -->
+  <PropertyGroup Condition="'$(GillionsAppearanceProofOnly)' == 'true'">
+    <Punchline>Local appearance proof only. Network disabled.</Punchline>
+    <Description>Read-only local character appearance capture. No pairing, uploads, configuration or game writes.</Description>
   </PropertyGroup>
 </Project>
