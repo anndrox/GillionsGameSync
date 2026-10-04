@@ -16,6 +16,31 @@ AssemblyLoadContext.Default.Resolving += (_, name) => {
 var pluginAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(assemblyPath);
 var configurationType = pluginAssembly.GetType("GillionsGameSync.PluginConfiguration", throwOnError: true)!;
 var pluginType = pluginAssembly.GetType("GillionsGameSync.Plugin", throwOnError: true)!;
+var proofOnly = pluginAssembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+    .Any(attribute => attribute.Key == "GillionsAppearanceProofOnly" && attribute.Value == "true");
+if (proofOnly) {
+    Assert(pluginAssembly.GetName().Name == "GillionsGameSyncTest", "Proof mode must keep the Testing DLL identity.");
+    var constructor = pluginType.GetConstructors().Single();
+    var constructorArguments = new object?[constructor.GetParameters().Length];
+    constructorArguments[0] = DispatchProxy.Create<IDalamudPluginInterface, AppearanceProofBoundaryProxy>();
+    constructorArguments[1] = DispatchProxy.Create<Dalamud.Plugin.Services.ICommandManager, AppearanceProofBoundaryProxy>();
+    ((AppearanceProofBoundaryProxy)constructorArguments[1]!).AllowCommand = true;
+    // Every normal collector/UI service is null: any accidental subscription,
+    // hydration or read would fail. Config proxy rejects every access/save.
+    var proofPlugin = constructor.Invoke(constructorArguments);
+    var commandProxy = (AppearanceProofBoundaryProxy)constructorArguments[1]!;
+    Assert(commandProxy.Commands.SequenceEqual(new[] { "/gillionssynctest" }), "Proof must register only its stable Testing command.");
+    Assert(pluginType.GetMethod("OnAppearanceProofCommand", BindingFlags.Instance | BindingFlags.NonPublic) is not null,
+        "Actual proof binary must contain the bounded local capture path.");
+    var send = pluginType.GetMethod("SendAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    var result = (Task<System.Net.Http.HttpResponseMessage>)send.Invoke(proofPlugin, [new System.Net.Http.HttpRequestMessage(), null])!;
+    try { await result; throw new InvalidOperationException("Proof transport was not blocked."); }
+    catch (InvalidOperationException error) {
+        Assert(error.Message == "Network disabled in local appearance proof build.", "Shared transport must fail before any service/credential/network access.");
+    }
+    Console.WriteLine("Actual appearance proof DLL identity / constructor no-config-no-collectors / transport denial passed.");
+    return;
+}
 Assert(pluginAssembly.GetType("GillionsGameSync.AutoRetainerVenturePlanWriter") is null
     && pluginAssembly.GetType("GillionsGameSync.AutoRetainerIpc") is null
     && pluginAssembly.GetType("GillionsGameSync.RetainerPlanDeliveryPolicy") is null
@@ -263,5 +288,16 @@ public class ConfigurationSaveProxy : DispatchProxy {
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) {
         if (targetMethod?.Name == "SavePluginConfig" && args is [object config]) { Save(config); return null; }
         throw new InvalidOperationException("Synthetic config test attempted an unexpected plugin service.");
+    }
+}
+
+public class AppearanceProofBoundaryProxy : DispatchProxy {
+    public bool AllowCommand { get; set; }
+    public List<string> Commands { get; } = [];
+    protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) {
+        if (AllowCommand && targetMethod?.Name == "AddHandler" && args is [string command, object]) {
+            Commands.Add(command); return true;
+        }
+        throw new InvalidOperationException("Proof constructor attempted configuration or an unexpected service.");
     }
 }
