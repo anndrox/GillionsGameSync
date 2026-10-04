@@ -19,7 +19,9 @@ assert 'stream.ReadAsync(bytes.AsMemory(length), token)' in m
 assert 'HuntMapPolicy.Admit' in hunt and 'PermitIsCurrent(permit)' in hunt
 assert 'personalHttp.SendAsync' in hunt and 'HttpStatusCode.OK' in hunt and 'HuntMapPolicy.Consumed' in hunt
 assert 'nextItemLinkPollUtc' not in hunt and 'nextHuntMapPollUtc' in hunt # Hunt denial cannot throttle unrelated item/PF traffic.
-assert 'new { capability = HuntMapPolicy.Capability }' in hunt
+assert 'new { capability = context.Capability }' in hunt
+assert 'capability = r.Capability' in hunt and 'HuntMapPolicy.TryPoll(json' in hunt
+assert 'huntMapNegotiation.LegacyEmpty' in hunt and 'huntMapNegotiation.Unsupported' in hunt
 assert 'GetExcelSheet<Lumina.Excel.Sheets.Map>' in hunt and 'TerritoryType.RowId == r.TerritoryId' in hunt
 assert 'OpenMapWithMapLink(new MapLinkPayload(r.TerritoryId, r.MapId, r.MapX, r.MapY))' in hunt
 for forbidden in ['FireCallback','Teleport(', 'TeleportTo','TargetManager','SendAction','unsafe','TrustAll','ServerCertificateCustomValidationCallback']:
@@ -30,3 +32,22 @@ assert 'huntMapCancellation.Cancel(); huntMapCancellation.Dispose();' in p.split
 assert 'RequestConfigurationSave' not in hunt and 'claimToken' not in hunt.split('log.Debug',1)[1].split('private async Task',1)[0]
 assert 'Revision is opaque' in m and 'new authorized request ID' in m
 print('Hunt map Testing/source/consent/transport/lifecycle/API boundaries PASS')
+
+focus=(root/'HuntFocus.cs').read_text(encoding='utf-8')
+assert focus.startswith('#if GILLIONS_TEST_BUILD || GILLIONS_HUNT_MAP_TESTS')
+assert 'time - now > TimeSpan.FromSeconds(30)' in focus and 'expiresAtUtc > now' in focus
+assert 'separatelyPermitted && Supported' in focus and 'HuntMapPolicy.Exact(focus' in focus
+assert 'JsonDocument' in focus and 'keys.Add(field.Name)' in focus
+assert 'RequestConfigurationSave' not in focus and 'Configuration' not in focus and 'MapX' not in focus
+assert 'request.Headers.Add(HuntFocusState.Header, HuntFocusState.Contract)' in p
+assert 'HuntFocusEligible() && personalAccepted.Contains("hunt_bills")' in p
+assert 'PersonalEnabled("hunt_bills") && HasPairedSession && activeOwnedState is not null' in p
+assert 'nextHuntFocusPresenceUtc = nextRetainerPresenceUtc' in p
+assert 'if (presenceInFlight || personalInFlight || now < nextHuntFocusPresenceUtc)' in p
+tick=p.split('private void TickHuntFocus',1)[1].split('private void ClearTravelPending',1)[0]
+assert 'SendCurrentRetainerPresence' in tick and 'Capture' not in tick and 'travelLocal' not in tick
+assert 'huntFocus.Clear(); nextHuntFocusPresenceUtc = DateTime.MinValue;' in p
+assert 'huntFocusActiveDiagnostic ? "active (ephemeral)"' in p # Draw reads managed status only, no native pointers.
+assert 'HuntMapTransport.Deadline(permit.Cancellation, CancellationToken.None)' in p
+assert 'SyncResponsePolicy.ReadAsync(response.Content, responseCancellation)' in p
+print('Hunt V2/focus source/priority/independent permission/ephemeral privacy/compatibility boundaries PASS')

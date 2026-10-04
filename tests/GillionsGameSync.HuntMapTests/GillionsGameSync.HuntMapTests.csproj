@@ -7,5 +7,5 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <DefineConstants>$(DefineConstants);GILLIONS_HUNT_MAP_TESTS</DefineConstants>
   </PropertyGroup>
-  <ItemGroup><Compile Include="../../HuntMapRequests.cs" Link="HuntMapRequests.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../HuntMapRequests.cs" Link="HuntMapRequests.cs" /><Compile Include="../../HuntFocus.cs" Link="HuntFocus.cs" /></ItemGroup>
 </Project>

@@ -29,22 +29,34 @@ internal sealed class HuntMapRequest {
     internal required string Classification { get; init; }
     internal uint? FateId { get; init; }
     internal string? FateName { get; init; }
+    internal int ContractVersion { get; init; } = 1;
+    internal string? CandidateKind { get; init; }
+    internal DateTime? WalkExpiresAtUtc { get; init; }
+    internal bool CandidateSetTruncated { get; init; }
+    internal uint? RecommendedAetheryteId { get; init; }
+    internal string? RecommendedAetheryteName { get; init; }
+    internal string Capability => ContractVersion == 2 ? HuntMapPolicy.CapabilityV2 : HuntMapPolicy.Capability;
     internal string Guidance => $"{TargetName} - Hunt area/reference location (not a sighting). " + (Classification switch {
         "FATE_REQUIRED" => $"FATE required: {FateName}; activity not currently known.",
         "CONDITIONAL" => "Conditional availability; activity not currently known.",
         "UNKNOWN" => "Availability unknown.",
         _ => "Ordinary reference; live availability unknown.",
-    }) + $" Site location {CandidateIndex + 1} of {CandidateCount}; alternative cycling is not supported in v1.";
+    }) + (ContractVersion == 1
+        ? $" Site location {CandidateIndex + 1} of {CandidateCount}; alternative cycling is not supported in v1."
+        : CandidateKind == "DISCRETE_SPAWN_LOCATIONS"
+            ? $" Possible location {CandidateIndex + 1} of {CandidateCount}; use Site Next possible location intentionally."
+            : " Site-selected primary reference anchor; not a live location.");
 }
 
 internal static class HuntMapPolicy {
     internal const string Origin = "https://test.gillions.app";
     internal const string Capability = "native_hunt_map_v1";
+    internal const string CapabilityV2 = "native_hunt_map_v2";
     internal const string Permission = "server:game-sync:receive:hunt-map:v1";
     internal const string RequestType = "hunt_map";
     internal const int MaximumResponseBytes = 4096;
     internal static bool Admit(bool consent, bool paired, string origin, bool current) => consent && paired && current && origin == Origin;
-    private static bool Exact(JsonElement value, params string[] names) {
+    internal static bool Exact(JsonElement value, params string[] names) {
         if (value.ValueKind != JsonValueKind.Object) return false;
         var keys = new HashSet<string>(names, StringComparer.Ordinal);
         foreach (var p in value.EnumerateObject()) if (!keys.Remove(p.Name)) return false;
@@ -52,7 +64,7 @@ internal static class HuntMapPolicy {
     }
     private static bool Hex(string? value, int length) => value is not null && value.Length == length
         && value.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
-    private static bool Text(string? value, int limit) => !string.IsNullOrWhiteSpace(value) && value.Length <= limit
+    internal static bool Text(string? value, int limit) => !string.IsNullOrWhiteSpace(value) && value.Length <= limit
         && value == value.Trim() && !value.Any(c => char.IsControl(c)
             || char.GetUnicodeCategory(c) is UnicodeCategory.Format or UnicodeCategory.Surrogate or UnicodeCategory.PrivateUse);
     internal static bool Valid(HuntMapRequest r, DateTime now) => now.Kind == DateTimeKind.Utc
@@ -60,28 +72,68 @@ internal static class HuntMapPolicy {
         && r.ClaimToken.Length is >= 16 and <= 100 && r.ClaimToken.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
         && Hex(r.Revision, 64) && Hex(r.CandidateId, 24) && r.TargetId > 0 && Text(r.TargetName, 120)
         && r.TerritoryId > 0 && r.MapId > 0 && float.IsFinite(r.MapX) && float.IsFinite(r.MapY)
-        && r.MapX is >= 0 and <= 100 && r.MapY is >= 0 and <= 100 && r.CandidateIndex == 0 && r.CandidateCount > 0
+        && r.MapX is >= 0 and <= 100 && r.MapY is >= 0 and <= 100
+        && (r.ContractVersion == 1 ? r.CandidateIndex == 0 && r.CandidateCount > 0 && r.CandidateKind is null
+            && r.WalkExpiresAtUtc is null && !r.CandidateSetTruncated && r.RecommendedAetheryteId is null && r.RecommendedAetheryteName is null
+            : ValidV2(r))
         && r.ExpiresAtUtc.Kind == DateTimeKind.Utc && r.ExpiresAtUtc > now && r.ExpiresAtUtc - now <= TimeSpan.FromSeconds(90)
         && r.Classification is "ALWAYS_AVAILABLE" or "FATE_REQUIRED" or "CONDITIONAL" or "UNKNOWN"
         && (r.FateId is null ? r.FateName is null && r.Classification != "FATE_REQUIRED" : r.FateId > 0 && Text(r.FateName, 160))
         && (r.Classification != "ALWAYS_AVAILABLE" || r.FateId is null);
+    private static bool ValidV2(HuntMapRequest r) => r.ContractVersion == 2
+        && r.CandidateCount is >= 1 and <= 128 && r.CandidateIndex >= 0 && r.CandidateIndex < r.CandidateCount
+        // Walk timestamps are presentation metadata, NOT cursor lifetime/authority.
+        && r.WalkExpiresAtUtc is { Kind: DateTimeKind.Utc }
+        && (r.CandidateKind == "DISCRETE_SPAWN_LOCATIONS" ? r.Classification == "ALWAYS_AVAILABLE" && r.FateId is null
+            : r.CandidateKind == "ORDINARY_AREA" ? r.CandidateIndex == 0 && r.CandidateCount == 1 && r.Classification != "FATE_REQUIRED"
+            : r.CandidateKind == "FATE_REQUIRED" && r.CandidateIndex == 0 && r.CandidateCount == 1 && r.Classification == "FATE_REQUIRED")
+        && (r.RecommendedAetheryteId is null ? r.RecommendedAetheryteName is null
+            : r.RecommendedAetheryteId > 0 && Text(r.RecommendedAetheryteName, 120));
+    internal static bool Utc(string? text, out DateTime result) {
+        result = default;
+        return text is not null && text.EndsWith('Z') && DateTime.TryParseExact(text,
+            ["yyyy-MM-dd'T'HH:mm:ss'Z'", "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'"], CultureInfo.InvariantCulture,
+            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out result);
+    }
     internal static HuntMapRequest? Parse(string json, DateTime now) {
-        if (Encoding.UTF8.GetByteCount(json) > MaximumResponseBytes) return null;
+        return TryPoll(json, now, Capability, out var request) ? request : null;
+    }
+    internal static bool TryPoll(string json, DateTime now, string capability, out HuntMapRequest? request) {
+        request = null;
+        var v2 = capability == CapabilityV2;
+        if (capability != Capability && !v2 || now.Kind != DateTimeKind.Utc) return false;
+        if (Encoding.UTF8.GetByteCount(json) > MaximumResponseBytes) return false;
         try {
             using var doc = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 5 });
             var root = doc.RootElement;
             // Site's actual v1 acknowledgment is just ok + request, NOT PF's nativeRequests descriptor.
-            if (!Exact(root, "ok", "request") || root.GetProperty("ok").ValueKind != JsonValueKind.True) return null;
+            if (!(v2 ? Exact(root, "ok", "request", "progression") : Exact(root, "ok", "request"))
+                || root.GetProperty("ok").ValueKind != JsonValueKind.True) return false;
+            // This Native only performs normal polls. Browser Next queues a
+            // normal command with progression:null. No device-side Next action.
+            if (v2 && root.GetProperty("progression").ValueKind != JsonValueKind.Null) return false;
             var r = root.GetProperty("request");
-            if (!Exact(r, "requestType", "requestId", "claimToken", "huntTargetId", "huntTargetName", "availability",
-                "territoryId", "mapId", "mapX", "mapY", "candidateId", "revision", "candidateIndex", "candidateCount", "expiresAt")
-                || r.GetProperty("requestType").GetString() != RequestType) return null;
+            if (r.ValueKind == JsonValueKind.Null) return true;
+            string[] fields = ["requestType", "requestId", "claimToken", "huntTargetId", "huntTargetName", "availability",
+                "territoryId", "mapId", "mapX", "mapY", "candidateId", "revision", "candidateIndex", "candidateCount", "expiresAt"];
+            if (!Exact(r, v2 ? [..fields, "contractVersion", "candidateKind", "walkExpiresAt", "candidateSetTruncated", "recommendedAetheryte"] : fields)
+                || r.GetProperty("requestType").GetString() != RequestType) return false;
             var a = r.GetProperty("availability");
-            if (!Exact(a, "classification", "fateId", "fateName", "activity") || a.GetProperty("activity").GetString() != "UNKNOWN") return null;
+            if (!Exact(a, "classification", "fateId", "fateName", "activity") || a.GetProperty("activity").GetString() != "UNKNOWN") return false;
             var date = r.GetProperty("expiresAt").GetString();
             if (date is null || !date.EndsWith('Z') || !DateTime.TryParseExact(date,
                 ["yyyy-MM-dd'T'HH:mm:ss'Z'", "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'"], CultureInfo.InvariantCulture,
-                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var expiry)) return null;
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var expiry)) return false;
+            DateTime? walkExpiry = null; uint? recommendedId = null; string? recommendedName = null;
+            if (v2) {
+                if (!Utc(r.GetProperty("walkExpiresAt").GetString(), out var walk)) return false;
+                walkExpiry = walk;
+                var recommended = r.GetProperty("recommendedAetheryte");
+                if (recommended.ValueKind != JsonValueKind.Null) {
+                    if (!Exact(recommended, "aetheryteId", "name")) return false;
+                    recommendedId = recommended.GetProperty("aetheryteId").GetUInt32(); recommendedName = recommended.GetProperty("name").GetString();
+                }
+            }
             var result = new HuntMapRequest {
                 RequestId = r.GetProperty("requestId").GetString() ?? "", ClaimToken = r.GetProperty("claimToken").GetString() ?? "",
                 Revision = r.GetProperty("revision").GetString() ?? "", CandidateId = r.GetProperty("candidateId").GetString() ?? "",
@@ -92,9 +144,15 @@ internal static class HuntMapPolicy {
                 ExpiresAtUtc = expiry, Classification = a.GetProperty("classification").GetString() ?? "",
                 FateId = a.GetProperty("fateId").ValueKind == JsonValueKind.Null ? null : a.GetProperty("fateId").GetUInt32(),
                 FateName = a.GetProperty("fateName").GetString(),
+                ContractVersion = v2 ? r.GetProperty("contractVersion").GetInt32() : 1,
+                CandidateKind = v2 ? r.GetProperty("candidateKind").GetString() : null,
+                WalkExpiresAtUtc = walkExpiry,
+                CandidateSetTruncated = v2 && r.GetProperty("candidateSetTruncated").GetBoolean(),
+                RecommendedAetheryteId = recommendedId, RecommendedAetheryteName = recommendedName,
             };
-            return Valid(result, now) ? result : null;
-        } catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException or OverflowException) { return null; }
+            if (!Valid(result, now)) return false;
+            request = result; return true;
+        } catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException or OverflowException) { return false; }
     }
     internal static bool Consumed(string json) {
         if (Encoding.UTF8.GetByteCount(json) > MaximumResponseBytes) return false;

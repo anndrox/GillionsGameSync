@@ -1,5 +1,12 @@
 # Testing
 
+## Testing 0.0.81 Hunt V2 / Active Hunt focus
+
+See [Testing81 contract, validation and owner acceptance](releases/testing-0.0.81.md).
+The existing rolling URL is unchanged. Keep configuration; no reset or re-pair.
+Owner-confirmed80 final-completion behavior is a live-proven baseline, not pending.
+New81 map/focus gameplay acceptance remains separate from offline contract proof.
+
 ## Testing 0.0.80 Hunt final-completion retest
 
 See [exact source correction, evidence limits and Site map handoff](releases/testing-0.0.80.md).
@@ -13,8 +20,8 @@ not corrected live proof. Publication identity is recorded separately under
 
 Keep `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
 in Dalamud. This JSON is the rolling Testing channel pointer, not a version pin.
-The anonymously verified feed currently advertises the tested 0.0.70 target-name
-correction. Refresh
+Use the committed `data/releases/testing-update-feed.json` for the latest
+anonymously verified publication identity. Refresh
 the plugin list and update normally; keep the installed configuration. Future
 authorized Testing publications must advance this same JSON, not ask testers to
 change repository URLs. [Publication procedure](releasing.md#fixed-testing-update-feed).

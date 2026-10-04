@@ -1,5 +1,11 @@
 # Gillions Game Sync
 
+Testing81 adds exact Site Hunt V2 requests and ephemeral Active Hunt focus on
+secure TEST. B-rank Next remains an intentional Site action; ordinary hunts use
+one reference anchor. Focus is priority, not consent, travel sharing or faster
+native reads. V1 fallback and the owner-live-proven80 completion correction remain.
+See [Testing81 acceptance steps](docs/releases/testing-0.0.81.md).
+
 Testing80 adds supported numeric Hunt progress events when the native counter cache
 does not advance. It binds LogMessage4411 to one recently observed exact bill,
 rechecks the obtained order, and preserves positive progress against stale same-order

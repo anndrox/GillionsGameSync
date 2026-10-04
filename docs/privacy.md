@@ -1,5 +1,16 @@
 # Privacy
 
+## Testing 0.0.81 ephemeral Active Hunt focus
+
+Exact TEST presence may request `active_hunt_focus_v1` only with existing explicit
+private Hunt sync/local retention permission and paired own-character context.
+Its RAM-only lease expires locally within30 seconds; missing, malformed, revoked
+or failed responses stop priority. It is not consent or retained activity history.
+Presence refresh uses the existing one-flight/backoff path; no position, extra
+native reads or travel permission is added. V2 claims remain RAM-only, bounded,
+one-time consumed before map presentation. Site Next queues a normal authorized
+command, never gives browser users device credentials or claim tokens.
+
 ## Testing 0.0.80 Hunt progress evidence and diagnostics
 
 Existing separate Hunt local-retention consent also covers narrowly filtered
