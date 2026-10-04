@@ -1,4 +1,4 @@
-# Testing0.0.82 command-latency investigation — UNPUBLISHED
+# Testing0.0.82 command-latency correction — PUBLISHED
 
 Owner live acceptance for published0.0.81 is FAILED: command responsiveness is
 a BLOCKER. Owner-observed cases: 2nd Cohort signifer7–10s, Tryptix Stumblemox7–12s,
@@ -77,10 +77,12 @@ Five clock calibrations bounded the TEST server ahead of this PC by roughly
 The original owner commands' full browser/poll/claim stage timings were not
 recorded. Native logs show some OperationCanceledException failures with the
 existing30s retry path, but do NOT prove which caused the long-tail observation.
-Actual browser/network tracing and native timing on a controlled loaded package
-remain required. Do not relabel the owner verdict or infer unmeasured stages.
+At preparation, controlled package timing and repeated shared-TEST measurements
+remained required. The measured run below supersedes that preparation hold;
+exact browser POST tracing and original long-tail attribution remain unavailable.
+Do not relabel the original owner verdict or infer unmeasured stages.
 
-## Publication hold
+## Preparation hold (historical; superseded below)
 
 Maintained verification passes:799 Hunt-map,542 Submarine,454 personal-state,
 1792 Dashboard,2551 travel,224 Market,116 PF and268 orchestration named checks
@@ -100,3 +102,63 @@ it; run Security/Privacy and Compatibility on the final exact package only after
 latency correction; then publish the next authorized Testing version.
 
 Do not alter Site/source/schema/Stable/main/production based on a hypothesis.
+
+## Completed controlled validation and publication
+
+Artifact source42cf0b11f1c499261bf56dec11d851d08dfe6d70 was loaded by the owner
+with installed81 disabled. No rebuild occurred after exact-package review or
+live measurement. Ten authenticated intentional Show actions against shared TEST
+gave the following finite results (milliseconds):
+
+| Stage | Median | Worst |
+| --- | ---: | ---: |
+| Agent action dispatch → map API invocation | 769.08 | 1081.21 |
+| Agent action dispatch → Native poll | 687.50 | 959.00 |
+| Poll → claim response received | 23.27 | 156.82 |
+| Site queue → claim (DB transaction stamps) | 556.71 | 803.95 |
+| Claim response → map API invocation | 62.95 | 136.55 |
+| Consume HTTP dispatch → response headers | 16.18 | 101.40 |
+| Validated consume acknowledgement → map invocation | 11.14 | 47.54 |
+
+Zero duplicate invocations were observed. Owner feedback was "Prompt, no
+unexplained repeats" for the first eight actions; later actions are instrumented
+results, not separately owner-attested. Owner's natural gameplay produced
+distinct automatic transitions, not repeats of consumed commands. Hunt
+completion remained functional; no gameplay was requested or automated.
+
+Leaving Active Hunt for more than30s and returning gave a real background-focus
+resume response of1938.46ms, followed by reacquired active focus1120.33ms. Neither
+replayed a consumed request. B-rank Next/racing/no-wrap and reconnect/backoff
+recovery passed exact-package/current-Site fixtures, not live fault injection.
+The owner explicitly requested a B-rank Next fixture; repeated authenticated
+wire validation was real, not simulated. The earlier preparation list must not
+be read as proof that every case was measured live.
+
+Limitations: action dispatch is not an exact browser POST timestamp and includes
+automation-to-click overhead; map API invocation is not rendered-pixel time.
+Browser POST→queue time is UNKNOWN. DB NOW stamps are transaction starts, not
+HTTP arrival/commit. Consume succeeds before presentation; presentation→consume
+is N/A by design. The original>30s incident cannot be retrospectively attributed
+to one failure; corrected scheduling/issuer-clock defects are independently
+reproduced mechanisms, not fabricated original-request traces. The finite after
+run met the target; this is not a guarantee against all future long tails.
+
+Security/Privacy and Compatibility both ACCEPTED the final unchanged source and
+exact artifact for Testing publication. Their two documentation/evidence
+FOLLOW-UPs were corrected: attestation is limited to eight actions and this
+record separates live, fixture, and unknown evidence. No remaining code/package
+BLOCKER was found.
+
+Published v0.0.82-testing on2026-10-04; source42cf0b11, annotated tag
+e86f62830e6bfce102d7e3a0e6b416112be075a2. Anonymous immutable and rolling downloads
+match accepted bytes. The unchanged rolling64 JSON now resolves82. Prior
+immutable release assets and historical64 notes suffix are unchanged. See
+[publication record](../../data/releases/testing-0.0.82.json) for full hashes.
+
+Stable/main/production/Site source/schema/deployment/Market architecture/Wardrobe
+were not changed. No game writes, extra sensitive reads or TLS bypass. Testing
+command polling alone changed; existing backoff and permissions remain intact.
+
+Owner procedure: keep the same repository URL and configuration. Disable the
+diagnostic dev-plugin entry before enabling the installed Testing82 plugin;
+never run both. No reset, re-pairing or additional delivery/Hunt action required.
