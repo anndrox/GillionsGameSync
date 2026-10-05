@@ -185,18 +185,23 @@ internal sealed class HuntBillLocalView : IDisposable {
             HuntItemProbeDiagnostics? probe = null;
             if (stable) {
                 int probed=0, unavailable=0, empty=0, idZero=0, idMatch=0, qtyZero=0, qtyMatch=0, changed=0, mapped=0;
-                // Diagnose at most8 structurally bound non-symbolic invalid slots.
-                // Getters are read-only. Counts never admit a negative fact or leave RAM.
+                // At most8 structurally bound non-symbolic invalid slots. Aggregate
+                // counts are diagnostic only. A separate same-read per-slot empty
+                // proof can resolve zero-ID/nonzero-positive residual quantity.
                 foreach (int i in Enumerable.Range(0,size).Where(i => !HuntBillItemCoverage.ItemShapeValid(firstSlots[i])).Take(8)) {
                     if (keyItems->Items != pointer || keyItems->Size != size || keyItems->Type != container || !keyItems->IsLoaded) { unavailable++; continue; }
                     var s=firstSlots[i]; var item=pointer+i;
                     if (s.Slot != i || s.Container != (int)container || s.Symbolic || item->VirtualTable == null
                         || item->VirtualTable->IsEmpty == null || item->VirtualTable->GetBaseItemId == null || item->VirtualTable->GetQuantity == null) { unavailable++; continue; }
+                    var itemVirtualTable=item->VirtualTable;
                     try {
                         bool isEmpty=item->IsEmpty(); uint baseId=item->GetBaseItemId(), quantity=item->GetQuantity();
                         bool same=isEmpty==item->IsEmpty() && baseId==item->GetBaseItemId() && quantity==item->GetQuantity()
+                            && item->VirtualTable==itemVirtualTable
                             && new HuntKeyItemSlot(item->Slot,(int)item->Container,item->IsSymbolic,item->ItemId,item->Quantity)==s;
                         probed++; if (!same) { changed++; continue; }
+                        if (s.ItemId==0 && s.Quantity>0 && isEmpty && baseId==0 && quantity==(uint)s.Quantity)
+                            firstSlots[i]=s with { NativeConfirmedEmpty=true };
                         if (isEmpty) empty++; if (baseId==0) idZero++; if (baseId==s.ItemId) idMatch++;
                         if (quantity==0) qtyZero++; if (s.Quantity>=0 && quantity==(uint)s.Quantity) qtyMatch++;
                         if (domains.Any(d=>d.KeyItemId==s.ItemId)) mapped++;

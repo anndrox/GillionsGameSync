@@ -14,8 +14,8 @@ internal static class HuntBillItemPackagedTests {
         uint[] ids=[2001361,2001700,2001701,2001702,2001362,2001703,2002113,2002114,2002115,2002116,2002628,2002629,2002630,2002631,2003090,2003091,2003092,2003093,2003509,2003510,2003511,2003512];
         for(int i=0;i<22;i++) domains.SetValue(Activator.CreateInstance(domain,[(byte)i,ids[i],(byte)1,1u,10u]),i);
         var slots=Array.CreateInstance(slot,2);
-        slots.SetValue(Activator.CreateInstance(slot,[0,2004,false,2003509u,1]),0);
-        slots.SetValue(Activator.CreateInstance(slot,[1,2004,false,0u,0]),1);
+        slots.SetValue(Activator.CreateInstance(slot,[0,2004,false,2003509u,1,false]),0);
+        slots.SetValue(Activator.CreateInstance(slot,[1,2004,false,0u,0,false]),1);
         var current=Activator.CreateInstance(coverage!,true)!;
         const BindingFlags instance=BindingFlags.Instance|BindingFlags.NonPublic;
         coverage!.GetMethod("SetCatalog",instance)!.Invoke(current,[domains]);
@@ -28,6 +28,11 @@ internal static class HuntBillItemPackagedTests {
         Require(states.Length==22,"Exact DLL dropped domains");
         string State(object d)=>(string)d.GetType().GetProperty("State")!.GetValue(d)!;
         Require(State(states[18])=="present_unresolved" && states.Where((_,i)=>i!=18).All(d=>State(d)=="absent_confirmed"),"Exact DLL absence/presence overclaimed");
+        slots.SetValue(Activator.CreateInstance(slot,[1,2004,false,0u,1,false]),1); Observe(key,true);
+        Require(((Array)Current(key)!.GetType().GetProperty("Domains")!.GetValue(Current(key))!).Cast<object>().All(d=>State(d)=="unavailable"),"Exact DLL trusted residual quantity without per-slot native proof");
+        slots.SetValue(Activator.CreateInstance(slot,[1,2004,false,0u,1,true]),1); Observe(key,true);
+        Require(((Array)Current(key)!.GetType().GetProperty("Domains")!.GetValue(Current(key))!).Cast<object>().Count(d=>State(d)=="present_unresolved")==1,"Exact DLL rejected native-confirmed empty slot or lost held bill");
+        slots.SetValue(Activator.CreateInstance(slot,[1,2004,false,0u,0,false]),1);
         Require(Current(other) is null,"Exact DLL cross-character leak");
         Observe(key,false);
         snapshot=Current(key)!;

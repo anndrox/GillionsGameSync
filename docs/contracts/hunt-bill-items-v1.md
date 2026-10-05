@@ -39,8 +39,16 @@ Use InventoryManager's KeyItems container (2004), not cached Hunt flags. Require
 IsLoaded, non-null Items, reported size1..256, correct Type and typed GetSize
 agreement. Copy every reported slot twice on the same framework turn; headers,
 pointer and slot facts must agree. Each slot must have its expected index and
-container, no symbolic representation, and either itemId/quantity both zero or
-both positive. Every positive item must resolve in EventItem. Reject a read whose
+container and no symbolic representation. ItemId/quantity both zero or both
+positive remain the ordinary valid shapes. A zero-ID slot with positive residual
+quantity is accepted as empty only with a separate same-read per-slot native
+proof: IsEmpty=true, GetBaseItemId=0 and GetQuantity matching the raw quantity,
+each repeated consistently while the slot's raw fields remain unchanged. Require
+non-null typed virtual table/getters; at most8 such exceptions per complete
+snapshot. No aggregate diagnostic or missing getter establishes this proof.
+Negative quantity, positive-ID/zero-quantity, inconsistent getters, symbolic or
+misidentified slots still fail closed. The proof is ephemeral and never part of
+the payload. Every positive item must resolve in EventItem. Reject a read whose
 preparation exceeds100ms. Require all22 unique catalog type/item mappings and
 valid native classification/range, resolving each mapped EventItem. Partial,
 malformed, changed or unsupported data cannot produce an absence fact.

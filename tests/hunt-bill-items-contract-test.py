@@ -21,6 +21,11 @@ assert 'TimeSpan.FromMilliseconds(100)' in native
 assert '.Take(8)' in native and 'item->VirtualTable->GetQuantity == null' in native
 assert 'probe?.Summary' in model and 'probe' not in model.split('var present = complete',1)[0].split('bool complete =',1)[1]
 assert 'quantity==(uint)s.Quantity' in native and 'GetBaseItemId()' in native
+assert 's.ItemId==0 && s.Quantity>0 && isEmpty && baseId==0 && quantity==(uint)s.Quantity' in native
+assert 'firstSlots[i]=s with { NativeConfirmedEmpty=true }' in native
+assert 'item->VirtualTable==itemVirtualTable' in native
+assert 'slots.Count(s => s.NativeConfirmedEmpty) <= 8' in model
+assert 'NativeConfirmedEmpty' not in model.split('var root = JsonNode.Parse',1)[1].split('internal sealed class HuntBillItemSync',1)[0]
 assert 'huntCoverageSync.Clear(); huntLocal?.ClearCoverage();' in plugin
 assert 'huntCoverageAccepted' in plugin and 'PersonalSyncPolicy.HuntCoverageCompatible' in plugin
 assert 'coverage && !CoveragePreparedCurrent(prepared, permit)' in plugin

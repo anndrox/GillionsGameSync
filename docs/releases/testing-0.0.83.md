@@ -50,8 +50,10 @@ to produce absence. Publication/live-proof state and hashes are recorded separat
 
 The initial owner run showed loaded, stable and initialized source with all124
 slots and no identity or symbolic mismatch, but one invalid item/quantity shape.
-All22 domains correctly remained unavailable. This establishes fail-closed
-behavior, not successful absence coverage; the exact shape remains unknown.
+All22 domains correctly remained unavailable. A subsequent diagnostic run
+identified a zero-ID slot with positive residual quantity; repeated native
+getters reported empty=true, base item ID0 and unchanged matching quantity.
+This identifies the failed assumption, not successful complete coverage.
 
 The diagnostic successor distinguishes zero-ID/nonzero-quantity,
 positive-ID/zero-quantity and negative-quantity counts. At most8 structurally
@@ -59,12 +61,18 @@ bound, non-symbolic invalid slots receive read-only IsEmpty, GetBaseItemId and
 GetQuantity probes, twice for consistency, only on the existing Hunt cadence.
 Null virtual tables/functions are not called. The UI and copied aggregate
 diagnostics expose finite counts only, never slot indices, item IDs or quantities
-from those probes. Probe results never authorize coverage and are not exported,
-logged as new history, persisted or uploaded. Completeness rules remain unchanged.
+from those probes. Aggregate probe counts never authorize coverage and are not
+exported, logged as new history, persisted or uploaded.
+
+The correction accepts only that zero-ID/positive residual-quantity case with
+a separate same-read native-confirmed empty proof. Missing/inconsistent getters,
+negative quantity or any other malformed slot remains unavailable. All other
+completeness, freshness, character and history gates are unchanged; the payload
+shape is unchanged. Corrected fixtures are not live coverage proof.
 
 The [pinned typed source](https://github.com/aers/FFXIVClientStructs/blob/6a562a1ef86b9acb22bda0726e28b0e23bb27552/FFXIVClientStructs/FFXIV/Client/Game/InventoryItem.cs)
-defines those getters but does not establish which condition caused this live
-mismatch. A new source rule must not be inferred from that aggregate alone.
+defines those getters; the owner diagnostics establish the observed empty-slot
+case. The corrected complete-coverage path still needs a bounded runtime check.
 
 ## Site routing rule
 

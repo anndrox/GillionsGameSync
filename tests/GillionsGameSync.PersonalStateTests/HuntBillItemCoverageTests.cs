@@ -55,6 +55,20 @@ internal static class HuntBillItemCoverageTests {
         c.Observe(key,key,true,true,2004,4,[slots[0] with{Quantity=1},slots[1],slots[2],slots[3]],true,now,mono,PersonalObservationCompatibility.GameBuild,"0.0.83.0",PersonalObservationCompatibility.NativeVersion);
         check(c.Status.Contains("zero-id-nonzero-qty=1"),"Zero-id mismatch conflated with positive-id mismatch");
         check(new HuntItemProbeDiagnostics(99,-1,99,99,99,99,99,99,99).Summary.StartsWith("getter-probes=8/8, getter-unavailable=0"),"Local getter diagnostics unbounded");
+        // Live-shaped residual quantity: only a separate same-read native empty
+        // proof admits it. Aggregate diagnostic counts above were insufficient.
+        var residual=slots.ToArray(); residual[0]=residual[0] with {Quantity=1,NativeConfirmedEmpty=true};
+        Observe(residual);
+        check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="absent_confirmed"),"Native-confirmed zero-ID empty slot rejected");
+        foreach(var rejected in new[]{residual[0] with{NativeConfirmedEmpty=false}, residual[0] with{ItemId=2003509}, residual[0] with{Quantity=-1}, residual[0] with{Quantity=0}, residual[0] with{Symbolic=true}, residual[0] with{Container=0}, residual[0] with{Slot=2}}) {
+            Observe([rejected,slots[1],slots[2],slots[3]]);
+            check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="unavailable"),"Residual-quantity correction weakened an unrelated gate");
+        }
+        Observe(residual,stable:false); check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="unavailable"),"Native empty proof bypassed snapshot stability");
+        Observe(residual,after:other); check(c.Current(key,now,mono) is null,"Native empty proof crossed character transition");
+        var tooMany=Enumerable.Range(0,9).Select(i=>new HuntKeyItemSlot(i,2004,false,0,1,true)).ToArray();
+        Observe(tooMany,size:9); check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="unavailable"),"More than8 exceptions admitted");
+        check(!c.Payload(hp,key,now,mono)!.Contains("nativeConfirmedEmpty",StringComparison.OrdinalIgnoreCase),"Internal source proof exported");
         Observe(presentSlots,5); Observe(slots,6);
         check(c.Current(key,now.AddSeconds(6),At(6))!.Domains.Single(d=>d.BillTypeId==18).State=="absent_confirmed","I: removal not observed");
         check(c.Current(key,now.AddSeconds(22),At(22)) is null,"Expired UTC coverage remained current");
