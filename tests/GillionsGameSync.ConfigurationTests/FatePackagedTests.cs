@@ -27,6 +27,16 @@ internal static class FatePackagedTests {
             (byte)35,true,(byte)15,(byte)20,null,null,null])!;
         var rows=Array.CreateInstance(T("FateObservation"),1); rows.SetValue(row,0);
         var prepared=Invoke("Prepare",(long)1,source,rows,now);
+        var epochType=T("FateEpochState"); const BindingFlags instanceFlags=BindingFlags.Instance|BindingFlags.NonPublic;
+        var lifecycle=Activator.CreateInstance(epochType,true)!;
+        epochType.GetMethod("Invalidate",instanceFlags)!.Invoke(lifecycle,[]);
+        var epoch=epochType.GetProperty("Epoch",instanceFlags)!;
+        long settledEpoch=(long)epoch.GetValue(lifecycle)!;
+        var context=Activator.CreateInstance(T("FateContext"),[(ulong)123,(uint)21,(uint)134,(uint)2])!;
+        for(int tick=0;tick<4;tick++) {
+            Check((bool)epochType.GetMethod("Observe",instanceFlags)!.Invoke(lifecycle,[context,context,source,rows,now.AddSeconds(tick*5)])!,"Packaged consecutive settled reads.");
+            Check((long)epoch.GetValue(lifecycle)! == settledEpoch,"Packaged first-context binding must not force recurring re-settlement.");
+        }
         var body=(ReadOnlyMemory<byte>)T("FatePrepared").GetProperty("Body",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(prepared)!;
         using(var json=JsonDocument.Parse(body)) {
             Check(json.RootElement.EnumerateObject().Select(p=>p.Name).Order().SequenceEqual(new[]{"schemaVersion","collectorSchema","coverage","source","batchId","observations"}.Order()),"Packaged exact envelope keys.");

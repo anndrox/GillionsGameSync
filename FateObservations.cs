@@ -108,7 +108,11 @@ internal sealed class FateEpochState {
     }
     internal bool Observe(FateContext before, FateContext after, FateSource source, FateObservation[] rows, DateTime now) {
         if (before != after || before.LocalCharacter == 0 || !FatePolicy.Compatible(source)) { Invalidate(); return false; }
-        if (context != before) { Invalidate(); context=before; }
+        // The framework reader already invalidates/settles a new epoch before
+        // the first observation. Binding its first context must not invalidate
+        // that same epoch again (which would force alternating settle/read
+        // passes and erase terminal support on every subsequent observation).
+        if (context != before) { if (context is not null) Invalidate(); context=before; }
         foreach (var key in timedOccurrences.Where(p => now-p.Value > TimeSpan.FromSeconds(120)).Select(p=>p.Key).ToArray()) timedOccurrences.Remove(key);
         var accepted = new List<FateObservation>();
         foreach (var row in rows.Take(FatePolicy.MaximumRows)) {

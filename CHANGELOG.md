@@ -4,6 +4,8 @@
 
 - Add a temporary Advanced/Testing read-only FATE measurement session using typed
   IFateTable/IFate APIs, independently bounded five-second reads and copied scalars.
+- Bind the first observed context to its already-settled epoch without a second
+  invalidation; steady reads preserve occurrence support and do not re-settle.
 - Fence exact installed sources and settled public Overworld world/territory/instance
   context. Retain positive observations only in bounded RAM; no absence, timer or
   progress-based completion claims, private player fields or persistent history.

@@ -24,6 +24,8 @@ transitions fail closed. Eureka, Bozja and special exploratory modes remain outs
 scope. CurrentWorld, territory and typed public instance ordinal must agree before
 and after enumeration; two separately scheduled stable checks precede the first
 read. Zero ordinal means noninstanced only in that settled supported context.
+The first admitted context binds the already-settled epoch without invalidating
+it again; subsequent reads preserve that epoch until a real lifecycle change.
 Login/logout, ZoneInit, territory, map, instance and pairing/session invalidation
 discard unsent evidence and occurrence support.
 

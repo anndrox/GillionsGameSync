@@ -42,7 +42,9 @@ foreach(var changed in new[] {Row() with {WorldId=22},Row() with {Instance=new("
 Check(FatePolicy.Prepare(1,source,[],now)==null,"no empty replacement");
 Check(FatePolicy.Prepare(1,source,Enumerable.Repeat(Row(),65).ToArray(),now)==null,"64 bound");
 var state=new FateEpochState();
+state.Invalidate(); var settledEpoch=state.Epoch;
 Check(state.Observe(context,context,source,[Row()],now),"first positive");
+Check(state.Epoch==settledEpoch,"first admitted context binds the already-settled epoch without invalidating it again");
 var batch=state.Prepared!;
 Check(batch is not null && batch.Body.Length<128*1024,"bounded exact batch");
 using(var d=JsonDocument.Parse(batch!.Body)) {
@@ -127,6 +129,24 @@ Check(state.Observe(context,context,source,[newStart],now.AddSeconds(5)) && stat
 var costs=new FateMeasurements(); for(int i=0;i<300;i++) costs.Add(new(i,100,i/2.0,20,i%10,1,i%2==0,"fixture"));
 Check(costs.Count==240 && costs.Snapshot()[0].ReadMilliseconds==60,"bounded diagnostic ring");
 Check(FateMeasurements.Summary(costs.Snapshot()).Contains("p95"),"median/p95/max diagnostics");
+// Reproduce the native reader's separately scheduled settlement check. No game
+// getters are called; the source contract separately checks this caller pattern.
+var lifecycle=new FateEpochState(); FateContext? settled=null; long admittedEpoch=0;
+int settlePasses=0, readPasses=0;
+for(int tick=0;tick<8;tick++) {
+    var time=now.AddSeconds(tick*5);
+    if(settled!=context || admittedEpoch!=lifecycle.Epoch) {
+        lifecycle.Invalidate(); settled=context; admittedEpoch=lifecycle.Epoch; settlePasses++; continue;
+    }
+    var positive=Row(time) with {State= tick==7 ? new("ended",7) : new("running",4)};
+    Check(lifecycle.Observe(context,context,source,[positive],time),"consecutive settled scheduled read");
+    Check(lifecycle.Epoch==admittedEpoch && lifecycle.Current.Length==1,"ordinary reads preserve settled epoch and established terminal support");
+    readPasses++;
+}
+Check(settlePasses==1 && readPasses==7,"one settlement pass, then every five-second read; no alternating re-settlement");
+var previousEpoch=lifecycle.Epoch;
+lifecycle.Observe(context with {World=22},context with {World=22},source,[Row(now.AddSeconds(40)) with {WorldId=22}],now.AddSeconds(40));
+Check(lifecycle.Epoch>previousEpoch && lifecycle.Current.Single().WorldId==22,"real context changes still invalidate the prior epoch");
 if(args.Length==2 && args[0]=="--fixture") {
     var path=Path.GetFullPath(args[1]); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
     File.WriteAllBytes(path,prepared.CopyBody());
