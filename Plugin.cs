@@ -61,6 +61,7 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly SubmarineLocalView submarineLocal;
     private readonly HuntBillLocalView huntLocal;
     private readonly DashboardLocalView dashboardLocal;
+    private readonly FateLocalView fateLocal;
     private readonly TravelContextLocalView travelLocal;
     private readonly TravelSyncState travelSync = new();
     private bool travelAccepted, travelInFlight;
@@ -183,6 +184,7 @@ public sealed class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Testing85 adds temporary Advanced FATE diagnostics: bounded read-only public overworld observations and cost measurements in RAM. No remote contributions until an exact independent Site policy/admission contract is wired. Missing FATEs are UNKNOWN; no player coordinates or persistent history.",
         "Testing84 refreshes acknowledged Hunt coverage at a six-second observation deadline using newer RAM snapshots, without waiting for the routine personal tick. Reads remain three seconds; permission, single-flight, backoff and the 15-second freshness boundary remain unchanged.",
         "Testing83 reports private Hunt bill Key Item absence only after a complete loaded snapshot. Presence remains unresolved; unavailable state never supersedes history. Exact order/acquisition/reset is unsupported, and historical progress is unchanged.",
         "Hunt item coverage uses latest-only RAM, existing Hunt consent and unchanged three-second reads. It uploads only after Site explicitly admits hunt_bills_v2; older Site keeps positive-only v1 sync. No new local history, public sharing or travel permission.",
@@ -232,7 +234,7 @@ public sealed class Plugin : IDalamudPlugin {
 
     public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commands, IClientState clientState, IObjectTable objects, IFramework framework, IDataManager dataManager, IUnlockState unlockState, IGameInventory gameInventory, IPartyFinderGui partyFinderGui, IChatGui chatGui, IPluginLog log
 #if GILLIONS_TEST_BUILD
-        , IAddonLifecycle addonLifecycle, IMarketBoard marketBoard, ICondition marketConditions, IGameGui gameGui, IPlayerState travelPlayerState
+        , IAddonLifecycle addonLifecycle, IMarketBoard marketBoard, ICondition marketConditions, IGameGui gameGui, IPlayerState travelPlayerState, IFateTable fateTable
 #endif
     ) {
         this.pluginInterface = pluginInterface;
@@ -283,6 +285,7 @@ public sealed class Plugin : IDalamudPlugin {
         dashboardLocal = new DashboardLocalView(pluginInterface, commands, framework, clientState, dataManager,
             gameGui, marketConditions, addonLifecycle, configuration.DashboardFacts, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
         travelLocal = new TravelContextLocalView(pluginInterface,clientState,objects,travelPlayerState,dataManager,gameGui,marketConditions);
+        fateLocal = new FateLocalView(pluginInterface,commands,clientState,travelPlayerState,dataManager,marketConditions,fateTable,framework);
         travelLocal.Invalidated += ClearTravelPending;
         travelLocal.SetEnabled(configuration.ShareHuntRoutingLocation);
         this.marketConditions = marketConditions;
@@ -458,6 +461,7 @@ public sealed class Plugin : IDalamudPlugin {
         var huntChanged = huntLocal.SemanticRevision != huntRevision || huntLocal.CoverageRevision != coverageRevision;
         if (huntLocal.SemanticRevision != huntRevision || huntRawRevision != huntLocal.RawRevision) RecordDiagnostic(huntLocal.LastDiagnostic);
         dashboardLocal.Tick(now); // Independent, off-by-default; one bounded source group per due check.
+        fateLocal.Tick(now); // RAM-only local diagnostic session; independent five-second admission.
         travelLocal.Tick(now); // Independent default-OFF, latest-only RAM, bounded 15-second read.
         TickTravelSync(now); // Also clears invalid/expired pending state while unpaired.
         if (now >= nextMarketMaintenanceUtc) {
@@ -1520,6 +1524,7 @@ public sealed class Plugin : IDalamudPlugin {
         if (!diagnosticsExpanded) return;
 #if GILLIONS_TEST_BUILD
         ImGui.TextWrapped("Testing diagnostics record automatically. Diagnostic entries stay local and may include gameplay details. Review copied reports before sharing.");
+        if (ImGui.Button("Advanced FATE diagnostics (local only)")) fateLocal.Show();
 #else
         ImGui.TextWrapped("Diagnostic recording is off by default and stays on this PC. It never uploads logs, chat text, credentials, or device identifiers. Start it only when reproducing a sync problem; review copied gameplay details before sharing.");
         if (!view.Recording) {
@@ -1584,6 +1589,7 @@ public sealed class Plugin : IDalamudPlugin {
         requestLifetime.Invalidate(); ClearTransientState(); ClearRetainerServerAcceptance();
 #if GILLIONS_TEST_BUILD
         travelAccepted = false; travelBinding = ""; ClearTravelPending(); travelLocal?.ClearSession();
+        fateLocal?.ClearAuthorization(); // account/session changes discard any diagnostic unsent epoch
         ClearHuntMapRequests();
         huntFocus.Clear(); nextHuntFocusPresenceUtc = DateTime.MinValue;
         foreach (var cancellation in personalCancellation.Values) { cancellation.Cancel(); cancellation.Dispose(); }
@@ -2174,6 +2180,7 @@ public sealed class Plugin : IDalamudPlugin {
         submarineLocal.Dispose();
         huntLocal.Dispose();
         dashboardLocal.Dispose();
+        fateLocal.Dispose();
         travelLocal.Dispose();
         huntMapCancellation.Cancel(); huntMapCancellation.Dispose();
         marketSource.Dispose(); marketContributor.Dispose(); marketHttp.Dispose();

@@ -15,6 +15,11 @@ $partyFinderTests = Join-Path $root 'tests/GillionsGameSync.PartyFinderTests/Gil
 dotnet run --project $partyFinderTests -c Release
 if ($LASTEXITCODE -ne 0) { throw 'Party Finder contribution behavior fixture failed.' }
 
+dotnet run --project (Join-Path $root 'tests/GillionsGameSync.FateTests/GillionsGameSync.FateTests.csproj') -c Release -- --fixture (Join-Path $root 'artifacts/verification/fate/fate-live-observations-v1.json')
+if ($LASTEXITCODE -ne 0) { throw 'FATE positive-only/source/privacy/epoch/transport fixtures failed.' }
+python (Join-Path $root 'tests/fate-contract-test.py')
+if ($LASTEXITCODE -ne 0) { throw 'FATE typed-source/lifecycle/privacy boundaries failed.' }
+
 dotnet run --project (Join-Path $root 'tests/GillionsGameSync.HuntMapTests/GillionsGameSync.HuntMapTests.csproj') -c Release
 if ($LASTEXITCODE -ne 0) { throw 'Hunt map contract/lifecycle/race fixtures failed.' }
 python (Join-Path $root 'tests/hunt-map-contract-test.py')
