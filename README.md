@@ -1,10 +1,12 @@
 # Gillions Game Sync
 
-Prepared Testing85 adds an Advanced/Testing local FATE measurement session using
+Published Testing85 adds an Advanced/Testing local FATE measurement session using
 maintained typed APIs. It retains only bounded RAM observations; missing FATEs
 remain unknown. Remote contribution stays disabled pending exact Site admission
-and independent consent. Publication requires real-client cost and positive
-observation acceptance. See [FATE capability and activation requirements](docs/contracts/fate-live-observations-v1.md).
+and independent consent. Real-client collection, bounded costs and prompt PF-link
+delivery were accepted; exact reviewed bytes were published without rebuilding.
+Keep the same rolling Testing URL. See [Testing85 validation and Site handoff](docs/releases/testing-0.0.85.md)
+and [FATE capability and activation requirements](docs/contracts/fate-live-observations-v1.md).
 
 Published Testing84 corrects Hunt coverage refresh scheduling without changing
 the15-second contract or three-second gameplay reads. Two real TEST windows had

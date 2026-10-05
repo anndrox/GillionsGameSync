@@ -1,9 +1,10 @@
 # Testing live FATE observations
 
-Testing candidate 0.0.85 adds a read-only, RAM-only local diagnostic collector.
+Published Testing 0.0.85 adds a read-only, RAM-only local diagnostic collector.
 Remote contributions remain disabled. Site contract revision 2 reserves intake
-but does not activate an endpoint, provider or consent policy. Publication requires
-real-client positive observation and cost acceptance, not fixture success.
+but does not activate an endpoint, provider or consent policy. Real-client positive
+observation, bounded cost and owner-observed command responsiveness are accepted;
+see [Testing85 results](../releases/testing-0.0.85.md).
 
 ## Maintained sources and supported context
 
@@ -149,8 +150,9 @@ expires at 30 seconds. No production, plaintext or direct-IP fallback is allowed
 
 Site clock admission is at most five seconds future/thirty seconds old. Fresh
 through observedAt+30 seconds, stale until +120, then no recent observation.
-Estimated timer expiry is not a terminal event. Live acceptance must establish
-actual cost, cadence margin and command responsiveness before publication.
+Estimated timer expiry is not a terminal event. Local cost and bounded command
+responsiveness acceptance are established. Live wire freshness/cadence margin
+remains an activation-phase check; no sender or intake is active in85.
 
 ## Site activation handoff
 
@@ -164,5 +166,5 @@ Hunt/travel cannot be joined to the public observation stream.
 Native then needs a bounded follow-up wiring the agreed discovery/policy lifecycle
 and sender to these helpers, with joint auth/revocation/retry tests. No Site
 activation, public alert, Watch/Tracked FATE control or static FATE UI change is
-part of this candidate. Exact accepted source/package identities and measured
-runtime results accompany the release handoff after owner runtime acceptance.
+part of this release. Exact accepted source/package identities and measured
+runtime results accompany the [published release handoff](../releases/testing-0.0.85.md).

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.85 - Testing FATE diagnostic candidate
+## 0.0.85 - Testing local FATE observations
 
 - Add a temporary Advanced/Testing read-only FATE measurement session using typed
   IFateTable/IFate APIs, independently bounded five-second reads and copied scalars.
@@ -12,8 +12,9 @@
 - Prepare exact schema1 batches, immutable IDs/bodies and fail-closed future policy/
   receipt helpers. No live grants or contribution sender until Site defines exact
   admission discovery. No default-ON sharing, gameplay writes, alerts or static UI changes.
-- Preserve84 and all prior capabilities. Candidate remains unpublished until exact
-  package review and real-client positive/cost acceptance.
+- Preserve84 and all prior capabilities. Publish the unchanged reviewed package
+  after real-client positive/cost and command-responsiveness acceptance; remote
+  FATE transport remains dormant pending exact Site discovery and follow-up wiring.
 
 ## 0.0.84 - Testing Hunt coverage refresh margin
 
