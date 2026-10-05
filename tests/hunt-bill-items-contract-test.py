@@ -34,6 +34,14 @@ assert 'SendPersonalAsync(coveragePermit, current, coverageToken, coverage: true
 assert 'SendPersonalAsync(coveragePermit, current, coverageCancellation.Token' not in plugin
 assert 'HuntBillItemSync.NeedsCurrentSample(disposition) && !CoveragePreparedCurrent' in plugin
 assert 'if (!coverage) RequestConfigurationSave();' in plugin
+assert 'prompt || refreshDue' in plugin and 'huntCoverageSync.RefreshDue' in plugin
+assert 'CoverageObservedAtUtc(HuntBillRetentionPolicy.CharacterKey' in plugin
+assert 'internal const int RefreshAfterSeconds = 6' in model
+assert 'newest > observedUtc && newest <= now' in model
+assert 'candidateObservedUtc <= observedUtc' in model
+assert 'now - observedUtc >= TimeSpan.FromSeconds(RefreshAfterSeconds)' in model
+assert 'nextReadUtc = now.AddSeconds(3)' in (root/'HuntBills.cs').read_text()
+assert 'Hunt coverage timing:' in plugin and 'Numeric local timings only; no identity/payload logged.' in plugin
 assert 'huntCoverageSync' not in plugin.split('public sealed class PluginConfiguration',1)[1]
 assert 'itemCoverage' not in plugin.split('public sealed class PluginConfiguration',1)[1]
 assert 'SyncPersonalHunts && configuration.HuntBills.LocalRetentionEnabled' in plugin

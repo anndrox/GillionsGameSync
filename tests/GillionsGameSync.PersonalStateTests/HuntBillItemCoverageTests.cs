@@ -128,6 +128,74 @@ internal static class HuntBillItemCoverageTests {
         c.SetCatalog(catalog[..21]); check(c.Current(key,now.AddSeconds(8),At(8)) is null,"Partial catalog authorized omissions");
         check(!HuntBillItemCoverage.CatalogValid(catalog.Select(d=>d with {KeyItemId=1}).ToArray()),"Duplicate mapping admitted");
         check(JsonSerializer.Serialize(history)==retained,"F: lifecycle tests mutated retained progress");
-        Console.WriteLine("Absence-only A-I, completeness/epoch/privacy/nonce/expiry/admission fixtures PASS; synthetic, no live inventory proof.");
+        RefreshSchedule(check, catalog, hp, key, owner, now, mono, slots);
+        Console.WriteLine("Absence-only A-I, completeness/epoch/privacy/nonce/expiry/admission and refresh-margin fixtures PASS; synthetic, no live inventory proof.");
+    }
+    private static void RefreshSchedule(Action<bool,string> check, HuntBillItemDomain[] catalog,
+        HuntBillRetentionPolicy history, string key, string owner, DateTime origin, long mono, HuntKeyItemSlot[] slots) {
+        long At(double seconds) => mono + (long)(seconds * Stopwatch.Frequency);
+        var coverage = new HuntBillItemCoverage(); coverage.SetCatalog(catalog);
+        void Read(double t) => coverage.Observe(key,key,true,true,2004,slots.Length,slots,true,origin.AddSeconds(t),At(t),
+            "2026.09.15.0000.0000","0.0.84.0","7.56.2.9136");
+        Read(0);
+        // Existing83 drain at ACK, then5s routine checks, misses6s from preparation.
+        double legacyNext=2.1,legacyDispatch=0;
+        for(double t=2.1;t<20;t+=0.05)if(t>=legacyNext) {
+            legacyNext=t+5;
+            if(t-2>=6) {legacyDispatch=t;break;}
+        }
+        check(legacyDispatch-2>=10,"Baseline preparation/tick quantization was not reproduced");
+        var lane = new HuntBillItemSync();
+        var p = lane.Prepare(owner,coverage.Payload(history,key,origin,At(0))!,coverage.Epoch,origin.AddSeconds(2),At(2))!;
+        p.Acknowledged=true;
+        check(!lane.RefreshDue(origin.AddSeconds(5.99),At(5.99),origin.AddSeconds(3)),"Refresh advanced before observation deadline");
+        check(lane.RefreshDue(origin.AddSeconds(6),At(6),origin.AddSeconds(6)),"Refresh waited six seconds from preparation instead of observation");
+        check(!lane.RefreshDue(origin.AddSeconds(20),At(3),origin.AddSeconds(3)),"Wall jump invented monotonic refresh");
+        check(!lane.RefreshDue(origin.AddSeconds(1),At(20),origin),"Clock rollback invented refresh");
+        check(!lane.RefreshDue(origin.AddSeconds(8),At(8),origin),"Same observed sample invented a refresh");
+        check(ReferenceEquals(p,lane.Prepare(owner,p.Payload,coverage.Epoch,origin.AddSeconds(12),At(12))),"ACKed old sample issued another nonce after preparation expiry");
+        check(!PersonalSyncPolicy.Due(origin.AddSeconds(6),origin.AddSeconds(10),origin.AddSeconds(30),false,true,true),"Coverage deadline bypassed retry backoff");
+        check(!PersonalSyncPolicy.Due(origin.AddSeconds(6),origin.AddSeconds(10),origin,true,true,true),"Coverage deadline bypassed private single-flight");
+        check(!PersonalSyncPolicy.Due(origin.AddSeconds(6),origin.AddSeconds(10),origin,false,true,false),"Coverage deadline bypassed permission");
+        lane.Clear(); check(!lane.RefreshDue(origin.AddSeconds(8),At(8),origin.AddSeconds(6)),"OFF/session clear kept refresh deadline");
+        var failed=lane.Prepare(owner,p.Payload,coverage.Epoch,origin.AddSeconds(2),At(2))!;
+        check(!lane.RefreshDue(origin.AddSeconds(8),At(8),origin.AddSeconds(6)),"Unacknowledged network failure invented renewal");
+        check(!lane.Current(failed,owner,p.Payload,coverage.Epoch,origin.AddSeconds(18),At(18)),"Network-down assertion did not expire honestly");
+        check(!PersonalSyncPolicy.Due(origin.AddSeconds(8),origin,origin.AddSeconds(120),false,true,true),"Failed private lane ignored bounded backoff");
+        failed.Acknowledged=true;
+        check(!PersonalSyncPolicy.Due(origin.AddSeconds(6),origin,origin,true,true,true),"Unrelated private request allowed parallel coverage");
+        check(lane.RefreshDue(origin.AddSeconds(7),At(7),origin.AddSeconds(6)),"Finished bounded private request lost overdue coverage priority");
+        check(15-(7+0.5+4.5)>=3,"Bounded unrelated flight fixture did not retain3s lease margin");
+        // Repeated exact model cycles. Ordinary jitter and a bounded healthy
+        // shared-lane delay are not simulated network-failure guarantees.
+        foreach (var frameSeconds in new[]{0.025,0.15,0.5}) foreach(var responseSeconds in new[]{0.05,0.5,1.0}) {
+            var c=new HuntBillItemCoverage();c.SetCatalog(catalog);var sync=new HuntBillItemSync();
+            DateTime next=origin; double nextRead=0,finish=-1; PersonalPreparedSnapshot? flight=null;
+            var arrivals=new List<(double Received,double Observed)>();var nonces=new HashSet<string>();
+            for(double t=0;t<180;t+=frameSeconds) {
+                var utc=origin.AddSeconds(t);
+                if(t>=nextRead) {c.Observe(key,key,true,true,2004,slots.Length,slots,true,utc,At(t),"2026.09.15.0000.0000","0.0.84.0","7.56.2.9136");nextRead=t+3;}
+                if(flight is not null && t>=finish) {
+                    check(sync.Current(flight,owner,c.Payload(history,key,utc,At(t)),c.Epoch,utc,At(t)),"Healthy ACK lost current sample");
+                    flight.Acknowledged=true;flight=null;next=DateTime.MinValue;
+                }
+                if(!PersonalSyncPolicy.Due(utc,next,origin,flight is not null,sync.RefreshDue(utc,At(t),c.Current(key,utc,At(t))?.ObservedAtUtc),true))continue;
+                next=utc.AddSeconds(5);
+                var current=sync.Prepare(owner,c.Payload(history,key,utc,At(t))!,c.Epoch,utc,At(t))!;
+                if(current.Acknowledged||current.Blocked)continue;
+                check(nonces.Add(current.Nonce),"ACKed body dispatched twice or nonce reused for refresh");
+                using var body=JsonDocument.Parse(current.Payload);
+                double observed=(body.RootElement.GetProperty("billItemCoverage").GetProperty("observedAtUtc").GetDateTime()-origin).TotalSeconds;
+                if(arrivals.Count>0) {
+                    // Measured client/server skew is bounded separately; this
+                    // fixture adds4.5s pessimistic server-ahead offset, not a TTL change.
+                    double priorAgeAtArrival=t+responseSeconds+4.5-arrivals[^1].Observed;
+                    check(priorAgeAtArrival<13,"Healthy jitter exhausted lease safety margin");
+                }
+                arrivals.Add((t+responseSeconds,observed));flight=current;finish=t+responseSeconds;
+            }
+            check(arrivals.Count>20,"Repeated refresh cycles did not run");
+            check(arrivals.Zip(arrivals.Skip(1)).All(x=>x.Second.Received-x.First.Received<8),"Healthy refresh interval too long");
+        }
     }
 }

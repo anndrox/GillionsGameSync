@@ -39,6 +39,8 @@ internal sealed class HuntBillLocalView : IDisposable {
     internal long CoverageRevision => itemCoverage.Revision;
     internal long CoverageEpoch => itemCoverage.Epoch;
     internal void ClearCoverage() => itemCoverage.Clear();
+    internal DateTime? CoverageObservedAtUtc(string key, DateTime now) => store.LocalRetentionEnabled
+        ? itemCoverage.Current(key, now, Stopwatch.GetTimestamp())?.ObservedAtUtc : null;
     internal string? CoveragePayload(string key, DateTime now) => store.LocalRetentionEnabled
         ? itemCoverage.Payload(policy, key, now, Stopwatch.GetTimestamp()) : null;
     private string rawFingerprint = "";

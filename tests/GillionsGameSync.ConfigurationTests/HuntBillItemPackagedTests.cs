@@ -49,6 +49,25 @@ internal static class HuntBillItemPackagedTests {
         var needsCurrent=sync!.GetMethod("NeedsCurrentSample",BindingFlags.Static|BindingFlags.NonPublic)!;
         foreach(var name in new[]{"Retry","Blocked","Canceled","Acknowledged"})
             Require((bool)needsCurrent.Invoke(null,[Enum.Parse(disposition,name)])! == (name=="Acknowledged"),"Exact DLL expiry suppresses response classification");
+        Observe(key,true);
+        var store=Activator.CreateInstance(a.GetType("GillionsGameSync.HuntBillRetention",true)!)!;
+        store.GetType().GetProperty("LocalRetentionEnabled")!.SetValue(store,true);
+        var history=Activator.CreateInstance(a.GetType("GillionsGameSync.HuntBillRetentionPolicy",true)!,[store])!;
+        var payload=(string)coverage.GetMethod("Payload",instance)!.Invoke(current,[history,key,now,mono])!;
+        var syncObject=Activator.CreateInstance(sync,true)!;
+        long At(double t)=>mono+(long)(t*Stopwatch.Frequency);
+        var epoch=coverage.GetProperty("Epoch",instance)!.GetValue(current)!;
+        var prepare=sync.GetMethod("Prepare",instance)!;
+        var prepared=prepare.Invoke(syncObject,[key,payload,epoch,now.AddSeconds(2),At(2)])!;
+        prepared.GetType().GetProperty("Acknowledged")!.SetValue(prepared,true);
+        var due=sync.GetMethod("RefreshDue",instance)!;
+        Require(!(bool)due.Invoke(syncObject,[now.AddSeconds(5.99),At(5.99),now.AddSeconds(3)])!,"Exact DLL refresh too early");
+        Require((bool)due.Invoke(syncObject,[now.AddSeconds(6),At(6),now.AddSeconds(6)])!,"Exact DLL refresh still preparation/tick anchored");
+        Require(!(bool)due.Invoke(syncObject,[now.AddSeconds(8),At(8),now])!,"Exact DLL refresh repeated old observation");
+        Require(!(bool)due.Invoke(syncObject,[now.AddSeconds(20),At(3),now.AddSeconds(3)])!,"Exact DLL refresh trusts wall jump");
+        Require(ReferenceEquals(prepared,prepare.Invoke(syncObject,[key,payload,epoch,now.AddSeconds(12),At(12)])),"Exact DLL reused old assertion with new nonce");
+        sync.GetMethod("Clear",instance)!.Invoke(syncObject,null);
+        Require(!(bool)due.Invoke(syncObject,[now.AddSeconds(8),At(8),now.AddSeconds(6)])!,"Exact DLL reset leaked refresh deadline");
         Console.WriteLine("Exact packaged absence-only source/completeness/character/unavailable/version/RAM boundaries PASS; pure managed calls, no live memory or HTTP.");
     }
     private static void Require(bool value,string message) { if(!value) throw new InvalidOperationException(message); }

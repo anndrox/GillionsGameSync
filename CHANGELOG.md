@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.84 - Testing Hunt coverage refresh margin
+
+- Schedule acknowledged coverage renewal six seconds from the original observation,
+  with UTC/monotonic agreement and a newer RAM sample. Bypass only the routine
+  five-second personal tick; retain private single-flight, backoff and consent.
+- Never reissue an ACKed unchanged observation under a new nonce. Preserve exact
+  immutable retries, source/session freshness and the 15-second Site contract.
+- Add numeric local stage durations to existing opt-in diagnostics, with unchanged
+  capacity and no identity/payload/credential data. Keep three-second native reads,
+  80 final completion,82 commands, V1/V2 and all unrelated resources unchanged.
+
 ## 0.0.83 - Testing Hunt bill item coverage
 
 - Complete loaded Key Items snapshots report explicit absent_confirmed,

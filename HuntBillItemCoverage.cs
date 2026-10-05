@@ -98,32 +98,49 @@ internal sealed class HuntBillItemCoverage {
 // Expired/transitioned samples are abandoned, not replayed after reload. Historical
 // positives remain durably retained and are included again in the next fresh payload.
 internal sealed class HuntBillItemSync {
+    internal const int RefreshAfterSeconds = 6;
     // Dispatch freshness and response classification are separate: a delayed
     // failure still requires backoff; only accepting an assertion needs a live sample.
     internal static bool NeedsCurrentSample(PersonalResponseDisposition disposition) => disposition == PersonalResponseDisposition.Acknowledged;
     private PersonalPreparedSnapshot? pending;
     private long preparedMonotonic;
     private DateTime preparedUtc;
+    private DateTime observedUtc;
     private long epoch;
     internal void Clear() { pending = null; }
     // Classification of a terminal response survives expiry/delayed framework
     // commit. It stops only this exact RAM preparation, never another session.
     internal void Block(PersonalPreparedSnapshot p) { if (ReferenceEquals(pending, p)) p.Blocked = true; }
+    // This is a dispatch deadline, not a new observation cadence. Measure from
+    // the actual assertion time, not preparation/ACK; retries never renew it.
+    // Both clocks must agree, so a wall-clock jump cannot invent a renewal.
+    internal bool RefreshDue(DateTime now, long monotonic, DateTime? newestObservationUtc) => pending is { Acknowledged: true, Blocked: false }
+        && newestObservationUtc is { } newest && newest > observedUtc && newest <= now
+        && now >= preparedUtc && monotonic >= preparedMonotonic
+        && now - observedUtc >= TimeSpan.FromSeconds(RefreshAfterSeconds)
+        && Stopwatch.GetElapsedTime(preparedMonotonic, monotonic) + (preparedUtc - observedUtc)
+            >= TimeSpan.FromSeconds(RefreshAfterSeconds);
     internal PersonalPreparedSnapshot? Prepare(string owner, string payload, long currentEpoch, DateTime now, long monotonic) {
         if (!PersonalObservationCompatibility.Key(owner) || !PersonalSyncPolicy.HuntCoveragePayloadValid(payload)) return null;
+        using var doc = JsonDocument.Parse(payload);
+        var candidateObservedUtc = doc.RootElement.GetProperty("billItemCoverage").GetProperty("observedAtUtc").GetDateTime();
         if (pending is { Blocked: true } && epoch == currentEpoch && pending.OwnerKey == owner
             && HuntBillItemCoverage.SameStates(pending.Payload, payload)) return pending;
+        if (pending is { Acknowledged: true } && epoch == currentEpoch && pending.OwnerKey == owner
+            && candidateObservedUtc <= observedUtc && HuntBillItemCoverage.SameStates(pending.Payload, payload)) return pending;
         if (pending is not null && (epoch != currentEpoch || pending.OwnerKey != owner || !Fresh(now, monotonic)
             || !HuntBillItemCoverage.SameStates(pending.Payload, payload))) Clear();
-        // Acknowledged states refresh before the15s server eligibility lease expires.
-        if (pending is { Acknowledged: true } && now - preparedUtc >= TimeSpan.FromSeconds(6)) Clear();
+        if (RefreshDue(now, monotonic, candidateObservedUtc)) Clear();
         if (pending is null) {
             pending = new(owner, "hunt_bills", Guid.NewGuid().ToString("N"), payload, PersonalSyncPolicy.Hash(payload));
             preparedUtc = now; preparedMonotonic = monotonic;
+            observedUtc = candidateObservedUtc;
             epoch = currentEpoch;
         }
         return pending;
     }
+    internal double PreparationAgeMilliseconds(PersonalPreparedSnapshot p, long monotonic) => ReferenceEquals(pending, p)
+        && monotonic >= preparedMonotonic ? Stopwatch.GetElapsedTime(preparedMonotonic, monotonic).TotalMilliseconds : 0;
     private bool Fresh(DateTime now, long monotonic) => now >= preparedUtc && now - preparedUtc <= TimeSpan.FromSeconds(10)
         && monotonic >= preparedMonotonic && Stopwatch.GetElapsedTime(preparedMonotonic, monotonic) <= TimeSpan.FromSeconds(10);
     internal bool Current(PersonalPreparedSnapshot p, string owner, string? livePayload, long currentEpoch, DateTime now, long monotonic) => ReferenceEquals(pending, p)

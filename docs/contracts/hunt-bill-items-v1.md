@@ -165,8 +165,13 @@ Preparation lives at most10s; dispatch also checks the original observation's15s
 UTC/monotonic freshness, live state equality, epoch and auth/permission admission.
 No offline negative journal or expired replay. Same nonce/different body remains
 an error; established UUID snapshotId/receivedAt/unchanged receipt is required.
-An ACKed current assertion refreshes after6s when the existing5s personal cadence
-next runs. Failure uses existing60..900s backoff, not faster gameplay observation.
+Testing84 schedules an ACKed assertion's refresh at6s from its original observation
+time, with UTC and monotonic agreement. It uses only a newer already-available
+character-bound RAM observation and may bypass the routine5s personal tick, never
+single-flight, backoff or permission gates. An unchanged observation is not
+reissued with a new nonce. Hunt reads remain3s; no command-poll coupling or renewed
+timestamp on old evidence. The existing10s preparation/15s observation checks
+still apply. Failure uses existing60..900s backoff, not faster gameplay observation.
 Unchanged terminal input stays stopped in RAM until semantics/session changes.
 Classified retry/backoff is committed for the still-authorized request even when
 its sample expires or changes during response delivery; only ACK acceptance

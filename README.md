@@ -1,5 +1,9 @@
 # Gillions Game Sync
 
+Testing84 is prepared to correct Hunt coverage refresh scheduling without changing
+the15-second contract or three-second gameplay reads. Corrected live timing and
+publication are pending; see [Testing84 validation](docs/releases/testing-0.0.84.md).
+
 Published Testing83 adds explicit private Hunt bill-item coverage: absent confirmed,
 present unresolved or unavailable. Complete Key Items absence can exclude a
 historical bill type from current routing without changing progress, but only

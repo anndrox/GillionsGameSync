@@ -183,6 +183,7 @@ public sealed class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Testing84 refreshes acknowledged Hunt coverage at a six-second observation deadline using newer RAM snapshots, without waiting for the routine personal tick. Reads remain three seconds; permission, single-flight, backoff and the 15-second freshness boundary remain unchanged.",
         "Testing83 reports private Hunt bill Key Item absence only after a complete loaded snapshot. Presence remains unresolved; unavailable state never supersedes history. Exact order/acquisition/reset is unsupported, and historical progress is unchanged.",
         "Hunt item coverage uses latest-only RAM, existing Hunt consent and unchanged three-second reads. It uploads only after Site explicitly admits hunt_bills_v2; older Site keeps positive-only v1 sync. No new local history, public sharing or travel permission.",
         "Testing80 binds typed numeric Hunt progress to a recent exact bill/order/target. Raw/accessor disagreement fails closed; stale same-order reads never undo positive progress. No localized chat parsing or completion from absence.",
@@ -1866,7 +1867,10 @@ public sealed class Plugin : IDalamudPlugin {
             if (before && !enabled && personalCancellation.Remove(resource, out var canceled)) { canceled.Cancel(); canceled.Dispose(); }
             if (resource == "hunt_bills") observedPersonalHunts = enabled; else observedPersonalSubmarines = enabled;
         }
-        if (!PersonalSyncPolicy.Due(now, nextPersonalUtc, personalRetryUtc, personalInFlight, prompt,
+        var refreshDue = huntCoverageAccepted && PersonalEnabled("hunt_bills")
+            && huntCoverageSync.RefreshDue(now, System.Diagnostics.Stopwatch.GetTimestamp(),
+                huntLocal.CoverageObservedAtUtc(HuntBillRetentionPolicy.CharacterKey(activeRetainerCharacterContentId), now));
+        if (!PersonalSyncPolicy.Due(now, nextPersonalUtc, personalRetryUtc, personalInFlight, prompt || refreshDue,
             configuration.SyncPersonalHunts || configuration.SyncPersonalSubmarines)) return;
         nextPersonalUtc = now.AddSeconds(5);
         if (configuration.ActiveSession!.Origin != PersonalSyncPolicy.Origin) {
@@ -1941,6 +1945,9 @@ public sealed class Plugin : IDalamudPlugin {
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation, featureToken);
         cancellation.CancelAfter(TimeSpan.FromSeconds(30)); // Bound headers AND receipt; no indefinitely held private flight.
         var token = cancellation.Token;
+        var queuedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        long dispatchedAt = 0, headersAt = 0, receiptAt = 0;
+        double observationAgeAtDispatchMs = 0, preparationAgeAtDispatchMs = 0;
         try {
             using var request = SnapshotRequest("/api/game-sync/sync", permit, prepared.Resource, prepared.Nonce, Encoding.UTF8.GetBytes(prepared.Payload));
             request.Headers.Add("X-Gillions-Personal-Contract", PersonalSyncPolicy.Contract);
@@ -1949,18 +1956,30 @@ public sealed class Plugin : IDalamudPlugin {
                 RequirePermit(permit); token.ThrowIfCancellationRequested();
                 if (!PersonalEnabled(prepared.Resource) || permit.Origin != PersonalSyncPolicy.Origin || !personalAccepted.Contains(prepared.Resource)) throw new OperationCanceledException();
                 if (coverage && !CoveragePreparedCurrent(prepared, permit)) throw new OperationCanceledException();
+                if (coverage) {
+                    dispatchedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+                    using var body = JsonDocument.Parse(prepared.Payload);
+                    observationAgeAtDispatchMs = (DateTime.UtcNow - body.RootElement.GetProperty("billItemCoverage").GetProperty("observedAtUtc").GetDateTime()).TotalMilliseconds;
+                    preparationAgeAtDispatchMs = huntCoverageSync.PreparationAgeMilliseconds(prepared, dispatchedAt);
+                }
                 pending = personalHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
             });
             using var response = await pending!;
+            headersAt = System.Diagnostics.Stopwatch.GetTimestamp();
             // Status controls stop/retry independently of an HTML/empty/broken
             // error body. Only success needs bounded receipt JSON validation.
             var terminal = PersonalSyncPolicy.TerminalStatus((int)response.StatusCode);
             var receipt = await PersonalSyncPolicy.ReadReceiptAsync((int)response.StatusCode,
                 () => SyncResponsePolicy.ReadAsync(response.Content, token));
+            receiptAt = System.Diagnostics.Stopwatch.GetTimestamp();
             await framework.RunOnFrameworkThread(() => {
                 var disposition = PersonalSyncPolicy.Disposition(PermitIsCurrent(permit), permit.Cancellation.IsCancellationRequested,
                     featureToken.IsCancellationRequested, PersonalEnabled(prepared.Resource), receipt, terminal);
                 if (disposition == PersonalResponseDisposition.Canceled) return;
+                if (coverage && dispatchedAt != 0) {
+                    var committedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+                    RecordDiagnostic($"Hunt coverage timing: observation→dispatch={observationAgeAtDispatchMs:F2}ms; preparation→dispatch={preparationAgeAtDispatchMs:F2}ms; worker→dispatch={System.Diagnostics.Stopwatch.GetElapsedTime(queuedAt, dispatchedAt).TotalMilliseconds:F2}ms; dispatch→headers={System.Diagnostics.Stopwatch.GetElapsedTime(dispatchedAt, headersAt).TotalMilliseconds:F2}ms; headers→receipt={System.Diagnostics.Stopwatch.GetElapsedTime(headersAt, receiptAt).TotalMilliseconds:F2}ms; receipt→framework={System.Diagnostics.Stopwatch.GetElapsedTime(receiptAt, committedAt).TotalMilliseconds:F2}ms; response={disposition}; refresh observation deadline={HuntBillItemSync.RefreshAfterSeconds}s. Numeric local timings only; no identity/payload logged.");
+                }
                 if (coverage && disposition == PersonalResponseDisposition.Blocked) {
                     huntCoverageSync.Block(prepared);
                     personalStatus = $"Hunt v2: HTTP {(int)response.StatusCode}; unchanged terminal input stopped in RAM. Historical progress and ordinary sync unchanged.";
