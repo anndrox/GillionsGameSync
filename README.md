@@ -1,6 +1,6 @@
 # Gillions Game Sync
 
-Testing83 prepares explicit private Hunt bill-item coverage: absent confirmed,
+Published Testing83 adds explicit private Hunt bill-item coverage: absent confirmed,
 present unresolved or unavailable. Complete Key Items absence can exclude a
 historical bill type from current routing without changing progress, but only
 after Site admits the new version. No exact current order/cycle claim, new history,
