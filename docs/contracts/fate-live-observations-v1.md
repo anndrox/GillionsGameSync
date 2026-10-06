@@ -1,11 +1,10 @@
 # Testing live FATE observations
 
-Published Testing 0.0.85 supplies the accepted read-only, RAM-only collector.
-The prepared Testing86 successor wires authenticated Site contract revision3
-without changing schema1. Sending requires exact Site version admission and the
-independent default-OFF account policy. Real sender acceptance/publication is
-pending; [Testing85 results](../releases/testing-0.0.85.md) prove local collection,
-not live contribution.
+Published Testing86 wires authenticated Site contract revision3 without changing
+schema1 or the accepted85 read-only, RAM-only collector. Sending requires exact
+Site admission and the independent default-OFF policy. [Testing86 results](../releases/testing-0.0.86.md)
+prove real shared TEST contribution, renewal, progress, privacy and stale/expiry.
+Earlier [Testing85 results](../releases/testing-0.0.85.md) prove local collection only.
 
 ## Maintained sources and supported context
 
@@ -148,9 +147,10 @@ and OFF cancel pending/in-flight contributions. OFF->ON or renewed admission aft
 a denial requires a newer observation; stale pre-consent batches are not replayed.
 No permanent Native FATE preference, new credentials or config history is added.
 
-**Activation dependency:** Site95 currently admits source/device0.0.85.0 only.
-Testing86 reports its actual version and stays closed until Site explicitly
-reconciles the exact successor matrix. Matching wire shape never bypasses that gate.
+**Exact admission:** deployed Site64d0d8ee8e105d2cad828606849e89d284e89ab0/schema0027
+admits the actual0.0.86.0 device/source tuple. Testing86 rejects mismatched matrices.
+Future successors require explicit reconciliation; matching wire shape never
+bypasses this gate.
 
 Sender requirements are at least five seconds between attempted requests,
 bounded backoff, no redirects, normal hostname/TLS verification and the existing
@@ -179,15 +179,16 @@ Successful discovery resets exponential failure count; failures do not.
 
 Site clock admission is at most five seconds future/thirty seconds old. Fresh
 through observedAt+30 seconds, stale until +120, then no recent observation.
-Estimated timer expiry is not a terminal event. Local cost and bounded command
-responsiveness acceptance are established. Live wire freshness/cadence margin
-remains an activation-phase check. Native85 has no sender; the successor needs
-independent exact-package reviews and real game-to-Site proof before publication.
+Estimated timer expiry is not a terminal event. Real86 renewals arrived about10s
+apart and updated the same slots. Natural fresh/stale/expiry, numerical progress
+0->16% and sender-active command responsiveness passed. Both independent reviews
+accepted the exact published package. Native85 remains sender-free.
 
 ## Site activation handoff
 
-Site95/schema0027 supplies discovery, consent, intake, transient observations,
-receipts, rates and the provisional live overlay. Reconcile the prepared successor's
-actual collector/device version only after its exact matrix and reviews are ready.
+Site64d0d8ee8e105d2cad828606849e89d284e89ab0/schema0027 supplies discovery, consent,
+intake, transient observations, receipts, rates and the provisional live overlay.
+Actual86 admission and real transport passed. Reconcile future successors only
+after their exact source matrix and reviews are ready.
 Preserve schema1, all private/public boundaries and existing routes. No Tracked
 FATE control, alerts or static FATE UI changes are part of Native sender wiring.

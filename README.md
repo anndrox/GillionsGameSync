@@ -1,10 +1,13 @@
 # Gillions Game Sync
 
-Prepared Testing86 wires the exact independent Site FATE policy and bounded
-authenticated sender, with accepted85 collection unchanged. Live transport and
-publication await explicit admission of the actual successor version; the
-published rolling feed remains85 until real game-to-Site acceptance passes.
-See [FATE capability and transport](docs/contracts/fate-live-observations-v1.md).
+Published Testing86 wires the independent default-OFF Site FATE policy and bounded
+authenticated sender, with accepted85 collection unchanged. Real shared TEST
+intake, renewal, same-occurrence progress, privacy, rendering and natural expiry
+passed. Prompt website-map delivery was confirmed with the sender active.
+Keep the rolling Testing URL. Disable the dev copy before enabling installed
+Testing; never run both. No rebuild followed acceptance. See
+[Testing86 results](docs/releases/testing-0.0.86.md) and
+[FATE capability and transport](docs/contracts/fate-live-observations-v1.md).
 
 Published Testing85 adds an Advanced/Testing local FATE measurement session using
 maintained typed APIs. It retains only bounded RAM observations; missing FATEs

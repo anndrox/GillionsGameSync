@@ -1,0 +1,127 @@
+{
+  "channel": "testing",
+  "version": "0.0.86",
+  "assemblyVersion": "0.0.86.0",
+  "status": "published-and-anonymously-verified",
+  "repository": "Gillions/GillionsGameSync",
+  "branch": "codex/game-sync/beastmaster-party-finder-testing",
+  "startingPublishedVersion": "0.0.85.0",
+  "startingPublishedSource": "39f7a71a9d1d7d4f17068aff50c9d516aa9884fd",
+  "startingTaskHead": "334579fe96d66386db44b7e1a3524e4d25849e4c",
+  "sourceCommit": "f16884294cb45e23a233fc6cfadce2fb6c0b03df",
+  "sourceTree": "67a9caff8542e68699cbeec0e77c082a782ac0ee",
+  "publicationRecordIdentity": "Later publication-only commit containing this record; artifact source remains pinned above.",
+  "tag": "v0.0.86-testing",
+  "annotatedTag": "a0e5b304f58edaa19ab770637111d7cc56351a4f",
+  "releaseId": 404218674,
+  "publishedAt": "2026-10-06T01:25:13Z",
+  "archiveSha256": "624f0b9c3ccaf2bc9ba2816fd2ae01270f0c6b36a416017ec227112ecd980760",
+  "dllSha256": "561112e5760d2f9213bc763ec745589ab12090a127f85d322a0b00bcd9660fb5",
+  "manifestSha256": "5df4c24c45ee290a361ec878759678e40e5c2f39bbdb7f4212d4d087eedfba51",
+  "embeddedManifestSha256": "3e3c8bb6b3d2546d67a28ee622d8b295b5b55361d9d1a38b4326cd245e039506",
+  "archiveAssetId": 614103887,
+  "manifestAssetId": 614103890,
+  "rollingManifestAssetId": 614104788,
+  "archiveBytes": 409715,
+  "rollingUrl": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json",
+  "anonymousRollingVerificationAt": "2026-10-06T01:26:06.373402+00:00",
+  "anonymousDefaultGetVerificationAt": "2026-10-06T01:30:42.009145+00:00",
+  "cacheNote": "Initial CDN hit retained85; cache-revalidated GET of unchanged exact URL returned86 with matching hash. No re-upload, URL change or rebuild.",
+  "site": {
+    "source": "64d0d8ee8e105d2cad828606849e89d284e89ab0",
+    "schema": "0027",
+    "image": "sha256:7ba5a20c212b7b9c55a4d5d524709a46bd482e6157a7280c7640c7126574ebd2",
+    "senderHandoffSha256": "559d0b5f1afe76445b41da056bc919585be591e8e68312211ab718d18c8bae3c",
+    "nativeChanges": false,
+    "admission": "Site95-to64 reconciles exact85 to86 source/device; revision3/schema1 preserved. Real86 authenticated passage proven."
+  },
+  "transport": {
+    "endpoint": "https://test.gillions.app/api/game-sync/fates/contribute",
+    "discovery": "GET /api/game-sync/fates/capability; strict revision3 grant/source/device/policy/expiry binding",
+    "capability": "fate-live-observations-v1",
+    "schemaVersion": 1,
+    "collectorSchema": "fate-live-observations-v1",
+    "coverage": "positive_only",
+    "policy": "fate_public_observations",
+    "policyRevision": 1,
+    "defaultEnabled": false,
+    "readCadenceSeconds": 5,
+    "discoveryFloorSeconds": 10,
+    "sendFloorSeconds": 5,
+    "positiveRenewalSeconds": 10,
+    "maxRows": 64,
+    "maxPayloadBytes": 131072,
+    "maxResponseBytes": 65536,
+    "grantAndBatchLifetimeSeconds": 30,
+    "retention": "RAM only; collector preparation plus one immutable in-flight/retry body; 240 bounded samples; no offline journal",
+    "safety": "Exact receipts; same UUID/body retries; original observedAt; backoff/Retry-After; feature cancellation; fresh observations after admission; normal TLS/exact TEST/no redirects or fallback"
+  },
+  "live": {
+    "worldId": 79,
+    "territoryId": 148,
+    "instance": {
+      "kind": "public_instance",
+      "number": 1
+    },
+    "fateIds": [
+      127,
+      131,
+      136,
+      137,
+      140,
+      209,
+      604
+    ],
+    "acceptedRows": 7,
+    "ackRequestMilliseconds": 59.99,
+    "actualBodySha256": "9bcf8025bb9b3317ede862d7ffd37549e3a4a0814f3bd2a681ccc3b2959ec403",
+    "actualBodyBytes": 3146,
+    "privacy": "Hash-matched actual body contains six envelope keys/allowed source/public event fields only; no private player/account/device/character/ContentID/HomeWorld/party/FC/inventory/quests/Hunt/travel/credentials",
+    "renewal": "About10-second accepted renewals; seven slots after multiple renewals, no duplicate occurrence growth",
+    "progress": "FATE1310->16%, same world79/territory148/instance1/start1791249402; fresh API and actual page",
+    "expiry": "FATE140 naturally fresh->stale preserving31%/no completion->No recent observations after120s; read-only cleanup verified",
+    "command": "Owner confirmed Megamaguey Show in FFXIV prompt around1–2s, no hitch/repeat while sender active; sanity observation, not numerical benchmark",
+    "limitations": "No global coverage/player participation or terminal inference. Native/server clocks differ about2.1s; not cross-clock latency."
+  },
+  "performance": {
+    "samples": 20,
+    "readMilliseconds": {
+      "median": 0.048,
+      "p95": 2.336,
+      "max": 2.479
+    },
+    "prepareMilliseconds": {
+      "median": 0.091,
+      "p95": 2.552,
+      "max": 14.726
+    },
+    "combinedMilliseconds": {
+      "median": 0.14305,
+      "p95": 2.5817,
+      "max": 17.2046
+    },
+    "final12CombinedMilliseconds": {
+      "median": 0.1247,
+      "p95": 0.2307,
+      "max": 0.2307
+    },
+    "scope": "Stage/current-thread measurements, not frame/process metrics; startup cost disclosed"
+  },
+  "validation": {
+    "maintained": "8411 counted managed assertions:603 FATE,799 Hunt-map,542 Submarine,1516 personal,1792 Dashboard,2551 travel,224 Market,116 PF,268 orchestration; additional config/ordinary/Beastmaster/source/SDK/manifest/performance PASS",
+    "builds": "Both validation builds zero warnings/errors;12 config fixtures per product and12 Stable FATE exclusion checks",
+    "exactPackage": "403 FATE exact-DLL checks plus inherited HuntV2/focus/clocks/consume/config/resource/privacy; actual premature-end reader Retry200/201",
+    "publication": "Anonymous exact immutable JSON/ZIP/contained DLL/embedded match reviewed bytes;34 prior releases/57 immutable assets preserved; only rolling64 JSON advanced",
+    "rebuildAfterAcceptance": false
+  },
+  "reviews": {
+    "source": "f16884294cb45e23a233fc6cfadce2fb6c0b03df",
+    "exactArtifactsBound": true,
+    "securityPrivacy": "ACCEPTED; no outstanding findings",
+    "compatibility": "ACCEPTED; no outstanding findings"
+  },
+  "preserved": "Hunt80 completion/82 commands/84 coverage, V1/V2, PF/item links, Beastmaster, Market, Submarines, Dashboard/Custom Deliveries, travel privacy, ordinary sync, config/retention/performance, Testing/Stable separation",
+  "siteHandoff": "Tracked FATEs and toast/tray/Notification Center/optional-sound alerts are separate Site work consuming this occurrence/freshness model. PF attribution: clickable Data provided by xivpf.com.",
+  "effects": "Testing86 tag/prerelease/exact assets, mutable rolling64 JSON and publication-only task commit/push. Stable/main/production/Site source/schema/Market architecture/Wardrobe untouched; no Native gameplay writes/new credentials/TLS bypass/default-ON sharing/alerts/Tracked FATE/static UI changes.",
+  "endState": "REAL LIVE FATE CROWDSOURCING PROVEN ON SHARED TEST — READY FOR TRACKED FATES AND ALERTS"
+}

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.86 - Prepared Testing FATE sender
+## 0.0.86 - Testing FATE sender
 
 - Wire exact authenticated revision3 discovery and independent default-OFF Site
   FATE policy; no permanent local sharing toggle or change to ordinary permissions.
@@ -10,8 +10,10 @@
   delayed framework callbacks and in-flight observation expiry; discovery failures
   retain exponential backoff rather than resetting their counter.
 - Keep accepted85 gameplay collection, command polling and all prior resources
-  unchanged. New source/device version must be explicitly admitted by Site before
-  live proof or publication; no Stable, production, alerts or static UI changes.
+  unchanged. Exact Site admission and real intake, renewal, same-occurrence
+  progress, privacy, stale/expiry and command responsiveness passed. The same
+  reviewed bytes were published without rebuilding; keep the rolling URL.
+  No Stable, production, alerts or static UI changes.
 
 ## 0.0.85 - Testing local FATE observations
 
