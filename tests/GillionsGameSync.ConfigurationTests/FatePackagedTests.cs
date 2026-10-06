@@ -87,6 +87,26 @@ internal static class FatePackagedTests {
                     : status is 429 or >=500 || status is 200 or 201 && failed ? "Retry" : "Invalid";
                 Check(result==expected,"Packaged HTTP disposition survives empty/malformed/stalled body: "+status);
             }
+        var transportFailure=T("FateTransportPolicy").GetMethod("TransportFailure",flags)!;
+        foreach(var error in new Exception[]{new HttpIOException(HttpRequestError.ResponseEnded),new IOException("stream ended"),
+            new HttpRequestException(),new OperationCanceledException(),new JsonException(),new InvalidOperationException()}) {
+            var failed=(bool)transportFailure.Invoke(null,[error])!;
+            Check(failed==(error is IOException or HttpRequestException or OperationCanceledException),"Packaged stream failure classification "+error.GetType().Name);
+            foreach(int status in new[]{200,201,401,403,422,429,503}) {
+                var expected=status is 401 or 403 or 422 ? "Suspended"
+                    : status is 429 or 503 || failed ? "Retry" : "Invalid";
+                Check(responsePolicy.Invoke(null,[status,false,failed])!.ToString()==expected,"Packaged truncated versus malformed complete response "+status);
+            }
+        }
+        var read=T("SyncResponsePolicy").GetMethod("ReadAsync",BindingFlags.Public|BindingFlags.Static)!;
+        using(var content=new StreamContent(new TruncatedResponseStream())) {
+            Exception? observed=null;
+            try { ((Task<string>)read.Invoke(null,[content,CancellationToken.None])!).GetAwaiter().GetResult(); }
+            catch(Exception error) { observed=error; }
+            Check(observed is HttpIOException,"Packaged bounded reader exposes premature response termination.");
+            foreach(int status in new[]{200,201})
+                Check(responsePolicy.Invoke(null,[status,false,(bool)transportFailure.Invoke(null,[observed])!])!.ToString()=="Retry","Packaged actual truncated success retries immutable batch.");
+        }
         var canCommit=T("FateTransportPolicy").GetMethod("CanCommit",flags)!;
         using var transportDeadline=new CancellationTokenSource(); using var feature=new CancellationTokenSource(); transportDeadline.Cancel();
         Check((bool)canCommit.Invoke(null,[true,true,feature.Token])!,"Packaged delayed disposition survives transport deadline.");
@@ -128,5 +148,19 @@ internal static class FatePackagedTests {
         Directory.CreateDirectory(fixtureDirectory);
         File.WriteAllBytes(Path.Combine(fixtureDirectory,"packaged-fate-live-observations-v1.json"),body.ToArray());
         Console.WriteLine($"Exact packaged FATE schema/privacy/no-admission/config boundaries PASS: {checks} checks. Synthetic; no native getter or live HTTP call.");
+    }
+    private sealed class TruncatedResponseStream : Stream {
+        public override bool CanRead=>true;
+        public override bool CanSeek=>false;
+        public override bool CanWrite=>false;
+        public override long Length=>throw new NotSupportedException();
+        public override long Position { get=>throw new NotSupportedException(); set=>throw new NotSupportedException(); }
+        public override int Read(byte[] buffer,int offset,int count)=>throw new HttpIOException(HttpRequestError.ResponseEnded);
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer,CancellationToken cancellationToken=default)=>
+            ValueTask.FromException<int>(new HttpIOException(HttpRequestError.ResponseEnded));
+        public override void Flush()=>throw new NotSupportedException();
+        public override long Seek(long offset,SeekOrigin origin)=>throw new NotSupportedException();
+        public override void SetLength(long value)=>throw new NotSupportedException();
+        public override void Write(byte[] buffer,int offset,int count)=>throw new NotSupportedException();
     }
 }

@@ -1813,7 +1813,7 @@ public sealed class Plugin : IDalamudPlugin {
         } catch(Exception error) {
             await framework.RunOnFrameworkThread(()=> {
                 if(FateRequestCurrent(permit,binding,batch.Epoch,feature)) {
-                    var result=FateTransportPolicy.Response(responseStatus,false,error is HttpRequestException or OperationCanceledException);
+                    var result=FateTransportPolicy.Response(responseStatus,false,FateTransportPolicy.TransportFailure(error));
                     fateSender.Complete(batch,result,DateTime.UtcNow,Environment.TickCount64,retry:serverDelay);
                     if(result is FateSendDisposition.Invalid or FateSendDisposition.Suspended) fateLocal.CancelUnsent();
                 }

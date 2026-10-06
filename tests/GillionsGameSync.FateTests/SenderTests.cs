@@ -115,6 +115,16 @@ internal static class SenderTests {
                 check(FateTransportPolicy.Response(status,false,failed)==expected,"empty/malformed/stalled body preserves HTTP disposition "+status);
             }
         }
+        foreach(var error in new Exception[]{new HttpIOException(HttpRequestError.ResponseEnded),new IOException("stream ended"),
+            new HttpRequestException(),new OperationCanceledException(),new JsonException(),new InvalidOperationException()}) {
+            var failed=FateTransportPolicy.TransportFailure(error);
+            check(failed==(error is IOException or HttpRequestException or OperationCanceledException),"response-stream failure classification "+error.GetType().Name);
+            foreach(int status in new[]{200,201,401,403,422,429,503}) {
+                var expected=status is 401 or 403 or 422 ? FateSendDisposition.Suspended
+                    : status is 429 or 503 || failed ? FateSendDisposition.Retry : FateSendDisposition.Invalid;
+                check(FateTransportPolicy.Response(status,false,failed)==expected,"truncated versus malformed complete response "+status);
+            }
+        }
         check(FateTransportPolicy.Response(null,false)==FateSendDisposition.Retry,"network failure before headers retry same body");
         foreach(var outcome in new[]{FateSendDisposition.Retry,FateSendDisposition.Suspended,FateSendDisposition.Invalid,FateSendDisposition.Acknowledged}) {
             using var late=new FateSenderState(); late.Bind("late",1); late.Install(grant,now,0);

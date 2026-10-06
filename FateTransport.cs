@@ -16,6 +16,8 @@ internal sealed record FateAdmission(string SessionGeneration, string Origin, st
     bool ActiveAccount, bool EnabledDevice);
 internal enum FateSendDisposition { Acknowledged, Retry, Suspended, Invalid }
 internal static class FateTransportPolicy {
+    internal static bool TransportFailure(Exception error) =>
+        error is HttpRequestException or OperationCanceledException or System.IO.IOException;
     internal static bool CanCommit(bool sessionCurrent,bool contextCurrent,CancellationToken feature) =>
         sessionCurrent && contextCurrent && !feature.IsCancellationRequested;
     internal static bool CanSend(FateAdmission? grant, FateSource source, string generation,
