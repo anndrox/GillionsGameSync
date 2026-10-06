@@ -99,7 +99,7 @@ state.CancelUnsent(); Check(state.Prepared==null,"policy OFF cancels RAM batch, 
 string Receipt(int accepted,int duplicate,string rejected="[]") => $"{{\"ok\":true,\"schemaVersion\":1,\"batchId\":\"{prepared.BatchId}\",\"receivedAt\":\"{now:O}\",\"acceptedCount\":{accepted},\"duplicateCount\":{duplicate},\"rejected\":{rejected},\"retryAfterSeconds\":5}}";
 Check(FateTransportPolicy.Receipt(Receipt(1,0),prepared,1,now),"exact receipt");
 Check(FateTransportPolicy.Receipt(Receipt(0,1),prepared,1,now),"duplicate receipt");
-Check(FateTransportPolicy.Receipt(Receipt(0,0,"[{\"index\":0,\"code\":\"unsupported_reference\"}]"),prepared,1,now),"explicit rejected row");
+Check(FateTransportPolicy.Receipt(Receipt(0,0,"[{\"index\":0,\"code\":\"FATE_DEFINITION_UNSUPPORTED\"}]"),prepared,1,now),"explicit rejected row");
 Check(!FateTransportPolicy.Receipt("{\"ok\":true}",prepared,1,now),"generic 200 is not receipt or authorization");
 Check(!FateTransportPolicy.Receipt(Receipt(1,1),prepared,1,now),"count integrity");
 Check(!FateTransportPolicy.Receipt(Receipt(0,0,"[{\"index\":1,\"code\":\"bad\"}]"),prepared,1,now),"reject index range");
@@ -147,6 +147,7 @@ Check(settlePasses==1 && readPasses==7,"one settlement pass, then every five-sec
 var previousEpoch=lifecycle.Epoch;
 lifecycle.Observe(context with {World=22},context with {World=22},source,[Row(now.AddSeconds(40)) with {WorldId=22}],now.AddSeconds(40));
 Check(lifecycle.Epoch>previousEpoch && lifecycle.Current.Single().WorldId==22,"real context changes still invalidate the prior epoch");
+SenderTests.Run(Check,source,now);
 if(args.Length==2 && args[0]=="--fixture") {
     var path=Path.GetFullPath(args[1]); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
     File.WriteAllBytes(path,prepared.CopyBody());

@@ -1,5 +1,11 @@
 # Gillions Game Sync
 
+Prepared Testing86 wires the exact independent Site FATE policy and bounded
+authenticated sender, with accepted85 collection unchanged. Live transport and
+publication await explicit admission of the actual successor version; the
+published rolling feed remains85 until real game-to-Site acceptance passes.
+See [FATE capability and transport](docs/contracts/fate-live-observations-v1.md).
+
 Published Testing85 adds an Advanced/Testing local FATE measurement session using
 maintained typed APIs. It retains only bounded RAM observations; missing FATEs
 remain unknown. Remote contribution stays disabled pending exact Site admission

@@ -1,10 +1,11 @@
 # Testing live FATE observations
 
-Published Testing 0.0.85 adds a read-only, RAM-only local diagnostic collector.
-Remote contributions remain disabled. Site contract revision 2 reserves intake
-but does not activate an endpoint, provider or consent policy. Real-client positive
-observation, bounded cost and owner-observed command responsiveness are accepted;
-see [Testing85 results](../releases/testing-0.0.85.md).
+Published Testing 0.0.85 supplies the accepted read-only, RAM-only collector.
+The prepared Testing86 successor wires authenticated Site contract revision3
+without changing schema1. Sending requires exact Site version admission and the
+independent default-OFF account policy. Real sender acceptance/publication is
+pending; [Testing85 results](../releases/testing-0.0.85.md) prove local collection,
+not live contribution.
 
 ## Maintained sources and supported context
 
@@ -99,9 +100,9 @@ Diagnostics report median/p95/max and distinguish these stages from whole-frame
 performance. Copying is manual; public world/territory/time can reveal presence.
 Share only with a trusted diagnostic recipient. No automatic diagnostic upload.
 
-## Exact envelope and dormant transport
+## Exact envelope and Testing transport
 
-Reserved endpoint: `POST https://test.gillions.app/api/game-sync/fates/contribute`.
+Endpoint: `POST https://test.gillions.app/api/game-sync/fates/contribute`.
 Capability and collectorSchema: `fate-live-observations-v1`; schemaVersion: 1;
 coverage: `positive_only`. Envelope keys are exactly schemaVersion,
 collectorSchema, coverage, source, batchId and observations. Batch limits are
@@ -116,7 +117,7 @@ and must not appear as a public reporter fingerprint.
 Excluded payload fields include account/device/character/content IDs or names,
 HomeWorld, player coordinates, participation, quests, inventory, party/FC,
 credentials, actor/pointer values and private Hunt/travel state. Local character
-identity exists only as an epoch invalidation key and is not serialized. Future
+identity exists only as an epoch invalidation key and is not serialized. Existing
 paired Bearer transport identifies the contributor privately; de-identification
 is not anonymity.
 
@@ -127,18 +128,41 @@ schema/capability/source tuple and independent `fate_public_observations` revisi
 request creation. Ordinary sync, PF, Market or Site login cannot grant consent.
 Disabling FATE sends must cancel its RAM batch without changing other preferences.
 
-**Activation dependency:** Site revision 2 does not define the exact authenticated
-capability/policy discovery response. Native has no live grant parser, policy
-installation or FATE HTTP sender. Those remain unwired until the exact discovery,
-revocation/session binding and admission contract is agreed. The request/receipt
-helpers are tested preparation only; a newly reachable endpoint alone cannot
-activate this build. No contribution requests are made while waiting.
+Authenticated `GET /api/game-sync/fates/capability` is independent from ordinary
+presence. Its exact root is `{ok:true,fateContribution:<grant>}`. The grant's17
+fields are capability, schemaVersion, collectorSchema, coverage, endpoint,
+maxPayloadBytes, maxObservations, acceptedClientProduct, acceptedSource,
+referenceCompatibilityEpoch, authorized, reason, deviceBinding, policy, issuedAt,
+expiresAt and retryAfterSeconds. Unknown, duplicated or missing keys fail closed.
+The nested source has the eleven exact keys above, deviceBinding has deviceId and
+pairedAt, and policy has name, revision, enabled and generation. Bind the current
+paired UUID/credential session, source tuple and policy generation; verify UTC
+issuance/expiry30s and exact limits. A relative endpoint must be exactly
+`/api/game-sync/fates/contribute`; a grant cannot redirect credentials.
 
-Future sender requirements are at least five seconds between attempted requests,
+Discovery runs no more often than10 monotonic seconds while the temporary
+measurement session has settled context. Account policy is the only remote consent.
+It must be ON with a valid generation, supported revision and authorized grant.
+Grant expiry also has a monotonic deadline. Session, context, stop, invalid discovery
+and OFF cancel pending/in-flight contributions. OFF->ON or renewed admission after
+a denial requires a newer observation; stale pre-consent batches are not replayed.
+No permanent Native FATE preference, new credentials or config history is added.
+
+**Activation dependency:** Site95 currently admits source/device0.0.85.0 only.
+Testing86 reports its actual version and stays closed until Site explicitly
+reconciles the exact successor matrix. Matching wire shape never bypasses that gate.
+
+Sender requirements are at least five seconds between attempted requests,
 bounded backoff, no redirects, normal hostname/TLS verification and the existing
 paired Bearer channel. Account budget is shared 12/minute, burst 2; Site global cap
 is 600/minute. Same batch ID/body is duplicate-safe; changed body needs a new UUID.
 Never renew observedAt on retry. Re-observe expired data instead of replaying it.
+One replaceable collector preparation plus one immutable in-flight/retry body are
+bounded RAM-only (each at most128KiB/64rows); no offline journal. ACK cancels only
+that prepared identity and never forces a new ID for the same observation. Positive
+unchanged evidence renews at10s from an actual collector read. Discovery and upload
+each have a single-flight lane and a10s request deadline; neither waits behind
+ordinary sync or website command processing. No gameplay reads are added.
 
 Success receipt keys are exactly ok=true, schemaVersion=1, batchId, receivedAt,
 acceptedCount, duplicateCount, rejected[{index,code}] and retryAfterSeconds=5.
@@ -152,19 +176,13 @@ Site clock admission is at most five seconds future/thirty seconds old. Fresh
 through observedAt+30 seconds, stale until +120, then no recent observation.
 Estimated timer expiry is not a terminal event. Local cost and bounded command
 responsiveness acceptance are established. Live wire freshness/cadence margin
-remains an activation-phase check; no sender or intake is active in85.
+remains an activation-phase check. Native85 has no sender; the successor needs
+independent exact-package reviews and real game-to-Site proof before publication.
 
 ## Site activation handoff
 
-Site must implement the exact discovery response and explicit independent policy,
-source/reference allowlist, authenticated Testing-only intake, private contributor
-custody, budgets, bounded receipts, conflicting observation handling, expiry and
-de-identified read model. Unknown source, field, mode, world, instance or policy
-fails closed. Public responses exclude producer fingerprints and private metadata.
-Hunt/travel cannot be joined to the public observation stream.
-
-Native then needs a bounded follow-up wiring the agreed discovery/policy lifecycle
-and sender to these helpers, with joint auth/revocation/retry tests. No Site
-activation, public alert, Watch/Tracked FATE control or static FATE UI change is
-part of this release. Exact accepted source/package identities and measured
-runtime results accompany the [published release handoff](../releases/testing-0.0.85.md).
+Site95/schema0027 supplies discovery, consent, intake, transient observations,
+receipts, rates and the provisional live overlay. Reconcile the prepared successor's
+actual collector/device version only after its exact matrix and reviews are ready.
+Preserve schema1, all private/public boundaries and existing routes. No Tracked
+FATE control, alerts or static FATE UI changes are part of Native sender wiring.

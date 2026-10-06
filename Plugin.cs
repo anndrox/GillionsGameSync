@@ -62,6 +62,7 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly HuntBillLocalView huntLocal;
     private readonly DashboardLocalView dashboardLocal;
     private readonly FateLocalView fateLocal;
+    private readonly FateSenderState fateSender=new();
     private readonly TravelContextLocalView travelLocal;
     private readonly TravelSyncState travelSync = new();
     private bool travelAccepted, travelInFlight;
@@ -286,6 +287,7 @@ public sealed class Plugin : IDalamudPlugin {
             gameGui, marketConditions, addonLifecycle, configuration.DashboardFacts, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
         travelLocal = new TravelContextLocalView(pluginInterface,clientState,objects,travelPlayerState,dataManager,gameGui,marketConditions);
         fateLocal = new FateLocalView(pluginInterface,commands,clientState,travelPlayerState,dataManager,marketConditions,fateTable,framework);
+        fateLocal.Invalidated += InvalidateFateSender;
         travelLocal.Invalidated += ClearTravelPending;
         travelLocal.SetEnabled(configuration.ShareHuntRoutingLocation);
         this.marketConditions = marketConditions;
@@ -462,6 +464,7 @@ public sealed class Plugin : IDalamudPlugin {
         if (huntLocal.SemanticRevision != huntRevision || huntRawRevision != huntLocal.RawRevision) RecordDiagnostic(huntLocal.LastDiagnostic);
         dashboardLocal.Tick(now); // Independent, off-by-default; one bounded source group per due check.
         fateLocal.Tick(now); // RAM-only local diagnostic session; independent five-second admission.
+        TickFateSender(now); // Independent managed transport: no extra game reads, commands or ordinary-sync gates.
         travelLocal.Tick(now); // Independent default-OFF, latest-only RAM, bounded 15-second read.
         TickTravelSync(now); // Also clears invalid/expired pending state while unpaired.
         if (now >= nextMarketMaintenanceUtc) {
@@ -1524,7 +1527,7 @@ public sealed class Plugin : IDalamudPlugin {
         if (!diagnosticsExpanded) return;
 #if GILLIONS_TEST_BUILD
         ImGui.TextWrapped("Testing diagnostics record automatically. Diagnostic entries stay local and may include gameplay details. Review copied reports before sharing.");
-        if (ImGui.Button("Advanced FATE diagnostics (local only)")) fateLocal.Show();
+        if (ImGui.Button("Advanced FATE diagnostics")) fateLocal.Show();
 #else
         ImGui.TextWrapped("Diagnostic recording is off by default and stays on this PC. It never uploads logs, chat text, credentials, or device identifiers. Start it only when reproducing a sync problem; review copied gameplay details before sharing.");
         if (!view.Recording) {
@@ -1699,6 +1702,121 @@ public sealed class Plugin : IDalamudPlugin {
 #endif
     }
 #if GILLIONS_TEST_BUILD
+    private void InvalidateFateSender() {
+        fateSender.Bind("",fateLocal.Epoch);
+        fateLocal.CancelUnsent();
+    }
+    private void TickFateSender(DateTime now) {
+        long clock=Environment.TickCount64;
+        var session=configuration.ActiveSession;
+        var source=fateLocal.ObservedSource;
+        string binding=HasPairedSession && activeOwnedState is not null && session?.Origin==FateDiscovery.Origin
+            && fateLocal.ContextReady && FatePolicy.Compatible(source)
+            ? $"{session.Generation}:{activeRetainerCharacterContentId}:{fateLocal.Epoch}" : "";
+        fateSender.Bind(binding,fateLocal.Epoch);
+        fateSender.Maintain(now,clock);
+        if(binding.Length==0) { fateLocal.CancelUnsent(); fateLocal.RemoteStatus=fateSender.Status; return; }
+        if(fateSender.Discover(clock)) {
+            var permit=CapturePermit(SyncRequestMode.Manual);
+            _=DiscoverFateAsync(permit,binding,fateLocal.Epoch,source!,fateSender.Cancellation);
+        }
+        if(!fateSender.Authorized(now,clock)) fateLocal.CancelUnsent();
+        else if(fateSender.Take(fateLocal.Prepared,source!,session!.Generation,now,clock) is { } batch) {
+            var permit=CapturePermit(SyncRequestMode.Manual);
+            _=ContributeFateAsync(permit,binding,batch,source!,fateSender.Cancellation);
+        }
+        fateLocal.RemoteStatus=fateSender.Status
+            +(fateSender.LastAcknowledged is { } ack ? $" Last acknowledgement {ack:O}; request {fateSender.LastRequestMilliseconds:F2} ms." : "");
+    }
+    private bool FateRequestCurrent(SyncRequestPermit permit,string binding,long epoch,CancellationToken cancellation) =>
+        !cancellation.IsCancellationRequested && PermitIsCurrent(permit) && fateLocal.ContextReady
+        && fateLocal.Epoch==epoch && fateSender.Binding==binding && permit.Origin==FateDiscovery.Origin;
+    private async Task<HttpResponseMessage> DispatchFateAsync(HttpRequestMessage request,SyncRequestPermit permit,
+        string binding,long epoch,CancellationToken cancellation,bool contribution) {
+        Task<HttpResponseMessage>? pending=null;
+        await framework.RunOnFrameworkThread(()=> {
+            if(!FateRequestCurrent(permit,binding,epoch,cancellation)
+                || contribution && !fateSender.Authorized(DateTime.UtcNow,Environment.TickCount64)) throw new OperationCanceledException();
+            // Dispatch under the same framework gate used by existing personal
+            // transports; no await gap between final admission and SendAsync.
+            pending=personalHttp.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,cancellation);
+        });
+        return await pending!;
+    }
+    private async Task DiscoverFateAsync(SyncRequestPermit permit,string binding,long epoch,FateSource source,CancellationToken feature) {
+        using var deadline=CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation,feature);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
+        try {
+            using var request=new HttpRequestMessage(HttpMethod.Get,FateDiscovery.Origin+FateDiscovery.Path);
+            request.Headers.Authorization=new AuthenticationHeaderValue("Bearer",permit.Token);
+            request.Headers.UserAgent.ParseAdd($"GillionsGameSyncTest/{PluginVersion}");
+            using var response=await DispatchFateAsync(request,permit,binding,epoch,deadline.Token,false);
+            var text=await SyncResponsePolicy.ReadAsync(response.Content,deadline.Token);
+            var now=DateTime.UtcNow;
+            var grant=response.StatusCode==HttpStatusCode.OK ? FateDiscovery.Parse(text,permit.Session!.Generation,permit.Session.DeviceId,source,now) : null;
+            FateDiscovery.Error(text,out _,out var retry);
+            var header=response.Headers.RetryAfter;
+            double? retrySeconds=header?.Delta?.TotalSeconds ?? (header?.Date is { } date ? (date-DateTimeOffset.UtcNow).TotalSeconds : retry);
+            await framework.RunOnFrameworkThread(()=> {
+                if(!FateRequestCurrent(permit,binding,epoch,deadline.Token)) return;
+                if(grant is not null) fateSender.Install(grant,DateTime.UtcNow,Environment.TickCount64);
+                else fateSender.DiscoveryFailed(Environment.TickCount64,retrySeconds);
+                if(!fateSender.Authorized(DateTime.UtcNow,Environment.TickCount64)) fateLocal.CancelUnsent();
+            });
+        } catch(Exception) {
+            await framework.RunOnFrameworkThread(()=> {
+                // A deadline is a transport failure; feature/session cancellation
+                // is not. Never install an old response into a successor epoch.
+                if(FateRequestCurrent(permit,binding,epoch,feature)) {
+                    fateSender.DiscoveryFailed(Environment.TickCount64); fateLocal.CancelUnsent();
+                }
+            });
+        } finally { await framework.RunOnFrameworkThread(()=>fateSender.DiscoveryFinished()); }
+    }
+    private async Task ContributeFateAsync(SyncRequestPermit permit,string binding,FatePrepared batch,FateSource source,CancellationToken feature) {
+        using var deadline=CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation,feature);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
+        long started=Stopwatch.GetTimestamp();
+        int? responseStatus=null;
+        double? serverDelay=null;
+        try {
+            using var request=FateTransportPolicy.Request(fateSender.Grant?.Admission,source,permit.Session!.Generation,
+                true,true,batch,batch.Epoch,DateTime.UtcNow,permit.Token);
+            if(request is null) throw new OperationCanceledException();
+            request.Headers.UserAgent.ParseAdd($"GillionsGameSyncTest/{PluginVersion}");
+            using var response=await DispatchFateAsync(request,permit,binding,batch.Epoch,deadline.Token,true);
+            responseStatus=(int)response.StatusCode;
+            serverDelay=response.Headers.RetryAfter?.Delta?.TotalSeconds
+                ?? (response.Headers.RetryAfter?.Date is { } at ? (at-DateTimeOffset.UtcNow).TotalSeconds : null);
+            var text=await SyncResponsePolicy.ReadAsync(response.Content,deadline.Token);
+            int count;
+            using(var body=JsonDocument.Parse(batch.Body)) count=body.RootElement.GetProperty("observations").GetArrayLength();
+            bool receipt=FateTransportPolicy.Receipt(text,batch,count,DateTime.UtcNow);
+            int accepted=0;
+            if(receipt) { using var r=JsonDocument.Parse(text); accepted=r.RootElement.GetProperty("acceptedCount").GetInt32(); }
+            bool error=FateDiscovery.Error(text,out _,out var retry);
+            var outcome=FateTransportPolicy.Classify((int)response.StatusCode,receipt);
+            if(!receipt && !error && (int)response.StatusCode<500) outcome=FateSendDisposition.Invalid;
+            var header=response.Headers.RetryAfter;
+            double? retrySeconds=header?.Delta?.TotalSeconds ?? (header?.Date is { } date ? (date-DateTimeOffset.UtcNow).TotalSeconds : retry);
+            await framework.RunOnFrameworkThread(()=> {
+                if(!FateRequestCurrent(permit,binding,batch.Epoch,feature)) return;
+                fateSender.LastRequestMilliseconds=Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                fateSender.Complete(batch,outcome,DateTime.UtcNow,Environment.TickCount64,accepted,retrySeconds);
+                if(outcome==FateSendDisposition.Acknowledged) fateLocal.Acknowledge(batch.BatchId);
+                else if(outcome is FateSendDisposition.Suspended or FateSendDisposition.Invalid) fateLocal.CancelUnsent();
+            });
+        } catch(Exception error) {
+            await framework.RunOnFrameworkThread(()=> {
+                if(FateRequestCurrent(permit,binding,batch.Epoch,feature)) {
+                    var result=responseStatus is <500 && error is not (HttpRequestException or OperationCanceledException)
+                        ? FateSendDisposition.Invalid : FateSendDisposition.Retry;
+                    fateSender.Complete(batch,result,DateTime.UtcNow,Environment.TickCount64,retry:serverDelay);
+                    if(result==FateSendDisposition.Invalid) fateLocal.CancelUnsent();
+                }
+            });
+        } finally { await framework.RunOnFrameworkThread(()=>fateSender.UploadFinished()); }
+    }
     private MarketContributionSession? CaptureMarketSession() {
         if (disposed || !framework.IsInFrameworkUpdateThread || !configuration.ContributeObservedMarketData
             || !clientState.IsLoggedIn || marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas]
@@ -2180,6 +2298,8 @@ public sealed class Plugin : IDalamudPlugin {
         submarineLocal.Dispose();
         huntLocal.Dispose();
         dashboardLocal.Dispose();
+        fateSender.Dispose();
+        fateLocal.Invalidated -= InvalidateFateSender;
         fateLocal.Dispose();
         travelLocal.Dispose();
         huntMapCancellation.Cancel(); huntMapCancellation.Dispose();

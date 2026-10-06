@@ -8,9 +8,7 @@ using System.Text.Json;
 
 namespace GillionsGameSync;
 
-// Internal normalized admission model ONLY, not an invented Site wire format.
-// Revision 2 reserves intake but defines no capability/policy discovery reply.
-// No live caller can install a grant until that exact contract is supplied.
+// Normalized admission, populated only by exact authenticated revision3 discovery.
 internal sealed record FateAdmission(string SessionGeneration, string Origin, string Product,
     string Capability, int SchemaVersion, string CollectorSchema, FateSource AdmittedSource,
     string PolicyKey, int PolicyRevision, bool Granted, bool Revoked, DateTime ExpiresAt,
@@ -43,9 +41,8 @@ internal static class FateTransportPolicy {
             using var d=JsonDocument.Parse(json,new JsonDocumentOptions { MaxDepth=8 });
             var r=d.RootElement;
             string[] fields=["ok","schemaVersion","batchId","receivedAt","acceptedCount","duplicateCount","rejected","retryAfterSeconds"];
-            if (r.ValueKind != JsonValueKind.Object || r.EnumerateObject().Count()!=fields.Length
-                || r.EnumerateObject().Any(p=>!fields.Contains(p.Name)) || r.GetProperty("ok").ValueKind!=JsonValueKind.True
-                || r.GetProperty("schemaVersion").GetInt32()!=1 || !Guid.TryParse(r.GetProperty("batchId").GetString(),out var id)
+            if (!FateDiscovery.Shape(r,fields) || rowCount is <1 or >64 || r.GetProperty("ok").ValueKind!=JsonValueKind.True
+                || r.GetProperty("schemaVersion").GetInt32()!=1 || !FateDiscovery.Uuid(r.GetProperty("batchId").GetString(),out var id)
                 || id!=batch.BatchId || r.GetProperty("retryAfterSeconds").GetInt32()!=5) return false;
             var time=r.GetProperty("receivedAt").GetString();
             if (time is null || !time.EndsWith('Z') || !DateTime.TryParse(time,CultureInfo.InvariantCulture,
@@ -56,8 +53,8 @@ internal static class FateTransportPolicy {
                 || accepted+duplicate+rejected.Length!=rowCount) return false;
             var indices=rejected.Select(e=>e.GetProperty("index").GetInt32()).ToArray();
             return indices.Distinct().Count()==indices.Length && indices.All(i=>i>=0 && i<rowCount)
-                && rejected.All(e=>e.EnumerateObject().Count()==2 && e.TryGetProperty("code",out var c)
-                    && c.ValueKind==JsonValueKind.String && c.GetString() is {Length:>0 and <=80});
+                && rejected.All(e=>FateDiscovery.Shape(e,["index","code"]) && e.TryGetProperty("code",out var c)
+                    && c.ValueKind==JsonValueKind.String && FateDiscovery.RowCodes.Contains(c.GetString()));
         } catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException or System.Collections.Generic.KeyNotFoundException or OverflowException) { return false; }
     }
     internal static FateSendDisposition Classify(int status, bool receipt) => status switch {

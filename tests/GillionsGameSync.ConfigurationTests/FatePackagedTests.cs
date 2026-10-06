@@ -5,7 +5,7 @@ internal static class FatePackagedTests {
     internal static void Run(Assembly assembly, bool testing, string fixtureDirectory) {
         int checks=0;
         void Check(bool ok,string message) { checks++; if (!ok) throw new Exception(message); }
-        string[] names=["FateLocalView","FatePolicy","FatePrepared","FateEpochState","FateTransportPolicy","FateAdmission","FateMeasurements"];
+        string[] names=["FateLocalView","FatePolicy","FatePrepared","FateEpochState","FateTransportPolicy","FateAdmission","FateMeasurements","FateDiscovery","FateGrant","FateSenderState"];
         foreach(var name in names) Check((assembly.GetType("GillionsGameSync."+name)!=null)==testing,"FATE Testing/Stable type boundary: "+name);
         var plugin=assembly.GetType("GillionsGameSync.Plugin",true)!;
         Check(plugin.GetConstructors().Single().GetParameters().Any(p=>p.ParameterType==typeof(Dalamud.Plugin.Services.IFateTable))==testing,"FATE service injection must be Testing only.");
@@ -53,6 +53,31 @@ internal static class FatePackagedTests {
         Check((string)policy.GetField("Endpoint",flags)!.GetRawConstantValue()! == "https://test.gillions.app/api/game-sync/fates/contribute","Exact TEST endpoint only.");
         var copy=(byte[])T("FatePrepared").GetMethod("CopyBody",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(prepared,[])!;
         copy[0]=0; Check(body.Span[0]!=(byte)0,"Packaged immutable retry body.");
+        var sourceJson=JsonSerializer.SerializeToElement(source,source.GetType(),new JsonSerializerOptions {PropertyNamingPolicy=JsonNamingPolicy.CamelCase});
+        var wire=JsonSerializer.Serialize(new {ok=true,fateContribution=new {
+            capability="fate-live-observations-v1",schemaVersion=1,collectorSchema="fate-live-observations-v1",coverage="positive_only",
+            endpoint="/api/game-sync/fates/contribute",maxPayloadBytes=131072,maxObservations=64,acceptedClientProduct="GillionsGameSyncTest",
+            acceptedSource=sourceJson,referenceCompatibilityEpoch="fate-reference:2026.09.15.0000.0000",authorized=true,reason=(string?)null,
+            deviceBinding=new {deviceId="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",pairedAt=now.AddDays(-1)},
+            policy=new {name="fate_public_observations",revision=1,enabled=true,generation="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"},
+            issuedAt=now,expiresAt=now.AddSeconds(30),retryAfterSeconds=5}});
+        var parse=T("FateDiscovery").GetMethod("Parse",flags)!;
+        var grant=parse.Invoke(null,[wire,"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now]);
+        Check(grant is not null,"Packaged exact discovery parser admits supported grant.");
+        Check(parse.Invoke(null,[wire.Replace("\"ok\":true","\"ok\":true,\"ok\":true"),"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now]) is null,"Packaged duplicate key denies admission.");
+        Check(parse.Invoke(null,[wire,"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now.AddSeconds(30)]) is null,"Packaged expired grant denies admission.");
+        var senderType=T("FateSenderState");
+        using var sender=(IDisposable)Activator.CreateInstance(senderType,true)!;
+        object? Call(string method,params object?[] arguments)=>senderType.GetMethod(method,instanceFlags)!.Invoke(sender,arguments);
+        Call("Bind","binding",(long)1); Call("Install",grant,now,(long)0);
+        Check((bool)Call("Authorized",now,(long)0)!,"Packaged policyON authorizes only sender.");
+        Check(Call("Take",prepared,source,"synthetic",now,(long)0) is null,"Packaged pre-consent observation never sent.");
+        Call("Install",null,now,(long)1);
+        Check(!(bool)Call("Authorized",now,(long)1)!,"Packaged unavailable discovery closes sender.");
+        Check(Call("Discover",(long)0) is true && Call("Discover",(long)10000) is false,"Packaged discovery single-flight.");
+        Call("DiscoveryFinished"); Check(Call("Discover",(long)9999) is false,"Packaged discovery10s admission.");
+        Call("Install",grant,now,(long)0); Call("Maintain",now.AddSeconds(-1),(long)30000);
+        Check(!(bool)Call("Authorized",now.AddSeconds(-1),(long)30000)!,"Packaged monotonic grant expiry.");
         Directory.CreateDirectory(fixtureDirectory);
         File.WriteAllBytes(Path.Combine(fixtureDirectory,"packaged-fate-live-observations-v1.json"),body.ToArray());
         Console.WriteLine($"Exact packaged FATE schema/privacy/no-admission/config boundaries PASS: {checks} checks. Synthetic; no native getter or live HTTP call.");

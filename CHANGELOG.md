@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.86 - Prepared Testing FATE sender
+
+- Wire exact authenticated revision3 discovery and independent default-OFF Site
+  FATE policy; no permanent local sharing toggle or change to ordinary permissions.
+- Add separate bounded RAM-only upload/retry lanes, immutable batch receipts,
+  five-second send floor, ten-second discovery/renewal, expiry and cancellation.
+- Keep accepted85 gameplay collection, command polling and all prior resources
+  unchanged. New source/device version must be explicitly admitted by Site before
+  live proof or publication; no Stable, production, alerts or static UI changes.
+
 ## 0.0.85 - Testing local FATE observations
 
 - Add a temporary Advanced/Testing read-only FATE measurement session using typed

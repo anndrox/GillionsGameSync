@@ -39,6 +39,17 @@ internal sealed class FateLocalView : IDisposable {
     private sealed record View(string Status, FateContext? Context, FateObservation[] Rows, FateCost[] Costs, int TableRows);
     private volatile View view=new("Local FATE diagnostic session stopped; Site admission unavailable. No sends.",null,[],[],0);
     private string summary="No measured samples.";
+    internal FateSource? ObservedSource => source;
+    internal FatePrepared? Prepared => state.Prepared;
+    internal long Epoch => state.Epoch;
+    internal bool Measuring => measuring && !disposed;
+    // Managed settlement state only: sender maintenance never invokes Context()
+    // or adds player/location/game-memory reads between five-second passes.
+    internal bool ContextReady => Measuring && settled is not null && settleEpoch==state.Epoch;
+    internal event System.Action? Invalidated;
+    internal string RemoteStatus { get; set; }="Site policy unavailable; no contributions.";
+    internal void CancelUnsent()=>state.CancelUnsent();
+    internal void Acknowledge(Guid batch) { if(state.Prepared?.BatchId==batch) state.CancelUnsent(); }
 
     internal FateLocalView(IDalamudPluginInterface ui, ICommandManager commands, IClientState client,
         IPlayerState player, IDataManager data, ICondition conditions, IFateTable table, IFramework framework) {
@@ -65,6 +76,7 @@ internal sealed class FateLocalView : IDisposable {
     internal void Show() => visible=true;
     private void Invalidate() {
         state.Invalidate(); settled=null; settleEpoch=state.Epoch;
+        Invalidated?.Invoke();
         // Lifecycle cannot bypass five-second read admission. ZoneInit happens
         // before ClientState assigns the new territory/instance.
         view=new("Context invalidated; unsent epoch cleared. Missing FATEs are UNKNOWN. No sends.",null,[],measurements.Snapshot(),0);
@@ -161,11 +173,11 @@ internal sealed class FateLocalView : IDisposable {
             summary=FateMeasurements.Summary(view.Costs); // once per bounded read, never every UI frame
         }
     }
-    internal string Diagnostic() => "FATE local diagnostics (no upload)\n"+view.Status+"\n"
+    internal string Diagnostic() => "FATE Testing diagnostics (manual copy)\n"+view.Status+"\n"
         +$"Cadence {FatePolicy.ReadSeconds}s; RAM-only, maximum 240 samples. Source: {JsonSerializer.Serialize(source,FatePolicy.Json)}\n"
         +(view.Context is { } c ? $"World {c.World}; territory {c.Territory}; public ordinal {c.Instance}.\n" : "Context unavailable.\n")
         +summary+"\n"
-        +$"Remote: Waiting for exact Site capability/policy discovery contract. No contributions.\n"
+        +$"Remote: {RemoteStatus}\n"
         +"Rows: "+JsonSerializer.Serialize(view.Rows,FatePolicy.Json)+"\n"
         +"Samples: "+JsonSerializer.Serialize(view.Costs,FatePolicy.Json);
     private void Start() {
@@ -176,11 +188,11 @@ internal sealed class FateLocalView : IDisposable {
         if (!visible || disposed) return;
         ImGui.SetNextWindowSize(new System.Numerics.Vector2(760,480),ImGuiCond.FirstUseEver);
         if (!ImGui.Begin("Advanced Testing FATE diagnostics",ref visible)) { ImGui.End(); return; }
-        ImGui.TextWrapped("Read-only public overworld observations. No player coordinates, persistent history, gameplay writes or remote contributions. Missing state is UNKNOWN. Measurements stay in bounded RAM.");
+        ImGui.TextWrapped("Read-only public overworld observations. No player coordinates, persistent history or gameplay writes. Remote contributions require the independent Site/account FATE policy and exact TEST admission. Starting a measurement session does not grant consent. Missing state is UNKNOWN. Measurements stay in bounded RAM.");
         if (!measuring) { if (ImGui.Button("Start local measurement session")) _=framework.RunOnFrameworkThread(()=> { if (!disposed) Start(); }); }
         else if (ImGui.Button("Stop local measurement session")) _=framework.RunOnFrameworkThread(()=> { if (!disposed) Stop(); });
         ImGui.TextWrapped(view.Status);
-        ImGui.TextWrapped("Remote contribution: Waiting for exact Site capability/policy contract (fail closed).");
+        ImGui.TextWrapped("Remote contribution: "+RemoteStatus);
         ImGui.TextWrapped(summary);
         if (ImGui.Button("Copy FATE diagnostics (local, no upload)")) ImGui.SetClipboardText(Diagnostic());
         foreach(var row in view.Rows) ImGui.TextWrapped($"FATE {row.FateId}: {row.State.Kind}, progress {row.ProgressPercent?.ToString() ?? "UNKNOWN"}%, bonus {row.Bonus?.ToString() ?? "UNKNOWN"}; world {row.WorldId}, territory {row.TerritoryId}, {row.Instance.Kind} {row.Instance.Number}; observed {row.ObservedAt:O}; start {row.Timing?.StartTimeEpoch.ToString() ?? "UNKNOWN"}.");
