@@ -171,6 +171,11 @@ Validate batch binding, time, counts and unique bounded rejection indices. Gener
 400/409/413/415 require correction; 429/503 and other transient 5xx use exponential
 backoff (5..640 seconds) respecting a longer valid Retry-After. Queued data still
 expires at 30 seconds. No production, plaintext or direct-IP fallback is allowed.
+Known HTTP suspension/rate-limit dispositions survive malformed or stalled error
+bodies. A classified response commits against current session/context/feature
+authority, not the expired network deadline. Observation expiry discards retryable
+payloads without erasing an in-flight response's backoff or suspension outcome.
+Successful discovery resets exponential failure count; failures do not.
 
 Site clock admission is at most five seconds future/thirty seconds old. Fresh
 through observedAt+30 seconds, stale until +120, then no recent observation.

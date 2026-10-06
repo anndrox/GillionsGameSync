@@ -6,6 +6,9 @@
   FATE policy; no permanent local sharing toggle or change to ordinary permissions.
 - Add separate bounded RAM-only upload/retry lanes, immutable batch receipts,
   five-second send floor, ten-second discovery/renewal, expiry and cancellation.
+- Preserve HTTP disposition and Retry-After across malformed/stalled bodies,
+  delayed framework callbacks and in-flight observation expiry; discovery failures
+  retain exponential backoff rather than resetting their counter.
 - Keep accepted85 gameplay collection, command polling and all prior resources
   unchanged. New source/device version must be explicitly admitted by Site before
   live proof or publication; no Stable, production, alerts or static UI changes.

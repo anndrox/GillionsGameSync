@@ -42,6 +42,15 @@ assert 'SyncRequestMode.Manual' in plugin.split('private void TickFateSender',1)
 assert 'personalHttp.SendAsync' in plugin.split('private async Task<HttpResponseMessage> DispatchFateAsync',1)[1].split('private async Task DiscoverFateAsync',1)[0]
 assert 'clock+10000' in sender and 'clock+5000' in sender
 assert 'batch.OldestObservation<=consentAfter' in sender
+discovery_caller = plugin.split('private async Task DiscoverFateAsync',1)[1].split('private async Task ContributeFateAsync',1)[0]
+assert discovery_caller.index('serverDelay=response.Headers.RetryAfter') < discovery_caller.index('SyncResponsePolicy.ReadAsync')
+assert 'FateRequestCurrent(permit,binding,epoch,deadline.Token)' not in discovery_caller
+assert 'FateRequestCurrent(permit,binding,epoch,feature)' in discovery_caller
+assert 'DiscoveryFailed(Environment.TickCount64,serverDelay)' in discovery_caller
+contribute_caller = plugin.split('private async Task ContributeFateAsync',1)[1].split('private MarketContributionSession',1)[0]
+assert 'FateTransportPolicy.Response(responseStatus,receipt)' in contribute_caller
+assert 'FateTransportPolicy.Response(responseStatus,false,error is HttpRequestException or OperationCanceledException)' in contribute_caller
+assert 'inFlightId!=batch.BatchId' in sender and 'if(grant is not null) discoveryFailures=0' in sender
 assert not re.search(r'WriteAll|SavePluginConfig|File\.|IPlayerState|IObjectTable|IFateTable',sender+discovery)
 assert 'body=(byte[])bytes.Clone()' in model and 'internal byte[] CopyBody()' in model
 assert 'timedOccurrences.Count < 128' in model and 'costs.Count == 240' in model

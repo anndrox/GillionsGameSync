@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Threading;
 
 namespace GillionsGameSync;
 
@@ -15,6 +16,8 @@ internal sealed record FateAdmission(string SessionGeneration, string Origin, st
     bool ActiveAccount, bool EnabledDevice);
 internal enum FateSendDisposition { Acknowledged, Retry, Suspended, Invalid }
 internal static class FateTransportPolicy {
+    internal static bool CanCommit(bool sessionCurrent,bool contextCurrent,CancellationToken feature) =>
+        sessionCurrent && contextCurrent && !feature.IsCancellationRequested;
     internal static bool CanSend(FateAdmission? grant, FateSource source, string generation,
         bool currentPairing, bool contextCurrent, FatePrepared? prepared, long epoch, DateTime now) =>
         currentPairing && contextCurrent && FatePolicy.Compatible(source) && prepared is not null
@@ -64,6 +67,9 @@ internal static class FateTransportPolicy {
         >=500 => FateSendDisposition.Retry,
         _ => FateSendDisposition.Invalid
     };
+    internal static FateSendDisposition Response(int? status,bool receipt,bool transportFailed=false) =>
+        status is null || status is 200 or 201 && !receipt && transportFailed
+            ? FateSendDisposition.Retry : Classify(status!.Value,receipt);
     internal static int RetrySeconds(int failures, double? retryAfter = null) {
         double backoff=5*Math.Pow(2,Math.Clamp(failures,0,7));
         // Never shorten a valid server delay to the exponential backoff cap.

@@ -97,5 +97,43 @@ internal static class SenderTests {
         correction.Install(grant,now.AddSeconds(10),10000);
         check(!correction.Authorized(now.AddSeconds(11),11000)
             && correction.Take(Batch(15),source,"session",now.AddSeconds(15),15000)==null,"400/409/413/415/malformed receipt requires correction, no blind replacement after discovery");
+        // A completed network response can wait behind the framework until the
+        // transport timeout fires. Only actual session/context/feature authority
+        // decides whether its classified disposition may commit.
+        using var timeout=new CancellationTokenSource(); using var feature=new CancellationTokenSource();
+        timeout.Cancel();
+        check(FateTransportPolicy.CanCommit(true,true,feature.Token),"delayed framework disposition survives HTTP timeout");
+        state.Bind("delayed",1); state.Install(grant,now,0);
+        if(FateTransportPolicy.CanCommit(true,true,feature.Token)) state.Install(denied,now.AddSeconds(11),11000);
+        check(!state.Authorized(now.AddSeconds(11),11000),"classified OFF commits after HTTP deadline and cancels grant");
+        feature.Cancel(); check(!FateTransportPolicy.CanCommit(true,true,feature.Token),"actual feature cancellation suppresses stale disposition");
+        check(!FateTransportPolicy.CanCommit(false,true,CancellationToken.None) && !FateTransportPolicy.CanCommit(true,false,CancellationToken.None),"changed session/context suppresses stale disposition");
+        foreach(int status in new[]{401,403,404,422,429,503,502,400,409,413,415,200,201}) {
+            foreach(var failed in new[]{false,true}) {
+                var expected=status is 401 or 403 or 404 or 422 ? FateSendDisposition.Suspended
+                    : status is 429 or >=500 || status is 200 or 201 && failed ? FateSendDisposition.Retry : FateSendDisposition.Invalid;
+                check(FateTransportPolicy.Response(status,false,failed)==expected,"empty/malformed/stalled body preserves HTTP disposition "+status);
+            }
+        }
+        check(FateTransportPolicy.Response(null,false)==FateSendDisposition.Retry,"network failure before headers retry same body");
+        foreach(var outcome in new[]{FateSendDisposition.Retry,FateSendDisposition.Suspended,FateSendDisposition.Invalid,FateSendDisposition.Acknowledged}) {
+            using var late=new FateSenderState(); late.Bind("late",1); late.Install(grant,now,0);
+            late.Install(grant with {Admission=grant.Admission with {ExpiresAt=now.AddSeconds(50)},IssuedAt=now.AddSeconds(20)},now.AddSeconds(20),20000);
+            var aged=Batch(5); check(late.Take(aged,source,"session",now.AddSeconds(28),28000)==aged,"dispatch age23 under renewed grant");
+            late.Maintain(now.AddSeconds(36),36000); // age31: no longer a retryable payload
+            late.Complete(aged,outcome,now.AddSeconds(36),36000,1,30); late.UploadFinished();
+            if(outcome==FateSendDisposition.Retry)
+                check(late.Take(Batch(37),source,"session",now.AddSeconds(37),37000)==null,"in-flight expiry cannot erase503/Retry-After30");
+            else if(outcome is FateSendDisposition.Suspended or FateSendDisposition.Invalid)
+                check(!late.Authorized(now.AddSeconds(37),37000),"in-flight expiry cannot erase suspension/correction");
+            else check(late.LastAcknowledged==now.AddSeconds(36),"in-flight expiry preserves valid logical receipt");
+        }
+        using var backoff=new FateSenderState(); backoff.Bind("failures",1);
+        long attempt=0;
+        foreach(long next in new long[]{10000,20000,40000,80000}) {
+            check(backoff.Discover(attempt),"discovery attempt at growing backoff"); backoff.DiscoveryFinished(); backoff.DiscoveryFailed(attempt);
+            check(!backoff.Discover(next-1),"discovery failure exponential floor survives Install(null)"); attempt=next;
+        }
+        backoff.Install(grant,now,attempt); // a validated denial also counts as successful discovery
     }
 }

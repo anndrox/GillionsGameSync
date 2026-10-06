@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 internal static class FatePackagedTests {
     internal static void Run(Assembly assembly, bool testing, string fixtureDirectory) {
@@ -78,6 +79,52 @@ internal static class FatePackagedTests {
         Call("DiscoveryFinished"); Check(Call("Discover",(long)9999) is false,"Packaged discovery10s admission.");
         Call("Install",grant,now,(long)0); Call("Maintain",now.AddSeconds(-1),(long)30000);
         Check(!(bool)Call("Authorized",now.AddSeconds(-1),(long)30000)!,"Packaged monotonic grant expiry.");
+        var responsePolicy=T("FateTransportPolicy").GetMethod("Response",flags)!;
+        foreach(int status in new[]{401,403,404,422,429,503,502,400,409,413,415,200,201})
+            foreach(bool failed in new[]{false,true}) {
+                var result=responsePolicy.Invoke(null,[status,false,failed])!.ToString();
+                var expected=status is 401 or 403 or 404 or 422 ? "Suspended"
+                    : status is 429 or >=500 || status is 200 or 201 && failed ? "Retry" : "Invalid";
+                Check(result==expected,"Packaged HTTP disposition survives empty/malformed/stalled body: "+status);
+            }
+        var canCommit=T("FateTransportPolicy").GetMethod("CanCommit",flags)!;
+        using var transportDeadline=new CancellationTokenSource(); using var feature=new CancellationTokenSource(); transportDeadline.Cancel();
+        Check((bool)canCommit.Invoke(null,[true,true,feature.Token])!,"Packaged delayed disposition survives transport deadline.");
+        feature.Cancel(); Check(!(bool)canCommit.Invoke(null,[true,true,feature.Token])!,"Packaged actual cancellation suppresses old disposition.");
+        var renewed=JsonNode.Parse(wire)!;
+        renewed["fateContribution"]!["issuedAt"]=JsonSerializer.SerializeToNode(now.AddSeconds(20));
+        renewed["fateContribution"]!["expiresAt"]=JsonSerializer.SerializeToNode(now.AddSeconds(50));
+        var renewedGrant=parse.Invoke(null,[renewed.ToJsonString(),"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now.AddSeconds(20)]);
+        Check(renewedGrant is not null,"Packaged renewed exact30s grant.");
+        var freshRow=Activator.CreateInstance(T("FateObservation"),[(ushort)1000,(uint)21,(uint)134,instance,Invoke("State",(byte)4),now.AddSeconds(5),
+            (byte)35,true,(byte)15,(byte)20,null,null,null])!;
+        var freshRows=Array.CreateInstance(T("FateObservation"),1); freshRows.SetValue(freshRow,0);
+        var agedBatch=Invoke("Prepare",(long)1,source,freshRows,now.AddSeconds(5));
+        var newerRow=Activator.CreateInstance(T("FateObservation"),[(ushort)1000,(uint)21,(uint)134,instance,Invoke("State",(byte)4),now.AddSeconds(37),
+            (byte)40,true,(byte)15,(byte)20,null,null,null])!;
+        var newerRows=Array.CreateInstance(T("FateObservation"),1); newerRows.SetValue(newerRow,0);
+        var newerBatch=Invoke("Prepare",(long)1,source,newerRows,now.AddSeconds(37));
+        foreach(var outcome in new[]{"Retry","Suspended","Invalid","Acknowledged"}) {
+            using var late=(IDisposable)Activator.CreateInstance(senderType,true)!;
+            object? Late(string method,params object?[] arguments)=>senderType.GetMethod(method,instanceFlags)!.Invoke(late,arguments);
+            Late("Bind","late",(long)1); Late("Install",grant,now,(long)0); Late("Install",renewedGrant,now.AddSeconds(20),(long)20000);
+            Check(Late("Take",agedBatch,source,"synthetic",now.AddSeconds(28),(long)28000) is not null,"Packaged age23 dispatch.");
+            Late("Maintain",now.AddSeconds(36),(long)36000);
+            Late("Complete",agedBatch,Enum.Parse(T("FateSendDisposition"),outcome),now.AddSeconds(36),(long)36000,1,(double?)30);
+            Late("UploadFinished");
+            if(outcome=="Retry") Check(Late("Take",newerBatch,source,"synthetic",now.AddSeconds(37),(long)37000) is null
+                && senderType.GetProperty("Status",instanceFlags)!.GetValue(late)!.ToString()!.Contains("bounded retry"),"Packaged expired in-flight response preserves rate backoff.");
+            else if(outcome=="Acknowledged") Check(senderType.GetProperty("LastAcknowledged",instanceFlags)!.GetValue(late) is not null,"Packaged expired in-flight logical receipt commits.");
+            else Check(!(bool)Late("Authorized",now.AddSeconds(37),(long)37000)!,"Packaged expired in-flight suspension/correction commits.");
+        }
+        using var backoff=(IDisposable)Activator.CreateInstance(senderType,true)!;
+        object? Backoff(string method,params object?[] arguments)=>senderType.GetMethod(method,instanceFlags)!.Invoke(backoff,arguments);
+        Backoff("Bind","backoff",(long)1);
+        long attempt=0;
+        foreach(long next in new long[]{10000,20000,40000,80000}) {
+            Check((bool)Backoff("Discover",attempt)!,"Packaged discovery at exponential deadline."); Backoff("DiscoveryFinished"); Backoff("DiscoveryFailed",attempt,null);
+            Check(!(bool)Backoff("Discover",next-1)!,"Packaged failed discovery retains exponential count."); attempt=next;
+        }
         Directory.CreateDirectory(fixtureDirectory);
         File.WriteAllBytes(Path.Combine(fixtureDirectory,"packaged-fate-live-observations-v1.json"),body.ToArray());
         Console.WriteLine($"Exact packaged FATE schema/privacy/no-admission/config boundaries PASS: {checks} checks. Synthetic; no native getter or live HTTP call.");

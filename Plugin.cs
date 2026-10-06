@@ -1729,8 +1729,8 @@ public sealed class Plugin : IDalamudPlugin {
             +(fateSender.LastAcknowledged is { } ack ? $" Last acknowledgement {ack:O}; request {fateSender.LastRequestMilliseconds:F2} ms." : "");
     }
     private bool FateRequestCurrent(SyncRequestPermit permit,string binding,long epoch,CancellationToken cancellation) =>
-        !cancellation.IsCancellationRequested && PermitIsCurrent(permit) && fateLocal.ContextReady
-        && fateLocal.Epoch==epoch && fateSender.Binding==binding && permit.Origin==FateDiscovery.Origin;
+        FateTransportPolicy.CanCommit(PermitIsCurrent(permit),fateLocal.ContextReady
+            && fateLocal.Epoch==epoch && fateSender.Binding==binding && permit.Origin==FateDiscovery.Origin,cancellation);
     private async Task<HttpResponseMessage> DispatchFateAsync(HttpRequestMessage request,SyncRequestPermit permit,
         string binding,long epoch,CancellationToken cancellation,bool contribution) {
         Task<HttpResponseMessage>? pending=null;
@@ -1746,11 +1746,14 @@ public sealed class Plugin : IDalamudPlugin {
     private async Task DiscoverFateAsync(SyncRequestPermit permit,string binding,long epoch,FateSource source,CancellationToken feature) {
         using var deadline=CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation,feature);
         deadline.CancelAfter(TimeSpan.FromSeconds(10));
+        double? serverDelay=null;
         try {
             using var request=new HttpRequestMessage(HttpMethod.Get,FateDiscovery.Origin+FateDiscovery.Path);
             request.Headers.Authorization=new AuthenticationHeaderValue("Bearer",permit.Token);
             request.Headers.UserAgent.ParseAdd($"GillionsGameSyncTest/{PluginVersion}");
             using var response=await DispatchFateAsync(request,permit,binding,epoch,deadline.Token,false);
+            serverDelay=response.Headers.RetryAfter?.Delta?.TotalSeconds
+                ?? (response.Headers.RetryAfter?.Date is { } at ? (at-DateTimeOffset.UtcNow).TotalSeconds : null);
             var text=await SyncResponsePolicy.ReadAsync(response.Content,deadline.Token);
             var now=DateTime.UtcNow;
             var grant=response.StatusCode==HttpStatusCode.OK ? FateDiscovery.Parse(text,permit.Session!.Generation,permit.Session.DeviceId,source,now) : null;
@@ -1758,7 +1761,9 @@ public sealed class Plugin : IDalamudPlugin {
             var header=response.Headers.RetryAfter;
             double? retrySeconds=header?.Delta?.TotalSeconds ?? (header?.Date is { } date ? (date-DateTimeOffset.UtcNow).TotalSeconds : retry);
             await framework.RunOnFrameworkThread(()=> {
-                if(!FateRequestCurrent(permit,binding,epoch,deadline.Token)) return;
+                // Transport deadlines do not revoke authority to commit an
+                // already-classified OFF/denial/backoff result on this session.
+                if(!FateRequestCurrent(permit,binding,epoch,feature)) return;
                 if(grant is not null) fateSender.Install(grant,DateTime.UtcNow,Environment.TickCount64);
                 else fateSender.DiscoveryFailed(Environment.TickCount64,retrySeconds);
                 if(!fateSender.Authorized(DateTime.UtcNow,Environment.TickCount64)) fateLocal.CancelUnsent();
@@ -1768,7 +1773,7 @@ public sealed class Plugin : IDalamudPlugin {
                 // A deadline is a transport failure; feature/session cancellation
                 // is not. Never install an old response into a successor epoch.
                 if(FateRequestCurrent(permit,binding,epoch,feature)) {
-                    fateSender.DiscoveryFailed(Environment.TickCount64); fateLocal.CancelUnsent();
+                    fateSender.DiscoveryFailed(Environment.TickCount64,serverDelay); fateLocal.CancelUnsent();
                 }
             });
         } finally { await framework.RunOnFrameworkThread(()=>fateSender.DiscoveryFinished()); }
@@ -1791,12 +1796,11 @@ public sealed class Plugin : IDalamudPlugin {
             var text=await SyncResponsePolicy.ReadAsync(response.Content,deadline.Token);
             int count;
             using(var body=JsonDocument.Parse(batch.Body)) count=body.RootElement.GetProperty("observations").GetArrayLength();
-            bool receipt=FateTransportPolicy.Receipt(text,batch,count,DateTime.UtcNow);
+            bool receipt=responseStatus is 200 or 201 && FateTransportPolicy.Receipt(text,batch,count,DateTime.UtcNow);
             int accepted=0;
             if(receipt) { using var r=JsonDocument.Parse(text); accepted=r.RootElement.GetProperty("acceptedCount").GetInt32(); }
-            bool error=FateDiscovery.Error(text,out _,out var retry);
-            var outcome=FateTransportPolicy.Classify((int)response.StatusCode,receipt);
-            if(!receipt && !error && (int)response.StatusCode<500) outcome=FateSendDisposition.Invalid;
+            FateDiscovery.Error(text,out _,out var retry);
+            var outcome=FateTransportPolicy.Response(responseStatus,receipt);
             var header=response.Headers.RetryAfter;
             double? retrySeconds=header?.Delta?.TotalSeconds ?? (header?.Date is { } date ? (date-DateTimeOffset.UtcNow).TotalSeconds : retry);
             await framework.RunOnFrameworkThread(()=> {
@@ -1809,10 +1813,9 @@ public sealed class Plugin : IDalamudPlugin {
         } catch(Exception error) {
             await framework.RunOnFrameworkThread(()=> {
                 if(FateRequestCurrent(permit,binding,batch.Epoch,feature)) {
-                    var result=responseStatus is <500 && error is not (HttpRequestException or OperationCanceledException)
-                        ? FateSendDisposition.Invalid : FateSendDisposition.Retry;
+                    var result=FateTransportPolicy.Response(responseStatus,false,error is HttpRequestException or OperationCanceledException);
                     fateSender.Complete(batch,result,DateTime.UtcNow,Environment.TickCount64,retry:serverDelay);
-                    if(result==FateSendDisposition.Invalid) fateLocal.CancelUnsent();
+                    if(result is FateSendDisposition.Invalid or FateSendDisposition.Suspended) fateLocal.CancelUnsent();
                 }
             });
         } finally { await framework.RunOnFrameworkThread(()=>fateSender.UploadFinished()); }

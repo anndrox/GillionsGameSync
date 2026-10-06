@@ -19,6 +19,7 @@ internal sealed class FateSenderState : IDisposable {
     internal bool UploadBusy { get; private set; }
     private CancellationTokenSource lifetime=new();
     private FatePrepared? retryBatch;
+    private Guid? inFlightId;
     private Guid? acknowledged;
     private long nextDiscovery, nextSend, expires;
     private DateTime consentAfter=DateTime.MaxValue;
@@ -33,7 +34,7 @@ internal sealed class FateSenderState : IDisposable {
         // Preserve rate/discovery deadlines across context churn.
     }
     private void Cancel() {
-        lifetime.Cancel(); lifetime.Dispose(); lifetime=new(); retryBatch=null;
+        lifetime.Cancel(); lifetime.Dispose(); lifetime=new(); retryBatch=null; inFlightId=null;
         // Workers own the busy flags until their finally returns. Cancelling a
         // request never permits an overlapping replacement on the same lane.
     }
@@ -42,7 +43,7 @@ internal sealed class FateSenderState : IDisposable {
         DiscoveryBusy=true; nextDiscovery=clock+10000; return true;
     }
     internal void DiscoveryFinished()=>DiscoveryBusy=false;
-    internal void UploadFinished()=>UploadBusy=false;
+    internal void UploadFinished() { UploadBusy=false; inFlightId=null; }
     internal void Install(FateGrant? grant, DateTime now,long clock) {
         bool continuity=!suspended && Grant is {Admission.Granted:true} prior && grant is {Admission.Granted:true}
             && prior.PolicyGeneration==grant.PolicyGeneration && prior.PairedAt==grant.PairedAt
@@ -50,7 +51,8 @@ internal sealed class FateSenderState : IDisposable {
         if(grant is null || !grant.Admission.Granted || !continuity) {
             Cancel(); consentAfter=grant?.Admission.Granted==true ? now : DateTime.MaxValue;
         }
-        Grant=grant; suspended=false; discoveryFailures=0;
+        Grant=grant; suspended=false;
+        if(grant is not null) discoveryFailures=0;
         expires=grant is null ? 0 : clock+(long)Math.Min(30000,Math.Max(0,(grant.Admission.ExpiresAt-now).TotalMilliseconds));
         Status=grant is null ? "Malformed/unavailable discovery; no contributions."
             : grant.Admission.Granted ? "Site policy ON; awaiting fresh positive observations."
@@ -76,11 +78,14 @@ internal sealed class FateSenderState : IDisposable {
         var batch=retryBatch??latest;
         if(batch is null || batch.BatchId==acknowledged || batch.OldestObservation<=consentAfter
             || !FateTransportPolicy.CanSend(Grant!.Admission,source,generation,true,true,batch,Epoch,now)) return null;
-        retryBatch=batch; UploadBusy=true; nextSend=clock+5000;
+        retryBatch=batch; inFlightId=batch.BatchId; UploadBusy=true; nextSend=clock+5000;
         Status="Sending bounded public FATE observations."; return batch;
     }
     internal void Complete(FatePrepared batch,FateSendDisposition outcome,DateTime now,long clock,int accepted=0,double? retry=null) {
-        if(retryBatch?.BatchId!=batch.BatchId) return;
+        // Payload freshness decides retry eligibility, not ownership of a
+        // response already in flight. Its rate/suspension disposition survives
+        // observation expiry; actual cancellation clears this identity.
+        if(inFlightId!=batch.BatchId) return;
         if(outcome==FateSendDisposition.Acknowledged) {
             acknowledged=batch.BatchId; retryBatch=null; failures=0; LastAcknowledged=now; LastAccepted=accepted;
             Status=$"Acknowledged FATE batch; {accepted} accepted. Renewal uses fresh observations, not retries.";
@@ -92,6 +97,6 @@ internal sealed class FateSenderState : IDisposable {
             Status="FATE admission/receipt rejected; suspended until fresh discovery. Other sync unchanged.";
         }
     }
-    public void Dispose() { if(disposed) return; disposed=true; lifetime.Cancel(); lifetime.Dispose(); retryBatch=null; Grant=null; }
+    public void Dispose() { if(disposed) return; disposed=true; lifetime.Cancel(); lifetime.Dispose(); retryBatch=null; inFlightId=null; Grant=null; }
 }
 #endif
