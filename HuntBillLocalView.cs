@@ -1,4 +1,3 @@
-#if GILLIONS_TEST_BUILD
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -50,8 +49,16 @@ internal sealed class HuntBillLocalView : IDisposable {
     internal string LastDiagnostic { get; private set; } = "Hunt observation not attempted.";
     private int attempts;
     private DateTime? lastAttemptUtc;
-    private bool visible, disposed;
-    private string export = "";
+    private bool disposed;
+#if GILLIONS_TEST_BUILD
+    private bool visible;
+#endif
+    private string export { get; set; } = "";
+    internal HuntProgressSnapshot Progress { get; private set; } = HuntProgressSnapshot.Unavailable;
+    internal bool ProgressRequested { get; set; }
+    internal void ClearProgress() => Progress = HuntProgressSnapshot.Unavailable;
+    private bool ReadEnabled => store.LocalRetentionEnabled || ProgressRequested;
+    private readonly Dictionary<uint, uint> targetTerritories = new();
     private sealed record View(bool Enabled, string Status, string[] Rows, double Milliseconds,
         int Attempts = 0, DateTime? LastAttemptUtc = null, string CoverageStatus = "Hunt item coverage UNAVAILABLE.",
         DateTime? CoverageObservedAtUtc = null, string[]? CoverageRows = null);
@@ -71,11 +78,15 @@ internal sealed class HuntBillLocalView : IDisposable {
         client.TerritoryChanged += OnTerritoryChanged;
         conditions.ConditionChange += OnConditionChange;
         chat.LogMessage += OnProgressMessage;
+#if GILLIONS_TEST_BUILD
         commands.AddHandler("/gillionshunts", new CommandInfo((_, _) => Show()) { HelpMessage = "Testing read-only Hunt Bill local observations (no uploads)." });
         ui.UiBuilder.Draw += Draw;
+#endif
         Publish(policy.Status);
     }
+#if GILLIONS_TEST_BUILD
     internal void Show() => visible = true;
+#endif
     private string GameVersion() => data.GameData.Repositories.TryGetValue("ffxiv", out var repo) ? repo.Version : "unavailable";
     private unsafe string CurrentCharacterKey() {
         if (!PersonalObservationCompatibility.Supports(GameVersion(), typeof(MobHunt).Assembly.GetName().Version?.ToString())) return "";
@@ -84,11 +95,11 @@ internal sealed class HuntBillLocalView : IDisposable {
             ? HuntBillRetentionPolicy.CharacterKey(player->ContentId) : "";
     }
     private void OnLogout(int _, int __) { ClearLiveBaseline(); Publish("Logged out; retained Hunt state is historical, not current. Private sync paused."); }
-    private void ClearLiveBaseline() { export = ""; schedule.Reset(); session.Reset(); itemCoverage.Clear(); rawFingerprint = ""; lastProgressDiagnostic = "Structured Hunt progress cleared on session/transition."; }
+    private void ClearLiveBaseline() { Progress = HuntProgressSnapshot.Unavailable; export = ""; schedule.Reset(); session.Reset(); itemCoverage.Clear(); rawFingerprint = ""; lastProgressDiagnostic = "Structured Hunt progress cleared on session/transition."; }
     private void OnProgressMessage(ILogMessage message) {
         // The event wrapper is borrowed. Copy only three typed numeric values
         // synchronously; never retain it, strings, entity data or chat content.
-        if (disposed || !store.LocalRetentionEnabled || !framework.IsInFrameworkUpdateThread
+        if (disposed || !ReadEnabled || !framework.IsInFrameworkUpdateThread
             || message.LogMessageId != HuntProgressMessage.LogId) return;
         if (!PersonalObservationCompatibility.Supports(GameVersion(), typeof(MobHunt).Assembly.GetName().Version?.ToString())
             || conditions[ConditionFlag.BetweenAreas] || conditions[ConditionFlag.BetweenAreas51]) return;
@@ -142,9 +153,10 @@ internal sealed class HuntBillLocalView : IDisposable {
     // all native access; no new polling subscription, requests or interface dependency.
     // Supported lifecycle subscriptions only invalidate the RAM admission baseline.
     internal unsafe void Tick(DateTime now, bool force = false) {
-        if (!store.LocalRetentionEnabled) { session.Reset(); itemCoverage.Clear(); }
+        if (!ReadEnabled) { session.Reset(); itemCoverage.Clear(); Progress = HuntProgressSnapshot.Unavailable; }
         if (force) LastDiagnostic = "Hunt read not due/eligible (one-second manual admission bound); retained state preserved.";
-        if (disposed || !schedule.TryBegin(now, store.LocalRetentionEnabled, force)) return;
+        if (disposed || !schedule.TryBegin(now, ReadEnabled, force)) return;
+        Progress = HuntProgressSnapshot.Unavailable;
         LastDiagnostic = "Hunt fresh source unavailable; retained state preserved, no completion inferred.";
         if (!framework.IsInFrameworkUpdateThread) { itemCoverage.Clear(); Publish("Hunt read requires framework thread; no native access."); return; }
         attempts++; lastAttemptUtc = now;
@@ -265,6 +277,7 @@ internal sealed class HuntBillLocalView : IDisposable {
             }
             if (policy.Observe(characterKey, observations.ToArray())) { export = ""; persist(); }
             if (policy.LastSemanticChange) SemanticRevision++;
+            PublishProgress(characterKey, observations, partial, now);
             foreach (var observation in observations) {
                 var saved = store.Characters.SingleOrDefault(c => c.LocalCharacterKey == characterKey)?.Bills.SingleOrDefault(b => b.BillTypeId == observation.BillTypeId);
                 if (saved is not null) details.Add($"Retained after: bill {saved.BillTypeId}, order {saved.OrderId}; "
@@ -280,6 +293,40 @@ internal sealed class HuntBillLocalView : IDisposable {
             Publish(status, characterKey, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         } catch (Exception) { itemCoverage.Clear(); Publish("Hunt read/save failed; history preserved. New data may be memory-only. No live correctness claim."); }
     }
+    private void PublishProgress(string characterKey, List<HuntBillObservation> observations, int partial, DateTime now) {
+        uint territory = client.TerritoryType;
+        var area = data.GetExcelSheet<TerritoryType>().GetRowOrDefault(territory);
+        string name = area?.PlaceName.Value.Name.ExtractText() ?? "Current area";
+        // Item coverage proves the current item domain, not exact acquisition,
+        // order/cache ownership or reset generation. It cannot prove that ALL
+        // current-area targets are complete. Preserve the approved uncertainty
+        // fallback until the existing source can supply that stronger proof.
+        bool complete = false;
+        var rows = new List<HuntProgressRow>();
+        foreach (var bill in observations) foreach (var target in bill.Targets) {
+            if (!targetTerritories.TryGetValue(target.TargetId, out var targetTerritory)) {
+                targetTerritory = target.MapId > 0 ? data.GetExcelSheet<Lumina.Excel.Sheets.Map>().GetRowOrDefault(target.MapId)?.TerritoryType.RowId ?? 0 : 0;
+                if (targetTerritory == 0 && target.PlaceNameId > 0) {
+                    // Static reference lookup only. An unmapped target may still
+                    // have one unambiguous territory; never fabricate a location.
+                    var matches = data.GetExcelSheet<TerritoryType>().Where(t => t.PlaceName.RowId == target.PlaceNameId).Take(2).ToArray();
+                    if (matches.Length == 1) targetTerritory = matches[0].RowId;
+                }
+                if (targetTerritories.Count < 512) targetTerritories[target.TargetId] = targetTerritory;
+            }
+            if (targetTerritory == 0) complete = false;
+            if (targetTerritory != territory) continue;
+            // Presentation uses this admitted read (including exact, bounded
+            // session progress evidence), never a maximum from retained history.
+            // Reacquisition/order/reset ambiguity must not turn an old complete
+            // record into proof of a current completed target.
+            rows.Add(new($"{bill.BillTypeId}:{bill.OrderId}:{target.TargetIndex}:{target.TargetId}",
+                presentation.TargetName(target), target.ObservedKills, target.RequiredKills));
+        }
+        Progress = new(territory, name, observations.Count == 0 && !complete ? "Hunt progress updating…" : "", complete,
+            rows.ToArray(), Environment.TickCount64 + 6000);
+    }
+#if GILLIONS_TEST_BUILD
     private void Draw() {
         if (!visible || disposed) return;
         var state = view;
@@ -314,11 +361,14 @@ internal sealed class HuntBillLocalView : IDisposable {
         }
         ImGui.End();
     }
+#endif
     public void Dispose() {
         if (disposed) return; disposed = true; export = "";
-        client.Logout -= OnLogout; ui.UiBuilder.Draw -= Draw; commands.RemoveHandler("/gillionshunts");
+        client.Logout -= OnLogout;
+#if GILLIONS_TEST_BUILD
+        ui.UiBuilder.Draw -= Draw; commands.RemoveHandler("/gillionshunts");
+#endif
         client.TerritoryChanged -= OnTerritoryChanged; conditions.ConditionChange -= OnConditionChange;
         chat.LogMessage -= OnProgressMessage;
     }
 }
-#endif

@@ -38,6 +38,21 @@ internal static class FatePackagedTests {
             Check((bool)epochType.GetMethod("Observe",instanceFlags)!.Invoke(lifecycle,[context,context,source,rows,now.AddSeconds(tick*5)])!,"Packaged consecutive settled reads.");
             Check((long)epoch.GetValue(lifecycle)! == settledEpoch,"Packaged first-context binding must not force recurring re-settlement.");
         }
+        var localType=T("FateLocalView");
+        var local=System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(localType);
+        localType.GetField("state",instanceFlags)!.SetValue(local,lifecycle);
+        localType.GetField("measurements",instanceFlags)!.SetValue(local,Activator.CreateInstance(T("FateMeasurements"),true));
+        var automatic=localType.GetMethod("SetAuthorized",instanceFlags)!;
+        automatic.Invoke(local,[true]);
+        Check((bool)localType.GetProperty("Measuring",instanceFlags)!.GetValue(local)!,"Automatic Site grant starts collection without diagnostic command.");
+        Check(!(bool)localType.GetProperty("ContextReady",instanceFlags)!.GetValue(local)!,"Authorization cannot invent supported settled context.");
+        automatic.Invoke(local,[false]);
+        Check(!(bool)localType.GetProperty("Measuring",instanceFlags)!.GetValue(local)!,"Policy loss stops collection.");
+        Check(epochType.GetProperty("Prepared",instanceFlags)!.GetValue(lifecycle) is null,"Policy loss discards unsent observations.");
+        Check(((Array)epochType.GetProperty("Current",instanceFlags)!.GetValue(lifecycle)!).Length==0,"Policy loss clears volatile rows.");
+        Check((long)epoch.GetValue(lifecycle)! == settledEpoch,"Policy stop must not create discovery/re-settlement feedback loop.");
+        automatic.Invoke(local,[true]);
+        Check(epochType.GetProperty("Prepared",instanceFlags)!.GetValue(lifecycle) is null,"OFF to ON requires fresh observations, not pre-consent replay.");
         var body=(ReadOnlyMemory<byte>)T("FatePrepared").GetProperty("Body",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(prepared)!;
         using(var json=JsonDocument.Parse(body)) {
             Check(json.RootElement.EnumerateObject().Select(p=>p.Name).Order().SequenceEqual(new[]{"schemaVersion","collectorSchema","coverage","source","batchId","observations"}.Order()),"Packaged exact envelope keys.");

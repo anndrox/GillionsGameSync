@@ -6,7 +6,7 @@ internal static class HuntBillItemPackagedTests {
     internal static void Run(Assembly a, bool testing) {
         var coverage = a.GetType("GillionsGameSync.HuntBillItemCoverage");
         var sync = a.GetType("GillionsGameSync.HuntBillItemSync");
-        if (!testing) { Require(coverage is null && sync is null,"Stable gained absence coverage"); return; }
+        if (!testing) { Require(coverage is not null && sync is null,"Stable local reader missing or gained personal transport"); return; }
         Require(coverage is not null && sync is not null,"Testing missing coverage");
         var domain=a.GetType("GillionsGameSync.HuntBillItemDomain",true)!;
         var slot=a.GetType("GillionsGameSync.HuntKeyItemSlot",true)!;

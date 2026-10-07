@@ -19,6 +19,8 @@ dotnet run --project (Join-Path $root 'tests/GillionsGameSync.FateTests/Gillions
 if ($LASTEXITCODE -ne 0) { throw 'FATE positive-only/source/privacy/epoch/transport fixtures failed.' }
 python (Join-Path $root 'tests/fate-contract-test.py')
 if ($LASTEXITCODE -ne 0) { throw 'FATE typed-source/lifecycle/privacy boundaries failed.' }
+python (Join-Path $root 'tests/public-ui-contract-test.py')
+if ($LASTEXITCODE -ne 0) { throw 'Public presentation/reader/privacy boundaries failed.' }
 
 dotnet run --project (Join-Path $root 'tests/GillionsGameSync.HuntMapTests/GillionsGameSync.HuntMapTests.csproj') -c Release
 if ($LASTEXITCODE -ne 0) { throw 'Hunt map contract/lifecycle/race fixtures failed.' }

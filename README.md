@@ -1,5 +1,19 @@
 # Gillions Game Sync
 
+## Unpublished public UX candidate
+
+Testing87 preparation adds a compact connection/health window, dedicated pairing,
+General/Hunts/Connection/Advanced Settings and a default-OFF local Hunt Progress
+panel. FATE collection no longer needs a diagnostic command: fresh authenticated
+Site policy and exact source admission control its existing five-second lifecycle.
+No new payload contract, gameplay automation or extra Hunt/location reads are added.
+
+This candidate is **not published or ready for Stable promotion**. Site does not
+yet provide the complete Site-owned permission contract needed to replace legacy
+local contribution/request choices. Testing86 remains the installed feed. Existing
+Stable capabilities are not silently promoted from Testing. See the
+[candidate state and required Site correction](docs/public-release-candidate.md).
+
 Published Testing86 wires the independent default-OFF Site FATE policy and bounded
 authenticated sender, with accepted85 collection unchanged. Real shared TEST
 intake, renewal, same-occurrence progress, privacy, rendering and natural expiry
@@ -91,7 +105,10 @@ Updating this plugin does not cancel external AutoRetainer plans or guarantee ca
 ## Pair and sync
 
 - Open the plugin's Dalamud configuration window, or use `/gillionssync pair` to open its pairing controls.
-- `/gillionssync` opens the window and requests a manual sync. **Sync now** also collects the supported data currently available to the logged-in character.
+- Published Stable30: `/gillionssync` opens the window and requests a manual sync.
+  The unpublished public UX candidate separates these actions: `/gillionssync`
+  opens the main window; `/gillionssync sync` and Advanced **Sync now** explicitly
+  request sync. Testing uses `/gillionssynctest` with the same subcommands.
 - **Automatic sync** checks one ordinary category every 30 seconds. Inventory changes, queued Gil records and changed Retainer observations use their own deadlines. The two-second Gil fallback and 750 ms dirty delay are unchanged.
 - Pairing and startup with a valid pairing perform one character sync and presence request even when Automatic sync is off. Recurring collection remains off in that case.
 - **Allow website 'Link in game' requests** is a separate control, on by default. While paired and logged in, it polls for authenticated requests and prints a requested native item link after the server consumes its claim. It does not automate gameplay.

@@ -77,12 +77,19 @@ older overwrites, preserve known fields against null and classify tied conflicts
 as ambiguous. Native supplies no static names, reference maps or public reporter
 identity; Site owns compatible catalog enrichment and field merging.
 
-## RAM limits and diagnostic session
+## RAM limits and collection lifecycle
 
-Open `/gillionsfates` or Advanced FATE diagnostics under Testing diagnostics, then
-start the temporary local measurement session. It is stopped by default, is not
-persisted across reload and grants no remote consent. Stop discards observations.
-No permanent configuration checkbox or observation history is added.
+Published86 requires a temporary measurement session. In the unpublished public
+UX candidate87, fresh authenticated Site policy/discovery starts collection
+automatically. Missing, expired, OFF, malformed or unsupported policy stops it and
+discards unsent observations; OFF-to-ON requires fresh observations. Discovery can
+bootstrap before context settlement, but actual sends still require supported
+settled context. No duplicate manual collector or local permission is added.
+
+`/gillionsfates` and Advanced Testing diagnostics only open a local diagnostic
+view. Resetting measurement counters cannot authorize or start collection. No
+permanent configuration checkbox or observation history is added. Exact87 source
+admission remains a separate Site requirement;86 admission does not authorize87.
 
 Reads are independently admitted every five monotonic seconds, not on the command,
 Hunt or travel schedule. Context changes and stop/start cannot bypass this cadence.

@@ -1,5 +1,24 @@
 # Testing
 
+## Unpublished public UX candidate
+
+The [public candidate](public-release-candidate.md) is prepared separately from
+published Testing86. After Site authority/admission and exact-package reviews,
+validate welcome/pair/ready, returning connections, four Settings tabs, safe
+support copying, long/scaled Hunt labels, keyboard/controller access and no-focus
+auto-show. Hunt Progress must work with retained-history consent OFF and must not
+change retained history, transport permissions or website map selection.
+
+Test manual close, same-territory count/reconnect suppression, territory change,
+completion hold/removal and unknown/stale numeric hiding. Current order/reset
+coverage cannot prove all-complete; that fixture is presentation-only.
+
+FATE discovery/collection should start without a diagnostic command only under
+fresh Site policy and source admission. Check OFF/expiry/reload/logout/source
+fencing, fresh OFF-to-ON observations, one collector/sender and unchanged command
+responsiveness. Record actual read/preparation costs separately from synthetic UI
+and model timing. Never run installed Testing and its dev copy simultaneously.
+
 ## Testing 0.0.81 Hunt V2 / Active Hunt focus
 
 See [Testing81 contract, validation and owner acceptance](releases/testing-0.0.81.md).

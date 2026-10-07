@@ -8,7 +8,7 @@ model = (root / 'HuntBillItemCoverage.cs').read_text()
 native = (root / 'HuntBillLocalView.cs').read_text()
 plugin = (root / 'Plugin.cs').read_text()
 contract = (root / 'PersonalSync.cs').read_text()
-assert model.startswith('#if GILLIONS_TEST_BUILD || GILLIONS_PERSONAL_STATE_TESTS')
+assert '#if GILLIONS_TEST_BUILD || GILLIONS_PERSONAL_STATE_TESTS\ninternal sealed class HuntBillItemSync' in model
 assert all(s in model for s in ('absent_confirmed', 'present_unresolved', 'unavailable'))
 assert 'slots.Length == size' in model and '!s.Symbolic' in model and 's.Slot == i' in model
 assert 'before != after' in model and 'Stopwatch.GetElapsedTime' in model and 'Epoch' in model

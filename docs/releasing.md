@@ -1,5 +1,15 @@
 # Releasing
 
+## Public UX candidate preparation
+
+Testing87 preparation and proposed Stable31 are unpublished. The compact public
+UI and local Hunt Progress do not grant Site policy authority or public capability
+admission. Do not run Stable manifest preparation/publication or replace the
+rolling Testing feed until the [candidate gates](public-release-candidate.md) pass.
+Use the existing package script for ignored staging only. Distinct channel
+assemblies/conditional capabilities prevent a byte-identical cross-channel
+promotion; each eventual exact artifact requires equivalent acceptance.
+
 ## Fixed Testing update feed
 
 Owner direction establishes this existing URL as the rolling Testing feed:

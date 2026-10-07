@@ -3,6 +3,8 @@ using Dalamud.Game.Text.SeStringHandling.Payloads;
 using GillionsGameSync;
 using System.Text.Json;
 
+PublicExperienceTests.Run();
+
 static void Assert(bool condition, string message) {
     if (!condition) throw new InvalidOperationException(message);
 }

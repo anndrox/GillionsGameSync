@@ -44,7 +44,7 @@ internal static class GillionsEndpoints {
     }
 }
 
-public sealed class Plugin : IDalamudPlugin {
+public sealed partial class Plugin : IDalamudPlugin {
     public string Name => "Gillions Game Sync";
     private readonly IDalamudPluginInterface pluginInterface;
     private readonly ICommandManager commands;
@@ -56,10 +56,10 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly IGameInventory gameInventory;
     private readonly IChatGui chatGui;
     private readonly IPluginLog log;
+    private readonly HuntBillLocalView huntLocal;
 #if GILLIONS_TEST_BUILD
     private readonly BeastmasterLocalView beastmasterLocal;
     private readonly SubmarineLocalView submarineLocal;
-    private readonly HuntBillLocalView huntLocal;
     private readonly DashboardLocalView dashboardLocal;
     private readonly FateLocalView fateLocal;
     private readonly FateSenderState fateSender=new();
@@ -115,13 +115,8 @@ public sealed class Plugin : IDalamudPlugin {
     private volatile bool disposed;
     private bool logoutPending;
     private volatile PluginUiSnapshot uiState = PluginUiSnapshot.Empty;
-    private volatile bool dataDetailsExpanded;
-    private volatile bool diagnosticsExpanded;
     private string uiServerAddress = "";
     private string uiPairingCode = "";
-    private DateTime nextUiDetailsUtc;
-    private EvidenceBudgetUsage? uiBudget;
-    private string uiAvailability = "";
     private bool pairingInFlight;
     private bool observedAutomaticSync;
     private bool observedItemLinks;
@@ -131,7 +126,6 @@ public sealed class Plugin : IDalamudPlugin {
     // A paired background sync must never interrupt login with its settings
     // window. Open it explicitly from Dalamud configuration when needed.
     private volatile bool settingsVisible;
-    private volatile bool showPairingDetails;
     private DateTime nextAutomaticSyncUtc = DateTime.MinValue;
     private DateTime nextRetainerListingCaptureUtc = DateTime.MinValue;
     private DateTime nextGilLedgerPollUtc = DateTime.MinValue;
@@ -233,12 +227,13 @@ public sealed class Plugin : IDalamudPlugin {
     private const int NormalVentureRosterCaptureIntervalMilliseconds = 30000;
     private const int ActiveVentureRosterCaptureIntervalMilliseconds = 1000;
 
-    public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commands, IClientState clientState, IObjectTable objects, IFramework framework, IDataManager dataManager, IUnlockState unlockState, IGameInventory gameInventory, IPartyFinderGui partyFinderGui, IChatGui chatGui, IPluginLog log
+    public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commands, IClientState clientState, IObjectTable objects, IFramework framework, IDataManager dataManager, IUnlockState unlockState, IGameInventory gameInventory, IPartyFinderGui partyFinderGui, IChatGui chatGui, IPluginLog log, ICondition marketConditions, ITextureProvider textureProvider
 #if GILLIONS_TEST_BUILD
-        , IAddonLifecycle addonLifecycle, IMarketBoard marketBoard, ICondition marketConditions, IGameGui gameGui, IPlayerState travelPlayerState, IFateTable fateTable
+        , IAddonLifecycle addonLifecycle, IMarketBoard marketBoard, IGameGui gameGui, IPlayerState travelPlayerState, IFateTable fateTable
 #endif
     ) {
         this.pluginInterface = pluginInterface;
+        this.textureProvider = textureProvider;
         this.commands = commands;
         this.clientState = clientState;
         this.objects = objects;
@@ -252,6 +247,9 @@ public sealed class Plugin : IDalamudPlugin {
         partyFinderContributor = PartyFinderContributorFactory.Create(partyFinderGui, partyFinderHttp, log,
             () => PartyFinderContributionEnabled, CapturePartyFinderSession, RecordDiagnostic);
         uiServerAddress = configuration.ServerUrl;
+        publicUi = new PublicGameSyncUi(DrawMainPublic, DrawPublicSettings, DrawPairingPublic, DrawHuntProgress,
+            huntProgress, () => configuration.LockHuntProgressPosition, () => QueueUiAction(()=>huntProgress.Close()),
+            !HasPairedSession && !configuration.OnboardingCompleted, IsTesting);
         configuration.OwnedCharacters ??= new(StringComparer.Ordinal);
         configuration.CoverageGap ??= new();
         if (configuration.ActiveSession is null || !configuration.ActiveSession.IsValid(configuration.DeviceId, configuration.DeviceToken)) {
@@ -264,13 +262,16 @@ public sealed class Plugin : IDalamudPlugin {
         pairedClientHydration.PluginStarted(HasPairedSession);
         clientState.Login += OnLogin;
         clientState.Logout += OnLogout;
-        commands.AddHandler(CommandName, new CommandInfo(OnCommand) { HelpMessage = "Pair or sync your selected Gillions data." });
+        commands.AddHandler(CommandName, new CommandInfo(OnCommand) { HelpMessage = "Open Gillions Game Sync; 'sync' syncs now and 'pair' opens connection setup." });
         pluginInterface.UiBuilder.Draw += DrawSettings;
         pluginInterface.UiBuilder.OpenConfigUi += OpenSettings;
         framework.Update += OnFrameworkUpdate;
         gameInventory.InventoryChangedRaw += OnInventoryChangedRaw;
         chatGui.LogMessage += OnLogMessage;
         chatGui.ChatMessage += OnChatMessage;
+        configuration.HuntBills ??= new();
+        huntLocal = new HuntBillLocalView(pluginInterface, commands, framework, clientState, dataManager,
+            marketConditions, chatGui, configuration.HuntBills, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
 #if GILLIONS_TEST_BUILD
         huntMapGui = gameGui;
         observedHuntMapGuidance = configuration.AutomaticallyShowHuntMap;
@@ -278,9 +279,6 @@ public sealed class Plugin : IDalamudPlugin {
         configuration.SubmarineVoyages ??= new();
         submarineLocal = new SubmarineLocalView(pluginInterface, commands, framework, clientState, dataManager,
             addonLifecycle, configuration.SubmarineVoyages, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
-        configuration.HuntBills ??= new();
-        huntLocal = new HuntBillLocalView(pluginInterface, commands, framework, clientState, dataManager,
-            marketConditions, chatGui, configuration.HuntBills, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
         configuration.DashboardFacts ??= new();
         configuration.PersonalSync ??= new();
         dashboardLocal = new DashboardLocalView(pluginInterface, commands, framework, clientState, dataManager,
@@ -298,9 +296,13 @@ public sealed class Plugin : IDalamudPlugin {
     }
 
     private void OnCommand(string command, string arguments) {
-        settingsVisible = true;
-        if (arguments.Trim().Equals("pair", StringComparison.OrdinalIgnoreCase)) showPairingDetails = true;
-        else _ = SyncAsync();
+        if (arguments.Trim().Equals("pair", StringComparison.OrdinalIgnoreCase)) {
+            pairingRepair = HasPairedSession;
+            publicUi.ShowPairing();
+        }
+        else if (arguments.Trim().Equals("sync", StringComparison.OrdinalIgnoreCase)) _ = SyncAsync();
+        else publicUi.ShowMain();
+        settingsVisible = publicUi.Visible;
     }
 
     private static unsafe ulong ReadLocalContentId() {
@@ -308,7 +310,7 @@ public sealed class Plugin : IDalamudPlugin {
         return player is null || !player->IsLoaded ? 0 : player->ContentId;
     }
 
-    private void OpenSettings() => settingsVisible = true;
+    private void OpenSettings() { publicUi.ShowSettings(); settingsVisible = true; }
 
     // Pairing code is entered locally by the user in the plugin configuration UI.
     // It is single-use; Gillions returns a revocable per-device credential.
@@ -344,10 +346,12 @@ public sealed class Plugin : IDalamudPlugin {
                 RefreshSessionContext(); pairedClientHydration.PairingSucceeded();
                 presenceFailureCount = 0; nextRetainerPresenceUtc = DateTime.MinValue;
                 RequestConfigurationSave(); settingsMessage = "Connected. Gillions will load your selected character.";
+                pairingRepair = false;
+                publicConnectionFailure = "";
             });
         } catch (Exception error) {
             if (!disposed) await framework.RunOnFrameworkThread(() => {
-                if (!disposed && (permit is null || PermitIsCurrent(permit))) settingsMessage = OperationFailureMessage(error);
+                if (!disposed && (permit is null || PermitIsCurrent(permit))) { settingsMessage = OperationFailureMessage(error); ObserveConnectionFailure(error); }
             });
             log.Warning("Gillions pairing did not complete ({Type}).", error.GetType().Name);
         } finally {
@@ -391,6 +395,7 @@ public sealed class Plugin : IDalamudPlugin {
                 throw new InvalidOperationException("Invalid presence response.");
             await CommitAsync(permit, _ => {
                 retainerUploadServerSupported = uploadSupported; presenceFailureCount = 0;
+                publicConnectionFailure = "";
 #if GILLIONS_TEST_BUILD
                 marketAcceptedGeneration = MarketContributor.Compatible(responseJson) ? permit.Session!.Generation : "";
                 personalAccepted.Clear();
@@ -412,6 +417,7 @@ public sealed class Plugin : IDalamudPlugin {
         } catch (Exception error) {
             if (!disposed) await framework.RunOnFrameworkThread(() => {
                 if (!PermitIsCurrent(permit)) return;
+                ObserveConnectionFailure(error);
                 ClearRetainerServerAcceptance(); presenceFailureCount++;
 #if GILLIONS_TEST_BUILD
                 travelAccepted = false; ClearTravelPending();
@@ -455,6 +461,7 @@ public sealed class Plugin : IDalamudPlugin {
         var now = DateTime.UtcNow;
         RefreshSessionContext(); MaintainTransientState(now);
         partyFinderContributor.Tick(now);
+        huntLocal.ProgressRequested = configuration.ShowHuntProgress;
 #if GILLIONS_TEST_BUILD
         var huntRevision = huntLocal.SemanticRevision;
         var coverageRevision = huntLocal.CoverageRevision;
@@ -463,7 +470,9 @@ public sealed class Plugin : IDalamudPlugin {
         var huntChanged = huntLocal.SemanticRevision != huntRevision || huntLocal.CoverageRevision != coverageRevision;
         if (huntLocal.SemanticRevision != huntRevision || huntRawRevision != huntLocal.RawRevision) RecordDiagnostic(huntLocal.LastDiagnostic);
         dashboardLocal.Tick(now); // Independent, off-by-default; one bounded source group per due check.
-        fateLocal.Tick(now); // RAM-only local diagnostic session; independent five-second admission.
+        fateSender.Maintain(now, Environment.TickCount64);
+        fateLocal.SetAuthorized(HasPairedSession && activeOwnedState is not null && fateSender.Authorized(now, Environment.TickCount64));
+        fateLocal.Tick(now); // Automatic Site-policy gate, same independent five-second reads.
         TickFateSender(now); // Independent managed transport: no extra game reads, commands or ordinary-sync gates.
         travelLocal.Tick(now); // Independent default-OFF, latest-only RAM, bounded 15-second read.
         TickTravelSync(now); // Also clears invalid/expired pending state while unpaired.
@@ -472,6 +481,8 @@ public sealed class Plugin : IDalamudPlugin {
             marketContributor.RefreshSession(CaptureMarketSession());
             marketContributor.Tick(now); // Managed upload maintenance only, not market searches.
         }
+#else
+        huntLocal.Tick(now); // Same reader/cadence; display only, no personal transport.
 #endif
         if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;
 #if GILLIONS_TEST_BUILD
@@ -1321,11 +1332,13 @@ public sealed class Plugin : IDalamudPlugin {
                 if (submitted > 0 && !string.IsNullOrEmpty(configuration.SyncBlockedCode)) {
                     configuration.SyncBlockedCode = ""; configuration.SyncBlockedMessage = ""; RequestConfigurationSave();
                 }
+                publicConnectionFailure = "";
                 if (!background) settingsMessage = submitted > 0 ? "Sync completed." : "Your supported data is already current.";
             });
         } catch (Exception error) {
             if (!disposed) await framework.RunOnFrameworkThread(() => {
                 if (disposed || operationPermit is not null && !PermitIsCurrent(operationPermit)) return;
+                ObserveConnectionFailure(error);
                 if (error is GillionsSyncRejectedException rejection && IsAccountAccessBlocked(rejection.Code)) {
                     configuration.AutomaticSync = false; configuration.SyncBlockedCode = rejection.Code;
                     configuration.SyncBlockedMessage = OperationFailureMessage(error); RequestConfigurationSave(); RefreshSessionContext();
@@ -1354,15 +1367,12 @@ public sealed class Plugin : IDalamudPlugin {
     private void PublishUiState() {
         if (disposed) return;
         var now = DateTime.UtcNow;
+        if (now < nextPublicUiUtc) return;
+        nextPublicUiUtc = now.AddMilliseconds(250);
+        settingsVisible = publicUi.Visible;
+        PublishPublicHealth(now);
+        huntProgress.Update(configuration.ShowHuntProgress, clientState.TerritoryType, huntLocal.Progress, Environment.TickCount64);
         if (!uiRefreshPolicy.ShouldRefresh(settingsVisible, now)) return;
-        if (dataDetailsExpanded && now >= nextUiDetailsUtc) {
-            nextUiDetailsUtc = now.AddSeconds(1);
-            uiBudget = evidenceBudget.Measure(configuration.OwnedCharacters.Values);
-            uiAvailability = NativeInventoryCollector.GetAvailabilityStatus();
-        }
-        var usage = dataDetailsExpanded ? uiBudget : null;
-        string[] diagnosticLines = [];
-        if (diagnosticsExpanded) lock (diagnosticsLock) diagnosticLines = diagnostics.ToArray();
         uiState = new PluginUiSnapshot(
             PluginWindowModel.Create(HasPairedSession, configuration.PairingRequired, clientState.IsLoggedIn,
                 configuration.AutomaticSync, syncInFlight, configuration.CoverageGap.Paused,
@@ -1371,190 +1381,24 @@ public sealed class Plugin : IDalamudPlugin {
             PartyFinderContributionEnabled,
             configuration.ActiveSession?.Origin ?? "", activeOwnedState?.LastSyncUtc, settingsMessage,
             configuration.LastReadChangelogVersion, retainerUploadServerSupported,
-            dataDetailsExpanded ? uiAvailability : "", usage,
-            IsDiagnosticRecording, diagnosticRecordingUntilUtc, diagnosticLines);
+            "", null, IsDiagnosticRecording, diagnosticRecordingUntilUtc, []);
     }
 
     private void DrawSettings() {
-        if (!settingsVisible || disposed) { dataDetailsExpanded = false; diagnosticsExpanded = false; return; }
-        var view = uiState;
-        ImGui.SetNextWindowSize(new System.Numerics.Vector2(470, 0), ImGuiCond.FirstUseEver);
-        var windowOpen = settingsVisible;
-        var contentVisible = ImGui.Begin("Gillions Game Sync", ref windowOpen);
-        settingsVisible = windowOpen;
-        if (!contentVisible) { dataDetailsExpanded = false; diagnosticsExpanded = false; ImGui.End(); return; }
-        ImGui.Text(view.Model.Connection);
-        ImGui.TextWrapped(view.Model.Status);
-        if (view.Model.Warning is not null) { ImGui.PushTextWrapPos(0); ImGui.TextColored(new System.Numerics.Vector4(1f, .7f, .4f, 1f), view.Model.Warning); ImGui.PopTextWrapPos(); }
-        if (!view.Paired) DrawPairingControls(view);
-        ImGui.Separator();
-        var automaticSync = view.Automatic;
-        if (ImGui.Checkbox("Automatic sync", ref automaticSync)) QueueUiAction(() => {
-            configuration.AutomaticSync = automaticSync; RefreshSessionContext(); RequestConfigurationSave();
-        });
-        ImGui.BeginDisabled(!view.Model.CanSync);
-        if (ImGui.Button("Sync now")) _ = SyncAsync();
-        ImGui.EndDisabled();
-        var enableItemLinks = view.ItemLinks;
-#if GILLIONS_TEST_BUILD
-        const string websiteRequestLabel = "Allow website 'Open in FFXIV' requests";
-#else
-        const string websiteRequestLabel = "Allow website 'Link in game' requests";
-#endif
-        if (ImGui.Checkbox(websiteRequestLabel, ref enableItemLinks)) QueueUiAction(() => {
-            configuration.EnableItemLinkRequests = enableItemLinks; RefreshSessionContext(); RequestConfigurationSave();
-        });
-#if GILLIONS_TEST_BUILD
-        var pfLinks = configuration.EnablePartyFinderLinkRequests;
-        if (ImGui.Checkbox("Include Party Finder native links (final in-game click)", ref pfLinks)) QueueUiAction(() => {
-            configuration.EnablePartyFinderLinkRequests = pfLinks; RefreshSessionContext(); RequestConfigurationSave();
-        });
-        ImGui.TextWrapped("New action class: separately OFF for existing and new users. Secure TEST only; compatible Site request contract required. Never joins or applies. Item links retain their existing preference.");
-        ImGui.TextWrapped(partyFinderLinkStatus);
-        var huntMapGuidance = configuration.AutomaticallyShowHuntMap;
-        if (ImGui.Checkbox("Automatically show my current Hunt in FFXIV", ref huntMapGuidance)) QueueUiAction(() => {
-            configuration.AutomaticallyShowHuntMap = huntMapGuidance; RefreshSessionContext(); RequestConfigurationSave();
-        });
-        ImGui.TextWrapped("Separate default-OFF map permission. Pair with secure TEST, then enable Hunt guidance and select this device on Site. Public Hunt areas are references, not sightings. Site V2 supports deliberate B-rank Next possible location; older Site falls back to V1. No remote teleport.");
-        ImGui.TextWrapped(huntMapStatus);
-        ImGui.TextWrapped($"Testing Hunt protocol: {huntMapCapabilityDiagnostic}; Active Hunt focus: {(huntFocusActiveDiagnostic ? "active (ephemeral)" : "inactive")}. Focus is not permission and never enables location sharing.");
-#endif
-        ImGui.Separator();
-        var enablePartyFinderContributions = view.PartyFinderContributions;
-        if (ImGui.Checkbox("Contribute public Party Finder listings", ref enablePartyFinderContributions)) QueueUiAction(() => {
-#if GILLIONS_TEST_BUILD
-            configuration.EnableGillionsPartyFinderContributions = enablePartyFinderContributions;
-#else
-            configuration.EnablePartyFinderContributions = enablePartyFinderContributions;
-#endif
-            RequestConfigurationSave();
-            partyFinderContributor.SetEnabled(enablePartyFinderContributions);
-        });
-#if GILLIONS_TEST_BUILD
-        ImGui.TextWrapped("Off by default. Pair on the approved secure TEST origin as Testing and explicitly grant public Party Finder contribution permission, then opt in here. Public listing names/descriptions, owner ID lower bits, worlds, duties, jobs and slots go to TEST Gillions HTTPS, not xivpf.com. No production fallback. Automatic sync is independent. No active game queries are made.");
-        ImGui.TextWrapped("The paired-device credential authenticates only to Gillions. No chat, Square Enix credentials, diagnostics or unrelated local data is submitted. Reporter identity is private; listing owners may be other players. Disable to cancel and clear unsent observations.");
-        if (partyFinderContributor is GillionsPartyFinderContributor intake) ImGui.TextWrapped(intake.Status);
-#else
-        ImGui.TextWrapped("Off by default and independent of Gillions pairing or sync. When enabled, public listing names and descriptions, owner ID lower bits, worlds, duty/settings, jobs and slots are batched and sent directly to xivpf.com. They never pass through Gillions.");
-        ImGui.TextWrapped("No chat, Gillions account or device credential, Square Enix credential, diagnostic, or unrelated local data is included.");
-#endif
-        ImGui.TextWrapped("Data provided by xivpf.com — https://xivpf.com");
-        if (ImGui.Button("Open xivpf.com")) Util.OpenLink("https://xivpf.com");
-        ImGui.Separator();
-        if (!string.IsNullOrWhiteSpace(view.Message)) ImGui.TextWrapped(view.Message);
-        if (view.LastSync is { } lastSync) ImGui.TextDisabled($"Last sync: {lastSync.ToLocalTime():g}");
-        if (showPairingDetails) { ImGui.SetNextItemOpen(true, ImGuiCond.Always); showPairingDetails = false; }
-        if (ImGui.CollapsingHeader("Connection details")) {
-            ImGui.TextWrapped("A successful pair connects this plugin to the HTTPS server below. Editing this address takes effect only when you pair again.");
-            if (ImGui.InputText("Server address", ref uiServerAddress, 256)) {
-                var address = uiServerAddress;
-                QueueUiAction(() => { configuration.ServerUrl = address; RequestConfigurationSave(); });
-            }
-            if (view.Paired) {
-                ImGui.TextWrapped($"Connected to {view.Origin}");
-                ImGui.TextWrapped("Pairing again starts a new local record set. Earlier pending records remain saved and inactive; they are not moved to the new account.");
-                DrawPairingControls(view);
-                if (ImGui.Button("Disconnect")) QueueUiAction(() => {
-                    configuration.PairingRequired = true; configuration.ActiveSession = null;
-                    configuration.DeviceToken = ""; configuration.DeviceId = ""; configuration.PairingCode = "";
-                    ResetSessionContext(); RequestConfigurationSave(); settingsMessage = "Disconnected. Saved history remains on this PC.";
-                });
-            }
-        }
-        if (ImGui.CollapsingHeader("What changed")) {
-            foreach (var entry in CurrentChangelog) ImGui.BulletText(entry);
-            if (view.ReadChangelogVersion != PluginVersion && ImGui.Button("Mark as read")) QueueUiAction(() => {
-                configuration.LastReadChangelogVersion = PluginVersion; RequestConfigurationSave();
-            });
-        }
-        dataDetailsExpanded = ImGui.CollapsingHeader("Data and status");
-        if (dataDetailsExpanded) {
-            ImGui.TextWrapped("Automatic sync checks supported data one category at a time every 30 seconds. Inventory changes and queued records upload promptly. Gil checks keep their two-second fallback and short change delay.");
-            ImGui.TextWrapped("Pairing and paired startup load character details and send presence once, even with Automatic sync off. Website item links use their separate switch. No gameplay controls are used.");
-            ImGui.TextWrapped(view.Availability);
-            ImGui.TextWrapped(view.RetainerSupported ? "Retainer observations can upload." : "Retainer observations wait for server compatibility confirmation.");
-            if (view.Budget is { } usage) ImGui.TextWrapped($"Pending records across paired sessions and characters: {usage.Records:N0} / 10,000; {usage.Bytes:N0} / 8,388,608 serialized bytes.");
-            ImGui.TextWrapped("Older records with unknown ownership remain inactive in local configuration and are outside this new storage limit. Do not share your plugin configuration: it includes a credential and private gameplay history.");
-        }
-#if GILLIONS_TEST_BUILD
-        var huntSync = configuration.SyncPersonalHunts;
-        if (ImGui.Checkbox("Sync my private Hunt bills to shared TEST", ref huntSync)) QueueUiAction(() => SetPersonalSync("hunt_bills", huntSync));
-        var submarineSync = configuration.SyncPersonalSubmarines;
-        if (ImGui.Checkbox("Sync my private submarine state to shared TEST", ref submarineSync)) QueueUiAction(() => SetPersonalSync("submarine_personal", submarineSync));
-        ImGui.TextWrapped("Both OFF by default. Requires local retention ON and fresh Testing pairing at https://test.gillions.app with the matching private permission. Never sent to production. Submarines include private names, workshop scope and activity times—not public community results. Disabling sync preserves retained state and all unrelated features.");
-        ImGui.TextWrapped(personalStatus);
-        if (ImGui.Button("Beastmaster local test")) beastmasterLocal.Show();
-        if (ImGui.Button("Submarine voyage retention")) submarineLocal.Show();
-        if (ImGui.Button("My Hunt Bills local test")) huntLocal.Show();
-        if (ImGui.Button("Private daily / weekly facts")) dashboardLocal.Show();
-        var routingLocation = configuration.ShareHuntRoutingLocation;
-        if (ImGui.Checkbox("Share my current location for Hunt route recommendations",ref routingLocation)) QueueUiAction(() => {
-            configuration.ShareHuntRoutingLocation=routingLocation; travelLocal.SetEnabled(routingLocation);
-            ClearTravelPending(); nextRetainerPresenceUtc = DateTime.MinValue; RequestConfigurationSave();
-        });
-        ImGui.TextWrapped("OFF by default. Private rounded current location and naturally viewed public teleports, latest-only RAM (45s). Only HTTPS test.gillions.app with a compatible paired Testing device and its separate travel permission. OFF cancels pending location uploads; Site expires its last context within 45s. Hunt and all unrelated sync are preserved. No movement history.");
-        ImGui.TextWrapped(travelStatus);
-        if (ImGui.Button("Private Hunt routing context")) travelLocal.Show();
-        ImGui.Separator();
-        var marketEnabled = marketContributor.Enabled;
-        if (ImGui.Checkbox("Contribute observed market data to Gillions", ref marketEnabled)) QueueUiAction(() => {
-            configuration.ContributeObservedMarketData = marketEnabled;
-            marketContributor.SetEnabled(marketEnabled); RequestConfigurationSave();
-        });
-        ImGui.TextWrapped("On by default. Gillions may use market listings and recent sales you naturally view to improve shared market information, without names or player/retainer identities in those observations. No active scanning. Existing pairing authenticates transport; this is not anonymous to the server. Independent of Automatic sync and Dalamud's own contribution setting.");
-        ImGui.TextWrapped(marketContributor.Status);
-#endif
-        DrawDiagnostics(view);
-        ImGui.End();
+        if (disposed) return;
+        publicUi.Draw();
+        settingsVisible = publicUi.Visible;
     }
 
     private void DrawPairingControls(PluginUiSnapshot view) {
-        ImGui.TextWrapped(SyncOrigin.TryNormalize(uiServerAddress, out var pairingOrigin)
-            ? $"Pair with {pairingOrigin}"
-            : "Enter a valid HTTPS server address under Connection details.");
+        ImGui.TextWrapped("Create a one-time code on Gillions, then paste it below. Never share your code.");
         ImGui.InputText("Pairing code", ref uiPairingCode, 256, ImGuiInputTextFlags.Password);
         ImGui.BeginDisabled(view.Pairing || string.IsNullOrWhiteSpace(uiPairingCode) || !SyncOrigin.TryNormalize(uiServerAddress, out _));
-        if (ImGui.Button(view.Pairing ? "Connectingâ€¦" : "Pair this device")) {
+        if (ImGui.Button(view.Pairing ? "Connecting…" : "Pair this device")) {
             var code = uiPairingCode.Trim(); var address = uiServerAddress; uiPairingCode = "";
             QueueUiAction(() => { configuration.PairingCode = code; configuration.ServerUrl = address; _ = PairAsync(); });
         }
         ImGui.EndDisabled();
-    }
-
-    private void DrawDiagnostics(PluginUiSnapshot view) {
-        ImGui.Separator();
-        diagnosticsExpanded = ImGui.CollapsingHeader("Diagnostics");
-        if (!diagnosticsExpanded) return;
-#if GILLIONS_TEST_BUILD
-        ImGui.TextWrapped("Testing diagnostics record automatically. Diagnostic entries stay local and may include gameplay details. Review copied reports before sharing.");
-        if (ImGui.Button("Advanced FATE diagnostics")) fateLocal.Show();
-#else
-        ImGui.TextWrapped("Diagnostic recording is off by default and stays on this PC. It never uploads logs, chat text, credentials, or device identifiers. Start it only when reproducing a sync problem; review copied gameplay details before sharing.");
-        if (!view.Recording) {
-            if (ImGui.Button("Start 10-minute diagnostic recording")) QueueUiAction(() => {
-                lock (diagnosticsLock) diagnostics.Clear();
-                diagnosticRecordingUntilUtc = DateTime.UtcNow.AddMinutes(10);
-                RecordDiagnostic("Manual diagnostic recording started.");
-            });
-        } else {
-            ImGui.TextDisabled($"Recording: {Math.Max(1, (int)Math.Ceiling((view.RecordingUntil - DateTime.UtcNow).TotalMinutes))} minute(s) remaining");
-            if (ImGui.Button("Stop diagnostic recording")) QueueUiAction(() => {
-                RecordDiagnostic("Manual diagnostic recording stopped."); diagnosticRecordingUntilUtc = DateTime.MinValue;
-            });
-        }
-#endif
-        if (view.Diagnostics.Length == 0) { ImGui.TextDisabled("No diagnostic entries recorded."); return; }
-        if (ImGui.Button("Copy diagnostic report")) {
-#if GILLIONS_TEST_BUILD
-            const string channel = "Testing";
-#else
-            const string channel = "Public";
-#endif
-            ImGui.SetClipboardText($"Gillions Game Sync {PluginVersion} ({channel})\n" + string.Join("\n", view.Diagnostics));
-        }
-        ImGui.SameLine();
-        if (ImGui.Button("Clear diagnostics")) QueueUiAction(() => { lock (diagnosticsLock) diagnostics.Clear(); });
-        foreach (var line in view.Diagnostics) ImGui.TextWrapped(line);
     }
 
     private bool HasPairedSession => SyncOwnershipPolicy.IsBoundSession(configuration.ActiveSession,
@@ -1580,16 +1424,17 @@ public sealed class Plugin : IDalamudPlugin {
         partyFinderLinkProcessor = new();
 #endif
         lock (diagnosticsLock) diagnostics.Clear();
-        uiState = PluginUiSnapshot.Empty; uiBudget = null; uiAvailability = ""; nextUiDetailsUtc = DateTime.MinValue;
+        uiState = PluginUiSnapshot.Empty;
         uiRefreshPolicy.Reset();
         gilLedgerDirty = false; nextInventorySyncUtc = DateTime.MaxValue; nextGilLedgerUploadUtc = DateTime.MaxValue;
     }
 
-    private void OnLogin() { logoutPending = false; ResetSessionContext(); }
-    private void OnLogout(int type, int code) { logoutPending = true; ResetSessionContext(); }
+    private void OnLogin() { logoutPending = false; huntProgress.Invalidate(endTerritorySession: true); ResetSessionContext(); }
+    private void OnLogout(int type, int code) { logoutPending = true; huntProgress.Invalidate(endTerritorySession: true); ResetSessionContext(); }
     private void ResetSessionContext() {
         if (disposed) return;
         requestLifetime.Invalidate(); ClearTransientState(); ClearRetainerServerAcceptance();
+        huntProgress.Invalidate(); huntLocal?.ClearProgress();
 #if GILLIONS_TEST_BUILD
         travelAccepted = false; travelBinding = ""; ClearTravelPending(); travelLocal?.ClearSession();
         fateLocal?.ClearAuthorization(); // account/session changes discard any diagnostic unsent epoch
@@ -1608,6 +1453,7 @@ public sealed class Plugin : IDalamudPlugin {
         var contentId = clientState.IsLoggedIn && !logoutPending ? ReadLocalContentId() : 0;
         var generation = HasPairedSession ? configuration.ActiveSession!.Generation : "";
         if (contentId != activeRetainerCharacterContentId || generation != activeGeneration) {
+            if (contentId != activeRetainerCharacterContentId) huntProgress.Invalidate(endTerritorySession: true);
             ResetSessionContext();
             activeRetainerCharacterContentId = contentId; activeGeneration = generation;
 #if GILLIONS_TEST_BUILD
@@ -1711,17 +1557,18 @@ public sealed class Plugin : IDalamudPlugin {
         var session=configuration.ActiveSession;
         var source=fateLocal.ObservedSource;
         string binding=HasPairedSession && activeOwnedState is not null && session?.Origin==FateDiscovery.Origin
-            && fateLocal.ContextReady && FatePolicy.Compatible(source)
+            && FatePolicy.Compatible(source)
             ? $"{session.Generation}:{activeRetainerCharacterContentId}:{fateLocal.Epoch}" : "";
         fateSender.Bind(binding,fateLocal.Epoch);
         fateSender.Maintain(now,clock);
-        if(binding.Length==0) { fateLocal.CancelUnsent(); fateLocal.RemoteStatus=fateSender.Status; return; }
+        if(binding.Length==0) { fateLocal.SetAuthorized(false); fateLocal.CancelUnsent(); fateLocal.RemoteStatus=fateSender.Status; return; }
         if(fateSender.Discover(clock)) {
             var permit=CapturePermit(SyncRequestMode.Manual);
             _=DiscoverFateAsync(permit,binding,fateLocal.Epoch,source!,fateSender.Cancellation);
         }
+        fateLocal.SetAuthorized(fateSender.Authorized(now,clock));
         if(!fateSender.Authorized(now,clock)) fateLocal.CancelUnsent();
-        else if(fateSender.Take(fateLocal.Prepared,source!,session!.Generation,now,clock) is { } batch) {
+        else if(fateLocal.ContextReady && fateSender.Take(fateLocal.Prepared,source!,session!.Generation,now,clock) is { } batch) {
             var permit=CapturePermit(SyncRequestMode.Manual);
             _=ContributeFateAsync(permit,binding,batch,source!,fateSender.Cancellation);
         }
@@ -1729,14 +1576,14 @@ public sealed class Plugin : IDalamudPlugin {
             +(fateSender.LastAcknowledged is { } ack ? $" Last acknowledgement {ack:O}; request {fateSender.LastRequestMilliseconds:F2} ms." : "");
     }
     private bool FateRequestCurrent(SyncRequestPermit permit,string binding,long epoch,CancellationToken cancellation) =>
-        FateTransportPolicy.CanCommit(PermitIsCurrent(permit),fateLocal.ContextReady
-            && fateLocal.Epoch==epoch && fateSender.Binding==binding && permit.Origin==FateDiscovery.Origin,cancellation);
+        FateTransportPolicy.CanCommit(PermitIsCurrent(permit),fateLocal.Epoch==epoch
+            && fateSender.Binding==binding && permit.Origin==FateDiscovery.Origin,cancellation);
     private async Task<HttpResponseMessage> DispatchFateAsync(HttpRequestMessage request,SyncRequestPermit permit,
         string binding,long epoch,CancellationToken cancellation,bool contribution) {
         Task<HttpResponseMessage>? pending=null;
         await framework.RunOnFrameworkThread(()=> {
             if(!FateRequestCurrent(permit,binding,epoch,cancellation)
-                || contribution && !fateSender.Authorized(DateTime.UtcNow,Environment.TickCount64)) throw new OperationCanceledException();
+                || contribution && (!fateLocal.ContextReady || !fateSender.Authorized(DateTime.UtcNow,Environment.TickCount64))) throw new OperationCanceledException();
             // Dispatch under the same framework gate used by existing personal
             // transports; no await gap between final admission and SendAsync.
             pending=personalHttp.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,cancellation);
@@ -2296,10 +2143,10 @@ public sealed class Plugin : IDalamudPlugin {
 
     public void Dispose() {
         if (disposed) return;
+        huntLocal.Dispose();
 #if GILLIONS_TEST_BUILD
         beastmasterLocal.Dispose();
         submarineLocal.Dispose();
-        huntLocal.Dispose();
         dashboardLocal.Dispose();
         fateSender.Dispose();
         fateLocal.Invalidated -= InvalidateFateSender;
@@ -2321,6 +2168,7 @@ public sealed class Plugin : IDalamudPlugin {
 #endif
         pluginInterface.UiBuilder.Draw -= DrawSettings;
         pluginInterface.UiBuilder.OpenConfigUi -= OpenSettings;
+        publicUi.Dispose();
         commands.RemoveHandler(CommandName);
         partyFinderContributor.Dispose();
         partyFinderHttp.Dispose();
@@ -2345,9 +2193,12 @@ internal sealed record CapturedSnapshotBatch(string CharacterName, string Charac
 
 [Newtonsoft.Json.JsonConverter(typeof(LegacyPlanConfigurationConverter))]
 public sealed class PluginConfiguration : IPluginConfiguration {
+    public bool ShowHuntProgress { get; set; }
+    public bool LockHuntProgressPosition { get; set; }
+    public bool OnboardingCompleted { get; set; }
+    public HuntBillRetention HuntBills { get; set; } = new();
 #if GILLIONS_TEST_BUILD
     public SubmarineVoyageRetention SubmarineVoyages { get; set; } = new();
-    public HuntBillRetention HuntBills { get; set; } = new();
     public DashboardRetention DashboardFacts { get; set; } = new();
     public PersonalSyncState PersonalSync { get; set; } = new();
     public bool SyncPersonalHunts { get; set; }

@@ -1,4 +1,3 @@
-#if GILLIONS_TEST_BUILD || GILLIONS_PERSONAL_STATE_TESTS || GILLIONS_SUBMARINE_TESTS || GILLIONS_DASHBOARD_TESTS || GILLIONS_TRAVEL_TESTS
 using System;
 using System.Linq;
 using System.Text.Json;
@@ -17,4 +16,3 @@ internal static class PersonalObservationCompatibility {
         && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_');
     internal static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
 }
-#endif

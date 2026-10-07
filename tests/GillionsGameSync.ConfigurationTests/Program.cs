@@ -84,6 +84,26 @@ var pathForFixture = configurations.GetConfigFile(product).FullName;
 var savedViaPlugin = DispatchProxy.Create<IDalamudPluginInterface, ConfigurationSaveProxy>();
 var saveProxy = (ConfigurationSaveProxy)savedViaPlugin;
 saveProxy.Save = config => File.WriteAllText(pathForFixture, (string)serialize.Invoke(null, [config])!);
+var publicPreferences = new[] { "ShowHuntProgress", "LockHuntProgressPosition", "OnboardingCompleted" };
+var publicUpgrade = JsonConvert.DeserializeObject("{\"AutomaticSync\":false,\"EnableItemLinkRequests\":false,\"DeviceToken\":\"SYNTHETIC-DEVICE-TOKEN\",\"EnablePartyFinderContributions\":false,\"EnableGillionsPartyFinderContributions\":false,\"ContributeObservedMarketData\":false}", configurationType)!;
+Assert(publicPreferences.All(n => !(bool)configurationType.GetProperty(n)!.GetValue(publicUpgrade)!),
+    "Stable and Testing upgrades must default new presentation/onboarding fields OFF without reconsent.");
+foreach (var name in publicPreferences) configurationType.GetProperty(name)!.SetValue(publicUpgrade, true);
+configurationType.GetMethod("Save")!.Invoke(publicUpgrade, [savedViaPlugin]);
+var publicRestart = load.Invoke(configurations, [product])!;
+Assert(publicPreferences.All(n => (bool)configurationType.GetProperty(n)!.GetValue(publicRestart)!),
+    "Actual Dalamud persistence lost public presentation preferences.");
+configurationType.GetProperty("ShowHuntProgress")!.SetValue(publicRestart, false);
+configurationType.GetMethod("Save")!.Invoke(publicRestart, [savedViaPlugin]);
+publicRestart = load.Invoke(configurations, [product])!;
+Assert(!(bool)configurationType.GetProperty("ShowHuntProgress")!.GetValue(publicRestart)!
+    && !(bool)configurationType.GetProperty("AutomaticSync")!.GetValue(publicRestart)!
+    && !(bool)configurationType.GetProperty("EnableItemLinkRequests")!.GetValue(publicRestart)!
+    && !(bool)partyFinderOptIn.GetValue(publicRestart)! && !(bool)intakeOptIn.GetValue(publicRestart)!
+    && (string)configurationType.GetProperty("DeviceToken")!.GetValue(publicRestart)! == "SYNTHETIC-DEVICE-TOKEN"
+    && (!testingProduct || !(bool)configurationType.GetProperty("ContributeObservedMarketData")!.GetValue(publicRestart)!),
+    "Hunt Progress OFF changed old credentials, ordinary sync, website commands or contribution choices.");
+Console.WriteLine($"Actual public preferences default/upgrade/restart/OFF isolation PASS: {product}.");
 var marketSetting = configurationType.GetProperty("ContributeObservedMarketData");
 var personalHuntSetting = configurationType.GetProperty("SyncPersonalHunts");
 var personalSubSetting = configurationType.GetProperty("SyncPersonalSubmarines");
@@ -266,6 +286,18 @@ if (testingProduct) {
 
 var huntProperty = configurationType.GetProperty("HuntBills");
 var huntType = pluginAssembly.GetType("GillionsGameSync.HuntBillLocalView");
+var displayReader=System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(huntType!);
+var displayStore=Activator.CreateInstance(pluginAssembly.GetType("GillionsGameSync.HuntBillRetention",true)!)!;
+const BindingFlags localFlags=BindingFlags.NonPublic|BindingFlags.Instance;
+huntType!.GetField("store",localFlags)!.SetValue(displayReader,displayStore);
+Assert(!(bool)huntType.GetProperty("ReadEnabled",localFlags)!.GetValue(displayReader)!,"Both local choices OFF must stop Hunt reads.");
+huntType.GetProperty("ProgressRequested",localFlags)!.SetValue(displayReader,true);
+Assert((bool)huntType.GetProperty("ReadEnabled",localFlags)!.GetValue(displayReader)!
+    && !(bool)displayStore.GetType().GetProperty("LocalRetentionEnabled")!.GetValue(displayStore)!,
+    "Display-only Hunt reads must not grant retention or upload permission.");
+huntType.GetProperty("ProgressRequested",localFlags)!.SetValue(displayReader,false);
+Assert(!(bool)huntType.GetProperty("ReadEnabled",localFlags)!.GetValue(displayReader)!,"Display OFF must stop RAM-only Hunt reads.");
+Console.WriteLine($"Packaged Hunt Progress RAM-only/default-OFF/read isolation PASS: {product}.");
 if (testingProduct) {
     Assert(huntProperty is not null && huntType is not null, "Testing Hunt collection missing from actual binary.");
     var huntConfig = Activator.CreateInstance(configurationType)!;
@@ -287,8 +319,12 @@ if (testingProduct) {
     var huntOff = huntProperty.GetValue(load.Invoke(configurations, [product]))!;
     Assert(!(bool)huntOff.GetType().GetProperty("LocalRetentionEnabled")!.GetValue(huntOff)!, "Hunt opt-out did not survive actual serializer.");
     Console.WriteLine("Actual Hunt Testing-only/default-OFF/private-state/UTC/identity/opt-out Save/load passed; no native collection.");
-} else Assert(huntProperty is null && huntType is null && pluginAssembly.GetType("GillionsGameSync.HuntBillRetention") is null,
-    "Stable must not contain Hunt collector/retention.");
+} else {
+    Assert(huntProperty is not null && huntType is not null && pluginAssembly.GetType("GillionsGameSync.PersonalSyncPolicy") is null,
+        "Public Hunt Progress must reuse the local reader without promoting personal upload transport.");
+    var local = huntProperty!.GetValue(Activator.CreateInstance(configurationType))!;
+    Assert(!(bool)local.GetType().GetProperty("LocalRetentionEnabled")!.GetValue(local)!,"Stable Hunt Progress must not enable retained history.");
+}
 
 // Type metadata deliberately names retired types. Dalamud LoadForType and the
 var dashboardProperty = configurationType.GetProperty("DashboardFacts");

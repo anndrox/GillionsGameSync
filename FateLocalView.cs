@@ -19,7 +19,7 @@ namespace GillionsGameSync;
 
 // Maintained IFateTable/IFate only. No unsafe code, actor enumeration, native
 // requests, game writes, UI scraping or raw addresses. Diagnostics are RAM-only
-// and must be explicitly started for this local Testing measurement session.
+// collection is controlled solely by fresh authenticated Site policy discovery.
 internal sealed class FateLocalView : IDisposable {
     private readonly IDalamudPluginInterface ui;
     private readonly ICommandManager commands;
@@ -43,6 +43,11 @@ internal sealed class FateLocalView : IDisposable {
     internal FatePrepared? Prepared => state.Prepared;
     internal long Epoch => state.Epoch;
     internal bool Measuring => measuring && !disposed;
+    internal void SetAuthorized(bool authorized) {
+        if (measuring == authorized || disposed) return;
+        measuring = authorized;
+        if (!authorized) { state.ForgetObservations(); view=new("Waiting for supported context or Gillions authorization.",null,[],measurements.Snapshot(),0); }
+    }
     // Managed settlement state only: sender maintenance never invokes Context()
     // or adds player/location/game-memory reads between five-second passes.
     internal bool ContextReady => Measuring && settled is not null && settleEpoch==state.Epoch;
@@ -58,7 +63,7 @@ internal sealed class FateLocalView : IDisposable {
         try { source=Source(); } catch (Exception) { source=null; }
         client.Login+=Invalidate; client.Logout+=Logout; client.ZoneInit+=Zone;
         client.TerritoryChanged+=Changed; client.InstanceChanged+=Changed; client.MapIdChanged+=Changed;
-        commands.AddHandler("/gillionsfates",new CommandInfo((_,_)=>Show()) { HelpMessage="Testing local FATE measurements (RAM only; no sends without Site admission)." });
+        commands.AddHandler("/gillionsfates",new CommandInfo((_,_)=>Show()) { HelpMessage="Testing FATE diagnostics only; collection starts automatically when Gillions permits it." });
         ui.UiBuilder.Draw+=Draw;
     }
     private string GameVersion() => data.GameData.Repositories.TryGetValue("ffxiv",out var repo) ? repo.Version : "unavailable";
@@ -180,17 +185,13 @@ internal sealed class FateLocalView : IDisposable {
         +$"Remote: {RemoteStatus}\n"
         +"Rows: "+JsonSerializer.Serialize(view.Rows,FatePolicy.Json)+"\n"
         +"Samples: "+JsonSerializer.Serialize(view.Costs,FatePolicy.Json);
-    private void Start() {
-        measurements=new(); summary="No measured samples."; measuring=true; Invalidate();
-    }
-    private void Stop() { measuring=false; Invalidate(); view=new("Diagnostic session stopped; volatile observations discarded. No sends.",null,[],measurements.Snapshot(),0); }
+    private void ResetMeasurements() { measurements=new(); summary="No measured samples."; }
     private void Draw() {
         if (!visible || disposed) return;
         ImGui.SetNextWindowSize(new System.Numerics.Vector2(760,480),ImGuiCond.FirstUseEver);
         if (!ImGui.Begin("Advanced Testing FATE diagnostics",ref visible)) { ImGui.End(); return; }
-        ImGui.TextWrapped("Read-only public overworld observations. No player coordinates, persistent history or gameplay writes. Remote contributions require the independent Site/account FATE policy and exact TEST admission. Starting a measurement session does not grant consent. Missing state is UNKNOWN. Measurements stay in bounded RAM.");
-        if (!measuring) { if (ImGui.Button("Start local measurement session")) _=framework.RunOnFrameworkThread(()=> { if (!disposed) Start(); }); }
-        else if (ImGui.Button("Stop local measurement session")) _=framework.RunOnFrameworkThread(()=> { if (!disposed) Stop(); });
+        ImGui.TextWrapped("Read-only public overworld observations start automatically with a fresh Gillions policy grant and supported context. No player coordinates, persistent history or gameplay writes. Missing state is UNKNOWN. Diagnostics cannot start or authorize collection.");
+        if (ImGui.Button("Reset measurement counters")) _=framework.RunOnFrameworkThread(()=> { if (!disposed) ResetMeasurements(); });
         ImGui.TextWrapped(view.Status);
         ImGui.TextWrapped("Remote contribution: "+RemoteStatus);
         ImGui.TextWrapped(summary);

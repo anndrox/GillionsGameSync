@@ -28,7 +28,12 @@ assert 'var after=Context()' in tick and 'epoch!=state.Epoch || count!=table.Len
 assert 'count is <0 or >FatePolicy.MaximumRows' in tick and 'i<count' in tick
 assert 'definition.Value.EurekaFate!=0' in tick
 assert 'nextRead=' not in native.split('private void Invalidate()',1)[1].split('internal void ClearAuthorization',1)[0]
-assert 'nextRead=' not in native.split('private void Start()',1)[1].split('private void Draw()',1)[0]
+assert 'nextRead=' not in native.split('private void ResetMeasurements()',1)[1].split('private void Draw()',1)[0]
+assert 'Start local measurement session' not in native and 'Stop local measurement session' not in native
+assert 'internal void SetAuthorized(bool authorized)' in native and 'state.ForgetObservations()' in native
+assert 'fateLocal.SetAuthorized(HasPairedSession' in plugin
+assert 'else if(fateLocal.ContextReady && fateSender.Take' in plugin
+assert '&& fateLocal.ContextReady && FatePolicy.Compatible(source)' not in plugin
 assert 'measuring=true' not in native.split('internal FateLocalView',1)[1].split('private string GameVersion',1)[0]
 assert 'fateLocal.Tick(now)' in plugin and 'fateLocal.Dispose()' in plugin and 'fateLocal?.ClearAuthorization()' in plugin
 config = plugin.split('public sealed class PluginConfiguration',1)[1]

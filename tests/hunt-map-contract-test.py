@@ -51,7 +51,9 @@ assert 'if (presenceInFlight || personalInFlight || now < nextHuntFocusPresenceU
 tick=p.split('private void TickHuntFocus',1)[1].split('private void ClearTravelPending',1)[0]
 assert 'SendCurrentRetainerPresence' in tick and 'Capture' not in tick and 'travelLocal' not in tick
 assert 'huntFocus.Clear(); nextHuntFocusPresenceUtc = DateTime.MinValue;' in p
-assert 'huntFocusActiveDiagnostic ? "active (ephemeral)"' in p # Draw reads managed status only, no native pointers.
+public_ui=(root/'PluginPublicUi.cs').read_text(encoding='utf-8')
+assert 'private void DrawHuntProgress()' in public_ui and 'Native' not in public_ui.split('private void DrawHuntProgress()',1)[1]
+assert 'huntFocusActiveDiagnostic = HuntFocusActive(now)' in p # Existing managed focus signal remains, not a public privacy mirror.
 assert 'HuntMapTransport.Deadline(permit.Cancellation, CancellationToken.None)' in p
 assert 'SyncResponsePolicy.ReadAsync(response.Content, responseCancellation)' in p
 print('Hunt V2/focus source/priority/independent permission/ephemeral privacy/compatibility boundaries PASS')

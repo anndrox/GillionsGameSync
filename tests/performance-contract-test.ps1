@@ -60,9 +60,11 @@ Assert-NotContains $presenceBody "nextAutomaticSyncUtc" "Presence must not reset
 Assert-NotContains $presenceBody "RequestConfigurationSave" "Unchanged presence acceptance must not save configuration."
 Assert-Contains $pluginSource "nextRetainerUploadUtc" "Retainer uploads must have an independent due deadline."
 
-Assert-Contains $pluginSource "Start 10-minute diagnostic recording" "Public diagnostics must be explicitly started by the user."
+$publicUi = Get-Content -LiteralPath (Join-Path $pluginRoot "PluginPublicUi.cs") -Raw
+Assert-Contains $publicUi "Copy support summary" "Public support must use the safe summary, not raw recorded logs."
+Assert-NotContains $publicUi "Copy diagnostic report" "Normal UI must not export raw gameplay diagnostics."
 Assert-Contains $pluginSource "if (!IsDiagnosticRecording) return;" "Public diagnostics must remain idle by default."
 Assert-Contains $pluginSource "if (diagnostics.Count > 40)" "Diagnostic history must remain bounded."
-Assert-Contains $pluginSource "It never uploads logs, chat text, credentials, or device identifiers." "The public UI must state the diagnostic privacy boundary."
+Assert-NotContains $pluginSource "private void DrawDiagnostics" "The retired raw diagnostic UI must not remain a second public support surface."
 
 Write-Output "Gillions Game Sync performance contract checks passed."

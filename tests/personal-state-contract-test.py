@@ -7,8 +7,9 @@ root = Path(__file__).resolve().parents[1]
 hunt = (root / "HuntBillLocalView.cs").read_text(encoding="utf-8")
 sub = (root / "SubmarineLocalView.cs").read_text(encoding="utf-8")
 plugin = (root / "Plugin.cs").read_text(encoding="utf-8")
+assert sub.startswith("#if GILLIONS_TEST_BUILD")
+assert '#if GILLIONS_TEST_BUILD\n    private void Draw()' in hunt
 for text in (hunt, sub):
-    assert text.startswith("#if GILLIONS_TEST_BUILD")
     assert "framework.Update" not in text
     assert not re.search(r"HttpClient|SendAsync|RequestData|HookFrom|FireCallback|ReceiveEvent|GetIpcSubscriber|ObjectTable", text)
     event = text.split("private unsafe void OnAddon" if text is sub else "internal unsafe void Tick", 1)[1]
@@ -32,7 +33,10 @@ assert "hunt->GetKillCount(index, t.TargetIndex)" in hunt and "!c.Valid(catalog[
 assert "GetAvailableHuntOrderRowId(index)" in hunt
 assert "chat.LogMessage += OnProgressMessage" in hunt and "chat.LogMessage -= OnProgressMessage" in hunt
 progress = hunt.split("private void OnProgressMessage",1)[1].split("private void OnTerritoryChanged",1)[0]
-assert "!store.LocalRetentionEnabled" in progress and "!framework.IsInFrameworkUpdateThread" in progress
+assert "!ReadEnabled" in progress and "!framework.IsInFrameworkUpdateThread" in progress
+assert 'private bool ReadEnabled => store.LocalRetentionEnabled || ProgressRequested' in hunt
+assert 'CoveragePayload(string key, DateTime now) => store.LocalRetentionEnabled' in hunt
+assert 'schedule.TryBegin(now, ReadEnabled, force)' in hunt
 assert "message.LogMessageId != HuntProgressMessage.LogId" in progress and "message.ParameterCount != 4" in progress
 assert all(f"TryGetIntParameter({n}," in progress for n in (1,2,3))
 assert not re.search("TryGetStringParameter|SourceEntity|TargetEntity|FormatLogMessage|ChatMessage|PreventOriginal|Address", progress)

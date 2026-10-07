@@ -23,5 +23,6 @@
     <Compile Include="..\..\DurableEvidenceBudget.cs" Link="DurableEvidenceBudget.cs" />
     <Compile Include="..\..\ObservationMaintenance.cs" Link="ObservationMaintenance.cs" />
     <Compile Include="..\..\PluginWindowModel.cs" Link="PluginWindowModel.cs" />
+    <Compile Include="..\..\PublicExperience.cs" Link="PublicExperience.cs" />
   </ItemGroup>
 </Project>

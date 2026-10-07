@@ -1,4 +1,3 @@
-#if GILLIONS_TEST_BUILD || GILLIONS_PERSONAL_STATE_TESTS
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,7 +19,7 @@ public sealed record HuntBillObservation(byte BillTypeId, string Category, byte 
 internal sealed class HuntTargetPresentation(Func<uint, string?> resolveName) {
     internal const int MaximumNames = 512;
     private readonly Dictionary<uint, string> names = new();
-    internal string TargetLine(HuntBillTarget target) {
+    internal string TargetName(HuntBillTarget target) {
         if (!names.TryGetValue(target.NpcNameId, out var name)) {
             string? value;
             try { value = resolveName(target.NpcNameId); } catch (Exception) { value = null; }
@@ -28,8 +27,9 @@ internal sealed class HuntTargetPresentation(Func<uint, string?> resolveName) {
             if (name.Length == 0) name = "Target name unavailable";
             if (names.Count < MaximumNames) names[target.NpcNameId] = name;
         }
-        return $"  {name} — {target.ObservedKills}/{target.RequiredKills} kills (target ID {target.TargetId}; NPC name ID {target.NpcNameId})";
+        return name;
     }
+    internal string TargetLine(HuntBillTarget target) => $"  {TargetName(target)} — {target.ObservedKills}/{target.RequiredKills} kills (target ID {target.TargetId}; NPC name ID {target.NpcNameId})";
 }
 
 // Managed admission/cadence only. No native pointers, requests or ownership inference.
@@ -234,4 +234,3 @@ internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
         }, PersonalObservationCompatibility.Json);
     }
 }
-#endif

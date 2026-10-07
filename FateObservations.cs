@@ -142,6 +142,9 @@ internal sealed class FateEpochState {
         if (Prepared is not null && !FatePolicy.Fresh(Prepared.OldestObservation,now)) Prepared=null;
     }
     internal void CancelUnsent() => Prepared=null;
+    // Policy loss clears observations and terminal support without changing the
+    // context epoch that discovery is authorizing. No pre-consent replay.
+    internal void ForgetObservations() { Prepared=null; Current=[]; timedOccurrences.Clear(); lastPrepared=DateTime.MinValue; LastChanged=false; }
 }
 
 internal sealed record FateCost(double ReadMilliseconds, long ReadBytes, double PrepareMilliseconds,

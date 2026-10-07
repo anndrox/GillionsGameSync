@@ -30,6 +30,7 @@
     <PathMap>$(MSBuildProjectDirectory)=/_/GillionsGameSync</PathMap>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="assets/GillionsGameSync-icon-v4.png" LogicalName="GillionsGameSync.Branding.png" />
     <Compile Remove="tests\**\*.cs" />
     <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
       <_Parameter1>GillionsPublicBaseUrl</_Parameter1>
@@ -43,7 +44,7 @@
   <!-- A separate Dalamud identity keeps the test repository from updating or
        sharing configuration with the stable member plugin. -->
   <PropertyGroup Condition="'$(GillionsTestBuild)' == 'true'">
-    <Version>0.0.86</Version>
+    <Version>0.0.87</Version>
     <AssemblyName>GillionsGameSyncTest</AssemblyName>
     <Name>Gillions Game Sync Testing</Name>
     <Punchline>Unreleased Gillions sync test build.</Punchline>

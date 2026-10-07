@@ -1,5 +1,26 @@
 # Privacy
 
+## Unpublished public UX candidate
+
+The public UI directs users to the paired origin's `/gillions-sync` privacy/data
+controls. It exposes no new local contribution or privacy toggle. Historical local
+permissions remain unchanged in configuration and still gate their transports;
+this is preserved upgrade state, not a completed Site-policy migration. The
+candidate must not be published until the missing Site authority/discovery contract
+is reconciled. Market intake availability is not account contribution consent.
+
+Hunt Progress stores only presentation preferences. Its fresh current-area rows
+are session-local and cannot change Hunt selection, retained history, routes,
+website commands or permissions. Unavailable sources hide numeric rows. Current
+item coverage does not prove exact order/reset ownership, so the stronger runtime
+all-current-targets-complete statement remains unsupported and fails closed.
+
+FATE discovery is automatic; collection and sending still require fresh exact Site
+policy. Authorization loss discards unsent RAM state without resetting the read
+cadence or replaying pre-consent data. The copy-safe public support summary admits
+only fixed status labels, bounded version strings and last-sync time; it excludes
+character names, credentials, raw exceptions and gameplay payloads.
+
 ## Testing 0.0.81 ephemeral Active Hunt focus
 
 Exact TEST presence may request `active_hunt_focus_v1` only with existing explicit

@@ -6,6 +6,7 @@ $adapter = [IO.File]::ReadAllText((Join-Path $root 'PartyFinderContribution.cs')
 $core = [IO.File]::ReadAllText((Join-Path $root 'PartyFinderContributionCore.cs'))
 $intake = [IO.File]::ReadAllText((Join-Path $root 'GillionsPartyFinderContributor.cs'))
 $plugin = [IO.File]::ReadAllText((Join-Path $root 'Plugin.cs'))
+$publicUi = [IO.File]::ReadAllText((Join-Path $root 'PluginPublicUi.cs'))
 $project = [IO.File]::ReadAllText((Join-Path $root 'GillionsGameSync.csproj'))
 $behavior = [IO.File]::ReadAllText((Join-Path $root 'tests/GillionsGameSync.PartyFinderTests/Program.cs'))
 
@@ -46,9 +47,9 @@ Require $adapter.Contains('if (disposed || !enabled()) return;') 'Disabled contr
 Require ($adapter.Contains('XivpfEndpointPolicy.RequireBuildSafe(endpoint, true)') -and $core.Contains('endpoint != ProductionEndpoint') -and $core.Contains('endpoint != GillionsPartyFinderContributor.Endpoint')) 'Built products must enforce fixed Gillions testing intake and the official stable remote endpoint.'
 Require ($adapter.Contains('ordinary Gillions Game Sync remains active') -and $adapter.Contains('new DisabledPartyFinderContributor()')) 'Unsafe contribution configuration must fail closed without disabling ordinary Game Sync.'
 Require $plugin.Contains('EnablePartyFinderContributions { get; set; } = false') 'Party Finder contribution must be off by default.'
-Require $plugin.Contains('partyFinderContributor.SetEnabled(enablePartyFinderContributions)') 'The setting must apply opt-out clearing immediately.'
-Require ($plugin.IndexOf('RequestConfigurationSave();', $plugin.IndexOf('configuration.EnablePartyFinderContributions = enablePartyFinderContributions;', [StringComparison]::Ordinal), [StringComparison]::Ordinal) -lt $plugin.IndexOf('partyFinderContributor.SetEnabled(enablePartyFinderContributions)', [StringComparison]::Ordinal)) 'Opt-out persistence must be requested before cancellation is applied.'
-Require $plugin.Contains('Util.OpenLink("https://xivpf.com")') 'The settings disclosure must visibly link to xivpf.com.'
+Require ($intake.Contains('public void SetEnabled') -and $intake.Contains('Cancel')) 'Transport must preserve cancellation/opt-out clearing while the public Site policy contract is reconciled.'
+Require (-not $publicUi.Contains('configuration.EnablePartyFinderContributions =') -and -not $publicUi.Contains('configuration.EnableGillionsPartyFinderContributions =')) 'Public UI must not override Site privacy policy; legacy permissions stay inert/preserved pending contract reconciliation.'
+Require $publicUi.Contains('Util.OpenLink("https://xivpf.com")') 'Attribution must visibly link to xivpf.com.'
 $tick = $plugin.IndexOf('partyFinderContributor.Tick(now)', [StringComparison]::Ordinal)
 $pairingGate = $plugin.IndexOf('if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;', [StringComparison]::Ordinal)
 Require ($tick -ge 0 -and $pairingGate -gt $tick) 'Party Finder contribution must remain independent from Gillions pairing and login sync gates.'
@@ -56,7 +57,7 @@ Require ($project.Contains('https://xivpf.com/contribute/multiple') -and $projec
 Require $plugin.Contains('EnableGillionsPartyFinderContributions { get; set; } = false') 'New recipient must require a separate local opt-in.'
 Require ($plugin.Contains('CapturePartyFinderSession') -and $plugin.Contains('configuration.ActiveSession!.Origin != GillionsPartyFinderContributor.ApprovedTestingOrigin') -and $plugin.Contains('GillionsPartyFinderContributor.SessionEndpoint(permit.Origin)') -and $plugin.Contains('RequirePermit(permit);')) 'Authenticated intake must remain bound to the approved current TEST paired session.'
 Require (-not $project.Contains('https://gillions.app/api/game-sync/party-finder/contribute') -and -not $intake.Contains('https://gillions.app/api/game-sync/party-finder/contribute')) 'Testing PF must have no production fallback.'
-Require ($plugin.Contains('Data provided by xivpf.com') -and -not $plugin.Contains('Powered by xivpf.com')) 'User-facing xivpf attribution wording must match the owner direction.'
+Require ($publicUi.Contains('Data provided by xivpf.com') -and -not $publicUi.Contains('Powered by xivpf.com')) 'User-facing xivpf attribution wording must match the owner direction.'
 Require ($plugin.Contains('NativePartyFinderLinkFactory.Create(r)') -and $plugin.Contains('ConsumePartyFinderLinkAsync') -and $plugin.Contains('requestLifetime.InvalidateItemLinks();') -and $plugin.Contains('PartyFinderLinkPolicy.Parse')) 'PF requests must use shared item polling/consume, native factory, strict validation and lifetime invalidation.'
 Require ($plugin.Contains('? await SendNativePartyFinderAsync(pollRequest, permit)') -and $plugin.Contains('await SendNativePartyFinderAsync(consumeRequest, permit)') -and $plugin.Contains('pending = partyFinderHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, permit.Cancellation);')) 'PF-capable shared polls/consumes must use the no-redirect client, not the default redirect-following ordinary transport.'
 Require ($adapter.Contains('new GillionsPartyFinderContributor') -and $intake.Contains('MaximumBodyBytes = 262144') -and $intake.Contains('Take(batchLimit)') -and $intake.Contains('batchLimit = 100')) 'Testing transport must implement bounded contract batches.'
