@@ -44,7 +44,7 @@ assert 'nextReadUtc = now.AddSeconds(3)' in (root/'HuntBills.cs').read_text()
 assert 'Hunt coverage timing:' in plugin and 'Numeric local timings only; no identity/payload logged.' in plugin
 assert 'huntCoverageSync' not in plugin.split('public sealed class PluginConfiguration',1)[1]
 assert 'itemCoverage' not in plugin.split('public sealed class PluginConfiguration',1)[1]
-assert 'SyncPersonalHunts && configuration.HuntBills.LocalRetentionEnabled' in plugin
+assert 'PermissionEnabled("personalHunts", configuration.SyncPersonalHunts) && configuration.HuntBills.LocalRetentionEnabled' in plugin
 assert 'HuntCoverageHeader = "X-Gillions-Hunt-Item-Coverage"' in contract
 assert 'entries.Length == 1' in contract and '"hunt-bills-v2"' in contract
 example = json.loads((root / 'docs/examples/hunt-bills-v2.json').read_text())

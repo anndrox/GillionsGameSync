@@ -23,6 +23,7 @@ var endpoint = (Uri)pluginAssembly.GetType("GillionsGameSync.XivpfEndpoints", tr
     .GetProperty("ContributionUrl", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
 var testingProduct = pluginAssembly.GetName().Name == "GillionsGameSyncTest";
 FatePackagedTests.Run(pluginAssembly,testingProduct,fixturePath);
+PermissionPackagedTests.Run(pluginAssembly);
 HuntV2PackagedTests.Run(pluginAssembly, testingProduct, args.Length == 4 ? args[3] : null);
 HuntBillItemPackagedTests.Run(pluginAssembly, testingProduct);
 var intakeOptIn = configurationType.GetProperty("EnableGillionsPartyFinderContributions")!;

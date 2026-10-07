@@ -10,7 +10,8 @@ assert '!huntMapPollInFlight && huntMapPoll.TryBegin(now, focused)' in loop
 assert '!itemLinkPollInFlight' in loop and 'websiteItemPoll.TryBegin(now, focused)' in loop
 assert 'await' not in loop # unrelated item/PF cannot serialize Hunt behind it
 assert 'PollHuntMapRequestAsync' in loop and 'PollItemLinkRequestsAsync' in loop
-assert 'EnableItemLinkRequests && HasPairedSession' in loop
+assert 'WebsiteLinksEnabled && HasPairedSession' in loop
+assert 'HuntReceivingEnabled' in loop
 hunt=p.split('private bool HuntMapPermitted',1)[1].split('private bool PartyFinderLinksPermitted',1)[0]
 assert 'EnableItemLinkRequests' not in hunt and 'AutomaticSync' not in hunt and 'ShareHuntRoutingLocation' not in hunt
 assert 'CapturePermit(SyncRequestMode.Personal)' in hunt and 'HuntMapTransport.Deadline(permit.Cancellation, context.Token)' in hunt

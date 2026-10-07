@@ -18,7 +18,7 @@ assert "UseCookies = false" in (root / "PartyFinderContributionCore.cs").read_te
 assert "private readonly HttpClient marketHttp = PartyFinderHttp.CreateClient();" in plugin
 assert "public bool ContributeObservedMarketData { get; set; } = true;" in plugin
 capture = plugin.split("private MarketContributionSession? CaptureMarketSession()", 1)[1].split("private bool PermitIsCurrent", 1)[0]
-for guard in ["!framework.IsInFrameworkUpdateThread", "CurrentWorld.RowId", "ConditionFlag.BetweenAreas", "marketAcceptedGeneration", "RequirePermit(permit)", "!configuration.ContributeObservedMarketData", "permit.Token", "permit.Origin"]:
+for guard in ["!framework.IsInFrameworkUpdateThread", "CurrentWorld.RowId", "ConditionFlag.BetweenAreas", "marketAcceptedGeneration", "RequirePermit(permit)", "!MarketEnabled", "permit.Token", "permit.Origin"]:
     assert guard in capture, guard
 assert "now.AddMilliseconds(250)" in plugin and "marketSource.Dispose(); marketContributor.Dispose(); marketHttp.Dispose();" in plugin
 assert 'X-Gillions-Market-Contract' in plugin and 'MarketContributor.Compatible(responseJson)' in plugin

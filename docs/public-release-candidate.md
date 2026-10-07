@@ -1,8 +1,8 @@
 # Public Game Sync release candidate
 
 The unpublished Testing87 candidate prepares the approved compact UX and local
-Hunt Progress. It is not ready for public promotion: Site policy authority and
-Stable product admission remain unresolved. Testing86 and Stable30 stay published
+Hunt Progress. It is not ready for public promotion: final Stable capability wiring,
+product admission and owner approval remain held. Testing86 and Stable30 stay published
 unchanged. Do not install the prepared candidate as an accepted successor.
 
 ## Implemented presentation
@@ -57,27 +57,31 @@ Site policy/source admission, pairing and supported settled context. Discovery
 can bootstrap before settlement; sending cannot. Missing/OFF/expired/malformed
 authorization stops collection and discards unsent RAM. Reauthorization requires
 fresh observations. No manual activation loop, configuration permission, history,
-game request or additional location read is introduced. Current Site86 admission
-does not admit87. `/gillionsfates` only opens Testing diagnostics.
+game request or additional location read is introduced. Site admits the exact
+Testing86 and Testing87 source tuples. An ordinary authenticated presence reports
+the real successor before optional FATE discovery. `/gillionsfates` only opens
+Testing diagnostics.
 
-## Site contract gap
+## Site permission reconciliation
 
-The owner requires Site-only privacy/contribution authority. Current Market
-discovery reports intake availability, not an account preference, and its receiver
-has no matching account-policy check. Other permissions remain a mix of Testing
-enrollment/device grants and old local opt-ins. Hiding those local controls cannot
-make Site authoritative or safely migrate prior OFF choices. Historical choices
-remain unchanged and still gate transport in this unpublished candidate.
+Authenticated ordinary presence now supplies `permissionAuthority` revision 1
+with eight independent decisions and a 30-second lease. Native binds the response
+to the paired enrollment, rejects older issuance, and uses conservative issuer
+time plus a monotonic deadline. A malformed decision disables only that decision;
+an invalid root/binding disables the migrated authority without breaking ordinary
+sync. No generations, private data or extra credentials are persisted.
 
-Site Operations must provide the smallest compatible authority/discovery update
-for the existing contribution/private/request capabilities, plus public-product
-admission. Native must then reconcile each legacy choice against an explicit
-fresh Site grant, not automatically enable it. Do not infer privacy policy from
-feature health, service `enabled`, pairing or Active Hunt focus. No new endpoint,
-policy shape or production approval is invented here.
+Legacy decisions preserve historical local settings, including OFF. Fresh explicit
+Site ON/OFF supersedes those settings without mutating them. Item OFF does not
+disable explicit PF links; automatic-map OFF does not disable explicit Hunt Show.
+Site classifies and filters automatic commands on the unchanged wire contract.
+Permission transitions clear obsolete prepared contributions, while retained
+local history remains intact. OFF-to-ON requires fresh observations. Market's
+service acknowledgment is not consent. Public31 admission remains held.
 
 FATE schema1, PF, Market, ordinary sync, personal Hunt/submarine/travel and command
-payload contracts are unchanged. Exact new source admission is also required.
+payload contracts are unchanged. Actual Testing87 client acceptance is still a
+publication gate; source/fixture success alone does not satisfy it.
 Use **Data provided by xivpf.com** with a clickable link consistently on Site.
 
 ## Command and control inventory
@@ -95,7 +99,7 @@ Use **Data provided by xivpf.com** with a clickable link consistently on Site.
 | `/gillionshunts`, `/gillionssubs`, `/gillionsfacts`, `/gillionsbst` | Testing only | Existing focused local research/validation views; private exports remain explicitly labeled |
 | Old manual FATE Start/Stop session | Retired | Automatic Site-gated lifecycle only |
 | Raw public diagnostic report UI | Retired | Safe summary replaces raw log copying |
-| Old main privacy toggles, raw origin editor, feature panels | Retired UI | Legacy config remains preserved pending Site contract reconciliation |
+| Old main privacy toggles, raw origin editor, feature panels | Retired UI | Legacy config remains preserved; fresh explicit Site decisions supersede it |
 
 ## Validation and evidence limits
 
@@ -142,5 +146,5 @@ automatically only when Gillions authorizes them. Privacy controls live on Gilli
 Game Sync never moves, fights, teleports or automatically joins parties.
 
 These notes describe the intended accepted successor, not an available update.
-Final owner branding/accessibility approval and Site authority/admission remain
+Final owner branding/accessibility approval and Stable product admission remain
 required before public release readiness.

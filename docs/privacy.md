@@ -4,10 +4,22 @@
 
 The public UI directs users to the paired origin's `/gillions-sync` privacy/data
 controls. It exposes no new local contribution or privacy toggle. Historical local
-permissions remain unchanged in configuration and still gate their transports;
-this is preserved upgrade state, not a completed Site-policy migration. The
-candidate must not be published until the missing Site authority/discovery contract
-is reconciled. Market intake availability is not account contribution consent.
+permissions remain unchanged in configuration for legacy and downgrade behavior.
+On secure shared TEST, authenticated presence supplies eight independent decisions
+under `permissionAuthority` revision 1. Legacy preserves historical local OFF;
+fresh explicit Site ON/OFF supersedes the historical gate without rewriting it.
+Invalid or expired authority stops the affected capability, not ordinary sync.
+Market service availability is not account contribution consent.
+
+The 30-second authority lease is refreshed through one existing presence flight.
+The authenticated enrollment's device, pairing timestamp and Site external
+character ID are pinned in RAM after Site validates the observed character; the
+external ID is never compared to FFXIV Content ID. Permission transitions discard
+obsolete pending transport copies, not local retained history. Resumption uses
+fresh observations. PF contribution, PF links, item links, private Hunts,
+Submarines and travel remain independent. Manual Hunt Show remains available
+under fresh explicit automatic-map OFF; Site separately filters automatic commands
+using current permission, receiver and focus. Focus cannot grant consent.
 
 Hunt Progress stores only presentation preferences. Its fresh current-area rows
 are session-local and cannot change Hunt selection, retained history, routes,

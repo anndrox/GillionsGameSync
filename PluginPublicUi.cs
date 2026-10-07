@@ -46,8 +46,10 @@ public sealed partial class Plugin {
 #if GILLIONS_TEST_BUILD
         if (HasPairedSession) {
             fates=!FatePolicy.Compatible(fateLocal.ObservedSource) || fateSender.Grant?.Reason=="FATE_SOURCE_UNSUPPORTED" ? "Update required"
-                : fateSender.Grant is null ? "Temporarily unavailable" : "Ready";
-            market=marketAcceptedGeneration.Length>0 ? "Ready" : "Temporarily unavailable";
+                : fateSender.Grant?.Reason=="FATE_POLICY_OFF" ? "Off on Gillions"
+                : fateSender.Grant?.Admission.Granted==true ? "Ready" : "Temporarily unavailable";
+            market=ExplicitPermission("marketContribution") && !MarketEnabled ? "Off on Gillions"
+                : MarketEnabled && marketAcceptedGeneration.Length>0 ? "Ready" : "Temporarily unavailable";
         }
 #endif
         publicHealth=new(connection,character,hunts,HasPairedSession ? "Ready" : waiting,fates,market,

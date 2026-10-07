@@ -50,7 +50,7 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
     private DateTime due = DateTime.MaxValue;
     private string? blockedAuthorization;
     private bool endpointStopped;
-    private string status = "Off. Pair a Testing client with site-side Party Finder permission, then opt in here.";
+    private string status = "Off. Manage this Testing device's public Party Finder contribution on Gillions.";
     private bool enabledState;
     private bool disposed;
     private bool inFlight;
@@ -95,7 +95,7 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
             if (session?.AuthorizationBlocked == true) blockedAuthorization = session.AuthorizationKey;
             if (enabledState && session is null) status = "Waiting for a logged-in, paired Testing client on the approved secure TEST origin.";
             if (session is not null && blockedAuthorization == session.AuthorizationKey)
-                status = "Stopped for this pairing; correct account/permission and pair again. Logout or reload will not reset this stop.";
+                status = "Authorization stopped. Check the account and save an explicit contribution decision on Gillions; no re-pairing required for permission changes.";
             if (endpointStopped) status = "Party Finder endpoint unavailable or redirected; contribution stopped for this load. Site must correct deployment before reload.";
         }
         PartyFinderContributor.CancelSafely(cancel);
@@ -203,7 +203,7 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
                 var code = ErrorCode(bytes);
                 wait = Math.Max(Backoff(), RetryAfter(response, bytes));
                 outcome = $"Gillions Party Finder: HTTP {(int)response.StatusCode}; {code}; "
-                    + (denied ? "stopped for this pairing; correct account/permission and pair again."
+                    + (denied ? "authorization stopped; check the account and contribution permission on Gillions."
                         : stop ? "endpoint failure; stopped for this load until Site corrects deployment and the plugin is reloaded."
                         : retry ? "bounded retry queued." : "batch discarded; not retrying unchanged invalid data.");
             }

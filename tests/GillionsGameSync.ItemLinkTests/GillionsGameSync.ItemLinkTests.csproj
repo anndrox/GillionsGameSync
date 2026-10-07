@@ -24,5 +24,6 @@
     <Compile Include="..\..\ObservationMaintenance.cs" Link="ObservationMaintenance.cs" />
     <Compile Include="..\..\PluginWindowModel.cs" Link="PluginWindowModel.cs" />
     <Compile Include="..\..\PublicExperience.cs" Link="PublicExperience.cs" />
+    <Compile Include="..\..\PermissionAuthority.cs" Link="PermissionAuthority.cs" />
   </ItemGroup>
 </Project>

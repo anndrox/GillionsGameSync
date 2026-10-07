@@ -362,6 +362,7 @@ public sealed partial class Plugin : IDalamudPlugin {
     private async Task SendRetainerPresenceAsync(SyncRequestPermit permit, RetainerPresenceDocument presence) {
         try {
             using var request = Request("/api/game-sync/presence", permit, presence);
+            var permissionRequestStarted = Stopwatch.GetTimestamp();
 #if GILLIONS_TEST_BUILD
             var requestFocus = permit.Origin == HuntMapPolicy.Origin && HuntFocusEligible();
             if (requestFocus) request.Headers.Add(HuntFocusState.Header, HuntFocusState.Contract);
@@ -396,6 +397,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             await CommitAsync(permit, _ => {
                 retainerUploadServerSupported = uploadSupported; presenceFailureCount = 0;
                 publicConnectionFailure = "";
+                ApplyPermissions(responseJson, permit, response, Stopwatch.GetElapsedTime(permissionRequestStarted));
 #if GILLIONS_TEST_BUILD
                 marketAcceptedGeneration = MarketContributor.Compatible(responseJson) ? permit.Session!.Generation : "";
                 personalAccepted.Clear();
@@ -408,7 +410,8 @@ public sealed partial class Plugin : IDalamudPlugin {
                 if (requestFocus && focusClock is not null) huntFocus.Apply(responseJson, focusClock.UtcNow, HuntFocusEligible() && personalAccepted.Contains("hunt_bills"), DateTime.UtcNow);
                 else huntFocus.Clear();
 #endif
-                nextRetainerPresenceUtc = DateTime.UtcNow.Add(RetainerPresencePolicy.NextSuccessDelay(Random.Shared.Next(-5, 6)));
+                nextRetainerPresenceUtc = DateTime.UtcNow.Add(SitePermissionOrigin ? TimeSpan.FromSeconds(15)
+                    : RetainerPresencePolicy.NextSuccessDelay(Random.Shared.Next(-5, 6)));
 #if GILLIONS_TEST_BUILD
                 nextHuntFocusPresenceUtc = huntFocus.Supported
                     ? DateTime.UtcNow.AddSeconds(HuntFocusActive(DateTime.UtcNow) ? 12 : 20) : nextRetainerPresenceUtc;
@@ -418,6 +421,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             if (!disposed) await framework.RunOnFrameworkThread(() => {
                 if (!PermitIsCurrent(permit)) return;
                 ObserveConnectionFailure(error);
+                permissionAuthority.Invalidate(); ReconcilePermissions(force: true);
                 ClearRetainerServerAcceptance(); presenceFailureCount++;
 #if GILLIONS_TEST_BUILD
                 travelAccepted = false; ClearTravelPending();
@@ -460,6 +464,7 @@ public sealed partial class Plugin : IDalamudPlugin {
     private void UpdateOwnedState() {
         var now = DateTime.UtcNow;
         RefreshSessionContext(); MaintainTransientState(now);
+        ReconcilePermissions();
         partyFinderContributor.Tick(now);
         huntLocal.ProgressRequested = configuration.ShowHuntProgress;
 #if GILLIONS_TEST_BUILD
@@ -485,6 +490,10 @@ public sealed partial class Plugin : IDalamudPlugin {
         huntLocal.Tick(now); // Same reader/cadence; display only, no personal transport.
 #endif
         if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;
+        // One ordinary presence flight/lease/backoff, independent of automatic
+        // gameplay collection. No per-permission request or increased native reads.
+        if (SitePermissionOrigin && !presenceInFlight && now >= nextRetainerPresenceUtc)
+            SendCurrentRetainerPresence(activeRetainerCharacterContentId, now, SyncRequestMode.Personal);
 #if GILLIONS_TEST_BUILD
         TickPersonalSync(now, prompt: huntChanged);
         TickHuntFocus(now);
@@ -494,7 +503,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         PollWebsiteRequests(now);
 #else
-        if (ItemLinkPollPolicy.ShouldPoll(configuration.EnableItemLinkRequests, true, configuration.DeviceToken, itemLinkPollInFlight, now, nextItemLinkPollUtc)) {
+        if (ItemLinkPollPolicy.ShouldPoll(ItemLinksEnabled, true, configuration.DeviceToken, itemLinkPollInFlight, now, nextItemLinkPollUtc)) {
             nextItemLinkPollUtc = now.AddSeconds(ItemLinkPollIntervalSeconds);
             _ = PollItemLinkRequestsAsync();
         }
@@ -602,7 +611,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
             var commandPollStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             using var pollResponse = pfAllowed
-                ? await SendNativePartyFinderAsync(pollRequest, permit)
+                ? await SendNativePartyFinderAsync(pollRequest, permit, sharedPoll: true)
                 : await SendAsync(pollRequest, permit);
             var commandHeaderRoundTrip = System.Diagnostics.Stopwatch.GetElapsedTime(commandPollStarted);
 #else
@@ -662,7 +671,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 ),
                 link => framework.RunOnFrameworkThread(() => {
                     RequirePermit(permit);
-                    if (
+                    if (!ItemLinksEnabled ||
 #if GILLIONS_TEST_BUILD
                         commandClock.UtcNow
 #else
@@ -704,10 +713,10 @@ public sealed partial class Plugin : IDalamudPlugin {
     // a second outer deadline. This path reads no Hunt/travel native source.
     private void PollWebsiteRequests(DateTime now) {
         var focused = HuntFocusActive(now);
-        if (configuration.AutomaticallyShowHuntMap && configuration.ActiveSession?.Origin == HuntMapPolicy.Origin
+        if (HuntReceivingEnabled && configuration.ActiveSession?.Origin == HuntMapPolicy.Origin
             && !huntMapPollInFlight && huntMapPoll.TryBegin(now, focused))
             _ = PollHuntMapRequestAsync();
-        if (configuration.EnableItemLinkRequests && HasPairedSession && !itemLinkPollInFlight
+        if (WebsiteLinksEnabled && HasPairedSession && !itemLinkPollInFlight
             && websiteItemPoll.TryBegin(now, focused))
             _ = PollItemLinkRequestsAsync();
     }
@@ -721,7 +730,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         return WebsiteResponseClock.Capture(date, DateTime.UtcNow, roundTrip);
     }
     private bool HuntMapPermitted(SyncRequestPermit permit, CancellationToken cancellation) => !cancellation.IsCancellationRequested
-        && HuntMapPolicy.Admit(configuration.AutomaticallyShowHuntMap, HasPairedSession, permit.Origin, PermitIsCurrent(permit))
+        && HuntMapPolicy.Admit(HuntReceivingEnabled, HasPairedSession, permit.Origin, PermitIsCurrent(permit))
         && clientState.IsLoggedIn && objects.LocalPlayer is not null
         && !marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas]
         && !marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas51];
@@ -843,7 +852,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         return consumed;
     }
     private bool PartyFinderLinksPermitted(SyncRequestPermit permit) => PermitIsCurrent(permit)
-        && configuration.EnableItemLinkRequests && configuration.EnablePartyFinderLinkRequests
+        && PartyFinderLinksEnabled
         && permit.Origin == GillionsPartyFinderContributor.ApprovedTestingOrigin;
     private async Task<bool> ConsumePartyFinderLinkAsync(SyncRequestPermit permit, PartyFinderLinkRequest request, WebsiteResponseClock commandClock) {
         if (!await framework.RunOnFrameworkThread(() => PartyFinderLinksPermitted(permit) && PartyFinderLinkPolicy.Valid(request, commandClock.UtcNow))) return false;
@@ -863,10 +872,10 @@ public sealed partial class Plugin : IDalamudPlugin {
     }
     // Same authenticated item-request channel, but PF-capable polls/consumes
     // must never follow redirects or forward a claim body to another origin.
-    private async Task<HttpResponseMessage> SendNativePartyFinderAsync(HttpRequestMessage request, SyncRequestPermit permit) {
+    private async Task<HttpResponseMessage> SendNativePartyFinderAsync(HttpRequestMessage request, SyncRequestPermit permit, bool sharedPoll = false) {
         Task<HttpResponseMessage>? pending = null;
         await framework.RunOnFrameworkThread(() => {
-            if (!PartyFinderLinksPermitted(permit)) throw new OperationCanceledException();
+            if (!(sharedPoll ? PermitIsCurrent(permit) && WebsiteLinksEnabled : PartyFinderLinksPermitted(permit))) throw new OperationCanceledException();
             pending = partyFinderHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, permit.Cancellation);
         });
         return await pending!;
@@ -877,6 +886,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         , WebsiteResponseClock commandClock
 #endif
     ) {
+        if (!await framework.RunOnFrameworkThread(() => PermitIsCurrent(permit) && ItemLinksEnabled)) return false;
 #if GILLIONS_TEST_BUILD
         if (!commandClock.Unexpired(request.ExpiresAtUtc)) return false;
 #else
@@ -1434,6 +1444,10 @@ public sealed partial class Plugin : IDalamudPlugin {
     private void ResetSessionContext() {
         if (disposed) return;
         requestLifetime.Invalidate(); ClearTransientState(); ClearRetainerServerAcceptance();
+        permissionAuthority.Bind("", ""); permissionTransitions.Clear(); permissionFreshFrom.Clear();
+#if GILLIONS_TEST_BUILD
+        nativeVersionReported = false;
+#endif
         huntProgress.Invalidate(); huntLocal?.ClearProgress();
 #if GILLIONS_TEST_BUILD
         travelAccepted = false; travelBinding = ""; ClearTravelPending(); travelLocal?.ClearSession();
@@ -1505,7 +1519,7 @@ public sealed partial class Plugin : IDalamudPlugin {
     private bool PartyFinderContributionEnabled {
         get {
 #if GILLIONS_TEST_BUILD
-            return configuration.EnableGillionsPartyFinderContributions;
+            return PermissionEnabled("partyFinderContribution", configuration.EnableGillionsPartyFinderContributions);
 #else
             return configuration.EnablePartyFinderContributions;
 #endif
@@ -1517,13 +1531,13 @@ public sealed partial class Plugin : IDalamudPlugin {
         RefreshSessionContext();
         if (!HasPairedSession || activeOwnedState is null || configuration.ActiveSession!.Origin != GillionsPartyFinderContributor.ApprovedTestingOrigin) return null;
         var permit = CapturePermit(SyncRequestMode.Manual);
-        var authorizationGeneration = permit.Session!.Generation;
+        var authorizationGeneration = ContributionAuthority("partyFinderContribution");
         return new GillionsPartyFinderSession($"{authorizationGeneration}:{permit.Epoch}:{permit.ContentId}", authorizationGeneration,
             configuration.GillionsPartyFinderBlockedGeneration == authorizationGeneration, permit.Cancellation,
             () => framework.RunOnFrameworkThread(() => {
                 // A denial belongs to the captured enrollment, not its character or
                 // request epoch. Never apply an old enrollment's denial to a new one.
-                if (configuration.ActiveSession?.Generation != authorizationGeneration) return;
+                if (!HasPairedSession || ContributionAuthority("partyFinderContribution") != authorizationGeneration) return;
                 configuration.GillionsPartyFinderBlockedGeneration = authorizationGeneration;
                 // Security state must survive an immediate reload; do not coalesce.
                 RequestConfigurationSave();
@@ -1538,7 +1552,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 request.Headers.UserAgent.ParseAdd($"{RetainerClient.ProductName}/{PluginVersion}");
                 await framework.RunOnFrameworkThread(() => {
                     RequirePermit(permit);
-                    if (!PartyFinderContributionEnabled) throw new OperationCanceledException();
+                    if (!PartyFinderContributionEnabled || ContributionAuthority("partyFinderContribution") != authorizationGeneration) throw new OperationCanceledException();
                 });
                 cancellation.ThrowIfCancellationRequested();
                 return await partyFinderHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation);
@@ -1556,7 +1570,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         long clock=Environment.TickCount64;
         var session=configuration.ActiveSession;
         var source=fateLocal.ObservedSource;
-        string binding=HasPairedSession && activeOwnedState is not null && session?.Origin==FateDiscovery.Origin
+        string binding=HasPairedSession && nativeVersionReported && activeOwnedState is not null && session?.Origin==FateDiscovery.Origin
             && FatePolicy.Compatible(source)
             ? $"{session.Generation}:{activeRetainerCharacterContentId}:{fateLocal.Epoch}" : "";
         fateSender.Bind(binding,fateLocal.Epoch);
@@ -1668,7 +1682,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         } finally { await framework.RunOnFrameworkThread(()=>fateSender.UploadFinished()); }
     }
     private MarketContributionSession? CaptureMarketSession() {
-        if (disposed || !framework.IsInFrameworkUpdateThread || !configuration.ContributeObservedMarketData
+        if (disposed || !framework.IsInFrameworkUpdateThread || !MarketEnabled
             || !clientState.IsLoggedIn || marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas]
             || marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas51]) return null;
         RefreshSessionContext();
@@ -1677,11 +1691,12 @@ public sealed partial class Plugin : IDalamudPlugin {
         if (world is 0 or > ushort.MaxValue) return null;
         var permit = CapturePermit(SyncRequestMode.Manual);
         var generation = permit.Session!.Generation;
-        return new MarketContributionSession($"{generation}:{permit.Epoch}:{world}", generation,
-            configuration.GillionsMarketBlockedGeneration == generation, (ushort)world, permit.Cancellation,
+        var authorization = ContributionAuthority("marketContribution");
+        return new MarketContributionSession($"{authorization}:{permit.Epoch}:{world}", authorization,
+            configuration.GillionsMarketBlockedGeneration == authorization, (ushort)world, permit.Cancellation,
             () => framework.RunOnFrameworkThread(() => {
-                if (configuration.ActiveSession?.Generation != generation) return;
-                configuration.GillionsMarketBlockedGeneration = generation;
+                if (!HasPairedSession || ContributionAuthority("marketContribution") != authorization) return;
+                configuration.GillionsMarketBlockedGeneration = authorization;
                 RequestConfigurationSave(); FlushConfigurationSave(receivedAuthorizationDenial: true);
             }),
             async (body, cancellation) => {
@@ -1693,7 +1708,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 request.Headers.UserAgent.ParseAdd($"{RetainerClient.ProductName}/{PluginVersion}");
                 await framework.RunOnFrameworkThread(() => {
                     RequirePermit(permit);
-                    if (!configuration.ContributeObservedMarketData || marketAcceptedGeneration != generation
+                    if (!MarketEnabled || ContributionAuthority("marketContribution") != authorization || marketAcceptedGeneration != generation
                         || marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas]
                         || marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas51]
                         || objects.LocalPlayer?.CurrentWorld.RowId != world) throw new OperationCanceledException();
@@ -1708,7 +1723,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         RefreshSessionContext();
         return (permit.Mode == SyncRequestMode.Pair || HasPairedSession) && requestLifetime.Accepts(permit,
             activeRetainerCharacterContentId, configuration.ActiveSession, configuration.DeviceToken,
-            configuration.AutomaticSync, configuration.EnableItemLinkRequests);
+            configuration.AutomaticSync, WebsiteLinksEnabled);
     }
     private void RequirePermit(SyncRequestPermit permit) {
         if (!PermitIsCurrent(permit)) throw new OperationCanceledException("The connection or sync settings changed.");
@@ -1759,13 +1774,13 @@ public sealed partial class Plugin : IDalamudPlugin {
     private void ClearTravelPending() => travelSync.Clear();
     private string TravelBinding(SyncRequestPermit permit) => $"{permit.Session!.Generation}:{permit.Epoch}:{permit.ContentId}";
     private bool TravelAdmitted() => TravelSyncPolicy.Admit(true, travelLocal.Available(activeRetainerCharacterContentId),
-        configuration.ShareHuntRoutingLocation, HasPairedSession && activeOwnedState is not null,
+        TravelEnabled, HasPairedSession && activeOwnedState is not null,
         configuration.ActiveSession?.Origin ?? "", travelAccepted);
     private void TickTravelSync(DateTime now) {
         var admitted = TravelAdmitted();
         var binding = travelBinding;
         var due = travelSync.Maintain(binding,admitted,now);
-        if (!configuration.ShareHuntRoutingLocation) { travelStatus = "Travel sync OFF; volatile preparation cleared. Unrelated sync unchanged."; return; }
+        if (!TravelEnabled) { travelStatus = "Travel sync OFF; volatile preparation cleared. Unrelated sync unchanged."; return; }
         if (HasPairedSession && activeOwnedState is not null && configuration.ActiveSession!.Origin == TravelSyncPolicy.Origin
             && !presenceInFlight && now >= nextRetainerPresenceUtc)
             SendCurrentRetainerPresence(activeRetainerCharacterContentId,now,SyncRequestMode.Personal);
@@ -1821,8 +1836,8 @@ public sealed partial class Plugin : IDalamudPlugin {
         }
     }
     private bool PersonalEnabled(string resource) => resource == "hunt_bills"
-        ? configuration.SyncPersonalHunts && configuration.HuntBills.LocalRetentionEnabled
-        : resource == "submarine_personal" && configuration.SyncPersonalSubmarines && configuration.SubmarineVoyages.LocalRetentionEnabled;
+        ? PermissionEnabled("personalHunts", configuration.SyncPersonalHunts) && configuration.HuntBills.LocalRetentionEnabled
+        : resource == "submarine_personal" && PermissionEnabled("personalSubmarines", configuration.SyncPersonalSubmarines) && configuration.SubmarineVoyages.LocalRetentionEnabled;
     private void SetPersonalSync(string resource, bool enabled) {
         if (resource == "hunt_bills") configuration.SyncPersonalHunts = enabled;
         else configuration.SyncPersonalSubmarines = enabled;
@@ -1845,7 +1860,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             && huntCoverageSync.RefreshDue(now, System.Diagnostics.Stopwatch.GetTimestamp(),
                 huntLocal.CoverageObservedAtUtc(HuntBillRetentionPolicy.CharacterKey(activeRetainerCharacterContentId), now));
         if (!PersonalSyncPolicy.Due(now, nextPersonalUtc, personalRetryUtc, personalInFlight, prompt || refreshDue,
-            configuration.SyncPersonalHunts || configuration.SyncPersonalSubmarines)) return;
+            PersonalEnabled("hunt_bills") || PersonalEnabled("submarine_personal"))) return;
         nextPersonalUtc = now.AddSeconds(5);
         if (configuration.ActiveSession!.Origin != PersonalSyncPolicy.Origin) {
             personalStatus = "Private sync requires pairing at https://test.gillions.app; no personal data sent. Ordinary sync unchanged."; return;
@@ -1861,6 +1876,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             if (!PersonalEnabled(resource) || !personalAccepted.Contains(resource)) continue;
             if (resource == "hunt_bills" && huntCoverageAccepted) {
                 var coveragePayload = huntLocal.CoveragePayload(HuntBillRetentionPolicy.CharacterKey(activeRetainerCharacterContentId), now);
+                coveragePayload = PermissionObservationFilter.FreshPersonal(resource, coveragePayload, FreshFrom(PersonalPermission(resource)));
                 if (coveragePayload is null) { huntCoverageSync.Clear(); continue; }
                 var current = huntCoverageSync.Prepare(owner, coveragePayload, huntLocal.CoverageEpoch, now, System.Diagnostics.Stopwatch.GetTimestamp());
                 if (current is null || current.Acknowledged || current.Blocked) continue;
@@ -1881,6 +1897,8 @@ public sealed partial class Plugin : IDalamudPlugin {
             } catch (InvalidOperationException) { continue; }
             // No negative/empty replacement. Submarines wait for verified
             // workshop evidence in this character's session, including reload.
+            if (payload is null) continue;
+            payload = PermissionObservationFilter.FreshPersonal(resource, payload, FreshFrom(PersonalPermission(resource)));
             if (payload is null) continue;
             var prior = configuration.PersonalSync.Prepared.SingleOrDefault(p => p.OwnerKey == owner && p.Resource == resource);
             var prepared = PersonalSyncPolicy.Prepare(configuration.PersonalSync, owner, resource, payload);
@@ -1913,7 +1931,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         var now = DateTime.UtcNow;
         var key = HuntBillRetentionPolicy.CharacterKey(permit.ContentId);
         var owner = PersonalSyncPolicy.Owner(permit.Session!.Generation, key);
-        return huntCoverageSync.Current(prepared, owner, huntLocal.CoveragePayload(key, now), huntLocal.CoverageEpoch, now, System.Diagnostics.Stopwatch.GetTimestamp());
+        return huntCoverageSync.Current(prepared, owner, PermissionObservationFilter.FreshPersonal("hunt_bills", huntLocal.CoveragePayload(key, now), FreshFrom("personalHunts")), huntLocal.CoverageEpoch, now, System.Diagnostics.Stopwatch.GetTimestamp());
     }
     private async Task SendPersonalAsync(SyncRequestPermit permit, PersonalPreparedSnapshot prepared, CancellationToken featureToken, bool coverage = false) {
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation, featureToken);

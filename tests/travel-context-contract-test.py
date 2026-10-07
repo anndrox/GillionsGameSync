@@ -28,7 +28,7 @@ assert 'Math.Min(5,destinations.Length)' in source and 'label.Length>80' in sour
 assert 'PlaceName.Value.Name.ExtractText()' in source
 assert 'public bool ShareHuntRoutingLocation { get; set; }' in plugin
 assert 'travelLocal.Tick(now)' in plugin and 'travelLocal.Dispose()' in plugin
-assert 'travelLocal.SetEnabled(configuration.ShareHuntRoutingLocation)' in plugin
+assert 'travelLocal.SetEnabled(TravelEnabled)' in (root/'PluginPermissions.cs').read_text()
 ui=(root/'PluginPublicUi.cs').read_text(encoding='utf-8')
 assert 'configuration.ShareHuntRoutingLocation=' not in ui
 assert 'travelLocal.Invalidated += ClearTravelPending' in plugin

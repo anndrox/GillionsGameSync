@@ -3,7 +3,7 @@
 ## Unpublished public UX candidate
 
 The [public candidate](public-release-candidate.md) is prepared separately from
-published Testing86. After Site authority/admission and exact-package reviews,
+published Testing86. After permission reconciliation and exact-package reviews,
 validate welcome/pair/ready, returning connections, four Settings tabs, safe
 support copying, long/scaled Hunt labels, keyboard/controller access and no-focus
 auto-show. Hunt Progress must work with retained-history consent OFF and must not
@@ -18,6 +18,13 @@ fresh Site policy and source admission. Check OFF/expiry/reload/logout/source
 fencing, fresh OFF-to-ON observations, one collector/sender and unchanged command
 responsiveness. Record actual read/preparation costs separately from synthetic UI
 and model timing. Never run installed Testing and its dev copy simultaneously.
+
+On shared TEST, exercise the actual Site controls without resetting configuration
+or re-pairing: Market/PF contribution, each private resource, independent item/PF
+links, and automatic maps versus manual Hunt Show. Confirm OFF clears obsolete
+pending contributions and ON resumes fresh observations. Check authority expiry,
+binding/session loss and legacy OFF with fixtures; real FFXIV lifecycle and UI
+acceptance must use the same frozen Testing87 bytes intended for publication.
 
 ## Testing 0.0.81 Hunt V2 / Active Hunt focus
 

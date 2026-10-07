@@ -117,7 +117,7 @@ internal sealed class MarketContributor : IDisposable {
         else if (session is null || session.Cancellation.IsCancellationRequested)
             status = "On; waiting for compatible paired intake/current-world context. No market uploads.";
         else if (deniedAuthorization == session.AuthorizationKey)
-            status = "Market authorization denied for this pairing; correct permission and pair again.";
+            status = "Market authorization denied; check the account and save an explicit contribution decision on Gillions. No re-pairing required for permission changes.";
         else if (transitioned)
             status = "On; compatible authenticated Gillions intake ready. Naturally received partial market observations may be uploaded.";
     }

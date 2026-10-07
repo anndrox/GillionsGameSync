@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.87 - Unpublished permission reconciliation and public UX
+
+- Compact main/pairing windows, tabbed Settings, safe support summary and optional
+  display-only Hunt Progress preserve existing sync and read-only behavior.
+- Reconcile eight independent Site decisions through authenticated presence:
+  legacy local OFF is preserved; fresh explicit Site ON/OFF is authoritative.
+  No reset, re-pairing or destructive preference migration.
+- Separate explicit PF links from item links and manual Hunt Show from automatic
+  map consent. Expired authority fails closed; resumption discards obsolete
+  transport copies and requires fresh observations, not pre-consent history.
+- Automatically run the existing FATE collector under its separate fresh Site
+  policy and exact Testing source admission. The diagnostic command is not activation.
+- Testing publication awaits exact-package reviews and real shared-TEST acceptance.
+
 ## 0.0.86 - Testing FATE sender
 
 - Wire exact authenticated revision3 discovery and independent default-OFF Site

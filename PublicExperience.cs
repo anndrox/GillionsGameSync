@@ -10,7 +10,7 @@ internal sealed record PublicHealth(string Connection, string Character, string 
     string Fates, string Market, DateTime? LastSync, string Channel, string Version, string GameVersion) {
     private static string SafeVersion(string v) => Regex.IsMatch(v,@"^\d{1,8}(?:\.\d{1,8}){2,4}$") ? v : "unavailable";
     private static string SafeStatus(string s) => s is "Connected" or "Not connected" or "Connecting" or "Authorization expired or revoked"
-        or "Account unavailable" or "Ready" or "Waiting for supported context" or "Temporarily unavailable" or "Gillions unavailable" or "Update required" ? s : "Temporarily unavailable";
+        or "Account unavailable" or "Ready" or "Off on Gillions" or "Waiting for supported context" or "Temporarily unavailable" or "Gillions unavailable" or "Update required" ? s : "Temporarily unavailable";
     internal string SupportSummary() => $"Gillions Game Sync {SafeVersion(Version)}\nChannel: {(Channel is "Testing" or "Public" ? Channel : "unavailable")}\nConnection: {SafeStatus(Connection)}\nGame: {SafeVersion(GameVersion)}\nHunts: {SafeStatus(Hunts)}\nParty Finder: {SafeStatus(PartyFinder)}\nFATEs: {SafeStatus(Fates)}\nMarket: {SafeStatus(Market)}\nLast successful sync: {LastSync?.ToString("O") ?? "Not yet"}";
     internal static string ConnectionState(bool paired, bool pairing, string code) => pairing ? "Connecting"
         : code is "DEVICE_INVALID" or "DEVICE_REVOKED" or "TOKEN_INVALID" ? "Authorization expired or revoked"
