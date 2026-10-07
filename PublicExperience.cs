@@ -17,6 +17,10 @@ internal sealed record PublicHealth(string Connection, string Character, string 
         : code is "UNSUPPORTED_CLIENT" or "VERSION_UNSUPPORTED" or "CLIENT_VERSION_UNSUPPORTED" ? "Update required"
         : code is "ACCOUNT_DISABLED" or "TRIAL_EXPIRED" ? "Account unavailable"
         : !paired ? "Not connected" : "Connected";
+    internal static string FateState(bool compatible, string? reason, bool? granted, bool? policyEnabled) =>
+        !compatible || reason == "FATE_SOURCE_UNSUPPORTED" ? "Update required"
+        : reason == "FATE_POLICY_REQUIRED" && policyEnabled == false ? "Off on Gillions"
+        : granted == true ? "Ready" : "Temporarily unavailable";
 }
 
 internal static class PublicConnectionPresentation {

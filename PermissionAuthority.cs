@@ -34,6 +34,10 @@ internal sealed class PermissionAuthority {
         && (p.State == "explicit" ? p.Enabled == true : p.State == "legacy" && !explicitSeen.Contains(key) && historical);
     internal string Identity(string key, long clock) => !Fresh(clock) || !decisions.TryGetValue(key, out var p) ? "unavailable"
         : p.State == "explicit" ? "explicit:" + p.Generation + ":" + p.Enabled : p.State;
+    // Denial custody is not authorization. Keep the last known decision identity
+    // through lease expiry/invalidation so a received denial can survive reload.
+    internal string? KnownIdentity(string key) => !decisions.TryGetValue(key, out var p) ? null
+        : p.State == "explicit" ? "explicit:" + p.Generation + ":" + p.Enabled : p.State == "legacy" ? "legacy" : null;
     internal bool PartyFinderLinks(bool historicalItem, bool historicalPf, long clock) => Allows("partyFinderLinks", historicalItem && historicalPf, clock);
     internal bool HuntReceiving(bool historicalAutomatic, long clock) => Explicit("automaticHuntMaps", clock)
         || Allows("automaticHuntMaps", historicalAutomatic, clock);
@@ -98,6 +102,13 @@ internal sealed class PermissionAuthority {
         return new("invalid", false, null, null);
     }
     private bool Reject() { Invalidate(); return false; }
+}
+
+internal static class ContributionDenialPolicy {
+    internal static bool Record(string enrollment, string? currentEnrollment, string captured,
+        string? knownCurrent, string? existingStop) => enrollment == currentEnrollment
+        && (knownCurrent is not null ? knownCurrent == captured
+            : string.IsNullOrEmpty(existingStop) || existingStop == captured);
 }
 
 internal static class PermissionObservationFilter {

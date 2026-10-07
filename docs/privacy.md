@@ -15,7 +15,9 @@ The 30-second authority lease is refreshed through one existing presence flight.
 The authenticated enrollment's device, pairing timestamp and Site external
 character ID are pinned in RAM after Site validates the observed character; the
 external ID is never compared to FFXIV Content ID. Permission transitions discard
-obsolete pending transport copies, not local retained history. Resumption uses
+obsolete supported pending transport copies, not local retained history. Unknown
+or corrupt durable stores are preserved unchanged and their transport fails closed.
+Resumption uses
 fresh observations. PF contribution, PF links, item links, private Hunts,
 Submarines and travel remain independent. Manual Hunt Show remains available
 under fresh explicit automatic-map OFF; Site separately filters automatic commands

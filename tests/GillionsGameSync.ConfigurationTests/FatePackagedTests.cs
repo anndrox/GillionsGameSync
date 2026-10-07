@@ -80,6 +80,16 @@ internal static class FatePackagedTests {
         var parse=T("FateDiscovery").GetMethod("Parse",flags)!;
         var grant=parse.Invoke(null,[wire,"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now]);
         Check(grant is not null,"Packaged exact discovery parser admits supported grant.");
+        var offWire=JsonNode.Parse(wire)!;
+        offWire["fateContribution"]!["authorized"]=false;
+        offWire["fateContribution"]!["reason"]="FATE_POLICY_REQUIRED";
+        offWire["fateContribution"]!["policy"]!["enabled"]=false;
+        var offGrant=parse.Invoke(null,[offWire.ToJsonString(),"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now]);
+        Check(offGrant is not null,"Packaged real OFF fixture accepted");
+        var offType=offGrant!.GetType();
+        var fateStatus=assembly.GetType("GillionsGameSync.PublicHealth",true)!.GetMethod("FateState",flags)!;
+        Check((string)fateStatus.Invoke(null,[true,offType.GetProperty("Reason")!.GetValue(offGrant),false,
+            offType.GetProperty("PolicyEnabled")!.GetValue(offGrant)])! == "Off on Gillions","parsed real OFF fixture renders honest Site status");
         Check(parse.Invoke(null,[wire.Replace("\"ok\":true","\"ok\":true,\"ok\":true"),"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now]) is null,"Packaged duplicate key denies admission.");
         Check(parse.Invoke(null,[wire,"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now.AddSeconds(30)]) is null,"Packaged expired grant denies admission.");
         var senderType=T("FateSenderState");

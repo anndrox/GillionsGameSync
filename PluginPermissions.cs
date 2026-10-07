@@ -45,9 +45,20 @@ public sealed partial class Plugin {
     private string ContributionAuthority(string key) => ExplicitPermission(key)
         ? PersonalSyncPolicy.Hash(configuration.ActiveSession!.Generation + ":" + PermissionIdentity(key))
         : configuration.ActiveSession!.Generation;
+    private bool RecordContributionDenial(string key, string enrollment, string captured, string existingStop) {
+        var known = permissionAuthority.KnownIdentity(key);
+        var current = configuration.ActiveSession?.Generation;
+        var knownAuthority = known is null ? null : known == "legacy" ? current
+            : PersonalSyncPolicy.Hash(current + ":" + known);
+        return ContributionDenialPolicy.Record(enrollment, current, captured, knownAuthority, existingStop);
+    }
 #endif
     private void ApplyPermissions(string json, SyncRequestPermit permit, HttpResponseMessage response, TimeSpan roundTrip) {
         if (permit.Origin != PermissionAuthority.Origin) return;
+        // Observe expired old authority before a same-decision renewal can hide
+        // its loss in the regular 250ms maintenance gap. This is command/queue
+        // maintenance only; it performs no additional gameplay reads.
+        ReconcilePermissions(force: true);
         permissionAuthority.Bind(permit.Session!.Generation + ":" + permit.ContentId, permit.Session.DeviceId);
         // Only the exact authenticated, non-redirected origin supplies issuer time.
         var now = DateTime.UtcNow;
@@ -98,7 +109,7 @@ public sealed partial class Plugin {
                         HuntBillRetentionPolicy.CharacterKey(activeRetainerCharacterContentId));
                     // Retained history is not erased. Obsolete prepared contribution
                     // copies/nonces are withdrawn so OFF -> ON cannot replay them.
-                    if (configuration.PersonalSync.Prepared.RemoveAll(p => p.OwnerKey == owner && p.Resource == resource) > 0)
+                    if (PersonalSyncPolicy.Withdraw(configuration.PersonalSync, owner, resource) > 0)
                         RequestConfigurationSave();
                 }
                 nextPersonalUtc = DateTime.MinValue;

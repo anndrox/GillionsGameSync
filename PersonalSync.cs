@@ -135,6 +135,8 @@ internal static class PersonalSyncPolicy {
     }
     // One latest prepared snapshot per owner/resource. Never overwrite unacked
     // content or nonce. ACKed entries permit a successor; capacity never evicts.
+    internal static int Withdraw(PersonalSyncState state, string owner, string resource) =>
+        !Valid(state) ? 0 : state.Prepared.RemoveAll(p => p.OwnerKey == owner && p.Resource == resource);
     internal static PersonalPreparedSnapshot? Prepare(PersonalSyncState state, string owner, string resource, string payload) {
         if (!Valid(state) || !PersonalObservationCompatibility.Key(owner) || !PayloadValid(resource, payload)) return null;
         var prior = state.Prepared.SingleOrDefault(p => p.OwnerKey == owner && p.Resource == resource);

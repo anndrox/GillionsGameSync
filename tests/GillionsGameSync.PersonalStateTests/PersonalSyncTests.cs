@@ -63,6 +63,25 @@ internal static class PersonalSyncTests {
         check(!PersonalSyncPolicy.Valid(invalid),"modified pending hash fails closed");
         invalid.SchemaVersion = 2;
         check(!PersonalSyncPolicy.Valid(invalid),"unknown persisted schema preserved/fail closed");
+        var unsupported=new[] {
+            new PersonalSyncState {SchemaVersion=99,Prepared=[prepared]},
+            new PersonalSyncState {Prepared=null!},
+            new PersonalSyncState {Prepared=[null!]},
+            new PersonalSyncState {Prepared=[prepared with {Payload=null!}]},
+            new PersonalSyncState {Prepared=[prepared with {Payload=new string('x',PersonalSyncPolicy.MaximumPayloadBytes+1)}]},
+            new PersonalSyncState {Prepared=Enumerable.Repeat(prepared,PersonalSyncPolicy.MaximumPrepared+1).ToList()},
+        };
+        foreach(var unsupportedStore in unsupported) {
+            var preserved=JsonSerializer.Serialize(unsupportedStore);
+            check(PersonalSyncPolicy.Withdraw(unsupportedStore,owner,"hunt_bills")==0
+                &&JsonSerializer.Serialize(unsupportedStore)==preserved,"transition preserves unknown/null/corrupt/oversized durable store");
+        }
+        check(PersonalSyncPolicy.Withdraw(null!,owner,"hunt_bills")==0,"null store transition fails closed without throwing");
+        var supported=new PersonalSyncState();
+        PersonalSyncPolicy.Prepare(supported,owner,"hunt_bills",payload);
+        PersonalSyncPolicy.Prepare(supported,other,"hunt_bills",payload);
+        check(PersonalSyncPolicy.Withdraw(supported,owner,"hunt_bills")==1&&supported.Prepared.Count==1
+            &&supported.Prepared[0].OwnerKey==other,"supported obsolete copy removal remains character/resource bounded");
         var ack = JsonSerializer.Serialize(new {ok=true, acceptedClientProduct="GillionsGameSyncTest", personalObservations=new {
             contractVersion=1, endpoint=PersonalSyncPolicy.Endpoint, resources=new[]{new {
                 resourceType="hunt_bills",schemaVersion=1,collectorSchema="hunt-bills-v1",capability="hunt_bills_v1",maxPayloadBytes=65536}}

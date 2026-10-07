@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json.Nodes;
+using System.Runtime.CompilerServices;
 
 internal static class PermissionPackagedTests {
     internal static void Run(Assembly assembly) {
@@ -41,6 +42,34 @@ internal static class PermissionPackagedTests {
         Call("Invalidate");Check(!(bool)Call("HuntReceiving",true,0L)!,"missing/revoked lease closes presentation");
         var configuration=assembly.GetType("GillionsGameSync.PluginConfiguration",true)!;
         Check(!configuration.GetProperties().Any(p=>p.Name.Contains("PermissionAuthority")||p.Name.Contains("PermissionGeneration")),"authority/generations are not configuration");
+        if(assembly.GetName().Name=="GillionsGameSyncTest") {
+            var pluginType=assembly.GetType("GillionsGameSync.Plugin",true)!;
+            var plugin=RuntimeHelpers.GetUninitializedObject(pluginType);
+            var config=Activator.CreateInstance(configuration)!;
+            var sessionType=assembly.GetType("GillionsGameSync.PairedSession",true)!;
+            var session=Activator.CreateInstance(sessionType,[1,"https://test.gillions.app",device,"enrollment",new string('a',64)])!;
+            configuration.GetProperty("ActiveSession")!.SetValue(config,session);
+            pluginType.GetField("configuration",flags)!.SetValue(plugin,config);
+            pluginType.GetField("permissionAuthority",flags)!.SetValue(plugin,instance);
+            var record=pluginType.GetMethod("RecordContributionDenial",flags)!;
+            var hash=assembly.GetType("GillionsGameSync.PersonalSyncPolicy",true)!.GetMethod("Hash",BindingFlags.NonPublic|BindingFlags.Static)!;
+            foreach(var key in new[]{"marketContribution","partyFinderContribution"}) {
+                Call("Bind","enrollment:character",device);
+                Call("Apply",Fixture(true,true).ToJsonString(),issued,0L,null);
+                var known=(string)Call("KnownIdentity",key)!;
+                var fingerprint=(string)hash.Invoke(null,["enrollment:"+known])!;
+                bool Record(string captured,string existing="")=>(bool)record.Invoke(plugin,[key,"enrollment",captured,existing])!;
+                Check(Record(fingerprint),key+" actual Plugin callback preserves expired decision denial");
+                Call("Invalidate");Check(Record(fingerprint),key+" actual Plugin callback after malformed presence");
+                Call("Bind","","");Check(Record(fingerprint),key+" actual Plugin callback after logout drops RAM");
+                Check(!Record(fingerprint,"newer-stop"),key+" actual Plugin callback preserves conflicting durable stop after logout");
+                Call("Bind","enrollment:character",device);
+                var newer=Fixture(true,true);
+                newer["permissionAuthority"]!["permissions"]![key]!["generation"]="00000000-0000-4000-8000-000000000003";
+                Call("Apply",newer.ToJsonString(),issued,0L,null);
+                Check(!Record(fingerprint),key+" actual Plugin callback cannot apply old denial to newer decision");
+            }
+        }
         Console.WriteLine($"Exact packaged permission authority PASS: {count} checks; synthetic, no game/HTTP invocation.");
     }
 }

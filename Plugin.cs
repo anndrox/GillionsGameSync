@@ -1532,12 +1532,14 @@ public sealed partial class Plugin : IDalamudPlugin {
         if (!HasPairedSession || activeOwnedState is null || configuration.ActiveSession!.Origin != GillionsPartyFinderContributor.ApprovedTestingOrigin) return null;
         var permit = CapturePermit(SyncRequestMode.Manual);
         var authorizationGeneration = ContributionAuthority("partyFinderContribution");
+        var enrollmentGeneration = permit.Session!.Generation;
         return new GillionsPartyFinderSession($"{authorizationGeneration}:{permit.Epoch}:{permit.ContentId}", authorizationGeneration,
             configuration.GillionsPartyFinderBlockedGeneration == authorizationGeneration, permit.Cancellation,
             () => framework.RunOnFrameworkThread(() => {
                 // A denial belongs to the captured enrollment, not its character or
                 // request epoch. Never apply an old enrollment's denial to a new one.
-                if (!HasPairedSession || ContributionAuthority("partyFinderContribution") != authorizationGeneration) return;
+                if (!RecordContributionDenial("partyFinderContribution", enrollmentGeneration, authorizationGeneration,
+                    configuration.GillionsPartyFinderBlockedGeneration)) return;
                 configuration.GillionsPartyFinderBlockedGeneration = authorizationGeneration;
                 // Security state must survive an immediate reload; do not coalesce.
                 RequestConfigurationSave();
@@ -1695,7 +1697,8 @@ public sealed partial class Plugin : IDalamudPlugin {
         return new MarketContributionSession($"{authorization}:{permit.Epoch}:{world}", authorization,
             configuration.GillionsMarketBlockedGeneration == authorization, (ushort)world, permit.Cancellation,
             () => framework.RunOnFrameworkThread(() => {
-                if (!HasPairedSession || ContributionAuthority("marketContribution") != authorization) return;
+                if (!RecordContributionDenial("marketContribution", generation, authorization,
+                    configuration.GillionsMarketBlockedGeneration)) return;
                 configuration.GillionsMarketBlockedGeneration = authorization;
                 RequestConfigurationSave(); FlushConfigurationSave(receivedAuthorizationDenial: true);
             }),

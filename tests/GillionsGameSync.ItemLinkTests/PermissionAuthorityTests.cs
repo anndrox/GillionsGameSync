@@ -70,6 +70,26 @@ internal static class PermissionAuthorityTests {
         var downgrade=Bound();downgrade.Apply(Fixture("explicit",false).ToJsonString(),issued,0);
         downgrade.Apply(Fixture().ToJsonString(),issued,1);
         Check(!downgrade.Allows("itemLinks",true,1),"legacy downgrade cannot resurrect an explicit decision");
+        var custody=Bound();custody.Apply(Fixture("explicit",true).ToJsonString(),issued,0);
+        var known=custody.KnownIdentity("partyFinderContribution");
+        Check(known is not null&&!custody.Fresh(30000)&&custody.KnownIdentity("partyFinderContribution")==known,"expired lease retains denial identity without granting sends");
+        custody.Invalidate();
+        Check(custody.KnownIdentity("partyFinderContribution")==known&&!custody.Allows("partyFinderContribution",true,0),"malformed/invalidation preserves received-denial custody only");
+        foreach(var unavailable in new[]{"expiry","malformed","logout","reload"})
+            Check(ContributionDenialPolicy.Record("enrollment","enrollment","old-decision",unavailable is "logout" or "reload"?null:"old-decision",""),"received denial retained through "+unavailable);
+        Check(!ContributionDenialPolicy.Record("old-enrollment","new-enrollment","old-decision",null,""),"denial cannot cross re-pair ownership");
+        Check(!ContributionDenialPolicy.Record("enrollment","enrollment","old-decision","new-decision","new-decision"),"old callback cannot overwrite known newer decision stop");
+        Check(!ContributionDenialPolicy.Record("enrollment","enrollment","old-decision",null,"new-decision"),"logout does not allow conflicting newer durable stop overwrite");
+        Check(ContributionDenialPolicy.Record("enrollment","enrollment","new-decision","new-decision","old-decision"),"new decision denial supersedes obsolete stop");
+        var gap=Bound();gap.Apply(Fixture("explicit",true).ToJsonString(),issued,0);
+        var identity=gap.Identity("marketContribution",29990);var pending=true;int discarded=0;
+        void Reconcile(long clock) { var next=gap.Identity("marketContribution",clock);if(identity!=next){pending=false;discarded++;identity=next;} }
+        Reconcile(30050); // forced pre-install, even within normal maintenance gap
+        var renewal=Fixture("explicit",true);
+        renewal["permissionAuthority"]!["issuedAt"]=issued.AddMilliseconds(30050).ToString("O");
+        renewal["permissionAuthority"]!["expiresAt"]=issued.AddMilliseconds(60050).ToString("O");
+        gap.Apply(renewal.ToJsonString(),issued.AddMilliseconds(30050),30050);Reconcile(30050);
+        Check(!pending&&discarded==2,"same-decision renewal after expiry retires old pending work before ON resumes");
         var mixed=Fixture("explicit",true);mixed["permissionAuthority"]!["permissions"]!["itemLinks"]!["enabled"]=false;
         var independent=Bound();independent.Apply(mixed.ToJsonString(),issued,0);
         Check(!independent.Allows("itemLinks",true,0)&&independent.Allows("partyFinderLinks",false,0),"item OFF/PF ON independent");

@@ -45,9 +45,8 @@ public sealed partial class Plugin {
             ? "Update required" : huntLocal.Progress.ExpiresAt>Environment.TickCount64 && huntLocal.Progress.Availability.Length==0 ? "Ready" : "Waiting for supported context";
 #if GILLIONS_TEST_BUILD
         if (HasPairedSession) {
-            fates=!FatePolicy.Compatible(fateLocal.ObservedSource) || fateSender.Grant?.Reason=="FATE_SOURCE_UNSUPPORTED" ? "Update required"
-                : fateSender.Grant?.Reason=="FATE_POLICY_OFF" ? "Off on Gillions"
-                : fateSender.Grant?.Admission.Granted==true ? "Ready" : "Temporarily unavailable";
+            fates=PublicHealth.FateState(FatePolicy.Compatible(fateLocal.ObservedSource),fateSender.Grant?.Reason,
+                fateSender.Grant?.Admission.Granted,fateSender.Grant?.PolicyEnabled);
             market=ExplicitPermission("marketContribution") && !MarketEnabled ? "Off on Gillions"
                 : MarketEnabled && marketAcceptedGeneration.Length>0 ? "Ready" : "Temporarily unavailable";
         }
