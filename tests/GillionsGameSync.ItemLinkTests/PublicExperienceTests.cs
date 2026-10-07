@@ -51,7 +51,14 @@ internal static class PublicExperienceTests {
         foreach(string marker in new[]{"synthetic-bearer","synthetic-pairing","synthetic-cookie","synthetic-header","private-hunt-json","private-market-json","account-id-123"}) {
             var health=new PublicHealth(marker,marker,marker,marker,marker,marker,null,marker,marker,marker);
             Check(!health.SupportSummary().Contains(marker),"copy summary whitelist: "+marker);
+            Check(PublicConnectionPresentation.ActionMessage(marker).Length==0,"action feedback excludes raw secret: "+marker);
         }
+        Check(PublicConnectionPresentation.PairingUrl("https://example.invalid/")=="https://example.invalid/gillions-sync#pairing","saved next origin is the exact displayed/clicked pairing recipient");
+        Check(PublicConnectionPresentation.PairingUrl("https://test.gillions.app")=="https://test.gillions.app/gillions-sync#pairing","Testing origin never silently links to production");
+        Check(PublicConnectionPresentation.PairingUrl("https://secret@example.invalid").Length==0,"invalid origin cannot expose credentials in a link");
+        Check(PublicConnectionPresentation.PairingUrl("http://example.invalid").Length==0,"invalid origin cannot enable plaintext pairing");
+        Check(PublicConnectionPresentation.ActionMessage("Gillions could not complete the request. Pending records were kept; please try again.",true).Contains("fresh one-time code"),"pairing failure provides a safe recovery remedy");
+        Check(PublicConnectionPresentation.ActionMessage("Sync completed.")=="Sync completed.","manual sync result remains visible");
         var watch=System.Diagnostics.Stopwatch.StartNew();
         for(int i=0;i<10000;i++) state.Update(true,100,Snapshot(i),i);
         Console.WriteLine($"Public UX/Hunt Progress PASS: {checks} assertions; 10,000 synthetic model updates {watch.Elapsed.TotalMilliseconds:F2} ms (not in-game frame cost).");

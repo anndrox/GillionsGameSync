@@ -13,6 +13,7 @@ public sealed partial class Plugin {
     private DateTime nextPublicUiUtc;
     private bool pairingRepair;
     private string publicConnectionFailure = "";
+    private bool supportCopyAcknowledged;
     private void ObserveConnectionFailure(Exception error) {
         publicConnectionFailure = error is GillionsSyncRejectedException r ? r.Code switch {
             "DEVICE_INVALID" or "DEVICE_REVOKED" or "TOKEN_INVALID" => "DEVICE_INVALID",
@@ -28,7 +29,11 @@ public sealed partial class Plugin {
 #else
     private const bool IsTesting=false;
 #endif
-    private string PrivacyUrl => (configuration.ActiveSession?.Origin ?? GillionsEndpoints.DefaultServerUrl)+"/gillions-sync";
+    private string PrivacyUrl => (SyncOrigin.TryNormalize(configuration.ActiveSession?.Origin,out var current) ? current : GillionsEndpoints.DefaultServerUrl)+"/gillions-sync";
+    private void DrawActionFeedback(bool pairing=false) {
+        string message=PublicConnectionPresentation.ActionMessage(uiState.Message,pairing);
+        if(message.Length>0) Label(message);
+    }
     private void PublishPublicHealth(DateTime now) {
         string code=publicConnectionFailure.Length>0 ? publicConnectionFailure : configuration.SyncBlockedCode;
         string connection=code=="UNAVAILABLE" ? "Gillions unavailable" : PublicHealth.ConnectionState(HasPairedSession,pairingInFlight,code);
@@ -93,9 +98,21 @@ public sealed partial class Plugin {
         Label("Connect supported current FFXIV information to Gillions so Hunts and other companion tools stay useful while you play.");
         Label("Some public-world observations may be contributed according to your Gillions account settings.");
         Label("Game Sync does not move your character, fight, teleport or automatically join parties.");
-        Link("Connect to Gillions",PrivacyUrl+"#pairing");
-        Link("Learn about data & privacy",PrivacyUrl);
+        string nextOrigin=PublicConnectionPresentation.PairingOrigin(uiServerAddress);
+        if(nextOrigin.Length>0) {
+            Label("Next pairing destination: "+nextOrigin);
+            Link("Connect to Gillions",PublicConnectionPresentation.PairingUrl(uiServerAddress));
+            Link("Learn about data & privacy",nextOrigin+"/gillions-sync");
+        } else {
+            Label("The saved pairing destination is invalid. Choose the approved default before entering a code.");
+            if(ImGui.Button("Use default pairing destination")) {
+                uiServerAddress=IsTesting ? "https://test.gillions.app" : GillionsEndpoints.DefaultServerUrl;
+                string destination=uiServerAddress;
+                QueueUiAction(()=> { configuration.ServerUrl=destination; RequestConfigurationSave(); });
+            }
+        }
         Label(uiState.Pairing ? "Waiting for Gillions authorization…" : publicHealth.Connection);
+        DrawActionFeedback(pairing:true);
         DrawPairingControls(uiState);
     }
     private void DrawPublicSettings() {
@@ -115,6 +132,7 @@ public sealed partial class Plugin {
         }
         if(ImGui.BeginTabItem("Connection")) {
             Label(publicHealth.Connection); Label(publicHealth.Character); DrawPrivacy();
+            DrawActionFeedback();
             Link("Open Gillions",configuration.ActiveSession?.Origin ?? GillionsEndpoints.DefaultServerUrl);
             if(ImGui.Button("Reconnect")) { pairingRepair=true; publicUi.ShowPairing(); }
             if(uiState.Paired && ImGui.Button("Disconnect")) QueueUiAction(()=> {
@@ -130,7 +148,10 @@ public sealed partial class Plugin {
             Label("Hunts — "+publicHealth.Hunts); Label("Party Finder — "+publicHealth.PartyFinder);
             Label("FATEs — "+publicHealth.Fates); Label("Market — "+publicHealth.Market);
             Label(publicHealth.LastSync is { } last ? $"Last successful sync: {last.ToLocalTime():g}" : "No successful sync recorded for this character.");
-            if(ImGui.Button("Copy support summary")) ImGui.SetClipboardText(publicHealth.SupportSummary());
+            if(ImGui.Button("Copy support summary")) { ImGui.SetClipboardText(publicHealth.SupportSummary()); supportCopyAcknowledged=true; }
+            if(supportCopyAcknowledged) Label("Support summary copied.");
+            DrawActionFeedback();
+            if(!uiState.Model.CanSync) Label(!uiState.Paired ? "Connect to Gillions before syncing." : uiState.Model.Status.StartsWith("Log into",StringComparison.Ordinal) ? "Log into a character before syncing." : "A sync is already in progress. Please wait.");
             ImGui.BeginDisabled(!uiState.Model.CanSync);
             if(ImGui.Button("Sync now")) _=SyncAsync();
             ImGui.EndDisabled();

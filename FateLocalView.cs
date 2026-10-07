@@ -178,7 +178,7 @@ internal sealed class FateLocalView : IDisposable {
             summary=FateMeasurements.Summary(view.Costs); // once per bounded read, never every UI frame
         }
     }
-    internal string Diagnostic() => "FATE Testing diagnostics (manual copy)\n"+view.Status+"\n"
+    internal string Diagnostic() => "PRIVATE FATE Testing diagnostics (manual copy, no diagnostic upload)\nWorld, territory and observation times reveal your presence. Share only with a trusted diagnostic recipient; never share configuration or credentials.\n"+view.Status+"\n"
         +$"Cadence {FatePolicy.ReadSeconds}s; RAM-only, maximum 240 samples. Source: {JsonSerializer.Serialize(source,FatePolicy.Json)}\n"
         +(view.Context is { } c ? $"World {c.World}; territory {c.Territory}; public ordinal {c.Instance}.\n" : "Context unavailable.\n")
         +summary+"\n"
@@ -191,11 +191,12 @@ internal sealed class FateLocalView : IDisposable {
         ImGui.SetNextWindowSize(new System.Numerics.Vector2(760,480),ImGuiCond.FirstUseEver);
         if (!ImGui.Begin("Advanced Testing FATE diagnostics",ref visible)) { ImGui.End(); return; }
         ImGui.TextWrapped("Read-only public overworld observations start automatically with a fresh Gillions policy grant and supported context. No player coordinates, persistent history or gameplay writes. Missing state is UNKNOWN. Diagnostics cannot start or authorize collection.");
+        ImGui.TextWrapped("PRIVATE diagnostics: world, territory and observation times reveal your presence. Copy only for a trusted diagnostic recipient. Never share configuration or credentials.");
         if (ImGui.Button("Reset measurement counters")) _=framework.RunOnFrameworkThread(()=> { if (!disposed) ResetMeasurements(); });
         ImGui.TextWrapped(view.Status);
         ImGui.TextWrapped("Remote contribution: "+RemoteStatus);
         ImGui.TextWrapped(summary);
-        if (ImGui.Button("Copy FATE diagnostics (local, no upload)")) ImGui.SetClipboardText(Diagnostic());
+        if (ImGui.Button("Copy PRIVATE FATE diagnostics (local, no diagnostic upload)")) ImGui.SetClipboardText(Diagnostic());
         foreach(var row in view.Rows) ImGui.TextWrapped($"FATE {row.FateId}: {row.State.Kind}, progress {row.ProgressPercent?.ToString() ?? "UNKNOWN"}%, bonus {row.Bonus?.ToString() ?? "UNKNOWN"}; world {row.WorldId}, territory {row.TerritoryId}, {row.Instance.Kind} {row.Instance.Number}; observed {row.ObservedAt:O}; start {row.Timing?.StartTimeEpoch.ToString() ?? "UNKNOWN"}.");
         ImGui.End();
     }

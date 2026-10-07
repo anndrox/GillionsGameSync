@@ -19,6 +19,12 @@ assert 'configuration.ShowHuntProgress=show' in ui and 'configuration.LockHuntPr
 assert not re.search(r'configuration\.(Contribute|Enable.*Contribution|SyncPersonal|ShareHuntRouting|AutomaticallyShowHuntMap)\w*\s*=',ui)
 assert 'PrivacyUrl' in ui and '+"/gillions-sync"' in ui
 assert 'publicUi.ShowSettings()' in plugin and 'publicUi.ShowPairing()' in plugin
+assert 'PublicConnectionPresentation.PairingUrl(uiServerAddress)' in ui and 'Next pairing destination:' in ui
+assert 'Use default pairing destination' in ui and 'DrawActionFeedback(pairing:true)' in ui
+assert 'PublicConnectionPresentation.PairingOrigin(uiServerAddress); uiPairingCode' in plugin
+fate_view=(root/'FateLocalView.cs').read_text()
+assert 'PRIVATE FATE Testing diagnostics' in fate_view and 'reveal your presence' in fate_view
+assert 'Copy PRIVATE FATE diagnostics' in fate_view
 assert 'private void DrawDiagnostics' not in plugin
 assert 'uiState.Model.Warning' in main
 progress=hunt.split('private void PublishProgress(',1)[1].split('#if GILLIONS_TEST_BUILD\n    private void Draw()',1)[0]

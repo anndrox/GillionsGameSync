@@ -11,6 +11,12 @@ The main window has connection, recognized character, last sync and four health
 rows, with account/storage warnings where action is needed. It has no feature
 tabs or privacy switches. The dedicated welcome/pair/ready window reuses the
 one-time-code protocol. An already bound connection does not repeat onboarding.
+Pairing displays the normalized next destination and uses that same destination
+for the website link and code submission, separate from current-account privacy.
+Invalid destinations require an explicit default recovery action. Bounded action
+feedback preserves pairing recovery and manual sync/disconnect results without
+copying raw server messages. Direct FATE diagnostics and copied reports warn
+that world, territory and observation times reveal private presence.
 The approved repository/feed icon is embedded unchanged and loaded by Dalamud's
 shared resource provider: larger in pairing, restrained in main and small in
 Settings. No replacement art or Site asset scraping is used. Hunt Progress has

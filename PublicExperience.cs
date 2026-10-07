@@ -19,6 +19,20 @@ internal sealed record PublicHealth(string Connection, string Character, string 
         : !paired ? "Not connected" : "Connected";
 }
 
+internal static class PublicConnectionPresentation {
+    internal static string PairingOrigin(string value) => SyncOrigin.TryNormalize(value,out var origin) ? origin : "";
+    internal static string PairingUrl(string value) => PairingOrigin(value) is { Length: > 0 } origin ? origin+"/gillions-sync#pairing" : "";
+    internal static string ActionMessage(string value, bool pairing = false) => value switch {
+        "Connected. Gillions will load your selected character." or "Sync completed." or "Your supported data is already current."
+            or "Disconnected. Saved history remains on this PC." or "Your Gillions trial has ended." or "This Gillions account is disabled."
+            or "The connection or sync settings changed. Try again when ready." => value,
+        "Gillions could not complete the request. Pending records were kept; please try again." => pairing
+            ? "Pairing did not complete. Check the destination and connection, then create a fresh one-time code there and try again."
+            : value,
+        _ => ""
+    };
+}
+
 internal sealed record HuntProgressRow(string Key, string Name, int Current, int Required) {
     internal int Remaining => Math.Max(0, Required - Current);
     internal bool Complete => Current == Required;

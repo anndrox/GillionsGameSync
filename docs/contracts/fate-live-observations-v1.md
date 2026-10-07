@@ -146,8 +146,11 @@ paired UUID/credential session, source tuple and policy generation; verify UTC
 issuance/expiry30s and exact limits. A relative endpoint must be exactly
 `/api/game-sync/fates/contribute`; a grant cannot redirect credentials.
 
-Discovery runs no more often than10 monotonic seconds while the temporary
-measurement session has settled context. Account policy is the only remote consent.
+Published86 discovery runs no more often than10 monotonic seconds while its
+temporary measurement session has settled context. Candidate87 instead bootstraps
+discovery from the current paired session and exact source before settlement;
+actual collection and dispatch still require supported settled context and fresh
+authorization. Account policy is the only remote consent.
 It must be ON with a valid generation, supported revision and authorized grant.
 Grant expiry also has a monotonic deadline. Session, context, stop, invalid discovery
 and OFF cancel pending/in-flight contributions. OFF->ON or renewed admission after

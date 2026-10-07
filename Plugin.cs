@@ -1395,7 +1395,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         ImGui.InputText("Pairing code", ref uiPairingCode, 256, ImGuiInputTextFlags.Password);
         ImGui.BeginDisabled(view.Pairing || string.IsNullOrWhiteSpace(uiPairingCode) || !SyncOrigin.TryNormalize(uiServerAddress, out _));
         if (ImGui.Button(view.Pairing ? "Connecting…" : "Pair this device")) {
-            var code = uiPairingCode.Trim(); var address = uiServerAddress; uiPairingCode = "";
+            var code = uiPairingCode.Trim(); var address = PublicConnectionPresentation.PairingOrigin(uiServerAddress); uiPairingCode = "";
             QueueUiAction(() => { configuration.PairingCode = code; configuration.ServerUrl = address; _ = PairAsync(); });
         }
         ImGui.EndDisabled();

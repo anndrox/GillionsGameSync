@@ -52,6 +52,10 @@ var cases=new[]{
     ("14-hunt-progress-updating","DrawHuntProgress",true,300f,1f,0),
     ("15-hunt-progress-all-complete","DrawHuntProgress",true,300f,1f,0),
     ("16-hunt-progress-long-name-scale","DrawHuntProgress",true,300f,1.5f,0),
+    ("17-pairing-failure-recovery","DrawPairingPublic",false,460f,1f,0),
+    ("18-paired-origin-next-different","DrawPairingPublic",true,460f,1f,0),
+    ("19-invalid-next-pair-origin","DrawPairingPublic",false,460f,1f,0),
+    ("20-pairing-connecting","DrawPairingPublic",false,460f,1f,0),
 };
 foreach(var (name,method,paired,width,scale,tab) in cases) {
     object plugin=RuntimeHelpers.GetUninitializedObject(T("Plugin"));
@@ -61,12 +65,19 @@ foreach(var (name,method,paired,width,scale,tab) in cases) {
     config.GetType().GetProperty("ShowHuntProgress")!.SetValue(config,true);
     if(paired) config.GetType().GetProperty("ActiveSession")!.SetValue(config,New("PairedSession",1,testing?"https://test.gillions.app":"https://gillions.app","synthetic-device","synthetic-generation","synthetic-fingerprint"));
     Set("configuration",config);Set("uiPairingCode","");Set("uiServerAddress",testing?"https://test.gillions.app":"https://gillions.app");
+    if(name.StartsWith("18-")) {
+        config.GetType().GetProperty("ActiveSession")!.SetValue(config,New("PairedSession",1,"https://gillions.app","synthetic-device","synthetic-generation","synthetic-fingerprint"));
+        Set("pairingRepair",true);Set("uiServerAddress","https://test.gillions.app");
+    }
+    if(name.StartsWith("19-"))Set("uiServerAddress","http://invalid.example/synthetic-secret");
     Set("publicHealth",New("PublicHealth",paired?"Connected":"Not connected",paired?"Example Character · Example World":"Character unavailable",
         paired?"Ready":"Gillions unavailable",paired?"Ready":"Gillions unavailable",paired?"Ready":"Gillions unavailable",paired?"Ready":"Gillions unavailable",
         paired?new DateTime(2026,10,7,12,0,0,DateTimeKind.Utc):null,testing?"Testing":"Public",assembly.GetName().Version!.ToString(4),"2026.09.15.0000.0000"));
     var ui=T("PluginUiSnapshot").GetField("Empty",BindingFlags.Public|BindingFlags.Static)!.GetValue(null)!;
     ui=ui.GetType().GetMethod("<Clone>$")!.Invoke(ui,[])!;
     ui.GetType().GetProperty("Paired")!.SetValue(ui,paired);Set("uiState",ui);
+    if(name.StartsWith("17-"))ui.GetType().GetProperty("Message")!.SetValue(ui,"Gillions could not complete the request. Pending records were kept; please try again.");
+    if(name.StartsWith("20-"))ui.GetType().GetProperty("Pairing")!.SetValue(ui,true);
     var model=Activator.CreateInstance(T("HuntProgressState"),true)!;
     var rows=Array.CreateInstance(T("HuntProgressRow"),name.Contains("multiple")?2:name.Contains("updating")||name.Contains("all-complete")?0:1);
     for(int i=0;i<rows.Length;i++) rows.SetValue(New("HuntProgressRow","fixture-"+i,
