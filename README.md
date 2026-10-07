@@ -1,20 +1,23 @@
 # Gillions Game Sync
 
-## Unpublished public UX candidate
+## Published Testing 0.0.87
 
-Testing87 preparation adds a compact connection/health window, dedicated pairing,
+Testing87 adds a compact connection/health window, dedicated pairing,
 General/Hunts/Connection/Advanced Settings and a default-OFF local Hunt Progress
 panel. FATE collection no longer needs a diagnostic command: fresh authenticated
 Site policy and exact source admission control its existing five-second lifecycle.
 No new payload contract, gameplay automation or extra Hunt/location reads are added.
 
-This candidate is **not published or ready for Stable promotion**. The final
-Site-owned permission contract is reconciled; live transport and automatic FATE
-Off/On checks passed. Hunt Progress is now manually resizable with a fixed chosen
-size, and attribution uses a Data Provided by label plus an xivpf.com link button.
-The corrected presentation still needs exact-package owner acceptance. Testing86
-remains the installed feed. Existing Stable capabilities are not silently promoted
-from Testing. See the [candidate state and publication gates](docs/public-release-candidate.md).
+The rolling Testing feed now resolves **0.0.87.0**. The final Site-owned permission
+contract is reconciled; real transport, automatic FATE Off/On, independent links
+and automatic/manual Hunt-map checks passed. The owner confirmed Hunt Progress
+resize/close/reopen, keyboard/chat and Lock position. Attribution uses a Data
+Provided by label plus an xivpf.com link button. Controller and live FC submarine
+collection were not tested. The exact accepted package was not rebuilt or replaced.
+Disable any dev copy before enabling installed Testing; never run both. Preserve
+pairing/configuration and the repository URL. Stable/public promotion remains
+separately held. See [Testing87 results](docs/releases/testing-0.0.87.md) and
+[public/Stable gates](docs/public-release-candidate.md).
 
 Published Testing86 wires the independent default-OFF Site FATE policy and bounded
 authenticated sender, with accepted85 collection unchanged. Real shared TEST
@@ -108,7 +111,7 @@ Updating this plugin does not cancel external AutoRetainer plans or guarantee ca
 
 - Open the plugin's Dalamud configuration window, or use `/gillionssync pair` to open its pairing controls.
 - Published Stable30: `/gillionssync` opens the window and requests a manual sync.
-  The unpublished public UX candidate separates these actions: `/gillionssync`
+  Testing87 and the proposed public UX separate these actions: `/gillionssync`
   opens the main window; `/gillionssync sync` and Advanced **Sync now** explicitly
   request sync. Testing uses `/gillionssynctest` with the same subcommands.
 - **Automatic sync** checks one ordinary category every 30 seconds. Inventory changes, queued Gil records and changed Retainer observations use their own deadlines. The two-second Gil fallback and 750 ms dirty delay are unchanged.

@@ -1,12 +1,15 @@
 # Releasing
 
-## Public UX candidate preparation
+## Testing87 accepted; public/Stable held
 
-Testing87 preparation and proposed Stable31 are unpublished. The compact public
-UI and local Hunt Progress do not grant Site policy authority or public capability
-admission. Do not run Stable manifest preparation/publication or replace the
-rolling Testing feed until the [candidate gates](public-release-candidate.md) pass.
-Use the existing package script for ignored staging only. Distinct channel
+Testing87 is published at its immutable prerelease and the unchanged rolling
+Testing URL after applicable exact-package and practical live gates passed.
+Only the rolling JSON advanced after the final checks; no rebuild, retag or
+immutable-asset replacement occurred. See [Testing87 evidence](releases/testing-0.0.87.md).
+Proposed Stable31 remains preliminary/unpublished. The compact UI and local Hunt
+Progress do not grant Site policy authority or public capability admission.
+Do not run Stable manifest preparation/publication without the separate
+[public/Stable gates](public-release-candidate.md). Distinct channel
 assemblies/conditional capabilities prevent a byte-identical cross-channel
 promotion; each eventual exact artifact requires equivalent acceptance.
 

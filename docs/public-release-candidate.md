@@ -1,9 +1,12 @@
 # Public Game Sync release candidate
 
-The unpublished Testing87 candidate prepares the approved compact UX and local
-Hunt Progress. It is not ready for public promotion: final Stable capability wiring,
-product admission and owner approval remain held. Testing86 and Stable30 stay published
-unchanged. Do not install the prepared candidate as an accepted successor.
+Testing87's accepted source is `c286e5140470fd866cf43f2db92f18aa4d170f4c`.
+Its immutable prerelease and unchanged rolling Testing feed are published and
+anonymously verified. See [Testing87 results](releases/testing-0.0.87.md).
+It is not ready for public promotion: final Stable capability wiring, product
+admission and owner approval remain held. Immutable Testing86 and Stable30 remain
+unchanged. Disable the dev copy before enabling installed Testing; preserve pairing
+and configuration, and never load two copies.
 
 ## Implemented presentation
 
@@ -20,7 +23,8 @@ that world, territory and observation times reveal private presence.
 The approved repository/feed icon is embedded unchanged and loaded by Dalamud's
 shared resource provider: larger in pairing, restrained in main and small in
 Settings. No replacement art or Site asset scraping is used. Hunt Progress has
-no decorative artwork. Owner branding approval remains outstanding.
+no decorative artwork. Testing live UX is accepted; separate public/Stable
+exact-artifact and owner review remains outstanding.
 Settings has General, Hunts, Connection and Advanced tabs. Support copying uses
 fixed status labels and bounded version strings, not raw errors or payloads.
 
@@ -84,8 +88,9 @@ local history remains intact. OFF-to-ON requires fresh observations. Market's
 service acknowledgment is not consent. Public31 admission remains held.
 
 FATE schema1, PF, Market, ordinary sync, personal Hunt/submarine/travel and command
-payload contracts are unchanged. Actual Testing87 client acceptance is still a
-publication gate; source/fixture success alone does not satisfy it.
+payload contracts are unchanged. Actual Testing87 acceptance passed the applicable
+practical publication gates; source/fixture checks are documented separately,
+not substituted for physical evidence.
 Owner-approved provider attribution: a **Data Provided by** label followed by a
 clickable **xivpf.com** button linking to `https://xivpf.com`. Site should use the
 same label plus provider-domain button, including when other providers are added.
@@ -118,10 +123,17 @@ Dalamud font, then rasterize their ImGui triangles. They are not FFXIV captures 
 proof of native focus, keyboard/controller operation, placement or live transport.
 The renderer never creates a second product UI or uses Windows input.
 
-Source, exact package hashes, review verdicts and current Site identity belong in
-the durable owner evidence bundle. Live FATE steady-state cost, command latency
-and retained-state/game acceptance must be repeated after exact Site admission.
-Historical86 live success is not acceptance of changed87 lifecycle or public UI.
+Source, hashes, review verdicts and Site identity are bound in durable owner
+evidence and the [publication record](../data/releases/testing-0.0.87.json).
+Real87 automatic FATE lifecycle, consent transitions, private Hunt intake,
+independent links and manual/automatic maps were checked after exact admission.
+Historical86 success alone was not used to accept changed87 behavior.
+The owner physically accepted c286 geometry, keyboard/chat and Lock position;
+controller was not tested and live FC submarine collection is outstanding.
+Security/Privacy and Compatibility acceptance for unchanged b392 surfaces remains
+applicable, not a newly claimed independent c286 review. Exact tests were rebound
+to c286. Ordering is NO ISSUE; no display-name deduplication, Site target lookup,
+new polling or themed header was added.
 
 ## Release and recovery
 
@@ -131,11 +143,11 @@ cross-channel artifacts. Review/freeze Testing87 separately; the eventual public
 artifact needs equivalent exact-artifact acceptance after its contract is ready.
 Existing package tooling stages ignored artifacts without changing published feeds.
 
-No Stable/main/Site/production change is part of this preparation. Testing
-publication remains held until reviews, permission reconciliation and exact Site
-admission/live gates pass. Then the established versioned prerelease and unchanged
-rolling Testing URL are used. Stable publication needs final owner UX approval,
-compatible public admission and normal source/manifest integration authority.
+No Stable/main/Site source/schema/production change occurred. Testing's exact
+immutable assets were published first; only the established rolling JSON advanced
+after the remaining practical live checks passed. No immutable bytes were replaced.
+Stable publication still needs the separate owner review, compatible public admission
+and normal source/manifest integration authority.
 
 Recovery keeps immutable predecessor artifacts. A later approved Stable promotion
 would advance the established Stable main manifest and immutable GitHub release;
@@ -144,7 +156,7 @@ an immutable ZIP. Do not exercise that mutation now. New presentation fields are
 additive, but an older serializer may drop them on save; preserve a user-controlled
 config backup and obtain compatibility judgment before any binary downgrade.
 
-## Player release notes pending publication
+## Testing player release notes
 
 Game Sync has a smaller status window and clearer connection setup. Settings are
 organized into four tabs. Optional Hunt Progress shows local remaining counts in
@@ -152,6 +164,5 @@ your current area and stays closed when you dismiss it. FATE observations run
 automatically only when Gillions authorizes them. Privacy controls live on Gillions;
 Game Sync never moves, fights, teleports or automatically joins parties.
 
-These notes describe the intended accepted successor, not an available update.
-Final owner branding/accessibility approval and Stable product admission remain
-required before public release readiness.
+These notes describe the available Testing87 successor. Final public/Stable
+review and product admission remain required before Stable release readiness.
