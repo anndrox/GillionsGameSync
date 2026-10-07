@@ -4,6 +4,9 @@
 
 - Compact main/pairing windows, tabbed Settings, safe support summary and optional
   display-only Hunt Progress preserve existing sync and read-only behavior.
+- Hunt Progress can be manually resized and keeps its chosen geometry instead
+  of resizing when observations change. Lock position remains independent.
+- Separate the Data Provided by label from the clickable xivpf.com provider button.
 - Reconcile eight independent Site decisions through authenticated presence:
   legacy local OFF is preserved; fresh explicit Site ON/OFF is authoritative.
   No reset, re-pairing or destructive preference migration.

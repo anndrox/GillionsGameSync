@@ -8,11 +8,13 @@ panel. FATE collection no longer needs a diagnostic command: fresh authenticated
 Site policy and exact source admission control its existing five-second lifecycle.
 No new payload contract, gameplay automation or extra Hunt/location reads are added.
 
-This candidate is **not published or ready for Stable promotion**. Site does not
-yet provide the complete Site-owned permission contract needed to replace legacy
-local contribution/request choices. Testing86 remains the installed feed. Existing
-Stable capabilities are not silently promoted from Testing. See the
-[candidate state and required Site correction](docs/public-release-candidate.md).
+This candidate is **not published or ready for Stable promotion**. The final
+Site-owned permission contract is reconciled; live transport and automatic FATE
+Off/On checks passed. Hunt Progress is now manually resizable with a fixed chosen
+size, and attribution uses a Data Provided by label plus an xivpf.com link button.
+The corrected presentation still needs exact-package owner acceptance. Testing86
+remains the installed feed. Existing Stable capabilities are not silently promoted
+from Testing. See the [candidate state and publication gates](docs/public-release-candidate.md).
 
 Published Testing86 wires the independent default-OFF Site FATE policy and bounded
 authenticated sender, with accepted85 collection unchanged. Real shared TEST

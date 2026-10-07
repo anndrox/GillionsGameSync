@@ -105,6 +105,7 @@ Assert(!(bool)configurationType.GetProperty("ShowHuntProgress")!.GetValue(public
     && (!testingProduct || !(bool)configurationType.GetProperty("ContributeObservedMarketData")!.GetValue(publicRestart)!),
     "Hunt Progress OFF changed old credentials, ordinary sync, website commands or contribution choices.");
 Console.WriteLine($"Actual public preferences default/upgrade/restart/OFF isolation PASS: {product}.");
+HuntWindowPackagedTests.Run(pluginAssembly, testingProduct);
 var marketSetting = configurationType.GetProperty("ContributeObservedMarketData");
 var personalHuntSetting = configurationType.GetProperty("SyncPersonalHunts");
 var personalSubSetting = configurationType.GetProperty("SyncPersonalSubmarines");

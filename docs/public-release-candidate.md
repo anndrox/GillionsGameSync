@@ -25,7 +25,11 @@ Settings has General, Hunts, Connection and Advanced tabs. Support copying uses
 fixed status labels and bounded version strings, not raw errors or payloads.
 
 Both builds use the standard Dalamud WindowSystem. Placement follows Dalamud;
-compact windows size to content. Hunt Progress suppresses focus/navigation capture,
+main, pairing and Settings size to content. Hunt Progress is manually resizable,
+keeps the chosen size through content changes and reopening, and uses standard
+Dalamud/ImGui geometry persistence rather than plugin configuration. A scaled
+220-by-100 minimum preserves a usable viewport; longer contents wrap and scroll.
+Lock position prevents movement, not resizing. Hunt Progress suppresses focus/navigation capture,
 has no sound/animation and optionally locks movement. A manual close suppresses
 auto-show in the same territory until manual reopening or a territory change.
 
@@ -82,7 +86,10 @@ service acknowledgment is not consent. Public31 admission remains held.
 FATE schema1, PF, Market, ordinary sync, personal Hunt/submarine/travel and command
 payload contracts are unchanged. Actual Testing87 client acceptance is still a
 publication gate; source/fixture success alone does not satisfy it.
-Use **Data provided by xivpf.com** with a clickable link consistently on Site.
+Owner-approved provider attribution: a **Data Provided by** label followed by a
+clickable **xivpf.com** button linking to `https://xivpf.com`. Site should use the
+same label plus provider-domain button, including when other providers are added.
+This presentation does not imply Gillions originates the data or change contracts.
 
 ## Command and control inventory
 

@@ -23,6 +23,13 @@ internal sealed class PublicGameSyncUi : IDisposable {
         settings=new("Gillions Settings"+badge+"###GillionsSettings",drawSettings,520);
         pairing=new("Welcome to Gillions"+badge+"###GillionsPairing",drawPairing,460);
         hunts=new("Hunt Progress###GillionsHuntProgress",drawHunts,300);
+        // Keep the player's chosen geometry through content changes and reopenings.
+        // FirstUseEver and the unchanged ID let Dalamud/ImGui own persistence.
+        hunts.Flags &= ~ImGuiWindowFlags.AlwaysAutoResize;
+        hunts.Size=new Vector2(300,180);
+        hunts.SizeConstraints=new WindowSizeConstraints {
+            MinimumSize=new Vector2(220,100), MaximumSize=new Vector2(float.MaxValue,float.MaxValue)
+        };
         hunts.Flags |= ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoNavFocus | ImGuiWindowFlags.NoNavInputs;
         hunts.RespectCloseHotkey=false; hunts.DisableWindowSounds=true; hunts.DisableFadeInFadeOut=true;
         foreach(var window in new[]{main,settings,pairing,hunts}) windows.AddWindow(window);

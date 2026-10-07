@@ -6,6 +6,7 @@ using System.Runtime.Loader;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Windowing;
 
 // Offline actual candidate Draw methods; no plugin constructor/services,
 // Windows input, browser, game or network. C# is needed for the typed .NET
@@ -35,6 +36,10 @@ Type T(string n)=>assembly.GetType("GillionsGameSync."+n,true)!;
 const BindingFlags flags=BindingFlags.NonPublic|BindingFlags.Instance;
 object New(string n,params object?[] values)=>Activator.CreateInstance(T(n),values)!;
 bool testing=assembly.GetName().Name=="GillionsGameSyncTest";
+Action noop=()=>{};
+using var actualWindows=(IDisposable)Activator.CreateInstance(T("PublicGameSyncUi"),flags,null,
+    [noop,noop,noop,noop,Activator.CreateInstance(T("HuntProgressState"),true)!,(Func<bool>)(()=>false),noop,false,testing],null)!;
+var actualHuntWindow=(Window)T("PublicGameSyncUi").GetField("hunts",flags)!.GetValue(actualWindows)!;
 var cases=new[]{
     ("01-pairing-welcome","DrawPairingPublic",false,460f,1f,0),
     ("02-pairing-connected","DrawPairingPublic",true,460f,1f,0),
@@ -56,6 +61,8 @@ var cases=new[]{
     ("18-paired-origin-next-different","DrawPairingPublic",true,460f,1f,0),
     ("19-invalid-next-pair-origin","DrawPairingPublic",false,460f,1f,0),
     ("20-pairing-connecting","DrawPairingPublic",false,460f,1f,0),
+    ("21-hunt-progress-narrow-scroll","DrawHuntProgress",true,220f,1f,0),
+    ("22-hunt-progress-wide-static","DrawHuntProgress",true,480f,1f,0),
 };
 foreach(var (name,method,paired,width,scale,tab) in cases) {
     object plugin=RuntimeHelpers.GetUninitializedObject(T("Plugin"));
@@ -79,7 +86,7 @@ foreach(var (name,method,paired,width,scale,tab) in cases) {
     if(name.StartsWith("17-"))ui.GetType().GetProperty("Message")!.SetValue(ui,"Gillions could not complete the request. Pending records were kept; please try again.");
     if(name.StartsWith("20-"))ui.GetType().GetProperty("Pairing")!.SetValue(ui,true);
     var model=Activator.CreateInstance(T("HuntProgressState"),true)!;
-    var rows=Array.CreateInstance(T("HuntProgressRow"),name.Contains("multiple")?2:name.Contains("updating")||name.Contains("all-complete")?0:1);
+    var rows=Array.CreateInstance(T("HuntProgressRow"),name.Contains("scroll")||name.Contains("wide-static")?10:name.Contains("multiple")?2:name.Contains("updating")||name.Contains("all-complete")?0:1);
     for(int i=0;i<rows.Length;i++) rows.SetValue(New("HuntProgressRow","fixture-"+i,
         name.Contains("long-name")?"An exceptionally long localized-like Hunt target name that wraps on multiple lines":i==0?"Example hunt target":"Another example hunt target",
         name.Contains("complete")?3:name.Contains("one-left")?2:1,3),i);
@@ -89,7 +96,7 @@ foreach(var (name,method,paired,width,scale,tab) in cases) {
     Render(name,plugin,T("Plugin").GetMethod(method,flags)!,width,scale,tab);
 }
 File.WriteAllText(Path.Combine(output,"controlled-render.json"),JsonSerializer.Serialize(new{
-    mode="CONTROLLED OFFLINE: actual compiled Draw methods; synthetic state, installed Dalamud Noto Sans font and default ImGui style. Not FFXIV screenshots, runtime admission, installed-game focus, keyboard, WindowSystem placement or live performance proof.",
+    mode="CONTROLLED OFFLINE: actual compiled Draw methods and exact Hunt window flags; synthetic state, installed Dalamud Noto Sans font and default ImGui style. Hunt geometry checks simulate resize and close/reopen in ImGui only, not OS input. Not FFXIV screenshots, runtime admission, installed-game focus, keyboard, WindowSystem placement or live performance proof.",
     product=assembly.GetName().Name,version=assembly.GetName().Version!.ToString(4),dllSha256=Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(binary))).ToLowerInvariant(),
     allComplete="Model-only fixture: runtime cannot prove exact current-order/reset coverage, so all-complete remains fail-closed.",cases=cases.Select(c=>c.Item1)
 },new JsonSerializerOptions{WriteIndented=true}));
@@ -112,7 +119,13 @@ unsafe void Render(string name,object plugin,MethodInfo draw,float width,float s
         string title=draw.Name=="DrawHuntProgress"?"Hunt Progress":draw.Name=="DrawPublicSettings"?"Gillions Settings":draw.Name=="DrawPairingPublic"?"Welcome to Gillions":"Gillions Game Sync";
         if(testing&&draw.Name!="DrawHuntProgress")title+=" [TESTING]";
         // Synthetic ImGui IO restricted to the Settings tab strip, not OS input.
-        for(int frame=0;frame<5;frame++) {
+        bool hunt=draw.Name=="DrawHuntProgress";
+        var chosenSize=new Vector2(width*scale,180*scale);
+        var progressModel=hunt?T("Plugin").GetField("huntProgress",flags)!.GetValue(plugin):null;
+        var displayProperty=T("HuntProgressState").GetProperty("Display",flags)!;
+        var originalDisplay=hunt?displayProperty.GetValue(progressModel):null;
+        float scrollMax=0;
+        for(int frame=0;frame<7;frame++) {
             if(tab>0&&frame>0){
                 var style=ImGui.GetStyle();string[] labels=["General","Hunts","Connection","Advanced"];
                 float x=24+style.WindowPadding.X;
@@ -122,11 +135,27 @@ unsafe void Render(string name,object plugin,MethodInfo draw,float width,float s
                 float y=24+style.FramePadding.Y*2+line+style.WindowPadding.Y+line+style.ItemSpacing.Y+(style.FramePadding.Y*2+line)/2;
                 io.AddMousePosEvent(x,y);io.AddMouseButtonEvent(0,frame==2);
             }
-            ImGui.NewFrame();ImGui.SetNextWindowPos(new Vector2(24,24),ImGuiCond.Always);
-            ImGui.SetNextWindowSize(new Vector2(width*scale,0),ImGuiCond.Always);
-            bool open=true;if(ImGui.Begin(title,ref open,ImGuiWindowFlags.AlwaysAutoResize))draw.Invoke(plugin,[]);
+            ImGui.NewFrame();
+            if(hunt&&frame==3) { ImGui.Render();continue; } // closed for one frame
+            if(hunt&&frame==4) displayProperty.SetValue(progressModel,New("HuntProgressDisplay","Example current area","Hunt progress updating…",Array.CreateInstance(T("HuntProgressRow"),0)));
+            if(hunt&&frame==5) displayProperty.SetValue(progressModel,originalDisplay);
+            ImGui.SetNextWindowPos(new Vector2(24,24),ImGuiCond.Always);
+            if(hunt) {
+                var constraints=actualHuntWindow.SizeConstraints!.Value;
+                ImGui.SetNextWindowSizeConstraints(constraints.MinimumSize*scale,constraints.MaximumSize);
+                ImGui.SetNextWindowSize(frame==2?chosenSize:actualHuntWindow.Size!.Value*scale,
+                    frame==2?ImGuiCond.Always:actualHuntWindow.SizeCondition);
+            } else ImGui.SetNextWindowSize(new Vector2(width*scale,0),ImGuiCond.Always);
+            bool open=true;
+            if(ImGui.Begin(hunt?actualHuntWindow.WindowName:title,ref open,hunt?actualHuntWindow.Flags:ImGuiWindowFlags.AlwaysAutoResize))draw.Invoke(plugin,[]);
+            if(hunt&&frame>=4) {
+                var size=ImGui.GetWindowSize();
+                if(Vector2.Distance(size,chosenSize)>1)throw new InvalidOperationException("Hunt content/reopen reset the user's chosen size: "+name);
+                scrollMax=ImGui.GetScrollMaxY();
+            }
             ImGui.End();ImGui.Render();
         }
+        if(name.Contains("scroll")&&scrollMax<=0)throw new InvalidOperationException("Small Hunt viewport must scroll rather than auto-grow.");
         var data=ImGui.GetDrawData();var triangles=new List<object>();
         for(int list=0;list<data.CmdListsCount;list++) {
             var commands=new ImDrawListPtr(data.CmdLists[list]);

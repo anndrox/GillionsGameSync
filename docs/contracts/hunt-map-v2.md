@@ -73,5 +73,5 @@ clock failure clears focus priority without breaking ordinary sync. The same
 Testing response-clock handling covers existing item/PF expiries on exact TEST;
 Stable and other origins retain their existing strict local-clock policy.
 
-Site attribution recommendation remains **Data provided by xivpf.com**, with the
-clickable xivpf.com link. No contribution contract or technical identifier change.
+Site attribution recommendation: **Data Provided by** label followed by a clickable
+**xivpf.com** button linking to `https://xivpf.com`. No contribution contract or technical identifier change.

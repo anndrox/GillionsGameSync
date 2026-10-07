@@ -156,7 +156,8 @@ public sealed partial class Plugin {
             ImGui.BeginDisabled(!uiState.Model.CanSync);
             if(ImGui.Button("Sync now")) _=SyncAsync();
             ImGui.EndDisabled();
-            if(ImGui.Button("Data provided by xivpf.com")) Util.OpenLink("https://xivpf.com");
+            ImGui.TextUnformatted("Data Provided by"); ImGui.SameLine();
+            if(ImGui.Button("xivpf.com")) Util.OpenLink("https://xivpf.com");
 #if GILLIONS_TEST_BUILD
             if(ImGui.CollapsingHeader("Testing diagnostics")) {
                 Label("Diagnostics stay local. Private exports contain gameplay details: do not share configuration or credentials.");

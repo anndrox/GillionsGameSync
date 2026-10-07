@@ -207,5 +207,5 @@ Source/SDK/build checks and exact-package tests do not constitute live inventory
 proof. Live proof must confirm a complete bound Key Items read and at least one
 state against the owner's ordinary inventory; no hunt completion is required.
 
-Site wording for unchanged Party Finder attribution: **Data provided by xivpf.com**,
-with the clickable xivpf.com link retained.
+Site wording for unchanged Party Finder attribution: **Data Provided by** label
+followed by a clickable **xivpf.com** button linking to `https://xivpf.com`.

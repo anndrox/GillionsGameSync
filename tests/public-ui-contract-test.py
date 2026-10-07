@@ -12,6 +12,11 @@ assert 'BeginTab' not in main
 assert all('BeginTabItem("'+tab+'")' in ui for tab in ['General','Hunts','Connection','Advanced'])
 assert all(s in windows for s in ['WindowSystem','ImGuiCond.FirstUseEver','NoFocusOnAppearing','NoNavFocus','NoNavInputs','RespectCloseHotkey=false'])
 assert 'DisableFadeInFadeOut=true' in windows and 'override void OnClose' not in windows
+assert 'hunts.Flags &= ~ImGuiWindowFlags.AlwaysAutoResize' in windows
+assert 'hunts.Size=new Vector2(300,180)' in windows and 'MinimumSize=new Vector2(220,100)' in windows
+assert 'Flags=ImGuiWindowFlags.AlwaysAutoResize' in windows # other compact surfaces unchanged
+assert 'NoSavedSettings' not in windows and 'NoResize' not in windows and 'NoScrollbar' not in windows
+assert 'hunts.Flags = locked() ? hunts.Flags | ImGuiWindowFlags.NoMove' in windows
 assert 'huntWindow.Observe(requestedOpen,hunts.IsOpen' in windows
 assert not re.search(r'SetNextWindowPos|SetWindowFocus|SetNextWindowFocus|SetKeyboardFocus',windows+ui)
 assert not re.search(r'MapLink|OpenMap|SyncAsync|GetExcelSheet|PlayerState|ContentId|ReadLocal|Request\(',draw)
@@ -43,5 +48,8 @@ assert 'PersonalSyncPolicy.Withdraw(configuration.PersonalSync, owner, resource)
 assert 'RecordContributionDenial("partyFinderContribution", enrollmentGeneration, authorizationGeneration,' in plugin
 assert 'RecordContributionDenial("marketContribution", generation, authorization,' in plugin
 assert 'FATE_POLICY_OFF' not in ui and 'PublicHealth.FateState(' in ui
+assert 'ImGui.TextUnformatted("Data Provided by"); ImGui.SameLine();' in ui
+assert 'if(ImGui.Button("xivpf.com")) Util.OpenLink("https://xivpf.com")' in ui
+assert 'ImGui.Button("Data provided by xivpf.com")' not in ui
 assert 'commands.AddHandler("/gillionsfates",new CommandInfo((_,_)=>Show())' in (root/'FateLocalView.cs').read_text()
 print('Public UI/source boundaries PASS: local presentation, one existing reader/lifecycle, safe support, no hidden policy expansion or game writes.')

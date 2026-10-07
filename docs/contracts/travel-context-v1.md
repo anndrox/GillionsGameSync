@@ -198,7 +198,8 @@ are not exact cheapest support. Site may evaluate multiple **Possible locations*
 never “Current mob location”; no radar/sighting claim.
 
 Preserve preceding Site handoffs, including exact PF attribution:
-**Data provided by xivpf.com**, with clickable source link where appropriate.
+**Data Provided by** label followed by a clickable **xivpf.com** button linking
+to `https://xivpf.com`, where appropriate. Technical contracts are unchanged.
 
 ## One concise owner validation after updating
 

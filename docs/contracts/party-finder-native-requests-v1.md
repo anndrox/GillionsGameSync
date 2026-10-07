@@ -161,8 +161,8 @@ Primary references: [listing definition](https://github.com/goatcorp/Dalamud/blo
    do not claim confirmed rendering. Return “Listing expired”, “No compatible
    Game Sync connected” or “Request failed” honestly; retry means a new intentional
    enqueue after freshness validation, never replay an old consumed request.
-   Use exact source attribution **Data provided by xivpf.com**, linked to
-   `https://xivpf.com`, wherever that provider supplies the data. Do not imply
+   Use a **Data Provided by** label followed by a clickable **xivpf.com** button
+   linking to `https://xivpf.com`, wherever that provider supplies the data. Do not imply
    Gillions originates/owns xivpf data or mislabel native-only observations.
 
 `SeString.CreatePartyFinderSearchConditionsLink(string message)` is a supported
