@@ -10,7 +10,7 @@ public sealed partial class Plugin {
     private readonly Dictionary<string, string> permissionTransitions = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTime> permissionFreshFrom = new(StringComparer.Ordinal);
     private bool SitePermissionOrigin => configuration.ActiveSession?.Origin == PermissionAuthority.Origin;
-#if GILLIONS_TEST_BUILD
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
     private bool nativeVersionReported;
 #endif
     private DateTime nextPermissionMaintenanceUtc;
@@ -18,18 +18,18 @@ public sealed partial class Plugin {
         : HasPairedSession && activeOwnedState is not null && permissionAuthority.Allows(key, historical, Environment.TickCount64);
     private bool ExplicitPermission(string key) => SitePermissionOrigin && permissionAuthority.Explicit(key, Environment.TickCount64);
     private bool ItemLinksEnabled => PermissionEnabled("itemLinks", configuration.EnableItemLinkRequests);
-#if GILLIONS_TEST_BUILD
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
     private bool PartyFinderLinksEnabled => SitePermissionOrigin
         ? HasPairedSession && activeOwnedState is not null && permissionAuthority.PartyFinderLinks(configuration.EnableItemLinkRequests,
             configuration.EnablePartyFinderLinkRequests, Environment.TickCount64)
         : configuration.EnableItemLinkRequests && configuration.EnablePartyFinderLinkRequests;
 #endif
     private bool WebsiteLinksEnabled => ItemLinksEnabled
-#if GILLIONS_TEST_BUILD
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         || PartyFinderLinksEnabled
 #endif
         ;
-#if GILLIONS_TEST_BUILD
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
     // Site already classifies/filters automatic vs explicit commands and validates
     // focus at poll/consume. The unchanged wire shape has no invented mode field.
     private bool HuntReceivingEnabled => SitePermissionOrigin && HasPairedSession && activeOwnedState is not null
@@ -69,7 +69,7 @@ public sealed partial class Plugin {
             now = date.UtcDateTime.AddSeconds(1).Add(roundTrip);
         }
         permissionAuthority.Apply(json, now, Environment.TickCount64);
-#if GILLIONS_TEST_BUILD
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         nativeVersionReported = true;
 #endif
         ReconcilePermissions(force: true);
@@ -82,7 +82,7 @@ public sealed partial class Plugin {
         foreach (var key in PermissionAuthority.Keys) {
             var identity = SitePermissionOrigin ? permissionAuthority.Identity(key, clock) : "historical";
             if (key == "itemLinks") identity += ":" + ItemLinksEnabled;
-#if GILLIONS_TEST_BUILD
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
             identity += ":" + (key switch {
                 "marketContribution" => MarketEnabled,
                 "partyFinderContribution" => PartyFinderContributionEnabled,
@@ -96,7 +96,7 @@ public sealed partial class Plugin {
 #endif
             if (permissionTransitions.GetValueOrDefault(key) == identity) continue;
             permissionTransitions[key] = identity; permissionFreshFrom[key] = DateTime.UtcNow;
-#if GILLIONS_TEST_BUILD
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
             if (key == "marketContribution") { marketContributor.SetEnabled(false); marketContributor.RefreshSession(null); }
             if (key == "partyFinderContribution") partyFinderContributor.SetEnabled(false);
             if (key == "huntRoutingLocation") { ClearTravelPending(); travelLocal.ClearSession(); }
@@ -116,7 +116,7 @@ public sealed partial class Plugin {
             }
 #endif
         }
-#if GILLIONS_TEST_BUILD
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         marketContributor.SetEnabled(MarketEnabled);
         travelLocal.SetEnabled(TravelEnabled);
 #endif

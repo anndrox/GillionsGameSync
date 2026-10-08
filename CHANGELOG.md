@@ -1,5 +1,17 @@
 # Changelog
 
+## Unpublished Public 1.0.31 candidate freeze (not a release)
+
+- Promote the accepted Testing functionality into the actual public product,
+  preserving the frozen public UI and its recommendation ledger.
+- Use actual public product/version identity for authenticated capability
+  negotiation; optional shared-TEST transports await exact Site admission.
+- Preserve legacy OFF preferences, fresh explicit Site decisions, lease expiry,
+  independent ordinary sync and automatic bounded FATE lifecycle.
+- Keep research commands, raw exports and Testing diagnostics out of Public.
+- Validate upgrade from the immutable Stable 1.0.30 DLL without re-pairing or
+  deleting configuration. Stable publication, feeds and main remain held.
+
 ## Unpublished final Public 1.0.31 UI recheck (not a release)
 
 - Strengthen only the shallow pairing header with a two-line Gillions identity

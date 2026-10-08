@@ -42,7 +42,8 @@ $feedEvidence = [IO.File]::ReadAllText((Join-Path $root 'data/releases/testing-u
 Assert-Condition ($feedEvidence.feed -ceq $fixedTestingFeed) 'Testing update URL must remain the owner-selected existing repository URL.'
 $publishedVersion = $feedEvidence.version -replace '\.0$', ''
 $publishedZip = "https://github.com/anndrox/GillionsGameSync/releases/download/v$publishedVersion-testing/GillionsGameSyncTesting-$publishedVersion.zip"
-Assert-Condition ([Version]$feedEvidence.version -le [Version]$manualTesting.AssemblyVersion -and $feedEvidence.internalName -ceq $manualTesting.InternalName -and $feedEvidence.download -ceq $publishedZip) 'Published fixed-feed evidence must be a real published predecessor or the candidate, not falsely advanced by preparation.'
+$publishedRecord = [IO.File]::ReadAllText((Join-Path $root 'data/releases/testing-0.0.87.json')) | ConvertFrom-Json -AsHashtable
+Assert-Condition ($publishedRecord.status -ceq 'published-and-anonymously-verified' -and $feedEvidence.version -ceq $publishedRecord.assemblyVersion -and $feedEvidence.internalName -ceq $manualTesting.InternalName -and $feedEvidence.download -ceq $publishedZip) 'Rolling evidence must match the completed immutable Testing publication, not the older manual manifest or a prepared public candidate.'
 $readme = [IO.File]::ReadAllText((Join-Path $root 'README.md'))
 $releasing = [IO.File]::ReadAllText((Join-Path $root 'docs/releasing.md'))
 Assert-Condition ($readme.Contains($fixedTestingFeed) -and $releasing.Contains($fixedTestingFeed)) 'Installation and publication guidance must retain the fixed Testing update URL.'

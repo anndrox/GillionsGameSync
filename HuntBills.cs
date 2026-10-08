@@ -138,6 +138,8 @@ public sealed class HuntBillRetention {
     public bool CapacityReached { get; set; }
 }
 internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
+    internal Func<bool> SiteRetentionAuthorized { get; set; } = () => false;
+    internal bool RetentionEnabled => store.LocalRetentionEnabled || SiteRetentionAuthorized();
     internal bool LastSemanticChange { get; private set; }
     internal const int MaximumCharacters = 16;
     internal const int MaximumBytes = 256 * 1024;
@@ -176,7 +178,7 @@ internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
     // and reset/absence cannot be established from these native fields alone.
     internal bool Observe(string characterKey, HuntBillObservation[] observations) {
         LastSemanticChange = false;
-        if (!store.LocalRetentionEnabled || !Supported || !PersonalObservationCompatibility.Key(characterKey)
+        if (!RetentionEnabled || !Supported || !PersonalObservationCompatibility.Key(characterKey)
             || observations.Length is 0 or > 22 || !observations.All(BillValid)
             || observations.Select(b => b.BillTypeId).Distinct().Count() != observations.Length) return false;
         var current = store.Characters.SingleOrDefault(c => c.LocalCharacterKey == characterKey);
@@ -216,7 +218,7 @@ internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
         return true;
     }
     internal string PreparePrivateExport(string characterKey, bool allowEmpty = false) {
-        if (!Supported || !store.LocalRetentionEnabled || !PersonalObservationCompatibility.Key(characterKey))
+        if (!Supported || !RetentionEnabled || !PersonalObservationCompatibility.Key(characterKey))
             throw new InvalidOperationException("Retention off or unsupported.");
         var current = store.Characters.SingleOrDefault(c => c.LocalCharacterKey == characterKey);
         if (!allowEmpty && (current is null || current.Bills.Count == 0)) throw new InvalidOperationException("No retained Hunt observations for this character.");

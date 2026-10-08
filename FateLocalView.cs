@@ -1,4 +1,4 @@
-#if GILLIONS_TEST_BUILD
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -32,7 +32,10 @@ internal sealed class FateLocalView : IDisposable {
     private readonly FateEpochState state=new();
     private FateMeasurements measurements=new();
     private readonly FateSource? source;
-    private bool visible, measuring, disposed;
+    private bool measuring, disposed;
+#if GILLIONS_TEST_BUILD
+    private bool visible;
+#endif
     private long nextRead;
     private FateContext? settled;
     private long settleEpoch;
@@ -63,8 +66,10 @@ internal sealed class FateLocalView : IDisposable {
         try { source=Source(); } catch (Exception) { source=null; }
         client.Login+=Invalidate; client.Logout+=Logout; client.ZoneInit+=Zone;
         client.TerritoryChanged+=Changed; client.InstanceChanged+=Changed; client.MapIdChanged+=Changed;
+#if GILLIONS_TEST_BUILD
         commands.AddHandler("/gillionsfates",new CommandInfo((_,_)=>Show()) { HelpMessage="Testing FATE diagnostics only; collection starts automatically when Gillions permits it." });
         ui.UiBuilder.Draw+=Draw;
+#endif
     }
     private string GameVersion() => data.GameData.Repositories.TryGetValue("ffxiv",out var repo) ? repo.Version : "unavailable";
     private static string FileVersion(Assembly a) => FileVersionInfo.GetVersionInfo(a.Location).FileVersion ?? "unavailable";
@@ -78,7 +83,9 @@ internal sealed class FateLocalView : IDisposable {
         Revision(typeof(FFXIVClientStructs.FFXIV.Client.Game.Fate.FateManager).Assembly),
         FileVersion(typeof(Lumina.GameData).Assembly).TrimEndVersionZero(),
         FileVersion(typeof(Fate).Assembly).TrimEndVersionZero(),GameVersion());
+#if GILLIONS_TEST_BUILD
     internal void Show() => visible=true;
+#endif
     private void Invalidate() {
         state.Invalidate(); settled=null; settleEpoch=state.Epoch;
         Invalidated?.Invoke();
@@ -178,6 +185,7 @@ internal sealed class FateLocalView : IDisposable {
             summary=FateMeasurements.Summary(view.Costs); // once per bounded read, never every UI frame
         }
     }
+#if GILLIONS_TEST_BUILD
     internal string Diagnostic() => "PRIVATE FATE Testing diagnostics (manual copy, no diagnostic upload)\nWorld, territory and observation times reveal your presence. Share only with a trusted diagnostic recipient; never share configuration or credentials.\n"+view.Status+"\n"
         +$"Cadence {FatePolicy.ReadSeconds}s; RAM-only, maximum 240 samples. Source: {JsonSerializer.Serialize(source,FatePolicy.Json)}\n"
         +(view.Context is { } c ? $"World {c.World}; territory {c.Territory}; public ordinal {c.Instance}.\n" : "Context unavailable.\n")
@@ -200,11 +208,14 @@ internal sealed class FateLocalView : IDisposable {
         foreach(var row in view.Rows) ImGui.TextWrapped($"FATE {row.FateId}: {row.State.Kind}, progress {row.ProgressPercent?.ToString() ?? "UNKNOWN"}%, bonus {row.Bonus?.ToString() ?? "UNKNOWN"}; world {row.WorldId}, territory {row.TerritoryId}, {row.Instance.Kind} {row.Instance.Number}; observed {row.ObservedAt:O}; start {row.Timing?.StartTimeEpoch.ToString() ?? "UNKNOWN"}.");
         ImGui.End();
     }
+#endif
     public void Dispose() {
         disposed=true; measuring=false; state.Invalidate();
         client.Login-=Invalidate; client.Logout-=Logout; client.ZoneInit-=Zone;
         client.TerritoryChanged-=Changed; client.InstanceChanged-=Changed; client.MapIdChanged-=Changed;
+#if GILLIONS_TEST_BUILD
         ui.UiBuilder.Draw-=Draw; commands.RemoveHandler("/gillionsfates");
+#endif
     }
 }
 internal static class FateVersionFormat {

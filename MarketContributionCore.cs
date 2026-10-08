@@ -1,4 +1,4 @@
-#if GILLIONS_TEST_BUILD || GILLIONS_MARKET_TESTS
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_MARKET_TESTS
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -36,7 +36,7 @@ internal sealed record MarketObservation(string ObservationId, ushort WorldId, u
             _ => false
         });
     internal byte[] Serialize() => JsonSerializer.SerializeToUtf8Bytes(new {
-        schemaVersion = 1, source = "gillions-game-sync", clientProduct = "GillionsGameSyncTest",
+        schemaVersion = 1, source = "gillions-game-sync", clientProduct = NativeProduct.Name,
         ObservationId, WorldId, ItemId, Kind, ClientObservedAtUtc,
         worldEvidence = "current-world-context", completeness = "partial", sourceSnapshotAtUtc = (DateTime?)null,
         listings = Kind == "listings" ? Listings : null, sales = Kind == "history" ? Sales : null
@@ -231,7 +231,7 @@ internal sealed class MarketContributor : IDisposable {
         try {
             var ack = presence.GetProperty("marketContribution");
             return ack.GetProperty("contractVersion").GetInt32() == 1 && ack.GetProperty("enabled").ValueKind == JsonValueKind.True
-                && ack.GetProperty("acceptedClientProduct").GetString() == "GillionsGameSyncTest";
+                && ack.GetProperty("acceptedClientProduct").GetString() == NativeProduct.Name;
         } catch (Exception e) when (e is KeyNotFoundException or InvalidOperationException or FormatException) { return false; }
     }
     internal static bool Compatible(string presence) {

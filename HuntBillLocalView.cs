@@ -38,9 +38,10 @@ internal sealed class HuntBillLocalView : IDisposable {
     internal long CoverageRevision => itemCoverage.Revision;
     internal long CoverageEpoch => itemCoverage.Epoch;
     internal void ClearCoverage() => itemCoverage.Clear();
-    internal DateTime? CoverageObservedAtUtc(string key, DateTime now) => store.LocalRetentionEnabled
+    internal Func<bool> SiteRetentionAuthorized { set => policy.SiteRetentionAuthorized = value; }
+    internal DateTime? CoverageObservedAtUtc(string key, DateTime now) => policy.RetentionEnabled
         ? itemCoverage.Current(key, now, Stopwatch.GetTimestamp())?.ObservedAtUtc : null;
-    internal string? CoveragePayload(string key, DateTime now) => store.LocalRetentionEnabled
+    internal string? CoveragePayload(string key, DateTime now) => policy.RetentionEnabled
         ? itemCoverage.Payload(policy, key, now, Stopwatch.GetTimestamp()) : null;
     private string rawFingerprint = "";
     private string lastProgressDiagnostic = "Structured Hunt progress not observed in this session.";
@@ -57,7 +58,7 @@ internal sealed class HuntBillLocalView : IDisposable {
     internal HuntProgressSnapshot Progress { get; private set; } = HuntProgressSnapshot.Unavailable;
     internal bool ProgressRequested { get; set; }
     internal void ClearProgress() => Progress = HuntProgressSnapshot.Unavailable;
-    private bool ReadEnabled => store.LocalRetentionEnabled || ProgressRequested;
+    private bool ReadEnabled => policy.RetentionEnabled || ProgressRequested;
     private readonly Dictionary<uint, uint> targetTerritories = new();
     private sealed record View(bool Enabled, string Status, string[] Rows, double Milliseconds,
         int Attempts = 0, DateTime? LastAttemptUtc = null, string CoverageStatus = "Hunt item coverage UNAVAILABLE.",

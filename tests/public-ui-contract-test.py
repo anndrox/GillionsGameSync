@@ -36,9 +36,9 @@ progress=hunt.split('private void PublishProgress(',1)[1].split('#if GILLIONS_TE
 assert 'store.Characters' not in progress and 'policy.Prepare' not in progress
 assert 'bool complete = false' in progress # item coverage does not prove current order/reset
 assert 'target.MapId > 0' in progress and 'target.PlaceNameId > 0' in progress
-assert 'ReadEnabled => store.LocalRetentionEnabled || ProgressRequested' in hunt
+assert 'ReadEnabled => policy.RetentionEnabled || ProgressRequested' in hunt
 assert 'huntLocal.ProgressRequested = configuration.ShowHuntProgress' in plugin
-assert 'CoveragePayload(string key, DateTime now) => store.LocalRetentionEnabled' in hunt
+assert 'CoveragePayload(string key, DateTime now) => policy.RetentionEnabled' in hunt
 assert plugin.count('fateLocal.Tick(now)')==1 and plugin.count('TickFateSender(now)')==1
 permission=(root/'PluginPermissions.cs').read_text()
 apply=permission.split('private void ApplyPermissions(',1)[1].split('private void ReconcilePermissions(',1)[0]

@@ -1,4 +1,4 @@
-#if GILLIONS_TEST_BUILD || GILLIONS_TRAVEL_TESTS
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_TRAVEL_TESTS
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -44,7 +44,7 @@ internal static class TravelSyncPolicy {
             using var doc = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 16 });
             var root = doc.RootElement; var ack = root.GetProperty("personalObservations");
             if (root.GetProperty("ok").ValueKind != JsonValueKind.True
-                || root.GetProperty("acceptedClientProduct").GetString() != "GillionsGameSyncTest"
+                || root.GetProperty("acceptedClientProduct").GetString() != NativeProduct.Name
                 || ack.GetProperty("contractVersion").GetInt32() != 1 || ack.GetProperty("endpoint").GetString() != Endpoint) return false;
             var entries = ack.GetProperty("resources").EnumerateArray().Where(r => r.GetProperty("resourceType").GetString() == Resource).ToArray();
             if (entries.Length != 1) return false;

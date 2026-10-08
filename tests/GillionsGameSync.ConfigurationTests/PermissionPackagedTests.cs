@@ -42,7 +42,7 @@ internal static class PermissionPackagedTests {
         Call("Invalidate");Check(!(bool)Call("HuntReceiving",true,0L)!,"missing/revoked lease closes presentation");
         var configuration=assembly.GetType("GillionsGameSync.PluginConfiguration",true)!;
         Check(!configuration.GetProperties().Any(p=>p.Name.Contains("PermissionAuthority")||p.Name.Contains("PermissionGeneration")),"authority/generations are not configuration");
-        if(assembly.GetName().Name=="GillionsGameSyncTest") {
+        if(assembly.GetType("GillionsGameSync.PersonalSyncPolicy") is not null) {
             var pluginType=assembly.GetType("GillionsGameSync.Plugin",true)!;
             var plugin=RuntimeHelpers.GetUninitializedObject(pluginType);
             var config=Activator.CreateInstance(configuration)!;

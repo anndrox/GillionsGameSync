@@ -1,4 +1,4 @@
-#if GILLIONS_TEST_BUILD || GILLIONS_FATE_TESTS
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_FATE_TESTS
 using System;
 using System.Globalization;
 using System.Linq;
@@ -44,7 +44,7 @@ internal static class FateDiscovery {
             if(S("capability")!=FatePolicy.Capability || g.GetProperty("schemaVersion").GetInt32()!=1
                 || S("collectorSchema")!=FatePolicy.Capability || S("coverage")!="positive_only"
                 || S("endpoint")!="/api/game-sync/fates/contribute" || g.GetProperty("maxPayloadBytes").GetInt32()!=FatePolicy.MaximumBytes
-                || g.GetProperty("maxObservations").GetInt32()!=FatePolicy.MaximumRows || S("acceptedClientProduct")!="GillionsGameSyncTest"
+                || g.GetProperty("maxObservations").GetInt32()!=FatePolicy.MaximumRows || S("acceptedClientProduct")!=NativeProduct.Name
                 || S("referenceCompatibilityEpoch")!="fate-reference:"+source.ReferenceGameVersion
                 || g.GetProperty("retryAfterSeconds").GetInt32()!=5) return null;
             var s=g.GetProperty("acceptedSource");
@@ -68,7 +68,7 @@ internal static class FateDiscovery {
             string? reason=S("reason");
             if(authorized ? reason is not null || !enabled || policyGeneration is null || admitted!=source
                 : reason is null || !ErrorCodes.Contains(reason)) return null;
-            return new(new(generation,Origin,"GillionsGameSyncTest",FatePolicy.Capability,1,FatePolicy.Capability,
+            return new(new(generation,Origin,NativeProduct.Name,FatePolicy.Capability,1,FatePolicy.Capability,
                 admitted!,FatePolicy.AccountPolicy,1,authorized,false,expires,true,true),policyGeneration,paired,issued,enabled,reason);
         } catch(Exception e) when(e is JsonException or InvalidOperationException or FormatException
             or System.Collections.Generic.KeyNotFoundException or OverflowException or ArgumentException) { return null; }

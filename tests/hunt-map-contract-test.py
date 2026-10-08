@@ -3,7 +3,7 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[1]
 p=(root/'Plugin.cs').read_text(encoding='utf-8')
 m=(root/'HuntMapRequests.cs').read_text(encoding='utf-8')
-assert m.startswith('#if GILLIONS_TEST_BUILD || GILLIONS_HUNT_MAP_TESTS')
+assert m.startswith('#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_HUNT_MAP_TESTS')
 assert 'public bool AutomaticallyShowHuntMap { get; set; }' in p
 loop=p.split('private void PollWebsiteRequests(DateTime now)',1)[1].split('private bool HuntMapPermitted',1)[0]
 assert '!huntMapPollInFlight && huntMapPoll.TryBegin(now, focused)' in loop
@@ -39,7 +39,7 @@ assert 'Revision is opaque' in m and 'new authorized request ID' in m
 print('Hunt map Testing/source/consent/transport/lifecycle/API boundaries PASS')
 
 focus=(root/'HuntFocus.cs').read_text(encoding='utf-8')
-assert focus.startswith('#if GILLIONS_TEST_BUILD || GILLIONS_HUNT_MAP_TESTS')
+assert focus.startswith('#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_HUNT_MAP_TESTS')
 assert 'time - now > TimeSpan.FromSeconds(30)' in focus and 'expiresAtUtc > now' in focus
 assert 'separatelyPermitted && Supported' in focus and 'HuntMapPolicy.Exact(focus' in focus
 assert 'JsonDocument' in focus and 'keys.Add(field.Name)' in focus
@@ -77,5 +77,5 @@ assert 'HuntMapPolicy.Valid(r, commandClock.UtcNow)' in hunt
 assert 'Stopwatch.GetElapsedTime(observed) < remaining' in focus
 assert 'ClearHuntMapRequests(); websiteItemPoll.Reset()' not in p
 assert 'if (!commandClock.Unexpired(request.ExpiresAtUtc)) return false;' in p
-assert 'request => ConsumeItemLinkRequestAsync(permit, request\n#if GILLIONS_TEST_BUILD\n                    , commandClock' in p
+assert 'request => ConsumeItemLinkRequestAsync(permit, request\n#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD\n                    , commandClock' in p
 print('Exact-origin bounded issuer timeline/parser/consume/presentation/monotonic focus boundaries PASS')

@@ -43,7 +43,7 @@ public sealed partial class Plugin {
         string hunts=waiting, fates=waiting, market=waiting;
         if (HasPairedSession) hunts=!PersonalObservationCompatibility.Supports(game,typeof(FFXIVClientStructs.FFXIV.Client.Game.UI.MobHunt).Assembly.GetName().Version?.ToString())
             ? "Update required" : huntLocal.Progress.ExpiresAt>Environment.TickCount64 && huntLocal.Progress.Availability.Length==0 ? "Ready" : "Waiting for supported context";
-#if GILLIONS_TEST_BUILD
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         if (HasPairedSession) {
             fates=PublicHealth.FateState(FatePolicy.Compatible(fateLocal.ObservedSource),fateSender.Grant?.Reason,
                 fateSender.Grant?.Admission.Granted,fateSender.Grant?.PolicyEnabled);

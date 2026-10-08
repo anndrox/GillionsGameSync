@@ -16,7 +16,7 @@ internal static class XivpfEndpoints {
                 ?.Value;
             if (!Uri.TryCreate(configured, UriKind.Absolute, out var endpoint))
                 throw new InvalidOperationException("XivpfContributionUrl build metadata is missing or invalid.");
-#if GILLIONS_TEST_BUILD
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
             return XivpfEndpointPolicy.RequireBuildSafe(endpoint, true);
 #else
             return XivpfEndpointPolicy.RequireBuildSafe(endpoint, false);
@@ -25,7 +25,7 @@ internal static class XivpfEndpoints {
     }
 }
 
-#if GILLIONS_TEST_BUILD
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
 internal static class NativePartyFinderLinkFactory {
     internal static Dalamud.Game.Text.SeStringHandling.SeString Create(PartyFinderLinkRequest request) {
         if (request.ListingId == 0 || !PartyFinderLinkPolicy.RecruiterValid(request.RecruiterName))
@@ -53,7 +53,7 @@ internal sealed class DalamudPartyFinderContributionSource : IPartyFinderContrib
     private void OnListing(IPartyFinderListing listing, IPartyFinderListingEventArgs args) {
         if (disposed || !enabled()) return;
         try {
-#if GILLIONS_TEST_BUILD
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
             // The native link API takes uint. Never silently truncate an ulong
             // listing identity into a different actionable listing.
             if (listing.Id == 0 || listing.Id > uint.MaxValue) return;
@@ -108,7 +108,7 @@ internal static class PartyFinderContributorFactory {
             var endpoint = XivpfEndpoints.ContributionUrl;
             var version = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "unknown";
             source = new DalamudPartyFinderContributionSource(partyFinderGui, log, enabled);
-#if GILLIONS_TEST_BUILD
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
             return new GillionsPartyFinderContributor(source, captureSession, enabled, message => {
                 log.Information("{PartyFinderStatus}", message); report(message);
             });

@@ -1,4 +1,4 @@
-#if GILLIONS_TEST_BUILD
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -34,7 +34,10 @@ internal sealed class TravelContextLocalView : IDisposable {
         && PersonalObservationCompatibility.Supports(GameVersion(), nativeVersion);
     internal TravelObservation? Current(ulong character, DateTime now) => Available(character) ? state.Current(character,now) : null;
     internal void ClearSession() { state.Clear(); Reset(); }
-    private bool visible, disposed;
+    private bool disposed;
+#if GILLIONS_TEST_BUILD
+    private bool visible;
+#endif
     private sealed record View(string Status, string[] Rows, double Milliseconds, long Bytes, DateTime? ObservedAtUtc = null);
     private volatile View view = new("Location consent OFF; no travel reads or uploads.", [], 0, 0);
     private readonly string version = typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "unavailable";
@@ -43,10 +46,15 @@ internal sealed class TravelContextLocalView : IDisposable {
         IPlayerState player, IDataManager data, IGameGui gameGui, ICondition conditions) {
         this.ui=ui; this.client=client; this.objects=objects; this.player=player;
         this.data=data; this.gameGui=gameGui; this.conditions=conditions;
-        ui.UiBuilder.Draw += Draw; client.Login += Reset; client.Logout += Logout;
+#if GILLIONS_TEST_BUILD
+        ui.UiBuilder.Draw += Draw;
+#endif
+        client.Login += Reset; client.Logout += Logout;
         client.TerritoryChanged += Changed; client.MapIdChanged += Changed;
     }
+#if GILLIONS_TEST_BUILD
     internal void Show() => visible = true;
+#endif
     internal void SetEnabled(bool enabled) {
         if (state.Enabled == enabled) return;
         state.SetEnabled(enabled);
@@ -136,6 +144,7 @@ internal sealed class TravelContextLocalView : IDisposable {
         } catch (Exception) { Unavailable("Travel source unavailable; no current context. Unrelated sync preserved."); }
     }
     private void Unavailable(string message) { state.Invalidate(); Invalidated?.Invoke(); view = new(message,[],0,0); }
+#if GILLIONS_TEST_BUILD
     private void Draw() {
         if (!visible || disposed) return;
         if (ImGui.Begin("Hunt routing context — private local test",ref visible)) {
@@ -151,9 +160,13 @@ internal sealed class TravelContextLocalView : IDisposable {
         }
         ImGui.End();
     }
+#endif
     public void Dispose() {
         disposed=true; state.Clear(); Invalidated?.Invoke(); view=new("Disposed",[],0,0);
-        ui.UiBuilder.Draw -= Draw; client.Login -= Reset; client.Logout -= Logout;
+#if GILLIONS_TEST_BUILD
+        ui.UiBuilder.Draw -= Draw;
+#endif
+        client.Login -= Reset; client.Logout -= Logout;
         client.TerritoryChanged -= Changed; client.MapIdChanged -= Changed;
     }
 }

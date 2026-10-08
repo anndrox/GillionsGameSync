@@ -6,7 +6,7 @@ source=(root/'TravelContextLocalView.cs').read_text(encoding='utf-8')
 model=(root/'TravelContext.cs').read_text(encoding='utf-8')
 plugin=(root/'Plugin.cs').read_text(encoding='utf-8')
 assert source.startswith('#if GILLIONS_TEST_BUILD')
-assert model.startswith('#if GILLIONS_TEST_BUILD || GILLIONS_TRAVEL_TESTS')
+assert model.startswith('#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_TRAVEL_TESTS')
 assert not re.search(r'SendAsync|HttpClient|UpdateAetheryteList\(|GetTeleportCost\(|Teleport\(|TeleportTo|FireCallback|ReceiveEvent|GetIpc|\.Refresh\(',source)
 assert 'objects.LocalPlayer' in source and 'foreach (var' not in source.split('internal void Tick',1)[1].split('private void Unavailable',1)[0]
 assert 'IAetheryteList' in source and not re.search(r'private .*IAetheryteList',source)
@@ -19,7 +19,7 @@ assert 'map.Value.TerritoryType.RowId != territory' in source and 'MapUtil.World
 assert 'data.GetExcelSheet' not in source.split('private void Draw()',1)[1]
 assert 'TravelPolicy.Round(coordinates.X)' in source and 'Actual final charged cost UNSUPPORTED' in source
 transport=(root/'TravelSync.cs').read_text(encoding='utf-8')
-assert transport.startswith('#if GILLIONS_TEST_BUILD || GILLIONS_TRAVEL_TESTS')
+assert transport.startswith('#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_TRAVEL_TESTS')
 assert 'TravelObservation? latest;' in model and 'List<TravelObservation>' not in model
 clear=model.split('internal void Clear()',1)[1].split('internal void Invalidate',1)[0]
 assert 'nextReadUtc' not in clear

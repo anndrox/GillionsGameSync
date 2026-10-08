@@ -1,4 +1,4 @@
-#if GILLIONS_TEST_BUILD || GILLIONS_FATE_TESTS
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_FATE_TESTS
 using System;
 using System.Globalization;
 using System.Linq;
@@ -26,7 +26,7 @@ internal static class FateTransportPolicy {
         && prepared.Epoch == epoch && prepared.Body.Length is > 0 and <= FatePolicy.MaximumBytes
         && FatePolicy.Fresh(prepared.OldestObservation,now) && grant is not null
         && generation.Length > 0 && grant.SessionGeneration == generation
-        && grant.Origin == "https://test.gillions.app" && grant.Product == "GillionsGameSyncTest"
+        && grant.Origin == "https://test.gillions.app" && grant.Product == NativeProduct.Name
         && grant.Capability == FatePolicy.Capability && grant.SchemaVersion == 1
         && grant.CollectorSchema == FatePolicy.Capability && grant.AdmittedSource == source
         && grant.PolicyKey == FatePolicy.AccountPolicy && grant.PolicyRevision == FatePolicy.PolicyRevision

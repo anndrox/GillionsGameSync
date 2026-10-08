@@ -14,4 +14,5 @@
     <Compile Include="..\..\PersonalObservationPolicy.cs" Link="PersonalObservationPolicy.cs" />
     <Reference Include="Newtonsoft.Json" HintPath="$(DalamudLibPath)/Newtonsoft.Json.dll" />
   </ItemGroup>
+  <ItemGroup><Compile Include="../../NativeProduct.cs" Link="NativeProduct.cs" /></ItemGroup>
 </Project>

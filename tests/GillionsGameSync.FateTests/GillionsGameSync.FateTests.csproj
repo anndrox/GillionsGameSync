@@ -13,4 +13,5 @@
     <Compile Include="../../FateDiscovery.cs" Link="FateDiscovery.cs" />
     <Compile Include="../../FateSenderState.cs" Link="FateSenderState.cs" />
   </ItemGroup>
+  <ItemGroup><Compile Include="../../NativeProduct.cs" Link="NativeProduct.cs" /></ItemGroup>
 </Project>

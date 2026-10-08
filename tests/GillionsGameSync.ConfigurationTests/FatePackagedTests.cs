@@ -7,12 +7,12 @@ internal static class FatePackagedTests {
         int checks=0;
         void Check(bool ok,string message) { checks++; if (!ok) throw new Exception(message); }
         string[] names=["FateLocalView","FatePolicy","FatePrepared","FateEpochState","FateTransportPolicy","FateAdmission","FateMeasurements","FateDiscovery","FateGrant","FateSenderState"];
-        foreach(var name in names) Check((assembly.GetType("GillionsGameSync."+name)!=null)==testing,"FATE Testing/Stable type boundary: "+name);
+        foreach(var name in names) Check((assembly.GetType("GillionsGameSync."+name)!=null)==true,"FATE Testing/Stable type boundary: "+name);
         var plugin=assembly.GetType("GillionsGameSync.Plugin",true)!;
-        Check(plugin.GetConstructors().Single().GetParameters().Any(p=>p.ParameterType==typeof(Dalamud.Plugin.Services.IFateTable))==testing,"FATE service injection must be Testing only.");
+        Check(plugin.GetConstructors().Single().GetParameters().Any(p=>p.ParameterType==typeof(Dalamud.Plugin.Services.IFateTable))==true,"FATE service injection must be Testing only.");
         var config=assembly.GetType("GillionsGameSync.PluginConfiguration",true)!;
         Check(!config.GetProperties().Any(p=>p.Name.Contains("Fate",StringComparison.OrdinalIgnoreCase)),"FATE session must not add a permanent configuration permission/history.");
-        if (!testing) { Console.WriteLine($"Exact packaged FATE Stable exclusion PASS: {checks} checks."); return; }
+
         Type T(string name) => assembly.GetType("GillionsGameSync."+name,true)!;
         const BindingFlags flags=BindingFlags.Static|BindingFlags.NonPublic;
         var policy=T("FatePolicy");
@@ -72,7 +72,7 @@ internal static class FatePackagedTests {
         var sourceJson=JsonSerializer.SerializeToElement(source,source.GetType(),new JsonSerializerOptions {PropertyNamingPolicy=JsonNamingPolicy.CamelCase});
         var wire=JsonSerializer.Serialize(new {ok=true,fateContribution=new {
             capability="fate-live-observations-v1",schemaVersion=1,collectorSchema="fate-live-observations-v1",coverage="positive_only",
-            endpoint="/api/game-sync/fates/contribute",maxPayloadBytes=131072,maxObservations=64,acceptedClientProduct="GillionsGameSyncTest",
+            endpoint="/api/game-sync/fates/contribute",maxPayloadBytes=131072,maxObservations=64,acceptedClientProduct=assembly.GetName().Name,
             acceptedSource=sourceJson,referenceCompatibilityEpoch="fate-reference:2026.09.15.0000.0000",authorized=true,reason=(string?)null,
             deviceBinding=new {deviceId="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",pairedAt=now.AddDays(-1)},
             policy=new {name="fate_public_observations",revision=1,enabled=true,generation="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"},

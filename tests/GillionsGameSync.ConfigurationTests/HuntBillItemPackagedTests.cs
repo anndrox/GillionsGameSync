@@ -41,7 +41,7 @@ internal static class HuntBillItemPackagedTests {
         var config=a.GetType("GillionsGameSync.PluginConfiguration",true)!;
         Require(!config.GetProperties().Any(p=>p.PropertyType==coverage || p.PropertyType==sync || p.PropertyType.Name.StartsWith("HuntBillItem",StringComparison.Ordinal)),"Hunt item coverage became durable config");
         var policy=a.GetType("GillionsGameSync.PersonalSyncPolicy",true)!;
-        var ack=JsonSerializer.Serialize(new{ok=true,acceptedClientProduct="GillionsGameSyncTest",personalObservations=new{contractVersion=1,endpoint="https://test.gillions.app/api/game-sync/sync",resources=new[]{new{resourceType="hunt_bills",schemaVersion=2,collectorSchema="hunt-bills-v2",capability="hunt_bills_v2",maxPayloadBytes=65536}}}});
+        var ack=JsonSerializer.Serialize(new{ok=true,acceptedClientProduct=a.GetName().Name,personalObservations=new{contractVersion=1,endpoint="https://test.gillions.app/api/game-sync/sync",resources=new[]{new{resourceType="hunt_bills",schemaVersion=2,collectorSchema="hunt-bills-v2",capability="hunt_bills_v2",maxPayloadBytes=65536}}}});
         var compatible=policy.GetMethod("HuntCoverageCompatible",BindingFlags.Static|BindingFlags.NonPublic)!;
         Require((bool)compatible.Invoke(null,[ack])!,"Exact DLL compatible v2 gate failed");
         Require(!(bool)compatible.Invoke(null,[ack.Replace("hunt_bills_v2","hunt_bills_v1")])!,"Exact DLL silently accepts v1 for absence");

@@ -1,4 +1,4 @@
-#if GILLIONS_TEST_BUILD
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
 using System;
 using System.Globalization;
 using System.Linq;

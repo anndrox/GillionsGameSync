@@ -1,5 +1,9 @@
 # Public Game Sync release candidate
 
+Current successor: [real unpublished Public 1.0.31 freeze](public-1.0.31-freeze.md).
+The sections below record accepted Testing87 and its earlier promotion limits;
+the successor reconciles Public runtime gates without changing the frozen UI.
+
 Testing87's accepted source is `c286e5140470fd866cf43f2db92f18aa4d170f4c`.
 Its immutable prerelease and unchanged rolling Testing feed are published and
 anonymously verified. See [Testing87 results](releases/testing-0.0.87.md).
@@ -91,7 +95,7 @@ FATE schema1, PF, Market, ordinary sync, personal Hunt/submarine/travel and comm
 payload contracts are unchanged. Actual Testing87 acceptance passed the applicable
 practical publication gates; source/fixture checks are documented separately,
 not substituted for physical evidence.
-Owner-approved provider attribution: a **Data Provided by** label followed by a
+Owner-approved provider attribution: a **Data provided by** label followed by a
 clickable **xivpf.com** button linking to `https://xivpf.com`. Site should use the
 same label plus provider-domain button, including when other providers are added.
 This presentation does not imply Gillions originates the data or change contracts.

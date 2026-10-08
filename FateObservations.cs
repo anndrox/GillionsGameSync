@@ -1,4 +1,4 @@
-#if GILLIONS_TEST_BUILD || GILLIONS_FATE_TESTS
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_FATE_TESTS
 using System;
 using System.Collections.Generic;
 using System.Globalization;

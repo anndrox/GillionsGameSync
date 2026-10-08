@@ -96,7 +96,7 @@ internal sealed class HuntBillItemCoverage {
 // Uses the existing exact-body nonce/receipt type, but never writes coverage to config.
 // Expired/transitioned samples are abandoned, not replayed after reload. Historical
 // positives remain durably retained and are included again in the next fresh payload.
-#if GILLIONS_TEST_BUILD || GILLIONS_PERSONAL_STATE_TESTS
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_PERSONAL_STATE_TESTS
 internal sealed class HuntBillItemSync {
     internal const int RefreshAfterSeconds = 6;
     // Dispatch freshness and response classification are separate: a delayed

@@ -1,4 +1,4 @@
-#if GILLIONS_TEST_BUILD || GILLIONS_SUBMARINE_TESTS
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_SUBMARINE_TESTS
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -64,6 +64,8 @@ public sealed class SubmarineVoyageRetention {
 // Pure managed admission policy. No network, third-party plugin, native action,
 // credential, account identifier or inferred departure time exists here.
 internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention store) {
+    internal Func<bool> SiteRetentionAuthorized { get; set; } = () => false;
+    internal bool RetentionEnabled => store.LocalRetentionEnabled || SiteRetentionAuthorized();
     internal const int MaximumRecords = 400;
     internal const int MaximumCurrentSnapshots = 32;
     internal const int MaximumRecordBytes = 8192;
@@ -162,7 +164,7 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
         return changed;
     }
     internal bool ObserveSnapshot(SubmarineSnapshot snapshot) {
-        if (!store.LocalRetentionEnabled) return false;
+        if (!RetentionEnabled) return false;
         if (!Supported) { Status = "Retained format unsupported/oversized; preserved unchanged. Collection paused."; return false; }
         if (!SnapshotValid(snapshot)) { Status = "Partial workshop data; no valid or empty voyage inferred."; return false; }
         var current = store.Current.SingleOrDefault(row => row.Snapshot.LocalSubmarineKey == snapshot.LocalSubmarineKey);
@@ -214,7 +216,7 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
         : next is null ? prior : prior.Concat(next).Distinct().Order().ToArray();
     internal string PreparePersonalExport(string workshopKey) {
         supported = ValidateLoaded();
-        if (!Supported || !store.LocalRetentionEnabled || !LocalKey(workshopKey))
+        if (!Supported || !RetentionEnabled || !LocalKey(workshopKey))
             throw new InvalidOperationException("Personal export unavailable.");
         var snapshots = store.Current.Where(c => c.Snapshot.LocalWorkshopKey == workshopKey).Select(c => c.Snapshot)
             .GroupBy(s => s.Slot).Select(g => g.OrderBy(s => s.ObservedAtUtc).ThenBy(s => s.RegisteredAtUnix).Last()).ToArray();
@@ -264,7 +266,7 @@ internal sealed class SubmarineVoyageRetentionPolicy(SubmarineVoyageRetention st
                 && (route is null || result.Sectors.Length == route.Length)));
     internal bool ObserveResult(string localSubmarineKey, SubmarineBuild resultTimeBuild, SubmarineResult result,
         DateTime now, string gameVersion, string collectorVersion) {
-        if (!store.LocalRetentionEnabled) return false;
+        if (!RetentionEnabled) return false;
         if (!Supported || !ResultCoherent(result, null)
             || !LocalKey(localSubmarineKey) || resultTimeBuild is null || !BuildValid(resultTimeBuild)
             || !Metadata(gameVersion) || !Metadata(collectorVersion) || !UtcObservation(now)) {

@@ -7,12 +7,12 @@ native = (root / "SubmarineLocalView.cs").read_text(encoding="utf-8")
 model = (root / "SubmarineVoyages.cs").read_text(encoding="utf-8")
 plugin = (root / "Plugin.cs").read_text(encoding="utf-8")
 assert native.startswith("#if GILLIONS_TEST_BUILD")
-assert model.startswith("#if GILLIONS_TEST_BUILD || GILLIONS_SUBMARINE_TESTS")
+assert model.startswith("#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_SUBMARINE_TESTS")
 assert "lifecycle.RegisterListener" in native and "lifecycle.UnregisterListener" in native
 assert "framework.Update" not in native
 assert not re.search(r"HttpClient|SendAsync|HookFrom|ReceiveEvent|FireCallback|RequestData|Dispatch|Repair\(|Recall\(|FreeCompanyId", native)
 assert 'transportCharacter == contentId' in native, 'Private transport must match the observed current character.'
-for guard in ["!store.LocalRetentionEnabled", "!framework.IsInFrameworkUpdateThread", "!client.IsLoggedIn",
+for guard in ["!policy.RetentionEnabled", "!framework.IsInFrameworkUpdateThread", "!client.IsLoggedIn",
               "!player->IsLoaded", "housing->CurrentTerritory !=", "WorkshopTerritory->IsLoaded()", "!args.Addon.IsVisible",
               "sub->Parent !=", "sub->RegisterTime == 0", "results->IsAgentActive()", "results->AddonId == args.Addon.Id"]:
     assert guard in native, guard

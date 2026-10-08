@@ -1,4 +1,4 @@
-#if GILLIONS_TEST_BUILD
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -37,14 +37,17 @@ internal sealed class SubmarineLocalView : IDisposable {
     private HashSet<uint>? partIds;
     private HashSet<uint>? sectorIds;
     private HashSet<uint>? rankIds;
-    private bool visible;
     private bool disposed;
+#if GILLIONS_TEST_BUILD
+    private bool visible;
     private string export = "";
     private string personalExport = "";
+#endif
     private string activeWorkshopKey = "";
     private ulong transportCharacter;
     private string transportPayload = "";
-    internal string? PersonalPayload(ulong contentId) => store.LocalRetentionEnabled && policy.Supported
+    internal Func<bool> SiteRetentionAuthorized { set => policy.SiteRetentionAuthorized = value; }
+    internal string? PersonalPayload(ulong contentId) => policy.RetentionEnabled && policy.Supported
         && activeWorkshopKey.Length > 0 && contentId != 0 && transportCharacter == contentId && transportPayload.Length > 0
         ? transportPayload : null;
     private DateTime nextReadUtc;
@@ -58,11 +61,19 @@ internal sealed class SubmarineLocalView : IDisposable {
         foreach (var kind in Events) lifecycle.RegisterListener(kind, Addons, OnAddon);
         client.Logout += OnLogout;
         client.TerritoryChanged += OnTerritoryChanged;
+#if GILLIONS_TEST_BUILD
         commands.AddHandler("/gillionssubs", new CommandInfo((_, _) => Show()) { HelpMessage = "Open testing submarine local retention and sanitized export controls (no uploads)." });
         ui.UiBuilder.Draw += Draw;
+#endif
         Publish(policy.WaitingStatus);
     }
+#if GILLIONS_TEST_BUILD
     internal void Show() => visible = true;
+#else
+    // Public has no developer export surface.
+    private string export { get; set; } = "";
+    private string personalExport { get; set; } = "";
+#endif
     private void OnLogout(int _, int __) { transportCharacter = 0; transportPayload = ""; activeWorkshopKey = ""; personalExport = ""; export = ""; Publish("Logged out; retained observations are historical, not current workshop state."); }
     private void OnTerritoryChanged(uint _) { transportCharacter = 0; transportPayload = ""; activeWorkshopKey = ""; personalExport = ""; export = ""; Publish("Territory changed; prior observations retained. Await workshop interface evidence."); }
     private void Publish(string? status = null, double milliseconds = 0) {
@@ -112,7 +123,7 @@ internal sealed class SubmarineLocalView : IDisposable {
         return route.ToArray();
     }
     private unsafe void OnAddon(AddonEvent kind, AddonArgs args) {
-        if (disposed || !store.LocalRetentionEnabled || !framework.IsInFrameworkUpdateThread) return;
+        if (disposed || !policy.RetentionEnabled || !framework.IsInFrameworkUpdateThread) return;
         // Gate before ALL native pointers/signature calls, including PlayerState.
         if (!PersonalObservationCompatibility.Supports(GameVersion(), typeof(HousingManager).Assembly.GetName().Version?.ToString())) {
             activeWorkshopKey = ""; personalExport = "";
@@ -246,6 +257,7 @@ internal sealed class SubmarineLocalView : IDisposable {
     }
     private static SubmarineResult? VoyageOnly(List<SubmarineReward> rewards, string reason) => rewards.Count > 0
         ? new("voyage-only", [], rewards.ToArray(), null, [reason, "hq-experience-unlocks-unavailable"]) : null;
+#if GILLIONS_TEST_BUILD
     private void Change(Action action) {
         export = ""; personalExport = "";
         _ = framework.RunOnFrameworkThread(() => { if (disposed) return; action(); export = ""; personalExport = ""; persist(); Publish(policy.WaitingStatus); });
@@ -290,12 +302,15 @@ internal sealed class SubmarineLocalView : IDisposable {
         }
         ImGui.End();
     }
+#endif
     public void Dispose() {
         if (disposed) return;
         disposed = true; export = ""; personalExport = "";
         foreach (var kind in Events) lifecycle.UnregisterListener(kind, Addons, OnAddon);
         client.Logout -= OnLogout; client.TerritoryChanged -= OnTerritoryChanged;
+#if GILLIONS_TEST_BUILD
         ui.UiBuilder.Draw -= Draw; commands.RemoveHandler("/gillionssubs");
+#endif
     }
 }
 #endif

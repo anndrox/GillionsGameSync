@@ -15,4 +15,5 @@
     <Compile Include="../../MarketContributionCore.cs" Link="MarketContributionCore.cs" />
     <Compile Include="../../MarketContributionSource.cs" Link="MarketContributionSource.cs" />
   </ItemGroup>
+  <ItemGroup><Compile Include="../../NativeProduct.cs" Link="NativeProduct.cs" /></ItemGroup>
 </Project>

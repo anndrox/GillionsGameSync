@@ -1,6 +1,7 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>1.0.30</Version>
+    <Version>1.0.31</Version>
+    <DefineConstants Condition="'$(GillionsTestBuild)' != 'true'">$(DefineConstants);GILLIONS_PUBLIC_BUILD</DefineConstants>
     <AssemblyName>GillionsGameSync</AssemblyName>
     <RootNamespace>GillionsGameSync</RootNamespace>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -14,7 +15,7 @@
     <GillionsPublicBaseUrl Condition="'$(GillionsPublicBaseUrl)' == ''">https://gillions.app</GillionsPublicBaseUrl>
     <GillionsRepositoryUrl Condition="'$(GillionsRepositoryUrl)' == ''">https://github.com/anndrox/GillionsGameSync</GillionsRepositoryUrl>
     <GillionsStableIconUrl Condition="'$(GillionsStableIconUrl)' == ''">https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png</GillionsStableIconUrl>
-    <XivpfContributionUrl Condition="'$(XivpfContributionUrl)' == '' and '$(GillionsTestBuild)' != 'true'">https://xivpf.com/contribute/multiple</XivpfContributionUrl>
+    <XivpfContributionUrl Condition="'$(XivpfContributionUrl)' == '' and '$(GillionsTestBuild)' != 'true'">https://test.gillions.app/api/game-sync/party-finder/contribute</XivpfContributionUrl>
     <XivpfContributionUrl Condition="'$(XivpfContributionUrl)' == '' and '$(GillionsTestBuild)' == 'true'">https://test.gillions.app/api/game-sync/party-finder/contribute</XivpfContributionUrl>
     <RepositoryUrl>$(GillionsRepositoryUrl)</RepositoryUrl>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>

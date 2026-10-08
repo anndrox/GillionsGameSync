@@ -8,7 +8,7 @@ model = (root / 'HuntBillItemCoverage.cs').read_text()
 native = (root / 'HuntBillLocalView.cs').read_text()
 plugin = (root / 'Plugin.cs').read_text()
 contract = (root / 'PersonalSync.cs').read_text()
-assert '#if GILLIONS_TEST_BUILD || GILLIONS_PERSONAL_STATE_TESTS\ninternal sealed class HuntBillItemSync' in model
+assert '#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_PERSONAL_STATE_TESTS\ninternal sealed class HuntBillItemSync' in model
 assert all(s in model for s in ('absent_confirmed', 'present_unresolved', 'unavailable'))
 assert 'slots.Length == size' in model and '!s.Symbolic' in model and 's.Slot == i' in model
 assert 'before != after' in model and 'Stopwatch.GetElapsedTime' in model and 'Epoch' in model
@@ -44,7 +44,7 @@ assert 'nextReadUtc = now.AddSeconds(3)' in (root/'HuntBills.cs').read_text()
 assert 'Hunt coverage timing:' in plugin and 'Numeric local timings only; no identity/payload logged.' in plugin
 assert 'huntCoverageSync' not in plugin.split('public sealed class PluginConfiguration',1)[1]
 assert 'itemCoverage' not in plugin.split('public sealed class PluginConfiguration',1)[1]
-assert 'PermissionEnabled("personalHunts", configuration.SyncPersonalHunts) && configuration.HuntBills.LocalRetentionEnabled' in plugin
+assert 'PermissionEnabled("personalHunts", configuration.SyncPersonalHunts) && (configuration.HuntBills.LocalRetentionEnabled || ExplicitPermission("personalHunts"))' in plugin
 assert 'HuntCoverageHeader = "X-Gillions-Hunt-Item-Coverage"' in contract
 assert 'entries.Length == 1' in contract and '"hunt-bills-v2"' in contract
 example = json.loads((root / 'docs/examples/hunt-bills-v2.json').read_text())

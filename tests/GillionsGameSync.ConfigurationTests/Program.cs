@@ -14,6 +14,10 @@ AssemblyLoadContext.Default.Resolving += (_, name) => {
     return File.Exists(path) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(path) : null;
 };
 var pluginAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(assemblyPath);
+if (args.Length == 4 && args[3] is "--upgrade-write" or "--upgrade-check" or "--rollback-check") {
+    StableUpgradeTests.Run(pluginAssembly, fixturePath, args[3]);
+    return;
+}
 var configurationType = pluginAssembly.GetType("GillionsGameSync.PluginConfiguration", throwOnError: true)!;
 var pluginType = pluginAssembly.GetType("GillionsGameSync.Plugin", throwOnError: true)!;
 var partyFinderOptIn = configurationType.GetProperty("EnablePartyFinderContributions")!;
@@ -22,10 +26,12 @@ Assert(!(bool)partyFinderOptIn.GetValue(Activator.CreateInstance(configurationTy
 var endpoint = (Uri)pluginAssembly.GetType("GillionsGameSync.XivpfEndpoints", true)!
     .GetProperty("ContributionUrl", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
 var testingProduct = pluginAssembly.GetName().Name == "GillionsGameSyncTest";
+PublicCandidatePackagedTests.Run(pluginAssembly);
+var nativeCapabilities = pluginAssembly.GetType("GillionsGameSync.FateLocalView") is not null;
 FatePackagedTests.Run(pluginAssembly,testingProduct,fixturePath);
 PermissionPackagedTests.Run(pluginAssembly);
-HuntV2PackagedTests.Run(pluginAssembly, testingProduct, args.Length == 4 ? args[3] : null);
-HuntBillItemPackagedTests.Run(pluginAssembly, testingProduct);
+HuntV2PackagedTests.Run(pluginAssembly, nativeCapabilities, args.Length == 4 ? args[3] : null);
+HuntBillItemPackagedTests.Run(pluginAssembly, nativeCapabilities);
 var intakeOptIn = configurationType.GetProperty("EnableGillionsPartyFinderContributions")!;
 var legacyOptedIn = Activator.CreateInstance(configurationType)!;
 partyFinderOptIn.SetValue(legacyOptedIn, true);
@@ -42,14 +48,14 @@ Assert(AcceptsOrigin("https://gillions.app") && !AcceptsOrigin("http://example.c
 Console.WriteLine($"Actual HTTPS-only pairing boundary passed: {pluginAssembly.GetName().Name}.");
 Assert(testingProduct
         ? endpoint == new Uri("https://test.gillions.app/api/game-sync/party-finder/contribute")
-        : endpoint == new Uri("https://xivpf.com/contribute/multiple"),
+        : endpoint == new Uri("https://test.gillions.app/api/game-sync/party-finder/contribute"),
     "Built product resolved an unsafe or unexpected xivpf contribution endpoint.");
 var changelog = (string[])pluginType.GetField("CurrentChangelog", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
 Assert(testingProduct
     ? changelog.Any(line => line.Contains("Public listings go to Gillions HTTPS, not directly to xivpf.com or localhost."))
         && changelog.Any(line => line.Contains("runtime current-listing cache") && line.Contains("Authorization"))
         && !changelog.Any(line => line.Contains("listings directly to xivpf.com") || line.Contains("loopback-only"))
-    : changelog.Any(line => line.Contains("listings directly to xivpf.com")),
+    : changelog.Any(line => line.Contains("authenticated Gillions intake")),
     "Built-product recipient/custody changelog disclosure is incorrect.");
 Assert(pluginAssembly.GetType("GillionsGameSync.AutoRetainerVenturePlanWriter") is null
     && pluginAssembly.GetType("GillionsGameSync.AutoRetainerIpc") is null
@@ -112,7 +118,7 @@ var personalSubSetting = configurationType.GetProperty("SyncPersonalSubmarines")
 var pfLinkSetting = configurationType.GetProperty("EnablePartyFinderLinkRequests");
 var travelSetting = configurationType.GetProperty("ShareHuntRoutingLocation");
 var huntMapSetting = configurationType.GetProperty("AutomaticallyShowHuntMap");
-if (testingProduct) {
+if (nativeCapabilities) {
     var huntMapOlder = JsonConvert.DeserializeObject("{\"ShareHuntRoutingLocation\":true,\"SyncPersonalHunts\":true,\"SyncPersonalSubmarines\":true,\"AutomaticSync\":true,\"EnableItemLinkRequests\":true,\"EnablePartyFinderLinkRequests\":true,\"ContributeObservedMarketData\":true}",configurationType)!;
     Assert(!(bool)huntMapSetting!.GetValue(huntMapOlder)! && !(bool)huntMapSetting.GetValue(Activator.CreateInstance(configurationType))!,"Existing permissions must not grant Hunt map consent.");
     huntMapSetting.SetValue(huntMapOlder,true); configurationType.GetMethod("Save")!.Invoke(huntMapOlder,[savedViaPlugin]);
@@ -126,7 +132,7 @@ if (testingProduct) {
     Assert(typeof(Dalamud.Game.Text.SeStringHandling.Payloads.MapLinkPayload).GetConstructor([typeof(uint),typeof(uint),typeof(float),typeof(float),typeof(float)])!=null,"Human-readable map link constructor changed.");
     Console.WriteLine("Actual Hunt map default-OFF/serializer/independent consent/public SDK API PASS.");
 } else Assert(huntMapSetting is null && pluginAssembly.GetType("GillionsGameSync.HuntMapRequest") is null && pluginAssembly.GetType("GillionsGameSync.HuntMapProcessor") is null,"Stable gained Hunt map actions.");
-if (testingProduct) {
+if (nativeCapabilities) {
     var travelOlder = JsonConvert.DeserializeObject("{\"SyncPersonalHunts\":true,\"SyncPersonalSubmarines\":true,\"AutomaticSync\":true,\"EnablePartyFinderLinkRequests\":true,\"ContributeObservedMarketData\":false}",configurationType)!;
     Assert(!(bool)travelSetting!.GetValue(travelOlder)! && !(bool)travelSetting.GetValue(Activator.CreateInstance(configurationType))!,"Old/default permissions must not grant location consent.");
     travelSetting.SetValue(travelOlder,true);
@@ -158,11 +164,11 @@ if (testingProduct) {
     Assert(pluginAssembly.GetType("GillionsGameSync.TravelPrepared",true)!.GetMethod("ToString")!.DeclaringType==typeof(object),"Packaged preparation dumps its payload.");
     var httpHandler=(HttpClientHandler)pluginAssembly.GetType("GillionsGameSync.PartyFinderHttp",true)!.GetMethod("CreateHandler",BindingFlags.Static|BindingFlags.NonPublic)!.Invoke(null,[])!;
     using(httpHandler) Assert(!httpHandler.AllowAutoRedirect&&!httpHandler.UseCookies,"Personal/travel client follows redirects or retains cookies.");
-    Assert(((string)pluginType.GetField("PluginVersion",BindingFlags.Static|BindingFlags.NonPublic)!.GetValue(null)!).Split('.').Length==4,"Testing request/enrollment version must be four-part.");
+    Assert(((string)pluginType.GetField("PluginVersion",BindingFlags.Static|BindingFlags.NonPublic)!.GetValue(null)!).Split('.').Length==4,"Request/enrollment version must match the four-part FATE collector version.");
     Console.WriteLine("Actual travel serializer/default-OFF/unrelated consent/SDK/map conversion PASS. No live game or HTTP invocation.");
 } else Assert(travelSetting is null && pluginAssembly.GetType("GillionsGameSync.TravelContextLocalView") is null
     && pluginAssembly.GetType("GillionsGameSync.TravelSyncState") is null && pluginAssembly.GetType("GillionsGameSync.TravelPrepared") is null,"Stable gained travel collection/transport.");
-if (testingProduct) {
+if (nativeCapabilities) {
     var oldLinkConfig = JsonConvert.DeserializeObject("{\"EnableItemLinkRequests\":true}", configurationType)!;
     Assert(!(bool)pfLinkSetting!.GetValue(oldLinkConfig)! && !(bool)pfLinkSetting.GetValue(Activator.CreateInstance(configurationType))!,
         "Old/default item consent must not silently expand to PF actions.");
@@ -194,7 +200,7 @@ if (testingProduct) {
     Console.WriteLine("Actual installed PF API signature/flags/chat payload encoding/default-OFF and serializer consent PASS; no live game/chat invocation.");
 } else Assert(pfLinkSetting is null && pluginAssembly.GetType("GillionsGameSync.PartyFinderLinkRequestProcessor") is null,
     "Stable must not gain website PF request action classes.");
-if (testingProduct) {
+if (nativeCapabilities) {
     var oldPersonal = JsonConvert.DeserializeObject("{\"AutomaticSync\":true,\"ContributeObservedMarketData\":false}", configurationType)!;
     Assert(!(bool)personalHuntSetting!.GetValue(oldPersonal)! && !(bool)personalSubSetting!.GetValue(oldPersonal)!,
         "Older Testing configs must not silently grant personal upload consent.");
@@ -211,7 +217,7 @@ if (testingProduct) {
     Console.WriteLine("Actual Testing personal consent defaults/independent switches/ordinary and market isolation passed.");
 } else Assert(personalHuntSetting is null && personalSubSetting is null && pluginAssembly.GetType("GillionsGameSync.PersonalSyncPolicy") is null,
     "Stable must not contain personal transport or permission settings.");
-if (testingProduct) {
+if (nativeCapabilities) {
     Assert(marketSetting is not null && (bool)marketSetting.GetValue(Activator.CreateInstance(configurationType))!,
         "New Testing configuration must default market contribution ON.");
     var olderTesting = JsonConvert.DeserializeObject("{\"AutomaticSync\":false}", configurationType)!;
@@ -251,7 +257,7 @@ Assert((string)blockedGeneration.GetValue(load.Invoke(configurations, [product])
     "A new/default authorization-stop marker must round-trip without listing data.");
 var submarineProperty = configurationType.GetProperty("SubmarineVoyages");
 var submarineViewType = pluginAssembly.GetType("GillionsGameSync.SubmarineLocalView");
-if (testingProduct) {
+if (nativeCapabilities) {
     Assert(submarineProperty is not null && submarineViewType is not null,
         "Testing product must own the local submarine view and retained format.");
     var defaults = submarineProperty!.GetValue(Activator.CreateInstance(configurationType))!;
@@ -292,6 +298,7 @@ var displayReader=System.Runtime.CompilerServices.RuntimeHelpers.GetUninitialize
 var displayStore=Activator.CreateInstance(pluginAssembly.GetType("GillionsGameSync.HuntBillRetention",true)!)!;
 const BindingFlags localFlags=BindingFlags.NonPublic|BindingFlags.Instance;
 huntType!.GetField("store",localFlags)!.SetValue(displayReader,displayStore);
+huntType.GetField("policy",localFlags)!.SetValue(displayReader,Activator.CreateInstance(pluginAssembly.GetType("GillionsGameSync.HuntBillRetentionPolicy",true)!,[displayStore]));
 Assert(!(bool)huntType.GetProperty("ReadEnabled",localFlags)!.GetValue(displayReader)!,"Both local choices OFF must stop Hunt reads.");
 huntType.GetProperty("ProgressRequested",localFlags)!.SetValue(displayReader,true);
 Assert((bool)huntType.GetProperty("ReadEnabled",localFlags)!.GetValue(displayReader)!
@@ -300,7 +307,7 @@ Assert((bool)huntType.GetProperty("ReadEnabled",localFlags)!.GetValue(displayRea
 huntType.GetProperty("ProgressRequested",localFlags)!.SetValue(displayReader,false);
 Assert(!(bool)huntType.GetProperty("ReadEnabled",localFlags)!.GetValue(displayReader)!,"Display OFF must stop RAM-only Hunt reads.");
 Console.WriteLine($"Packaged Hunt Progress RAM-only/default-OFF/read isolation PASS: {product}.");
-if (testingProduct) {
+if (nativeCapabilities) {
     Assert(huntProperty is not null && huntType is not null, "Testing Hunt collection missing from actual binary.");
     var huntConfig = Activator.CreateInstance(configurationType)!;
     var huntStore = huntProperty!.GetValue(huntConfig)!;

@@ -15,7 +15,7 @@ for text in (hunt, sub):
     event = text.split("private unsafe void OnAddon" if text is sub else "internal unsafe void Tick", 1)[1]
     assert event.index("PersonalObservationCompatibility.Supports") < event.index("PlayerState.Instance()" if text is sub else "CurrentCharacterKey()")
     assert "!framework.IsInFrameworkUpdateThread" in event
-    assert "LocalRetentionEnabled" in event
+    assert "ReadEnabled" in event if text is hunt else "policy.RetentionEnabled" in event
     assert "client.Logout -= OnLogout" in text
     assert "PRIVATE" in text and "no upload" in text.lower()
 assert "nextReadUtc" in sub and "AddSeconds(1)" in sub
@@ -34,8 +34,8 @@ assert "GetAvailableHuntOrderRowId(index)" in hunt
 assert "chat.LogMessage += OnProgressMessage" in hunt and "chat.LogMessage -= OnProgressMessage" in hunt
 progress = hunt.split("private void OnProgressMessage",1)[1].split("private void OnTerritoryChanged",1)[0]
 assert "!ReadEnabled" in progress and "!framework.IsInFrameworkUpdateThread" in progress
-assert 'private bool ReadEnabled => store.LocalRetentionEnabled || ProgressRequested' in hunt
-assert 'CoveragePayload(string key, DateTime now) => store.LocalRetentionEnabled' in hunt
+assert 'private bool ReadEnabled => policy.RetentionEnabled || ProgressRequested' in hunt
+assert 'CoveragePayload(string key, DateTime now) => policy.RetentionEnabled' in hunt
 assert 'schedule.TryBegin(now, ReadEnabled, force)' in hunt
 assert "message.LogMessageId != HuntProgressMessage.LogId" in progress and "message.ParameterCount != 4" in progress
 assert all(f"TryGetIntParameter({n}," in progress for n in (1,2,3))

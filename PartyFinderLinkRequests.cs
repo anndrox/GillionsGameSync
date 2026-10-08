@@ -1,4 +1,4 @@
-#if GILLIONS_TEST_BUILD || GILLIONS_PF_LINK_TESTS
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_PF_LINK_TESTS
 using System;
 using System.Collections.Generic;
 using System.Globalization;

@@ -1,4 +1,4 @@
-#if GILLIONS_TEST_BUILD || GILLIONS_PERSONAL_STATE_TESTS
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_PERSONAL_STATE_TESTS
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -61,7 +61,7 @@ internal static class PersonalSyncPolicy {
             using var doc = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 16 });
             var root = doc.RootElement;
             if (root.GetProperty("ok").ValueKind != JsonValueKind.True
-                || root.GetProperty("acceptedClientProduct").GetString() != "GillionsGameSyncTest") return false;
+                || root.GetProperty("acceptedClientProduct").GetString() != NativeProduct.Name) return false;
             var ack = root.GetProperty("personalObservations");
             if (ack.GetProperty("contractVersion").GetInt32() != 1 || ack.GetProperty("endpoint").GetString() != Endpoint) return false;
             var matches = ack.GetProperty("resources").EnumerateArray().Where(r => r.GetProperty("resourceType").GetString() == resource).ToArray();
@@ -78,7 +78,7 @@ internal static class PersonalSyncPolicy {
             var r = doc.RootElement;
             var a = r.GetProperty("personalObservations");
             var entries = a.GetProperty("resources").EnumerateArray().Where(e => e.GetProperty("resourceType").GetString() == "hunt_bills").ToArray();
-            return r.GetProperty("ok").ValueKind == JsonValueKind.True && r.GetProperty("acceptedClientProduct").GetString() == "GillionsGameSyncTest"
+            return r.GetProperty("ok").ValueKind == JsonValueKind.True && r.GetProperty("acceptedClientProduct").GetString() == NativeProduct.Name
                 && a.GetProperty("contractVersion").GetInt32() == 1 && a.GetProperty("endpoint").GetString() == Endpoint
                 && entries.Length == 1 && entries[0].GetProperty("schemaVersion").GetInt32() == 2
                 && entries[0].GetProperty("collectorSchema").GetString() == "hunt-bills-v2"

@@ -12,4 +12,5 @@
     <Compile Include="..\..\GillionsPartyFinderContributor.cs" Link="GillionsPartyFinderContributor.cs" />
     <Compile Include="..\..\PartyFinderLinkRequests.cs" Link="PartyFinderLinkRequests.cs" />
   </ItemGroup>
+  <ItemGroup><Compile Include="../../NativeProduct.cs" Link="NativeProduct.cs" /></ItemGroup>
 </Project>

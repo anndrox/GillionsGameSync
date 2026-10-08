@@ -26,4 +26,5 @@
     <Compile Include="..\..\PublicExperience.cs" Link="PublicExperience.cs" />
     <Compile Include="..\..\PermissionAuthority.cs" Link="PermissionAuthority.cs" />
   </ItemGroup>
+  <ItemGroup><Compile Include="../../NativeProduct.cs" Link="NativeProduct.cs" /></ItemGroup>
 </Project>
