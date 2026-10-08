@@ -48,8 +48,8 @@ assert 'PersonalSyncPolicy.Withdraw(configuration.PersonalSync, owner, resource)
 assert 'RecordContributionDenial("partyFinderContribution", enrollmentGeneration, authorizationGeneration,' in plugin
 assert 'RecordContributionDenial("marketContribution", generation, authorization,' in plugin
 assert 'FATE_POLICY_OFF' not in ui and 'PublicHealth.FateState(' in ui
-assert 'ImGui.TextUnformatted("Data Provided by"); ImGui.SameLine();' in ui
-assert 'if(ImGui.Button("xivpf.com")) Util.OpenLink("https://xivpf.com")' in ui
+assert 'ImGui.TextUnformatted("Data provided by"); ImGui.SameLine();' in ui
+assert 'if(ImGui.SmallButton("xivpf.com")) Util.OpenLink("https://xivpf.com")' in ui
 assert 'ImGui.Button("Data provided by xivpf.com")' not in ui
 assert 'commands.AddHandler("/gillionsfates",new CommandInfo((_,_)=>Show())' in (root/'FateLocalView.cs').read_text()
 print('Public UI/source boundaries PASS: local presentation, one existing reader/lifecycle, safe support, no hidden policy expansion or game writes.')

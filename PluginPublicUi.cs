@@ -79,13 +79,35 @@ public sealed partial class Plugin {
         ImGui.TextColored(state=="Connected" ? new Vector4(.54f,.86f,.87f,1) : ImGui.GetStyle().Colors[(int)ImGuiCol.Text],
             state=="Connected" ? "Connected to Gillions" : state);
     }
-    private static void DrawFeatureHealth(PublicHealth health) {
+    private void DrawPairingBranding() {
+        // First-run composition: two-line identity, deliberate negative space,
+        // and one full approved coin/Aetheryte accent at right. No new artwork.
+        float scale=ImGui.GetFontSize()/17f;
+        var start=ImGui.GetCursorScreenPos();
+        var band=new Vector2(ImGui.GetContentRegionAvail().X,56*scale);
+        var ink=ImGui.GetWindowDrawList();
+        ink.AddRectFilled(start,start+band,ImGui.GetColorU32(new Vector4(.055f,.10f,.16f,1)));
+        ink.AddLine(start+new Vector2(0,band.Y),start+band,
+            ImGui.GetColorU32(new Vector4(.68f,.52f,.24f,1)),scale);
+        ink.AddText(ImGui.GetFont(),23*scale,start+new Vector2(12,2)*scale,
+            ImGui.GetColorU32(new Vector4(.92f,.78f,.48f,1)),"GILLIONS");
+        ink.AddText(ImGui.GetFont(),17*scale,start+new Vector2(12,30)*scale,
+            ImGui.GetColorU32(new Vector4(.54f,.86f,.87f,1)),"Game Sync");
+        if(textureProvider?.GetFromManifestResource(typeof(Plugin).Assembly,"GillionsGameSync.Branding.png").TryGetWrap(out var icon,out _) == true) {
+            ImGui.SetCursorScreenPos(start+new Vector2(band.X-56*scale,4*scale));
+            ImGui.Image(icon.Handle,new Vector2(48*scale,48*scale));
+        }
+        ImGui.SetCursorScreenPos(start); ImGui.Dummy(band);
+    }
+    private static void DrawFeatureHealth(PublicHealth health,bool quietGlobal=false) {
         // Fixed label column, wrapping value column: no consent controls.
         if(!ImGui.BeginTable("FeatureHealth",2,ImGuiTableFlags.SizingFixedFit)) return;
         ImGui.TableSetupColumn("Feature",ImGuiTableColumnFlags.WidthFixed,105*ImGui.GetFontSize()/17f);
         ImGui.TableSetupColumn("Health",ImGuiTableColumnFlags.WidthStretch);
-        DrawFeatureRow("Hunts",health.Hunts); DrawFeatureRow("Party Finder",health.PartyFinder);
-        DrawFeatureRow("FATEs",health.Fates); DrawFeatureRow("Market",health.Market);
+        DrawFeatureRow("Hunts",quietGlobal ? "Unavailable" : health.Hunts);
+        DrawFeatureRow("Party Finder",quietGlobal ? "Unavailable" : health.PartyFinder);
+        DrawFeatureRow("FATEs",quietGlobal ? "Unavailable" : health.Fates);
+        DrawFeatureRow("Market",quietGlobal ? "Unavailable" : health.Market);
         ImGui.EndTable();
     }
     private static void DrawFeatureRow(string name,string status) {
@@ -110,14 +132,17 @@ public sealed partial class Plugin {
         else if(h.Connection=="Gillions unavailable") Label("Gillions is temporarily unreachable. Local history is preserved; Game Sync will retry safely.");
         else if(h.Connection=="Account unavailable") Label("Check your Gillions account access on the website.");
         ImGui.Separator();
-        DrawFeatureHealth(h);
+        bool sharedUnavailable=h.Connection is "Not connected" or "Gillions unavailable" or "Authorization expired or revoked" or "Account unavailable" or "Update required"
+            && h.Hunts=="Gillions unavailable" && h.PartyFinder=="Gillions unavailable"
+            && h.Fates=="Gillions unavailable" && h.Market=="Gillions unavailable";
+        DrawFeatureHealth(h,sharedUnavailable);
         ImGui.Separator(); DrawPrivacy();
         Link("Open Gillions",configuration.ActiveSession?.Origin ?? GillionsEndpoints.DefaultServerUrl);
         ImGui.SameLine();
         if(ImGui.Button("Settings")) publicUi.ShowSettings();
     }
     private void DrawPairingPublic() {
-        DrawBranding(56); ImGui.Separator();
+        DrawPairingBranding(); ImGui.Separator();
         if(uiState.Paired && !pairingRepair) {
             Label("Game Sync is ready"); Label("Connected as:"); Label(publicHealth.Character); DrawPrivacy();
             Link("Open Gillions",configuration.ActiveSession?.Origin ?? GillionsEndpoints.DefaultServerUrl);
@@ -130,7 +155,8 @@ public sealed partial class Plugin {
         Label("Game Sync does not move your character, fight, teleport or automatically join parties.");
         string nextOrigin=PublicConnectionPresentation.PairingOrigin(uiServerAddress);
         if(nextOrigin.Length>0) {
-            Label("Next pairing destination: "+nextOrigin);
+            if(pairingRepair) Label("Next pairing destination: "+nextOrigin);
+            else Label("You’ll continue on "+(nextOrigin.StartsWith("https://",StringComparison.Ordinal) ? nextOrigin[8..] : nextOrigin)+" to connect this device.");
             Link("Connect to Gillions",PublicConnectionPresentation.PairingUrl(uiServerAddress));
             Link("Learn about data & privacy",nextOrigin+"/gillions-sync");
         } else {
@@ -170,7 +196,8 @@ public sealed partial class Plugin {
             DrawActionFeedback();
             Link("Open Gillions",configuration.ActiveSession?.Origin ?? GillionsEndpoints.DefaultServerUrl);
             if(ImGui.Button("Reconnect")) { pairingRepair=true; publicUi.ShowPairing(); }
-            if(uiState.Paired && ImGui.Button("Disconnect")) QueueUiAction(()=> {
+            if(uiState.Paired) { ImGui.Spacing(); ImGui.Separator(); }
+            if(uiState.Paired && ImGui.Button("Disconnect Game Sync")) QueueUiAction(()=> {
                 configuration.PairingRequired=true; configuration.ActiveSession=null;
                 configuration.DeviceToken=""; configuration.DeviceId=""; configuration.PairingCode="";
                 ResetSessionContext(); RequestConfigurationSave(); settingsMessage="Disconnected. Saved history remains on this PC.";
@@ -192,8 +219,8 @@ public sealed partial class Plugin {
             if(ImGui.Button("Sync now")) _=SyncAsync();
             ImGui.EndDisabled();
             ImGui.Separator(); ImGui.TextDisabled("Data providers");
-            ImGui.TextUnformatted("Data Provided by"); ImGui.SameLine();
-            if(ImGui.Button("xivpf.com")) Util.OpenLink("https://xivpf.com");
+            ImGui.TextUnformatted("Data provided by"); ImGui.SameLine();
+            if(ImGui.SmallButton("xivpf.com")) Util.OpenLink("https://xivpf.com");
 #if GILLIONS_TEST_BUILD
             if(ImGui.CollapsingHeader("Testing diagnostics")) {
                 Label("Diagnostics stay local. Private exports contain gameplay details: do not share configuration or credentials.");

@@ -3,15 +3,21 @@
 Based on the accepted Testing 0.0.87 implementation (`c286e514`) and its completed
 publication-history successor (`8ebbab69`). This branch is presentation preparation
 only. It does not replace Testing 0.0.87, admit another client, merge main, or publish
-a channel. Review packages use local-only version **0.0.0.0**, not release bytes.
+a channel. The final public UI review package uses **1.0.31.0**; the optional
+Testing compilation fixture uses **0.0.0.0**. Neither is published or newly admitted
+for Site transport. The prior 0.0.0.0 polish packages remain preserved as old evidence.
 
 ## Change classification and validation
 
 **Category A only:** shallow branded headers, connected-state emphasis, aligned
-wrapping feature-health rows, narrow pairing-field sizing, and Advanced support grouping. The approved embedded
+wrapping feature-health rows, narrow pairing-field sizing, and Advanced support grouping.
+Final corrections add stronger pairing composition, player-language destination copy,
+quiet shared-outage values on Main, separated Disconnect Game Sync, and compact provider
+attribution. The approved embedded
 coin/Aetheryte icon is fully contained and square, loaded through the same Dalamud
 shared-resource path. Pairing/main/Settings header heights are 56/32/20 logical px;
-pairing is smaller than the preceding 64 px treatment. No new artwork, animation,
+Pairing has a two-line Gillions identity and one right-aligned coin/Aetheryte accent;
+Main and Settings keep their preceding treatments. No new artwork, animation,
 header action, renderer dependency, or runtime asset download.
 
 Category B: **none**. Requests, consent, pairing actions, persistence, lifecycle,
@@ -37,14 +43,16 @@ support/expiry, not a selection identity. `HuntProgressDisplay` has only area, s
 and independently keyed local rows. A last manual map request cannot establish the
 current Site target. No new lookup, maintained selection state, name matching or
 proximity inference is introduced. Ordering remains neutral; distinct Aspis rows
-remain distinct. Trigger: a future accepted read-only current-selection identity
-becomes available locally, with explicit scope to consume it for presentation.
+remain distinct. Trigger: a future separately approved feature provides authoritative
+current-target identity locally for another legitimate reason.
 
 **BACKGROUND OPACITY: DEFERRED — NOT ESSENTIALLY FREE / NOT WORTH ADDITIONAL
 CONFIGURATION.** Dalamud `Window.BgAlpha` is a standard alpha override, not an existing
 saved user preference in these windows. A useful adjustable control would need new
 UI/configuration semantics. Preserve existing Dalamud styling. Trigger: an existing
-standard persisted window preference provides this without new configuration.
+standard persisted window preference provides this without new configuration, or
+real users repeatedly report readability/gameplay-obstruction problems. Neither
+trigger authorizes an opacity implementation in this presentation pass.
 
 ## Complete recovered UX recommendation ledger
 
@@ -52,48 +60,57 @@ Sources: accepted public UX design; initial and corrected candidate UX/security
 records; subsequent owner live criticism; current polish objective. Acceptance
 verdicts do not delete recommendations. Every recommendation has a disposition.
 
-| Recommendation | Disposition and rationale / trigger |
-| --- | --- |
-| Stronger pairing/welcome identity | IMPLEMENTED NOW — largest shallow approved-icon band, no new artwork. |
-| Restrained main branding | IMPLEMENTED NOW — 32 px identity strip. |
-| Subtle Settings shell branding | IMPLEMENTED NOW — 20 px strip, no repeated inner-tab banner. |
-| Themed image/header | IMPLEMENTED NOW — approved coin/Aetheryte asset, navy/gold band, square containment and scale-aware size. |
-| Tavi/Pip/new mascot scene | REJECTED WITH RATIONALE — not necessary; existing approved Aetheryte treatment fulfills the restraint requirement. No unapproved asset substitution. |
-| Main connection-first hierarchy | IMPLEMENTED NOW — identity, explicit Connected to Gillions, character/world, secondary last sync, compact health, privacy, actions. |
-| Compact readable health rows, not consent | IMPLEMENTED NOW — fixed labels and wrapping existing status values; no policy editors. |
-| Update/help only when actionable | ALREADY IMPLEMENTED — unchanged conditional update/action state; Settings/Advanced is secondary support. |
-| Dedicated focused pairing and ready flow | ALREADY IMPLEMENTED — authoritative destinations, explanations, waiting/failure/ready states and Finish action preserved. |
-| Narrow pairing-field label readability | IMPLEMENTED NOW — reserve label width; unchanged field identity, masking, validation and action. |
-| No re-onboarding paired users | ALREADY IMPLEMENTED — first-run/lifecycle behavior unchanged. |
-| Site-owned privacy handoff | ALREADY IMPLEMENTED — exact /gillions-sync link; no duplicated privacy toggles. |
-| Four-tab Settings / real General preferences | ALREADY IMPLEMENTED — General/Hunts/Connection/Advanced; no placebo persistence checkboxes. |
-| Advanced organization | IMPLEMENTED NOW — support information, existing feature health, recent sync/support, data providers; diagnostics remain secondary. |
-| More recent accepted contribution details | DEFERRED WITH TRIGGER — current safe PublicHealth snapshot supplies last sync only; add other detail only when already provided safely, or in a separately authorized functional scope. No new collection for support. |
-| Sanitized support copy and copy acknowledgement | ALREADY IMPLEMENTED — whitelist summary and visible copy acknowledgement unchanged. |
-| Sanitized action/error feedback | ALREADY IMPLEMENTED — earlier missing pairing/manual-sync/disconnect feedback correction retained. |
-| Stale manual-FATE contract description | ALREADY IMPLEMENTED — preceding accepted lineage documents automatic policy-driven collection; no activation role restored. |
-| Explain disabled Sync now | ALREADY IMPLEMENTED — established connect/login/in-progress explanation retained. |
-| Pairing-origin disclosure / link consistency | ALREADY IMPLEMENTED — earlier UX/privacy finding fixed; current vs next pairing destinations remain distinct, invalid destination recovery unchanged. |
-| Private FATE diagnostic warning | ALREADY IMPLEMENTED — earlier privacy finding corrected; no raw private data moved into ordinary UI. |
-| Testing identity and diagnostic isolation | ALREADY IMPLEMENTED — badge and Testing-only diagnostics preserved; public normal operation has no R&D activation requirement. |
-| Hunt Progress minimal identity, no themed art | ALREADY IMPLEMENTED — utility title only; no banner or gameplay actions. |
-| Remaining primary / ratio secondary / safe wrapping | ALREADY IMPLEMENTED — unchanged count renderer; long-label and scale fixtures included. |
-| Manual resize and saved geometry | ALREADY IMPLEMENTED — standard unchanged window ID/FirstUseEver, constraints and scroll behavior. |
-| Former content-driven Hunt height recommendation | SUPERSEDED — owner explicitly selected manual resizing and persistent chosen geometry. |
-| Lock position and no focus steal | ALREADY IMPLEMENTED — unchanged NoMove/passive window flags; no new input behavior. |
-| Optional click-through when locked | DEFERRED WITH TRIGGER — would change input/close interaction; evaluate only in separately authorized functional UX work, not pixel polish. |
-| Manual-close suppression | ALREADY IMPLEMENTED — unchanged territory-session suppression/gate. |
-| Local/offline usefulness | ALREADY IMPLEMENTED — existing local read-only Hunt state, no new Site dependency. |
-| Brief completion hold / no sound or motion | ALREADY IMPLEMENTED — unchanged completion text/hold/removal. |
-| Honest uncertain/unavailable state | ALREADY IMPLEMENTED — no stale numeric substitution or false all-complete claim. |
-| All-complete wording where coverage proves it | DEFERRED WITH TRIGGER — renderer supports model fixture, but current runtime coverage cannot prove exact order/reset; remains fail-closed until authoritative coverage exists. |
-| Hunt current-target promotion / cue | DEFERRED WITH TRIGGER — exact identity is not locally available as current state; see explicit decision above. |
-| Neutral ordering, duplicate display names | ALREADY IMPLEMENTED — independently keyed rows, no priority cue/name deduplication; Aspis/Horned lizard/Aspis fixture. |
-| Background opacity | DEFERRED WITH TRIGGER — only if essentially free standard persisted behavior; see explicit decision above. |
-| Provider attribution | ALREADY IMPLEMENTED — Data Provided by plus separate clickable xivpf.com button. Site wording recommendation remains identical. |
-| 100/125/150%, bright/dark/narrow/resized evidence | IMPLEMENTED NOW — exact compiled render cases; no fabricated live screenshots. |
-| Color-independent status, restrained motion | ALREADY IMPLEMENTED — readable text retains every state; no animation added. |
-| External Site reference gaps | DEFERRED WITH TRIGGER — later Site lane: U'Ghamaro bedesman / U'Ghamaro Mines; Chupacabra / Three-malm Bend. No Native coordinates or fallback. |
+Source-review labels below identify evidence, not gates: **Design** = accepted public
+UX design; **Prior** = recovered initial/corrected independent review; **Live** = owner
+live criticism; **Polish** = preceding polish objective; **Final** = latest independent
+UX verdict supplied in the final owner objective. Timing preserves earlier completion.
+
+| Recommendation | Current implementation | Disposition | Timing | Presentation vs functional | Reason / trigger | Source review |
+| --- | --- | --- | --- | --- | --- | --- |
+| Stronger pairing/welcome identity | Two-line Gillions wordmark text with a single full right-aligned approved coin/Aetheryte accent; 56 px band | IMPLEMENTED | Final recheck | Presentation | Strengthens the prior strip without hero/art generation | Final, Polish, Design |
+| Player-language pairing destination | You’ll continue on gillions.app to connect this device; explicit origin retained for repair | IMPLEMENTED | Final recheck | Presentation | Trust disclosure without changing destination or validation | Final |
+| Quiet degraded Main | Shared global unavailability displayed as Unavailable; independent failure values remain intact | IMPLEMENTED | Final recheck | Presentation | Global actionable problem stays above; health model unchanged | Final |
+| Disconnect action hierarchy | Separator/spacing after Reconnect; Disconnect Game Sync label | IMPLEMENTED | Final recheck | Presentation | Existing disconnect action; no confirmation or alarming styling | Final |
+| Provider attribution | Data provided by plus separate compact clickable xivpf.com SmallButton | IMPLEMENTED | Final recheck | Presentation | Standard ImGui styling; same destination; supersedes prior capitalization | Final, Live |
+| Restrained main branding | Unchanged 32 px identity strip | IMPLEMENTED NOW | Prior polish; retained | Presentation | No mascot-heavy treatment | Polish, Design |
+| Subtle Settings shell branding | Unchanged 20 px strip, no inner-tab banners | IMPLEMENTED NOW | Prior polish; retained | Presentation | Tabs/utility dominate | Polish, Design |
+| Themed image/header | Approved square contained asset with navy/gold band | IMPLEMENTED NOW | Prior polish; pairing composition refined now | Presentation | Existing asset custody; no artwork replacement | Polish, Design |
+| Tavi/Pip/new mascot scene | Existing approved Aetheryte treatment only | REJECTED WITH RATIONALE | Prior polish; retained | Presentation | No additional mascot scene needed; no unapproved substitution | Polish, Design |
+| Main connection-first hierarchy | Connected to Gillions, character/world, secondary sync, health/privacy/actions | IMPLEMENTED NOW | Prior polish; connected view retained | Presentation | No internal capability vocabulary | Polish, Design |
+| Compact readable health rows, not consent | Fixed labels/wrapping values; no policy editors | IMPLEMENTED NOW | Prior polish; retained | Presentation | Display-only health; only global redundancy quieted | Polish, Design |
+| Update/help only when actionable | Conditional update/action states; Settings/Advanced support | ALREADY IMPLEMENTED | Accepted baseline; retained | Existing behavior unchanged | No filler status section | Design |
+| Dedicated focused pairing and ready flow | Same waiting/failure/ready controls and Finish action | ALREADY IMPLEMENTED | Accepted baseline; retained | Existing behavior unchanged | Dedicated onboarding, not generic Settings | Design |
+| Narrow pairing-field label readability | Existing reserved label width | IMPLEMENTED NOW | Prior polish; retained | Presentation | Field identity, masking/validation/actions unchanged | Polish |
+| No re-onboarding paired users | Unchanged first-run/lifecycle | ALREADY IMPLEMENTED | Accepted baseline; retained | Existing behavior unchanged | No launch behavior changes | Design |
+| Site-owned privacy handoff | Exact /gillions-sync link; no local privacy toggles | ALREADY IMPLEMENTED | Accepted baseline; retained | Existing behavior unchanged | Site alone owns permission controls | Design, Prior |
+| Four-tab Settings / real General preferences | General/Hunts/Connection/Advanced; no placebo options | ALREADY IMPLEMENTED | Accepted baseline; retained | Presentation | No new tabs/filler settings | Design |
+| Advanced organization | Same support/health/recent sync/providers groups | IMPLEMENTED NOW | Prior polish; retained | Presentation | Secondary support; no extra collection | Polish, Design |
+| More recent accepted contribution details | Only existing safe PublicHealth last sync | DEFERRED WITH TRIGGER | Future, not Public31 | Would expand snapshot if absent | Add only when safe information already exists in an approved public snapshot; no collection to decorate Advanced | Final, Design |
+| Sanitized support copy and copy acknowledgement | Same whitelist summary and copy acknowledgement | ALREADY IMPLEMENTED | Prior correction; retained | Existing behavior unchanged | Earlier follow-up preserved | Prior |
+| Sanitized action/error feedback | Same bounded pairing/manual-sync/disconnect feedback | ALREADY IMPLEMENTED | Prior correction; retained | Existing behavior unchanged | Earlier UX finding preserved | Prior |
+| Stale manual-FATE contract description | Accepted lineage documents automatic policy-driven lifecycle | ALREADY IMPLEMENTED | Prior correction; retained | Documentation; runtime unchanged | Manual activation role not restored | Prior |
+| Explain disabled Sync now | Same connect/login/in-progress explanation | ALREADY IMPLEMENTED | Prior correction; retained | Presentation | Earlier follow-up preserved | Prior |
+| Pairing-origin disclosure / link consistency | Same current-vs-next origin distinction and invalid-origin recovery | ALREADY IMPLEMENTED | Prior correction; retained | Existing behavior unchanged | Normal copy polished only; repair remains explicit | Prior, Final |
+| Private FATE diagnostic warning | Same private-presence warning | ALREADY IMPLEMENTED | Prior correction; retained | Existing behavior unchanged | No raw private data in ordinary UI | Prior |
+| Testing identity and diagnostic isolation | Same badge/Testing-only diagnostic guards | ALREADY IMPLEMENTED | Accepted baseline; retained | Existing behavior unchanged | Normal Public does not require R&D activation | Design |
+| Hunt Progress minimal identity, no themed art | Unchanged utility title/count renderer | ALREADY IMPLEMENTED | Accepted baseline; retained | Presentation | No header/maps/actions | Design, Final |
+| Remaining primary / ratio secondary / safe wrapping | Unchanged Hunt count renderer | ALREADY IMPLEMENTED | Accepted baseline; retained | Presentation | Safe long names/scaling | Design, Live |
+| Manual resize and saved geometry | Same window ID, constraints, FirstUseEver and scroll behavior | ALREADY IMPLEMENTED | Accepted baseline; retained | Existing behavior unchanged | Standard Dalamud/ImGui geometry | Live |
+| Former content-driven Hunt height recommendation | User-resizable persistent geometry instead | SUPERSEDED | Owner resize decision | Presentation | Owner explicitly selected fixed chosen geometry | Live |
+| Lock position and no focus steal | Same NoMove/passive flags | ALREADY IMPLEMENTED | Accepted baseline; retained | Existing behavior unchanged | No input/control change | Design, Live |
+| Optional click-through when locked | Not added | DEFERRED WITH TRIGGER | Future, not Public31 | Functional input change if pursued | Repeated actual HUD interaction complaints; separately authorized evaluation | Final, Design |
+| Manual-close suppression | Same territory-session gate | ALREADY IMPLEMENTED | Accepted baseline; retained | Existing behavior unchanged | No count-driven reopen | Design, Live |
+| Local/offline usefulness | Same read-only local Hunt state | ALREADY IMPLEMENTED | Accepted baseline; retained | Existing behavior unchanged | No Site dependency added | Design |
+| Brief completion hold / no sound or motion | Same text/hold/removal | ALREADY IMPLEMENTED | Accepted baseline; retained | Existing behavior unchanged | No delay slider/sound/animation | Design |
+| Honest uncertain/unavailable state | No stale counts substituted or false completion | ALREADY IMPLEMENTED | Accepted baseline; retained | Existing behavior unchanged | UNKNOWN preserved | Design |
+| All-complete wording where coverage proves it | Strong wording remains fail-closed; model-only fixture not live proof | DEFERRED WITH TRIGGER | Future, not Public31 | Requires authoritative semantics | Authoritative coverage can reliably establish all-complete | Final, Design |
+| Hunt current-target promotion / cue | No current selection inference/cue | DEFERRED WITH TRIGGER | Future, not Public31 | New dependency currently required | Future separately approved feature provides authoritative identity locally for another legitimate reason | Final, Live |
+| Neutral ordering, duplicate display names | Independently keyed Aspis rows preserved; no priority/name dedup | ALREADY IMPLEMENTED | Accepted baseline; retained | Presentation | Duplicate names do not prove duplicate authoritative rows | Live |
+| Duplicate-name secondary discriminator | Not added; rows remain distinct | DEFERRED WITH TRIGGER | Future, not Public31 | Presentation only if existing authoritative data suffices | Real ordinary bill use demonstrates meaningful confusion; then consider a small discriminator from already-authoritative local data | Final |
+| Background opacity | Existing styling; no new configuration | DEFERRED WITH TRIGGER | Future, not Public31 | New config otherwise required | Reusable already-persisted standard control, or repeated real readability/gameplay-obstruction reports | Final, Polish |
+| 100/125/150%, bright/dark/narrow/resized evidence | Prior full evidence retained; affected final windows re-rendered | IMPLEMENTED NOW | Prior polish; final focused recheck | Validation only | Controlled compiled renders, not live captures | Polish, Final |
+| Color-independent status, restrained motion | Text state preserved; no animation | ALREADY IMPLEMENTED | Accepted baseline; retained | Presentation | No color-only state | Design, Prior |
+| External Site reference gaps | U'Ghamaro bedesman / U'Ghamaro Mines; Chupacabra / Three-malm Bend retained | DEFERRED WITH TRIGGER | Later Site lane | Outside Native scope | Separate Site correction; no invented Native coordinates | Live |
 
 ## Review and publication boundary
 

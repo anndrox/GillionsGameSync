@@ -1,5 +1,18 @@
 # Changelog
 
+## Unpublished final Public 1.0.31 UI recheck (not a release)
+
+- Strengthen only the shallow pairing header with a two-line Gillions identity
+  and one approved right-aligned coin/Aetheryte accent.
+- Use player-language browser-destination copy; keep repair-origin disclosure,
+  navigation and origin validation unchanged.
+- Quiet redundant Main values only when all four share the same global outage;
+  retain independent feature failures and the underlying health model.
+- Separate and relabel Disconnect Game Sync; use Data provided by with a compact
+  clickable xivpf.com button. Existing actions/destinations are unchanged.
+- Preserve the complete recommendation ledger and all explicit deferral triggers.
+  No publication, main/Site/production changes or new functional behavior.
+
 ## Unpublished public UI polish (not a release)
 
 - Use shallow, scale-aware Gillions coin/Aetheryte headers for pairing, main and

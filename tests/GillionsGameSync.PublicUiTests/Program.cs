@@ -11,7 +11,7 @@ using Dalamud.Interface.Windowing;
 // Offline actual candidate Draw methods; no plugin constructor/services,
 // Windows input, browser, game or network. C# is needed for the typed .NET
 // ImGui API; Python rasterizes its actual triangles, not a second UI design.
-if(args.Length!=3) throw new ArgumentException("Exact DLL, Dalamud library directory, output directory required.");
+if(args.Length is not (3 or 4) || (args.Length==4 && args[3]!="final")) throw new ArgumentException("Exact DLL, Dalamud library directory, output directory, optional final subset required.");
 string binary=Path.GetFullPath(args[0]),libs=Path.GetFullPath(args[1]),output=Path.GetFullPath(args[2]);
 Directory.CreateDirectory(output);
 AssemblyLoadContext.Default.Resolving+=(_,name)=>{var file=Path.Combine(libs,name.Name+".dll");return File.Exists(file)?AssemblyLoadContext.Default.LoadFromAssemblyPath(file):null;};
@@ -79,7 +79,14 @@ var cases=new[]{
     ("36-main-update-required","DrawMainPublic",true,420f,1f,0),
     ("37-main-site-unavailable","DrawMainPublic",true,420f,1f,0),
     ("38-main-wide","DrawMainPublic",true,560f,1f,0),
+    ("39-main-independent-failure","DrawMainPublic",true,420f,1f,0),
+    ("40-main-shared-unavailable","DrawMainPublic",true,420f,1f,0),
+    ("41-pairing-narrow-150","DrawPairingPublic",false,320f,1.5f,0),
 };
+if(args.Length==4) {
+    string[] selected=["01","02","03","04","08","09","18","19","20","23","24","25","26","30","31","34","37","39","40","41"];
+    cases=cases.Where(c=>selected.Contains(c.Item1[..2])).ToArray();
+}
 foreach(var (name,method,paired,width,scale,tab) in cases) {
     object plugin=RuntimeHelpers.GetUninitializedObject(T("Plugin"));
     void Set(string field,object? v)=>T("Plugin").GetField(field,flags)!.SetValue(plugin,v);
@@ -100,6 +107,11 @@ foreach(var (name,method,paired,width,scale,tab) in cases) {
         health.GetType().GetProperty(field)!.SetValue(health,"Waiting for supported context");
     if(name.StartsWith("36-"))health.GetType().GetProperty("Connection")!.SetValue(health,"Update required");
     if(name.StartsWith("37-"))health.GetType().GetProperty("Connection")!.SetValue(health,"Gillions unavailable");
+    if(name.StartsWith("39-"))health.GetType().GetProperty("Fates")!.SetValue(health,"Temporarily unavailable");
+    if(name.StartsWith("40-")) {
+        health.GetType().GetProperty("Connection")!.SetValue(health,"Gillions unavailable");
+        foreach(string field in new[]{"Hunts","PartyFinder","Fates","Market"})health.GetType().GetProperty(field)!.SetValue(health,"Gillions unavailable");
+    }
     Set("publicHealth",health);
     var ui=T("PluginUiSnapshot").GetField("Empty",BindingFlags.Public|BindingFlags.Static)!.GetValue(null)!;
     ui=ui.GetType().GetMethod("<Clone>$")!.Invoke(ui,[])!;
