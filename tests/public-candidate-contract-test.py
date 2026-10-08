@@ -11,7 +11,7 @@ for p in ['PublicExperience.cs','PublicGameSyncUi.cs','docs/public-ui-polish.md'
 cs=(r/'GillionsGameSync.csproj').read_text()
 assert '<Version>1.0.31</Version>' in cs and 'GILLIONS_PUBLIC_BUILD' in cs
 assert 'https://xivpf.com/contribute/multiple' not in cs
-for p in ['FateTransport.cs','FateDiscovery.cs','PersonalSync.cs','TravelSync.cs','MarketContributionCore.cs']:
+for p in ['FateTransport.cs','FateDiscovery.cs','PersonalSync.cs','TravelSync.cs','MarketContributionCore.cs','PartyFinderLinkRequests.cs']:
  text=(r/p).read_text()
  assert 'NativeProduct.Name' in text,p
  assert '"GillionsGameSyncTest"' not in text,p

@@ -22,6 +22,14 @@ for guard in ["!framework.IsInFrameworkUpdateThread", "CurrentWorld.RowId", "Con
     assert guard in capture, guard
 assert "now.AddMilliseconds(250)" in plugin and "marketSource.Dispose(); marketContributor.Dispose(); marketHttp.Dispose();" in plugin
 assert 'X-Gillions-Market-Contract' in plugin and 'MarketContributor.Compatible(responseJson)' in plugin
+assert 'if (permit.Origin == MarketContributor.Origin)\n                request.Headers.Add("X-Gillions-Market-Contract"' in plugin
+assert 'marketAcceptedGeneration = permit.Origin == MarketContributor.Origin && MarketContributor.Compatible(responseJson)' in plugin
+assert 'internal const string Origin = "https://test.gillions.app"' in core
+assert 'HttpMethod.Post, MarketContributor.Endpoint' in capture
+assert 'new Uri(new Uri(permit.Origin)' not in capture
+assert 'if (permit.Origin != MarketContributor.Origin) return null;' in capture
+assert 'if (permit.Origin != MarketContributor.Origin || !MarketEnabled' in capture
+assert 'configuration.ActiveSession?.Origin == MarketContributor.Origin' in (root/'PluginPermissions.cs').read_text(encoding='utf-8')
 assert "GillionsMarketBlockedGeneration" in plugin and "receivedAuthorizationDenial: true" in capture
 ordinary_update = plugin.split("private void UpdateOwnedState()", 1)[1].split("private ", 1)[0]
 ordinary_permit = plugin.split("private bool PermitIsCurrent(", 1)[1].split("private void RequirePermit", 1)[0]

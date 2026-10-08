@@ -52,6 +52,12 @@ the existing Site version parser. Native payload/receipt/permission schemas do
 not change. The accepted Site `f3dea3d2` still admits only Testing86/87 FATE and
 rejects this Public candidate pending the separate exact-admission handoff.
 
+Independent review corrections bind PF-link acknowledgement to the actual
+compiled product and restrict Market negotiation, session capture and dispatch
+to the exact shared TEST origin. Production, direct-IP, plaintext and lookalike
+origins cannot activate that promoted transport. Historical Market preference
+remains ON by default; an unavailable transport is not a consent change.
+
 ## UI freeze and upgrade
 
 The accepted draw functions, branding asset, Hunt model/window and

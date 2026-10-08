@@ -60,6 +60,8 @@ internal sealed class MarketContributionSession(string key, string authorization
 }
 
 internal sealed class MarketContributor : IDisposable {
+    internal const string Origin = "https://test.gillions.app";
+    internal const string Endpoint = Origin + "/api/game-sync/market-observations";
     internal const string Path = "/api/game-sync/market-observations";
     internal const int MaximumPending = 64;
     internal const int MaximumBodyBytes = 32768;

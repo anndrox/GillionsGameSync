@@ -66,7 +66,7 @@ internal static class PartyFinderLinkPolicy {
             if (!root.GetProperty("ok").GetBoolean()) return null;
             var ack = root.GetProperty("nativeRequests");
             if (ack.GetProperty("contract").GetString() != Contract || ack.GetProperty("contractVersion").GetInt32() != 1
-                || ack.GetProperty("acceptedClientProduct").GetString() != "GillionsGameSyncTest"
+                || ack.GetProperty("acceptedClientProduct").GetString() != NativeProduct.Name
                 || !ack.GetProperty("capabilities").EnumerateArray().Any(x => x.GetString() == Capability)) return null;
             var r = root.GetProperty("request");
             var fields = new HashSet<string>(["requestType", "requestId", "claimToken", "listingKey", "listingId",

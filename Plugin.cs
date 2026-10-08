@@ -377,7 +377,8 @@ public sealed partial class Plugin : IDalamudPlugin {
             if (requestFocus) request.Headers.Add(HuntFocusState.Header, HuntFocusState.Contract);
             using var focusDeadline = requestFocus ? HuntMapTransport.Deadline(permit.Cancellation, CancellationToken.None) : null;
             var responseCancellation = focusDeadline?.Token ?? permit.Cancellation;
-            request.Headers.Add("X-Gillions-Market-Contract", "1"); // Optional capability; existing body/identity unchanged.
+            if (permit.Origin == MarketContributor.Origin)
+                request.Headers.Add("X-Gillions-Market-Contract", "1"); // Optional capability; existing body/identity unchanged.
             if (permit.Origin == PersonalSyncPolicy.Origin) {
                 request.Headers.Add("X-Gillions-Personal-Contract", PersonalSyncPolicy.Contract);
                 request.Headers.Add("X-Gillions-Personal-Capability", TravelSyncPolicy.Capability);
@@ -408,7 +409,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 publicConnectionFailure = "";
                 ApplyPermissions(responseJson, permit, response, Stopwatch.GetElapsedTime(permissionRequestStarted));
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
-                marketAcceptedGeneration = MarketContributor.Compatible(responseJson) ? permit.Session!.Generation : "";
+                marketAcceptedGeneration = permit.Origin == MarketContributor.Origin && MarketContributor.Compatible(responseJson) ? permit.Session!.Generation : "";
                 personalAccepted.Clear();
                 huntCoverageAccepted = permit.Origin == PersonalSyncPolicy.Origin && PersonalSyncPolicy.HuntCoverageCompatible(responseJson);
                 if (permit.Origin == PersonalSyncPolicy.Origin) foreach (var resource in PersonalSyncPolicy.Resources)
@@ -1695,7 +1696,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         } finally { await framework.RunOnFrameworkThread(()=>fateSender.UploadFinished()); }
     }
     private MarketContributionSession? CaptureMarketSession() {
-        if (disposed || !framework.IsInFrameworkUpdateThread || !MarketEnabled
+        if (disposed || !MarketEnabled || !framework.IsInFrameworkUpdateThread
             || !clientState.IsLoggedIn || marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas]
             || marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas51]) return null;
         RefreshSessionContext();
@@ -1703,6 +1704,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         var world = objects.LocalPlayer?.CurrentWorld.RowId ?? 0;
         if (world is 0 or > ushort.MaxValue) return null;
         var permit = CapturePermit(SyncRequestMode.Manual);
+        if (permit.Origin != MarketContributor.Origin) return null;
         var generation = permit.Session!.Generation;
         var authorization = ContributionAuthority("marketContribution");
         return new MarketContributionSession($"{authorization}:{permit.Epoch}:{world}", authorization,
@@ -1714,7 +1716,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 RequestConfigurationSave(); FlushConfigurationSave(receivedAuthorizationDenial: true);
             }),
             async (body, cancellation) => {
-                using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(permit.Origin), MarketContributor.Path)) {
+                using var request = new HttpRequestMessage(HttpMethod.Post, MarketContributor.Endpoint) {
                     Content = new ByteArrayContent(body)
                 };
                 request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
@@ -1722,7 +1724,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 request.Headers.UserAgent.ParseAdd($"{RetainerClient.ProductName}/{PluginVersion}");
                 await framework.RunOnFrameworkThread(() => {
                     RequirePermit(permit);
-                    if (!MarketEnabled || ContributionAuthority("marketContribution") != authorization || marketAcceptedGeneration != generation
+                    if (permit.Origin != MarketContributor.Origin || !MarketEnabled || ContributionAuthority("marketContribution") != authorization || marketAcceptedGeneration != generation
                         || marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas]
                         || marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas51]
                         || objects.LocalPlayer?.CurrentWorld.RowId != world) throw new OperationCanceledException();

@@ -34,7 +34,8 @@ public sealed partial class Plugin {
     // focus at poll/consume. The unchanged wire shape has no invented mode field.
     private bool HuntReceivingEnabled => SitePermissionOrigin && HasPairedSession && activeOwnedState is not null
         && permissionAuthority.HuntReceiving(configuration.AutomaticallyShowHuntMap, Environment.TickCount64);
-    private bool MarketEnabled => PermissionEnabled("marketContribution", configuration.ContributeObservedMarketData);
+    private bool MarketEnabled => configuration.ActiveSession?.Origin == MarketContributor.Origin
+        && PermissionEnabled("marketContribution", configuration.ContributeObservedMarketData);
     private bool TravelEnabled => PermissionEnabled("huntRoutingLocation", configuration.ShareHuntRoutingLocation);
     private static string PersonalPermission(string resource) => resource == "hunt_bills" ? "personalHunts" : "personalSubmarines";
     private DateTime FreshFrom(string key) => permissionFreshFrom.GetValueOrDefault(key, DateTime.MaxValue);

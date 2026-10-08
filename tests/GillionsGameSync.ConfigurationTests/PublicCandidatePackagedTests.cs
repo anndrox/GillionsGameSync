@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Newtonsoft.Json;
 
@@ -27,6 +28,20 @@ internal static class PublicCandidatePackagedTests {
         string Market(string p)=>new JsonObject{["ok"]=true,["marketContribution"]=new JsonObject{["contractVersion"]=1,["serviceAvailable"]=true,["enabled"]=true,["acceptedClientProduct"]=p}}.ToJsonString();
         Check((bool)market.Invoke(null,[Market(product)])!,"matching Market product");
         Check(!(bool)market.Invoke(null,[Market(other)])!,"other Market product denied");
+        var pf=a.GetType("GillionsGameSync.PartyFinderLinkPolicy",true)!.GetMethod("Parse",statics)!;
+        JsonObject Pf(string? accepted)=>new(){["ok"]=true,["nativeRequests"]=new JsonObject{["contract"]="native-requests-v1",["contractVersion"]=1,["acceptedClientProduct"]=accepted,["capabilities"]=new JsonArray("native_party_finder_link_v1")},
+            ["request"]=new JsonObject{["requestType"]="party_finder",["requestId"]="00000000-0000-4000-8000-000000000001",["claimToken"]="SYNTHETIC_CLAIM_TOKEN",["listingKey"]="79:100:200",["listingId"]=200,["recruiterName"]="Example Player",["crossWorld"]=true,["listingObservedAt"]="2026-10-07T12:00:00Z",["listingExpiresAt"]="2026-10-07T12:05:00Z",["expiresAt"]="2026-10-07T12:01:00Z"}};
+        object? ParsePf(JsonObject wire)=>pf.Invoke(null,[System.Text.Json.JsonSerializer.SerializeToElement(wire)]);
+        Check(ParsePf(Pf(product)) is not null,"matching PF product");
+        Check(ParsePf(Pf(other)) is null,"other PF product denied");
+        Check(ParsePf(Pf(null)) is null,"null PF product denied");
+        var missing=Pf(product);missing["nativeRequests"]!.AsObject().Remove("acceptedClientProduct");
+        Check(ParsePf(missing) is null,"missing PF product denied");
+        Check(ParsePf(Pf(product.ToLowerInvariant())) is null,"PF product identity is exact");
+        var unsupported=Pf(product);unsupported["nativeRequests"]!["capabilities"]=new JsonArray("unsupported");
+        Check(ParsePf(unsupported) is null,"unsupported PF capability denied");
+        var extra=Pf(product);extra["request"]!["unexpected"]=true;
+        Check(ParsePf(extra) is null,"PF request shape stays exact");
         var config=Activator.CreateInstance(configType)!;
         const string device="00000000-0000-4000-8000-000000000001",token="SYNTHETIC_DEVICE_CREDENTIAL_0000000000";
         var session=a.GetType("GillionsGameSync.PairedSession",true)!.GetMethod("Create")!.Invoke(null,["https://test.gillions.app",device,token]);
@@ -48,6 +63,17 @@ internal static class PublicCandidatePackagedTests {
         Check((bool)authorityType.GetMethod("Apply",instance)!.Invoke(authority,[Authority("legacy",false).ToJsonString(),now,clock,null])!,"legacy fixture accepted");
         Check(!Personal("hunt_bills")&&!Personal("submarine_personal"),"historical OFF retained");
         Check((bool)authorityType.GetMethod("Apply",instance)!.Invoke(authority,[Authority("explicit",true).ToJsonString(),now,clock,null])!,"explicit fixture accepted");
+        Check((bool)plugin.GetProperty("MarketEnabled",instance)!.GetValue(p)!,"fresh explicit Market ON at shared TEST");
+        foreach(var origin in new[]{"https://gillions.app","https://test.gillions.app.example","http://test.gillions.app","https://10.10.2.1","https://test.gillions.app:444","https://other.example"}) {
+            // Deliberately synthetic origin records verify the separate Market
+            // gate without invoking pairing, game services or HTTP. Actual
+            // HTTPS-only pairing is independently covered by this executable.
+            var foreign=Activator.CreateInstance(a.GetType("GillionsGameSync.PairedSession",true)!,[1,origin,device,"synthetic-generation","synthetic-fingerprint"]);
+            configType.GetProperty("ActiveSession")!.SetValue(config,foreign);
+            Check(!(bool)plugin.GetProperty("MarketEnabled",instance)!.GetValue(p)!,"Market is not enabled at "+origin);
+            Check(plugin.GetMethod("CaptureMarketSession",instance)!.Invoke(p,[]) is null,"foreign origin cannot capture/read Market session: "+origin);
+        }
+        configType.GetProperty("ActiveSession")!.SetValue(config,session);
         Check(Personal("hunt_bills")&&Personal("submarine_personal"),"explicit consent is not blocked by an inaccessible local Testing-only toggle");
         Check(JsonConvert.SerializeObject(config)==before,"Site authority never rewrites historical configuration");
         authorityType.GetMethod("Invalidate",instance)!.Invoke(authority,[]);
