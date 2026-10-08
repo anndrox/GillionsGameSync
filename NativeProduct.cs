@@ -8,4 +8,11 @@ internal static class NativeProduct {
 #else
     internal const string Name = "GillionsGameSyncTest";
 #endif
+    // Optional transports use only these exact origins. The captured pairing,
+    // never this allow-list, selects the request destination and credential.
+    internal static bool TransportOrigin(string? origin) => origin == "https://test.gillions.app"
+#if GILLIONS_PUBLIC_BUILD
+        || origin == "https://gillions.app"
+#endif
+        ;
 }

@@ -56,14 +56,15 @@ internal static class PersonalSyncPolicy {
     internal static string? Capability(string resource) => resource switch {
         "hunt_bills" => "hunt_bills_v1", "submarine_personal" => "submarine_personal_v1", _ => null
     };
-    internal static bool Compatible(string json, string resource) {
+    internal static bool Compatible(string json, string resource, string origin = Origin) {
+        if (!NativeProduct.TransportOrigin(origin)) return false;
         try {
             using var doc = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 16 });
             var root = doc.RootElement;
             if (root.GetProperty("ok").ValueKind != JsonValueKind.True
                 || root.GetProperty("acceptedClientProduct").GetString() != NativeProduct.Name) return false;
             var ack = root.GetProperty("personalObservations");
-            if (ack.GetProperty("contractVersion").GetInt32() != 1 || ack.GetProperty("endpoint").GetString() != Endpoint) return false;
+            if (ack.GetProperty("contractVersion").GetInt32() != 1 || ack.GetProperty("endpoint").GetString() != origin + "/api/game-sync/sync") return false;
             var matches = ack.GetProperty("resources").EnumerateArray().Where(r => r.GetProperty("resourceType").GetString() == resource).ToArray();
             return Schema(resource) is not null && matches.Length == 1
                 && matches[0].GetProperty("schemaVersion").GetInt32() == 1
@@ -72,14 +73,15 @@ internal static class PersonalSyncPolicy {
                 && matches[0].GetProperty("maxPayloadBytes").GetInt32() == MaximumPayloadBytes;
         } catch (Exception error) when (error is JsonException or InvalidOperationException or KeyNotFoundException or FormatException) { return false; }
     }
-    internal static bool HuntCoverageCompatible(string json) {
+    internal static bool HuntCoverageCompatible(string json, string origin = Origin) {
+        if (!NativeProduct.TransportOrigin(origin)) return false;
         try {
             using var doc = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 16 });
             var r = doc.RootElement;
             var a = r.GetProperty("personalObservations");
             var entries = a.GetProperty("resources").EnumerateArray().Where(e => e.GetProperty("resourceType").GetString() == "hunt_bills").ToArray();
             return r.GetProperty("ok").ValueKind == JsonValueKind.True && r.GetProperty("acceptedClientProduct").GetString() == NativeProduct.Name
-                && a.GetProperty("contractVersion").GetInt32() == 1 && a.GetProperty("endpoint").GetString() == Endpoint
+                && a.GetProperty("contractVersion").GetInt32() == 1 && a.GetProperty("endpoint").GetString() == origin + "/api/game-sync/sync"
                 && entries.Length == 1 && entries[0].GetProperty("schemaVersion").GetInt32() == 2
                 && entries[0].GetProperty("collectorSchema").GetString() == "hunt-bills-v2"
                 && entries[0].GetProperty("capability").GetString() == HuntCoverageCapability
@@ -149,7 +151,7 @@ internal static class PersonalSyncPolicy {
         return next;
     }
     internal static bool CanSend(bool sync, bool retain, string origin, bool accepted, PersonalPreparedSnapshot? prepared) =>
-        sync && retain && origin == Origin && accepted && prepared is { Acknowledged: false, Blocked: false };
+        sync && retain && NativeProduct.TransportOrigin(origin) && accepted && prepared is { Acknowledged: false, Blocked: false };
     internal static bool Due(DateTime now, DateTime next, DateTime retry, bool inFlight, bool prompt, bool enabled) =>
         enabled && !inFlight && now >= retry && (prompt || now >= next);
     internal static bool Receipt(string json) {

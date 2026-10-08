@@ -26,7 +26,7 @@ internal static class FateTransportPolicy {
         && prepared.Epoch == epoch && prepared.Body.Length is > 0 and <= FatePolicy.MaximumBytes
         && FatePolicy.Fresh(prepared.OldestObservation,now) && grant is not null
         && generation.Length > 0 && grant.SessionGeneration == generation
-        && grant.Origin == "https://test.gillions.app" && grant.Product == NativeProduct.Name
+        && NativeProduct.TransportOrigin(grant.Origin) && grant.Product == NativeProduct.Name
         && grant.Capability == FatePolicy.Capability && grant.SchemaVersion == 1
         && grant.CollectorSchema == FatePolicy.Capability && grant.AdmittedSource == source
         && grant.PolicyKey == FatePolicy.AccountPolicy && grant.PolicyRevision == FatePolicy.PolicyRevision
@@ -35,7 +35,7 @@ internal static class FateTransportPolicy {
     internal static HttpRequestMessage? Request(FateAdmission? grant, FateSource source, string generation,
         bool paired, bool current, FatePrepared? batch, long epoch, DateTime now, string token) {
         if (!CanSend(grant,source,generation,paired,current,batch,epoch,now) || string.IsNullOrWhiteSpace(token)) return null;
-        var request = new HttpRequestMessage(HttpMethod.Post,FatePolicy.Endpoint);
+        var request = new HttpRequestMessage(HttpMethod.Post,grant!.Origin+"/api/game-sync/fates/contribute");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer",token);
         request.Content = new ByteArrayContent(batch!.CopyBody());
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");

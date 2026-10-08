@@ -55,7 +55,7 @@ internal static class HuntMapPolicy {
     internal const string Permission = "server:game-sync:receive:hunt-map:v1";
     internal const string RequestType = "hunt_map";
     internal const int MaximumResponseBytes = 4096;
-    internal static bool Admit(bool consent, bool paired, string origin, bool current) => consent && paired && current && origin == Origin;
+    internal static bool Admit(bool consent, bool paired, string origin, bool current) => consent && paired && current && NativeProduct.TransportOrigin(origin);
     internal static bool Exact(JsonElement value, params string[] names) {
         if (value.ValueKind != JsonValueKind.Object) return false;
         var keys = new HashSet<string>(names, StringComparer.Ordinal);

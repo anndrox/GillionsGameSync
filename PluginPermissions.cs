@@ -9,7 +9,7 @@ public sealed partial class Plugin {
     private readonly PermissionAuthority permissionAuthority = new();
     private readonly Dictionary<string, string> permissionTransitions = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTime> permissionFreshFrom = new(StringComparer.Ordinal);
-    private bool SitePermissionOrigin => configuration.ActiveSession?.Origin == PermissionAuthority.Origin;
+    private bool SitePermissionOrigin => NativeProduct.TransportOrigin(configuration.ActiveSession?.Origin);
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
     private bool nativeVersionReported;
 #endif
@@ -34,7 +34,7 @@ public sealed partial class Plugin {
     // focus at poll/consume. The unchanged wire shape has no invented mode field.
     private bool HuntReceivingEnabled => SitePermissionOrigin && HasPairedSession && activeOwnedState is not null
         && permissionAuthority.HuntReceiving(configuration.AutomaticallyShowHuntMap, Environment.TickCount64);
-    private bool MarketEnabled => configuration.ActiveSession?.Origin == MarketContributor.Origin
+    private bool MarketEnabled => NativeProduct.TransportOrigin(configuration.ActiveSession?.Origin)
         && PermissionEnabled("marketContribution", configuration.ContributeObservedMarketData);
     private bool TravelEnabled => PermissionEnabled("huntRoutingLocation", configuration.ShareHuntRoutingLocation);
     private static string PersonalPermission(string resource) => resource == "hunt_bills" ? "personalHunts" : "personalSubmarines";
@@ -55,7 +55,7 @@ public sealed partial class Plugin {
     }
 #endif
     private void ApplyPermissions(string json, SyncRequestPermit permit, HttpResponseMessage response, TimeSpan roundTrip) {
-        if (permit.Origin != PermissionAuthority.Origin) return;
+        if (!NativeProduct.TransportOrigin(permit.Origin)) return;
         // Observe expired old authority before a same-decision renewal can hide
         // its loss in the regular 250ms maintenance gap. This is command/queue
         // maintenance only; it performs no additional gameplay reads.
@@ -63,7 +63,7 @@ public sealed partial class Plugin {
         permissionAuthority.Bind(permit.Session!.Generation + ":" + permit.ContentId, permit.Session.DeviceId);
         // Only the exact authenticated, non-redirected origin supplies issuer time.
         var now = DateTime.UtcNow;
-        if (response.RequestMessage?.RequestUri?.GetLeftPart(UriPartial.Authority) != PermissionAuthority.Origin
+        if (response.RequestMessage?.RequestUri?.GetLeftPart(UriPartial.Authority) != permit.Origin
             || roundTrip < TimeSpan.Zero || roundTrip > TimeSpan.FromSeconds(30)) { permissionAuthority.Invalidate(); return; }
         if (response.Headers.Date is { } date) {
             if ((date.UtcDateTime - now).Duration() > TimeSpan.FromSeconds(30)) { permissionAuthority.Invalidate(); return; }

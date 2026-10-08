@@ -71,7 +71,7 @@ print('Command-only independent deadline/finite focus/backoff/numeric local timi
 issuer=(root/'WebsiteResponseClock.cs').read_text(encoding='utf-8')
 assert 'TimeSpan.FromSeconds(30)' in issuer and 'AddSeconds(1).Add(headerRoundTrip)' in issuer
 assert 'Stopwatch.GetElapsedTime' in issuer and 'ServerCertificate' not in issuer
-assert 'response.RequestMessage?.RequestUri?.GetLeftPart(UriPartial.Authority) == HuntMapPolicy.Origin' in p
+assert 'response.RequestMessage?.RequestUri?.GetLeftPart(UriPartial.Authority) == permit.Origin' in p
 assert 'HuntMapPolicy.TryPoll(json, commandClock.UtcNow' in hunt
 assert 'HuntMapPolicy.Valid(r, commandClock.UtcNow)' in hunt
 assert 'Stopwatch.GetElapsedTime(observed) < remaining' in focus

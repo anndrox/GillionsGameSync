@@ -36,16 +36,17 @@ internal static class TravelSyncPolicy {
     internal const string Permission = "server:game-sync:personal:travel-context:v1";
     internal const int MaximumEnvelopeBytes = 69632;
     internal static bool Admit(bool testing, bool supported, bool consent, bool paired, string origin, bool acknowledged) =>
-        testing && supported && consent && paired && origin == Origin && acknowledged;
+        testing && supported && consent && paired && NativeProduct.TransportOrigin(origin) && acknowledged;
     // Presence contains this entry ONLY after Site verifies the independent
     // device grant, active account, owned character and enrolled Testing version.
-    internal static bool Compatible(string json) {
+    internal static bool Compatible(string json, string origin = Origin) {
+        if (!NativeProduct.TransportOrigin(origin)) return false;
         try {
             using var doc = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 16 });
             var root = doc.RootElement; var ack = root.GetProperty("personalObservations");
             if (root.GetProperty("ok").ValueKind != JsonValueKind.True
                 || root.GetProperty("acceptedClientProduct").GetString() != NativeProduct.Name
-                || ack.GetProperty("contractVersion").GetInt32() != 1 || ack.GetProperty("endpoint").GetString() != Endpoint) return false;
+                || ack.GetProperty("contractVersion").GetInt32() != 1 || ack.GetProperty("endpoint").GetString() != origin + "/api/game-sync/sync") return false;
             var entries = ack.GetProperty("resources").EnumerateArray().Where(r => r.GetProperty("resourceType").GetString() == Resource).ToArray();
             if (entries.Length != 1) return false;
             var r = entries[0];

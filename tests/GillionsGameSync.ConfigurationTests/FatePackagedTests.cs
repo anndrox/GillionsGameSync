@@ -78,20 +78,32 @@ internal static class FatePackagedTests {
             policy=new {name="fate_public_observations",revision=1,enabled=true,generation="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"},
             issuedAt=now,expiresAt=now.AddSeconds(30),retryAfterSeconds=5}});
         var parse=T("FateDiscovery").GetMethod("Parse",flags)!;
-        var grant=parse.Invoke(null,[wire,"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now]);
+        var grant=parse.Invoke(null,[wire,"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now,"https://test.gillions.app"]);
         Check(grant is not null,"Packaged exact discovery parser admits supported grant.");
         var offWire=JsonNode.Parse(wire)!;
         offWire["fateContribution"]!["authorized"]=false;
         offWire["fateContribution"]!["reason"]="FATE_POLICY_REQUIRED";
         offWire["fateContribution"]!["policy"]!["enabled"]=false;
-        var offGrant=parse.Invoke(null,[offWire.ToJsonString(),"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now]);
+        var offGrant=parse.Invoke(null,[offWire.ToJsonString(),"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now,"https://test.gillions.app"]);
         Check(offGrant is not null,"Packaged real OFF fixture accepted");
         var offType=offGrant!.GetType();
         var fateStatus=assembly.GetType("GillionsGameSync.PublicHealth",true)!.GetMethod("FateState",flags)!;
         Check((string)fateStatus.Invoke(null,[true,offType.GetProperty("Reason")!.GetValue(offGrant),false,
             offType.GetProperty("PolicyEnabled")!.GetValue(offGrant)])! == "Off on Gillions","parsed real OFF fixture renders honest Site status");
-        Check(parse.Invoke(null,[wire.Replace("\"ok\":true","\"ok\":true,\"ok\":true"),"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now]) is null,"Packaged duplicate key denies admission.");
-        Check(parse.Invoke(null,[wire,"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now.AddSeconds(30)]) is null,"Packaged expired grant denies admission.");
+        Check(parse.Invoke(null,[wire.Replace("\"ok\":true","\"ok\":true,\"ok\":true"),"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now,"https://test.gillions.app"]) is null,"Packaged duplicate key denies admission.");
+        Check(parse.Invoke(null,[wire,"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now.AddSeconds(30),"https://test.gillions.app"]) is null,"Packaged expired grant denies admission.");
+        foreach(var origin in new[]{"https://test.gillions.app","https://gillions.app","http://gillions.app","http://test.gillions.app",
+            "https://gillions.app.example","https://sub.gillions.app","https://gillions.app:444","https://other.example"}) {
+            bool allowed=origin=="https://test.gillions.app" || !testing && origin=="https://gillions.app";
+            var originGrant=parse.Invoke(null,[wire,"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now,origin]);
+            Check((originGrant is not null)==allowed,"Packaged FATE exact origin: "+origin);
+            if(originGrant is null)continue;
+            var boundAdmission=originGrant.GetType().GetProperty("Admission")!.GetValue(originGrant)!;
+            using var message=(HttpRequestMessage?)request.Invoke(null,[boundAdmission,source,"synthetic",true,true,prepared,1L,now,"SYNTHETIC_TOKEN"]);
+            Check(message?.RequestUri?.AbsoluteUri==origin+"/api/game-sync/fates/contribute","FATE POST uses grant's captured paired origin");
+            Check(message?.Headers.Authorization?.Parameter=="SYNTHETIC_TOKEN","FATE paired credential remains on captured request");
+            Check(request.Invoke(null,[boundAdmission,source,"other-enrollment",true,true,prepared,1L,now,"SYNTHETIC_TOKEN"]) is null,"FATE grant cannot cross enrollment");
+        }
         var senderType=T("FateSenderState");
         using var sender=(IDisposable)Activator.CreateInstance(senderType,true)!;
         object? Call(string method,params object?[] arguments)=>senderType.GetMethod(method,instanceFlags)!.Invoke(sender,arguments);
@@ -139,7 +151,7 @@ internal static class FatePackagedTests {
         var renewed=JsonNode.Parse(wire)!;
         renewed["fateContribution"]!["issuedAt"]=JsonSerializer.SerializeToNode(now.AddSeconds(20));
         renewed["fateContribution"]!["expiresAt"]=JsonSerializer.SerializeToNode(now.AddSeconds(50));
-        var renewedGrant=parse.Invoke(null,[renewed.ToJsonString(),"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now.AddSeconds(20)]);
+        var renewedGrant=parse.Invoke(null,[renewed.ToJsonString(),"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now.AddSeconds(20),"https://test.gillions.app"]);
         Check(renewedGrant is not null,"Packaged renewed exact30s grant.");
         var freshRow=Activator.CreateInstance(T("FateObservation"),[(ushort)1000,(uint)21,(uint)134,instance,Invoke("State",(byte)4),now.AddSeconds(5),
             (byte)35,true,(byte)15,(byte)20,null,null,null])!;

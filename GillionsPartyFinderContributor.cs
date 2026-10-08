@@ -30,7 +30,7 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
     // Build metadata is a compatibility guard, not the dispatch authority.
     internal static readonly Uri Endpoint = new(ApprovedTestingOrigin + ContributionPath);
     internal static Uri SessionEndpoint(string origin) {
-        if (origin != ApprovedTestingOrigin) throw new InvalidOperationException("Party Finder Testing requires the approved secure TEST pairing.");
+        if (!NativeProduct.TransportOrigin(origin)) throw new InvalidOperationException("Party Finder Testing requires the approved secure TEST pairing.");
         return new Uri(origin + ContributionPath);
     }
     internal const int MaximumBodyBytes = 262144;

@@ -73,7 +73,7 @@ assert 'hunt_bills' not in scopes and 'submarine_personal' not in scopes
 assert 'public bool SyncPersonalHunts { get; set; }' in plugin
 assert 'public bool SyncPersonalSubmarines { get; set; }' in plugin
 assert 'X-Gillions-Personal-Contract' in plugin and 'personalHttp.SendAsync' in plugin
-assert 'permit.Origin != PersonalSyncPolicy.Origin' in plugin
+assert '!NativeProduct.TransportOrigin(permit.Origin)' in plugin
 assert 'PersonalEnabled(prepared.Resource)' in plugin and 'token.ThrowIfCancellationRequested()' in plugin
 assert 'PersistBeforeSend(() => FlushConfigurationSave(force: true))' in plugin
 assert '(force || savePolicy.ShouldSave(now))' in plugin

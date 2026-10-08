@@ -9,7 +9,7 @@ assert ui.replace('#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD\n        if 
 for p in ['PublicExperience.cs','PublicGameSyncUi.cs','docs/public-ui-polish.md']:
  assert (r/p).read_text(encoding='utf-8')==old(p),p
 cs=(r/'GillionsGameSync.csproj').read_text()
-assert '<Version>1.0.31.1</Version>' in cs and 'GILLIONS_PUBLIC_BUILD' in cs
+assert '<Version>1.0.31.2</Version>' in cs and 'GILLIONS_PUBLIC_BUILD' in cs
 assert 'https://xivpf.com/contribute/multiple' not in cs
 for p in ['FateTransport.cs','FateDiscovery.cs','PersonalSync.cs','TravelSync.cs','MarketContributionCore.cs','PartyFinderLinkRequests.cs']:
  text=(r/p).read_text()

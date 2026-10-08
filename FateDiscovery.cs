@@ -31,7 +31,8 @@ internal static class FateDiscovery {
         return text is not null && Regex.IsMatch(text,@"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",RegexOptions.CultureInvariant)
             && Guid.TryParseExact(text,"D",out id);
     }
-    internal static FateGrant? Parse(string json, string generation, string deviceId, FateSource source, DateTime now) {
+    internal static FateGrant? Parse(string json, string generation, string deviceId, FateSource source, DateTime now, string origin = Origin) {
+        if (!NativeProduct.TransportOrigin(origin)) return null;
         try {
             using var d=JsonDocument.Parse(json,new JsonDocumentOptions {MaxDepth=8}); var root=d.RootElement;
             if(!Shape(root,["ok","fateContribution"]) || root.GetProperty("ok").ValueKind!=JsonValueKind.True
@@ -68,7 +69,7 @@ internal static class FateDiscovery {
             string? reason=S("reason");
             if(authorized ? reason is not null || !enabled || policyGeneration is null || admitted!=source
                 : reason is null || !ErrorCodes.Contains(reason)) return null;
-            return new(new(generation,Origin,NativeProduct.Name,FatePolicy.Capability,1,FatePolicy.Capability,
+            return new(new(generation,origin,NativeProduct.Name,FatePolicy.Capability,1,FatePolicy.Capability,
                 admitted!,FatePolicy.AccountPolicy,1,authorized,false,expires,true,true),policyGeneration,paired,issued,enabled,reason);
         } catch(Exception e) when(e is JsonException or InvalidOperationException or FormatException
             or System.Collections.Generic.KeyNotFoundException or OverflowException or ArgumentException) { return null; }

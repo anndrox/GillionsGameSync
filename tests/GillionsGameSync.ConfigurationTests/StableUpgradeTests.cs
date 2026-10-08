@@ -47,7 +47,7 @@ internal static class StableUpgradeTests {
             Check(upgraded.Property("HuntBills") is not null,"candidate retained additive schema evidence");
             Console.WriteLine($"Real Stable30 backup rollback PASS: {checks} checks; additive-field downgrade is not lossless.");return;
         }
-        Check(assembly.GetName().Name=="GillionsGameSync" && assembly.GetName().Version!.ToString(4)=="1.0.31.1","exact public candidate required");
+        Check(assembly.GetName().Name=="GillionsGameSync" && assembly.GetName().Version!.ToString(4)=="1.0.31.2","exact public candidate required");
         File.WriteAllText(path,original);
         var loaded=load.Invoke(storage,["GillionsGameSync"])!;
         string saved=Save(loaded); var before=Parse(original);var after=Parse(saved);
@@ -60,7 +60,7 @@ internal static class StableUpgradeTests {
         File.WriteAllText(path,saved); var restarted=load.Invoke(storage,["GillionsGameSync"])!;
         Check(JToken.DeepEquals(after,Parse(Save(restarted))),"restart preserves all candidate config");
         File.WriteAllText(Path.Combine(directory,"upgraded.json"),saved);
-        File.WriteAllText(Path.Combine(directory,"upgrade-result.json"),new JObject{["product"]="GillionsGameSync",["predecessor"]="1.0.30.0",["candidate"]="1.0.31.1",["checks"]=checks,["result"]="PASS",["syntheticOnly"]=true,["pairingPreserved"]=true,["geometry"]="Dalamud-managed, no config migration or geometry write"}.ToString());
+        File.WriteAllText(Path.Combine(directory,"upgrade-result.json"),new JObject{["product"]="GillionsGameSync",["predecessor"]="1.0.30.0",["candidate"]="1.0.31.2",["checks"]=checks,["result"]="PASS",["syntheticOnly"]=true,["pairingPreserved"]=true,["geometry"]="Dalamud-managed, no config migration or geometry write"}.ToString());
         Console.WriteLine($"Real Stable30 -> Public31 upgrade PASS: {checks} checks; actual Dalamud serializer; no live game.");
     }
 }

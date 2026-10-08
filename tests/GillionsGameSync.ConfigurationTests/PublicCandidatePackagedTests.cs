@@ -68,10 +68,12 @@ internal static class PublicCandidatePackagedTests {
             // Deliberately synthetic origin records verify the separate Market
             // gate without invoking pairing, game services or HTTP. Actual
             // HTTPS-only pairing is independently covered by this executable.
-            var foreign=Activator.CreateInstance(a.GetType("GillionsGameSync.PairedSession",true)!,[1,origin,device,"synthetic-generation","synthetic-fingerprint"]);
+            bool approved=!testing && origin=="https://gillions.app";
+            var foreign=approved ? a.GetType("GillionsGameSync.PairedSession",true)!.GetMethod("Create")!.Invoke(null,[origin,device,token])
+                : Activator.CreateInstance(a.GetType("GillionsGameSync.PairedSession",true)!,[1,origin,device,"synthetic-generation","synthetic-fingerprint"]);
             configType.GetProperty("ActiveSession")!.SetValue(config,foreign);
-            Check(!(bool)plugin.GetProperty("MarketEnabled",instance)!.GetValue(p)!,"Market is not enabled at "+origin);
-            Check(plugin.GetMethod("CaptureMarketSession",instance)!.Invoke(p,[]) is null,"foreign origin cannot capture/read Market session: "+origin);
+            Check((bool)plugin.GetProperty("MarketEnabled",instance)!.GetValue(p)! == approved,"exact product-specific Market origin: "+origin);
+            if(!approved) Check(plugin.GetMethod("CaptureMarketSession",instance)!.Invoke(p,[]) is null,"foreign origin cannot capture/read Market session: "+origin);
         }
         configType.GetProperty("ActiveSession")!.SetValue(config,session);
         Check(Personal("hunt_bills")&&Personal("submarine_personal"),"explicit consent is not blocked by an inaccessible local Testing-only toggle");

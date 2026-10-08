@@ -12,8 +12,14 @@ them. Git SHAs and package hashes remain external evidence, not wire attestation
 
 Public `1.0.31.0` is invalidated for new capability admission (both earlier and
 corrected sources). Preserve its evidence, do not publish it, and use the
-[identity-only 1.0.31.1 successor](public-1.0.31.1-freeze.md). Four-part versions
-use `scripts/package.ps1 -Channel stable -Version 1.0.31.1` for local preparation;
+[identity-only 1.0.31.1 successor](public-1.0.31.1-freeze.md) as the immutable,
+fully accepted TEST-bound predecessor. The production-capable successor is
+`GillionsGameSync / 1.0.31.2`, based directly on that accepted source. Its only
+runtime delta is exact production-origin support alongside exact TEST support;
+each captured pairing still selects its own credential and destination. Testing
+remains TEST-only. Permission revision/lease, collectors, contracts, dependency
+tuple and frozen UI are unchanged (apart from the displayed actual version).
+Four-part versions use `scripts/package.ps1 -Channel stable -Version 1.0.31.2` for local preparation;
 the existing three-part version normalization is unchanged. Preparation does not
 authorize publication, main integration, tags or feed changes.
 
