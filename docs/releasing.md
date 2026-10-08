@@ -1,5 +1,22 @@
 # Releasing
 
+## Public candidate identity immutability
+
+PUBLIC CANDIDATE VERSION IDENTITIES ARE IMMUTABLE FOR ADMISSION.
+
+Once a public candidate version is frozen and later source changes materially,
+the old candidate version is burned for exact-admission purposes. Give the
+successor a distinguishable existing product/version identity; never reuse the
+same product/version for a different source candidate when Site must distinguish
+them. Git SHAs and package hashes remain external evidence, not wire attestation.
+
+Public `1.0.31.0` is invalidated for new capability admission (both earlier and
+corrected sources). Preserve its evidence, do not publish it, and use the
+[identity-only 1.0.31.1 successor](public-1.0.31.1-freeze.md). Four-part versions
+use `scripts/package.ps1 -Channel stable -Version 1.0.31.1` for local preparation;
+the existing three-part version normalization is unchanged. Preparation does not
+authorize publication, main integration, tags or feed changes.
+
 ## Testing87 accepted; public/Stable held
 
 Testing87 is published at its immutable prerelease and the unchanged rolling

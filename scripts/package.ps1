@@ -4,7 +4,7 @@ param(
   [string]$Channel,
 
   [Parameter(Mandatory = $true)]
-  [ValidatePattern('^\d+\.\d+\.\d+$')]
+  [ValidatePattern('^\d+\.\d+\.\d+(?:\.\d+)?$')]
   [string]$Version,
 
   [string]$PublicBaseUrl = 'https://gillions.app',
@@ -64,6 +64,7 @@ if (-not [Uri]::TryCreate($StableIconUrl, [UriKind]::Absolute, [ref]$parsedIcon)
 }
 
 $isTesting = $Channel -eq 'testing'
+$assemblyVersion = if ($Version.Split('.').Count -eq 3) { "$Version.0" } else { $Version }
 $internalName = if ($isTesting) { 'GillionsGameSyncTest' } else { 'GillionsGameSync' }
 $displayName = if ($isTesting) { 'Gillions Game Sync Testing' } else { 'Gillions Game Sync' }
 $zipBase = if ($isTesting) { 'GillionsGameSyncTesting' } else { 'GillionsGameSync' }
@@ -119,7 +120,7 @@ $manifest = @([ordered]@{
   Author = 'Gillions'
   Name = $displayName
   InternalName = $internalName
-  AssemblyVersion = "$Version.0"
+  AssemblyVersion = $assemblyVersion
   Description = if ($isTesting) { 'Unreleased, opt-in test build for Gillions Game Sync. Install only when directed for in-game verification.' } else { 'Opt-in character synchronization for Gillions with read-only Retainer observations. Never automates gameplay or sends Square Enix credentials.' }
   ApplicableVersion = 'any'
   RepoUrl = $RepositoryUrl

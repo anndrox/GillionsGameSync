@@ -1,6 +1,6 @@
 # Public Game Sync release candidate
 
-Current successor: [real unpublished Public 1.0.31 freeze](public-1.0.31-freeze.md).
+Current successor: [identity-only unpublished Public 1.0.31.1 freeze](public-1.0.31.1-freeze.md).
 The sections below record accepted Testing87 and its earlier promotion limits;
 the successor reconciles Public runtime gates without changing the frozen UI.
 

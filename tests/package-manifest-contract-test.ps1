@@ -17,6 +17,18 @@ foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate'
 }
 
 $testingOrigin = 'https://testing.invalid'
+& (Join-Path $root 'scripts/package.ps1') -Channel stable -Version 9.8.7.6 -PublishedAt 1
+if ($LASTEXITCODE -ne 0) { throw 'Four-part public identity package fixture failed.' }
+$fourRoot = Join-Path $root 'artifacts/package/stable/9.8.7.6'
+$four = @([IO.File]::ReadAllText((Join-Path $fourRoot 'GillionsGameSync.json')) | ConvertFrom-Json -AsHashtable)[0]
+$fourEmbedded = [IO.File]::ReadAllText((Join-Path $fourRoot 'build/GillionsGameSync.json')) | ConvertFrom-Json
+$fourAssembly = [Reflection.AssemblyName]::GetAssemblyName((Join-Path $fourRoot 'build/GillionsGameSync.dll'))
+Assert-Condition ($four.InternalName -ceq 'GillionsGameSync' -and $four.AssemblyVersion -ceq '9.8.7.6') 'Four-part repository identity must not append another zero.'
+Assert-Condition ($fourEmbedded.AssemblyVersion -ceq $four.AssemblyVersion -and $fourAssembly.Version.ToString(4) -ceq $four.AssemblyVersion) 'Four-part DLL, embedded and repository identities must agree.'
+foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate', 'DownloadLinkTesting')) {
+  Assert-Condition ($four[$field] -ceq 'https://github.com/anndrox/GillionsGameSync/releases/download/v9.8.7.6/GillionsGameSync-9.8.7.6.zip') "Four-part packaging generated the wrong $field."
+}
+Assert-Condition ($stable.AssemblyVersion -ceq '9.8.7.0') 'Existing three-part public version normalization changed.'
 $testingReleaseBase = 'https://github.com/anndrox/GillionsGameSync/releases/download'
 & (Join-Path $root 'scripts/package.ps1') -Channel testing -Version 0.0.0 -PublicBaseUrl $testingOrigin -TestingReleaseBaseUrl $testingReleaseBase -PublishedAt 1
 if ($LASTEXITCODE -ne 0) { throw 'Testing package fixture failed.' }
@@ -24,6 +36,7 @@ $testing = @([IO.File]::ReadAllText((Join-Path $root 'artifacts/package/testing/
 $embeddedTesting = [IO.File]::ReadAllText((Join-Path $root 'artifacts/package/testing/0.0.0/build/GillionsGameSyncTest.json')) | ConvertFrom-Json
 Assert-Condition ($embeddedTesting.IconUrl -ceq $testing.IconUrl) 'Embedded testing manifest and feed must agree on the canonical icon.'
 $testingUrl = "$testingReleaseBase/v0.0.0-testing/GillionsGameSyncTesting-0.0.0.zip"
+Assert-Condition ($testing.AssemblyVersion -ceq '0.0.0.0' -and $embeddedTesting.AssemblyVersion -ceq '0.0.0.0') 'Existing three-part Testing version normalization changed.'
 Assert-Condition ($testing.InternalName -ceq 'GillionsGameSyncTest') 'Testing packaging changed the separate plugin identity.'
 Assert-Condition ($testing.IconUrl -ceq 'https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png') 'Testing packaging must satisfy the hosted publisher canonical-icon contract.'
 foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate', 'DownloadLinkTesting')) {
