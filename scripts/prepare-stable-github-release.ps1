@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidatePattern('^\d+\.\d+\.\d+$')]
+  [ValidatePattern('^\d+\.\d+\.\d+(?:\.\d+)?$')]
   [string]$Version,
 
   [long]$PublishedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()

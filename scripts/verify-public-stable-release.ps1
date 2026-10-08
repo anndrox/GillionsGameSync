@@ -1,10 +1,12 @@
 param(
   [string]$ManifestUrl = 'https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/data/GillionsGameSync.json',
+  [ValidatePattern('^\d+\.\d+\.\d+(?:\.\d+)?$')]
   [string]$Version = '1.0.30'
 )
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+$assemblyVersion = if ($Version.Split('.').Count -eq 3) { "$Version.0" } else { $Version }
 $expectedAssetName = "GillionsGameSync-$Version.zip"
 $expectedAssetUrl = "https://github.com/anndrox/GillionsGameSync/releases/download/v$Version/$expectedAssetName"
 $expectedIconUrl = 'https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png'
@@ -24,7 +26,7 @@ try {
   Assert-Condition ($entries.Count -eq 1) 'The public stable manifest must contain exactly one entry.'
   $entry = $entries[0]
   Assert-Condition ($entry.InternalName -ceq 'GillionsGameSync') 'The public manifest has the wrong plugin identity.'
-  Assert-Condition ($entry.AssemblyVersion -ceq "$Version.0") 'The public manifest has the wrong stable version.'
+  Assert-Condition ($entry.AssemblyVersion -ceq $assemblyVersion) 'The public manifest has the wrong stable version.'
   Assert-Condition ($entry.RepoUrl -ceq 'https://github.com/anndrox/GillionsGameSync') 'RepoUrl is not the canonical GitHub repository.'
   Assert-Condition ($entry.IconUrl -ceq $expectedIconUrl) 'IconUrl is not the canonical GitHub icon.'
   foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate', 'DownloadLinkTesting')) {
@@ -57,7 +59,7 @@ try {
     try { $embedded = $reader.ReadToEnd() | ConvertFrom-Json -AsHashtable }
     finally { $reader.Dispose() }
     Assert-Condition ($embedded.InternalName -ceq 'GillionsGameSync') 'Embedded manifest has the wrong plugin identity.'
-    Assert-Condition ($embedded.AssemblyVersion -ceq "$Version.0") 'Embedded manifest has the wrong plugin version.'
+    Assert-Condition ($embedded.AssemblyVersion -ceq $assemblyVersion) 'Embedded manifest has the wrong plugin version.'
   }
   finally { $archive.Dispose() }
 
