@@ -1,0 +1,71 @@
+{
+  "channel": "testing",
+  "version": "0.0.80",
+  "assemblyVersion": "0.0.80.0",
+  "status": "published-and-anonymously-verified",
+  "repository": "Gillions/GillionsGameSync",
+  "branch": "codex/game-sync/beastmaster-party-finder-testing",
+  "startingPublishedVersion": "0.0.79.0",
+  "startingPublishedSource": "58f6570c627f4a2f9a390029fc3dbdd5f1cb44cc",
+  "startingPublicationRecordHead": "f74902814f67adf9d644b8b8348197191ba4643d",
+  "sourceCommit": "0330f229953ca7e6e656f8211744ebe2dfa95fab",
+  "publicationRecordIdentity": "Later commit containing this record; artifact source stays pinned above.",
+  "tag": "v0.0.80-testing",
+  "annotatedTag": "c736d503c2ab4d12a4c198204882b4e3a54efbfe",
+  "releaseId": 403076006,
+  "publishedAt": "2026-10-04T15:15:44Z",
+  "archiveSha256": "2f01799e58c83a2f702cb9c6a72f2aada1a24bad8cd92cffa25b6ed5c0a34f60",
+  "dllSha256": "5d0cfc72938e6fbca00167c9c86709ce0068ac9f1ff25661bd8886def01e8124",
+  "manifestSha256": "255bf37154b571f3cacdefd4b2c39b540e2346ae39a0af650b620325bacafa37",
+  "archiveAssetId": 610065491,
+  "manifestAssetId": 610065495,
+  "rollingManifestAssetId": 610065795,
+  "archiveBytes": 350139,
+  "rollingUrl": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json",
+  "anonymousRollingVerificationAt": "2026-10-04T15:15:55.153262Z",
+  "diagnosis": {
+    "fact": "Clean79 owner reproduction emitted game Hunt progress1/2 then2/2, but forced native raw/gate and retained semantics stayed unchanged; two positive bills admitted, zero partial. This is a supported-source observation gap, not demonstrated transport retry failure.",
+    "rawAccessor": "Installed SDK7.56.2.9136 GetKillCount(Byte,Byte) compiled function checks bounds then reads the same underlying CurrentKills array. Switching accessor alone supplies no independent completion state. New reads compare both and fail closed on disagreement.",
+    "bridge": "79 six-second final-transition bridge uses the same counter source and requires explicit final values. It cannot preserve a final value absent from that source. Missed removal window is not established; six-second window unchanged.",
+    "unknown": "Historical exact raw/accessor values, whether1/2 was captured, engine cache update cause, exact order/flag transition and historical map request pair remain UNKNOWN. Offline analysis is not live function invocation.",
+    "positiveSignal": "Installed game2026.09.15 LogMessage4411 uses BNpcName lnum2, count lnum3 and requirement lnum4. Supported IChatGui.LogMessage typed zero-based integer parameters1/2/3 provide a bounded corroborating source; exact ID/four parameters only.",
+    "correctedLiveObservation": "OUTSTANDING; catalog/SDK/fixtures and exact packaged validation do not establish actual80 event delivery or completed Hunt upload."
+  },
+  "behavior": {
+    "progressProof": "Testing/local-retention ON, supported build, loaded own character and framework-thread gate. Unique matching recently positively corroborated bill within6s; exact NPC/required target. Max110 RAM proofs; next read checks exact obtained order/item/catalog, recency, raw/accessor agreement and no source count regression. Proof one-use; borrowed messages/text/entities never retained.",
+    "finalAdmission": "Ordinary Key Item corroboration or unchanged79 same-session6s ALL-explicitly-complete transition bridge. Missing item/bill never proves completion; available order is diagnostic-only. No guessed offsets, packet hooks, free-text/OCR or game requests.",
+    "retention": "Positive per-target progress cannot regress under identical order/item/catalog identity, including reload. New order may start0. Lower count alone cannot prove same-order reset/reacquisition; no reset-generation/current-acceptance claim. Persisted schema and existing server payload/evidence enum unchanged.",
+    "lifecycle": "Character/logout/territory/condition/local-OFF clears or invalidates RAM proof. Durable history cannot seed a session event association.",
+    "syncNow": "Eligible fresh supported Hunt read applies recent already-bound typed proof, detects semantic changes and uses existing prompt preparation/immutable body+nonce/receipt/backoff/capability/consent gates. Cannot recover pre-load events or fabricate completion. Ordinary sync independent.",
+    "diagnostics": "Bounded176 numeric counter rows plus summary: public bill/order/available-order, target index/ID/NPC/required/raw/accessor/retained-before/after, proof binding and semantic revision; existing prepared/accepted receipt stages. Map presentation diagnostic contains public target/candidate and revision prefix only. No account/character IDs, credentials, claim tokens or private raw JSON.",
+    "map": "Native request-ID one-time consumption unchanged; manual same-target Show remains supported. No map request produced by Native counter changes. Site V1 same-target candidate-reranking path is a separately documented handoff, not a Native heuristic suppression."
+  },
+  "validation": {
+    "maintainedNumbered": 6121,
+    "personalNumbered": 454,
+    "huntMapNumbered": 174,
+    "matrix": "1/1,2/2,3/3,multi-target and weekly progress; typed binding uniqueness/expiry/order/character/OFF/transition; raw/accessor agreement and fail-closed disagreement; final item transition; monotonic reload/new order; semantic prompt/manual refresh/permissions/backoff/receipt/nonce; map one-time/manual/new target PASS",
+    "build": "Maintained Stable and Testing validation builds zero errors/warnings. Final accepted candidate packaged once; exact bytes validated and published with no later rebuild.",
+    "exactPackage": "Three entries, contained DLL equality, version/product/API15, private-path scan, generated/committed manifest equality and12 actual packaged configuration/serializer fixtures PASS",
+    "site": "Read-only TESTd14e139/schema0022 deployed guidance/request module hashes verified. In-memory pure partial progress keeps revision; fresh travel can change same-target candidate/revision. No database/source/deployment writes.",
+    "performance": "Bounded existing3s collection with catalog cache and rare exact4411 event handling; no per-frame collection or game requests. Corrected live timing remains outstanding.",
+    "publication": "Anonymous immutable and unchanged rolling manifest->ZIP->DLL byte equality PASS; all28 prior immutable release assets/digests/dates and historical64 notes suffix unchanged except authorized mutable64manifest."
+  },
+  "reviews": {
+    "source": "0330f229953ca7e6e656f8211744ebe2dfa95fab",
+    "exactArtifactsBound": true,
+    "securityPrivacy": "ACCEPTED; no BLOCKER/FOLLOW-UP/OPTIONAL findings",
+    "compatibilityChangeImpact": "ACCEPTED; no BLOCKER/OPTIONAL findings; inherited Site V1 candidate-reranking FOLLOW-UP documented",
+    "independentChecks": "Both independently reran454 private-state/174 Hunt-map and source-boundary checks; verified exact hashes and embedded DLL equality; inspected6121 maintained checks and12 exact packaged serializer fixtures."
+  },
+  "siteHandoff": {
+    "defect": "Fresh travel can rerank candidate0 and change revision for the same authoritative target, leading Site V1 afterTravelAccepted/afterHuntAccepted reconcile to issue another automatic request. Pure partial count change alone does not change revision. Owner historical request pair is not retained, so exact occurrence cause remains unproven.",
+    "remedy": "Latch the automatic current target/candidate watermark across partial progress/ordinary travel changes until authorized authoritative progression; preserve explicit Show as intentional new re-presentation. Cover location changes/expiry, partial/completion/next target, manual Show and account/device races. Never infer completion from disappearance/time/map.",
+    "scope": "No Site source/deploy/Hunt-map V2 implementation here. Exact bounded source locations and semantics are in docs/releases/testing-0.0.80.md."
+  },
+  "siteWordingRecommendation": "Data provided by xivpf.com; preserve clickable link.",
+  "preserved": "All79 Hunt/map/travel/PF/Beastmaster/Market/Submarine/Dashboard/CustomDelivery/item/ordinary-sync capabilities and independent permissions; no server contract change. All prior immutable Testing releases and Stable assets.",
+  "effects": "Authorized Testing80 exact tag/prerelease/assets and existing64 rolling JSON/current notes prefix; normal task-branch pushes only. Stable/main/production/Site source/database/schema/deployment/Market architecture/Wardrobe/gameplay/TLS untouched.",
+  "endState": "READY_FOR_OWNER_HUNT_FINAL_COMPLETION_RETEST",
+  "ownerProcedure": "Update80 through existing feed; keep existing Hunt local retention/private TEST sync ON; finish one available multi-kill target while80 loaded. Check final count and Site advancement. If stale, Sync now once and copy aggregate Hunt/main diagnostics only; no reset/re-pair/private JSON/credentials."
+}

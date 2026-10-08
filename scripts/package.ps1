@@ -4,12 +4,13 @@ param(
   [string]$Channel,
 
   [Parameter(Mandatory = $true)]
-  [ValidatePattern('^\d+\.\d+\.\d+$')]
+  [ValidatePattern('^\d+\.\d+\.\d+(?:\.\d+)?$')]
   [string]$Version,
 
   [string]$PublicBaseUrl = 'https://gillions.app',
   [string]$RepositoryUrl = 'https://github.com/anndrox/GillionsGameSync',
   [string]$StableReleaseBaseUrl = 'https://github.com/anndrox/GillionsGameSync/releases/download',
+  [string]$TestingReleaseBaseUrl = '',
   [string]$StableIconUrl = 'https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png',
   [long]$PublishedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 )
@@ -21,6 +22,7 @@ $parsedOrigin = $null
 $PublicBaseUrl = $PublicBaseUrl.Trim().TrimEnd('/')
 $RepositoryUrl = $RepositoryUrl.Trim().TrimEnd('/')
 $StableReleaseBaseUrl = $StableReleaseBaseUrl.Trim().TrimEnd('/')
+$TestingReleaseBaseUrl = $TestingReleaseBaseUrl.Trim().TrimEnd('/')
 $StableIconUrl = $StableIconUrl.Trim()
 $allowedSchemes = if ($Channel -eq 'testing') { @('http', 'https') } else { @('https') }
 if (-not [Uri]::TryCreate($PublicBaseUrl, [UriKind]::Absolute, [ref]$parsedOrigin) -or
@@ -41,6 +43,17 @@ if (-not [Uri]::TryCreate($StableReleaseBaseUrl, [UriKind]::Absolute, [ref]$pars
     $parsedReleaseBase.AbsolutePath -ne '/anndrox/GillionsGameSync/releases/download') {
   throw 'StableReleaseBaseUrl must be the canonical GillionsGameSync GitHub Releases download path.'
 }
+if ($TestingReleaseBaseUrl) {
+  $parsedTestingReleaseBase = $null
+  if ($Channel -ne 'testing' -or
+      -not [Uri]::TryCreate($TestingReleaseBaseUrl, [UriKind]::Absolute, [ref]$parsedTestingReleaseBase) -or
+      $parsedTestingReleaseBase.Scheme -ne 'https' -or
+      $parsedTestingReleaseBase.Host -ne 'github.com' -or
+      $parsedTestingReleaseBase.AbsolutePath -ne '/anndrox/GillionsGameSync/releases/download' -or
+      $parsedTestingReleaseBase.Query -or $parsedTestingReleaseBase.UserInfo) {
+    throw 'TestingReleaseBaseUrl is testing-only and must be the canonical GillionsGameSync GitHub Releases download path.'
+  }
+}
 $parsedIcon = $null
 if (-not [Uri]::TryCreate($StableIconUrl, [UriKind]::Absolute, [ref]$parsedIcon) -or
     $parsedIcon.Scheme -ne 'https' -or
@@ -51,6 +64,7 @@ if (-not [Uri]::TryCreate($StableIconUrl, [UriKind]::Absolute, [ref]$parsedIcon)
 }
 
 $isTesting = $Channel -eq 'testing'
+$assemblyVersion = if ($Version.Split('.').Count -eq 3) { "$Version.0" } else { $Version }
 $internalName = if ($isTesting) { 'GillionsGameSyncTest' } else { 'GillionsGameSync' }
 $displayName = if ($isTesting) { 'Gillions Game Sync Testing' } else { 'Gillions Game Sync' }
 $zipBase = if ($isTesting) { 'GillionsGameSyncTesting' } else { 'GillionsGameSync' }
@@ -92,21 +106,21 @@ try {
 } finally { $archive.Dispose() }
 $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $downloadUrl = if ($isTesting) {
-  "$PublicBaseUrl/downloads/plugins/$zipBase-$Version.zip"
+  if ($TestingReleaseBaseUrl) {
+    "$TestingReleaseBaseUrl/v$Version-testing/$zipBase-$Version.zip"
+  } else {
+    "$PublicBaseUrl/downloads/plugins/$zipBase-$Version.zip"
+  }
 } else {
   "$StableReleaseBaseUrl/v$Version/$zipBase-$Version.zip"
 }
-$iconUrl = if ($isTesting) {
-  "$PublicBaseUrl/downloads/plugins/GillionsGameSync-icon-v4.png"
-} else {
-  $StableIconUrl
-}
+$iconUrl = $StableIconUrl
 
 $manifest = @([ordered]@{
   Author = 'Gillions'
   Name = $displayName
   InternalName = $internalName
-  AssemblyVersion = "$Version.0"
+  AssemblyVersion = $assemblyVersion
   Description = if ($isTesting) { 'Unreleased, opt-in test build for Gillions Game Sync. Install only when directed for in-game verification.' } else { 'Opt-in character synchronization for Gillions with read-only Retainer observations. Never automates gameplay or sends Square Enix credentials.' }
   ApplicableVersion = 'any'
   RepoUrl = $RepositoryUrl

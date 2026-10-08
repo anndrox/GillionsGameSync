@@ -9,6 +9,7 @@
     <DefineConstants>$(DefineConstants);GILLIONS_POLICY_TESTS</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\..\BeastmasterReadiness.cs" Link="BeastmasterReadiness.cs" />
     <Compile Include="..\..\ItemLinkRequests.cs" Link="ItemLinkRequests.cs" />
     <Compile Include="..\..\PublicUrlConfiguration.cs" Link="PublicUrlConfiguration.cs" />
     <Compile Include="..\..\ProgressionSnapshots.cs" Link="ProgressionSnapshots.cs" />
@@ -22,5 +23,8 @@
     <Compile Include="..\..\DurableEvidenceBudget.cs" Link="DurableEvidenceBudget.cs" />
     <Compile Include="..\..\ObservationMaintenance.cs" Link="ObservationMaintenance.cs" />
     <Compile Include="..\..\PluginWindowModel.cs" Link="PluginWindowModel.cs" />
+    <Compile Include="..\..\PublicExperience.cs" Link="PublicExperience.cs" />
+    <Compile Include="..\..\PermissionAuthority.cs" Link="PermissionAuthority.cs" />
   </ItemGroup>
+  <ItemGroup><Compile Include="../../NativeProduct.cs" Link="NativeProduct.cs" /></ItemGroup>
 </Project>

@@ -35,9 +35,10 @@ public sealed class DurableEvidenceBudget {
         var count = 0;
         long bytes = 2;
         foreach (var state in states) foreach (var group in Groups(state)) {
-            var overhead = JsonSerializer.SerializeToUtf8Bytes(new { generation = state.Generation, contentId = state.CharacterContentId, queue = group.Kind, data = (object?)null }).Length - 4;
+            int? overhead = null;
             foreach (var record in group.Records) {
-                bytes += overhead + recordSizes.GetValue(record, value => new(JsonSerializer.SerializeToUtf8Bytes(value, value.GetType()).Length)).Bytes;
+                overhead ??= JsonSerializer.SerializeToUtf8Bytes(new { generation = state.Generation, contentId = state.CharacterContentId, queue = group.Kind, data = (object?)null }).Length - 4;
+                bytes += overhead.Value + recordSizes.GetValue(record, value => new(JsonSerializer.SerializeToUtf8Bytes(value, value.GetType()).Length)).Bytes;
                 if (count++ > 0) bytes++;
             }
         }

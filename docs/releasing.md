@@ -1,5 +1,80 @@
 # Releasing
 
+## Public candidate identity immutability
+
+PUBLIC CANDIDATE VERSION IDENTITIES ARE IMMUTABLE FOR ADMISSION.
+
+Once a public candidate version is frozen and later source changes materially,
+the old candidate version is burned for exact-admission purposes. Give the
+successor a distinguishable existing product/version identity; never reuse the
+same product/version for a different source candidate when Site must distinguish
+them. Git SHAs and package hashes remain external evidence, not wire attestation.
+
+Public `1.0.31.0` is invalidated for new capability admission (both earlier and
+corrected sources). Preserve its evidence, do not publish it, and use the
+[identity-only 1.0.31.1 successor](public-1.0.31.1-freeze.md) as the immutable,
+fully accepted TEST-bound predecessor. The production-capable successor is
+`GillionsGameSync / 1.0.31.2`, based directly on that accepted source. Its only
+runtime delta is exact production-origin support alongside exact TEST support;
+each captured pairing still selects its own credential and destination. Testing
+remains TEST-only. Permission revision/lease, collectors, contracts, dependency
+tuple and frozen UI are unchanged (apart from the displayed actual version).
+Four-part versions use `scripts/package.ps1 -Channel stable -Version 1.0.31.2` for local preparation;
+the existing three-part version normalization is unchanged. Preparation does not
+authorize publication, main integration, tags or feed changes.
+
+## Testing87 accepted; public/Stable held
+
+Testing87 is published at its immutable prerelease and the unchanged rolling
+Testing URL after applicable exact-package and practical live gates passed.
+Only the rolling JSON advanced after the final checks; no rebuild, retag or
+immutable-asset replacement occurred. See [Testing87 evidence](releases/testing-0.0.87.md).
+Proposed Stable31 remains preliminary/unpublished. The compact UI and local Hunt
+Progress do not grant Site policy authority or public capability admission.
+Do not run Stable manifest preparation/publication without the separate
+[public/Stable gates](public-release-candidate.md). Distinct channel
+assemblies/conditional capabilities prevent a byte-identical cross-channel
+promotion; each eventual exact artifact requires equivalent acceptance.
+
+## Fixed Testing update feed
+
+Owner direction establishes this existing URL as the rolling Testing feed:
+
+`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
+
+The historical tag in the URL does not pin the advertised version. Authorized
+Testing successors replace this JSON with their reviewed manifest, retaining
+`GillionsGameSyncTest` identity. ZIP links point to the actual successor version;
+do not rename a new binary to pretend it is 0.0.64. No per-release repository-entry
+change is required. This explicitly mutable channel pointer is the exception to
+the versioned-artifact preservation rule below; Stable is unaffected.
+
+After required review and successor publication, verify the published versioned
+manifest, ZIP checksum and embedded identity first. Then use the existing GitHub
+tool (replace X.Y.Z with the approved published Testing successor):
+
+```text
+gh release upload v0.0.64-testing artifacts/package/testing/X.Y.Z/GillionsGameSyncTesting.json --repo anndrox/GillionsGameSync --clobber
+```
+
+Replace only `GillionsGameSyncTesting.json`, not a ZIP or tag. Before replacement,
+capture the current feed digest/version. After replacement, anonymously fetch
+the exact fixed URL, check the advertised identity/version/all download links,
+download its update ZIP and verify reviewed checksum/embedded version. Record
+the changed pointer under [Testing feed evidence](../data/releases/testing-update-feed.json).
+Publication is incomplete until this existing update URL resolves to the intended
+successor. Do not advance it to a prepared/unpublished or unapproved candidate.
+
+## Testing 0.0.66 submarine addition
+
+Use the existing separate GitHub Testing prerelease/manual JSON path, not the
+Stable publication script or Stable feed. Preserve previous immutable artifacts.
+The addition is local-only and requires independent privacy judgment for the
+new retained history/community-export boundary; packaging/review is not live-game
+validation or an authenticated submarine server contract. Keep source, package,
+schema/examples, consent/overflow/downgrade notes and installed-game limitations
+bound in [Testing66 notes](releases/testing-0.0.66.md).
+
 GitHub is the source-history, stable Dalamud manifest, icon, tag, and immutable stable ZIP authority. Gillions infrastructure is not part of the stable distribution chain.
 
 The stable custom-repository URL is:

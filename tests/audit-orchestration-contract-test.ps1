@@ -8,11 +8,11 @@ function Require([bool]$Condition, [string]$Message) { if (-not $Condition) { th
 Require (-not [regex]::IsMatch($runtime, 'configuration\.(PendingGilLedgerEvents|PendingRetainerSales|PendingRetainerGilReceipts|PendingRetainerGilDeposits|RetainerVentureStates|RetainerGilBalances|LastPayloadHashes|LastInventoryComponentHashes)\b')) 'Runtime must never project or retire the inert legacy queues/maps.'
 Require (-not $runtime.Contains('configuration.ServerUrl.TrimEnd')) 'Requests must use the captured bound origin, never the editable next-pair address.'
 Require (-not [regex]::IsMatch($runtime, 'Environment\.(MachineName|UserDomainName)|GetMachineId')) 'Enrollment must not collect unused machine identifiers.'
-Require (([regex]::Matches($runtime, 'http\.SendAsync\(')).Count -eq 1) 'All HTTP dispatch must pass through one framework-owned permit boundary.'
+Require (([regex]::Matches($runtime, '\(client \?\? http\)\.SendAsync\(')).Count -eq 1 -and ([regex]::Matches($runtime, 'http\.SendAsync\(')).Count -eq 1) 'Testing alternate client and unchanged Stable HTTP must share the framework-owned permit boundary.'
 $dispatchStart = $runtime.IndexOf('private async Task<HttpResponseMessage> SendAsync')
 $dispatchEnd = $runtime.IndexOf('private async Task CommitAsync', $dispatchStart)
 $dispatch = $runtime.Substring($dispatchStart, $dispatchEnd - $dispatchStart)
-Require ($dispatch.Contains('RunOnFrameworkThread') -and $dispatch.IndexOf('RequirePermit(permit)') -lt $dispatch.IndexOf('http.SendAsync')) 'A captured permit must still be current immediately before HTTP dispatch.'
+Require ($dispatch.Contains('RunOnFrameworkThread') -and $dispatch.IndexOf('RequirePermit(permit)') -lt $dispatch.IndexOf('(client ?? http).SendAsync')) 'A captured permit must still be current immediately before HTTP dispatch.'
 Require ($dispatch.Contains('HttpCompletionOption.ResponseHeadersRead') -and $dispatch.Contains('permit.Cancellation')) 'Requests must stream bounded replies and support lifecycle cancellation.'
 Require ($runtime.Contains('await CommitAsync(captured.Permit, state =>')) 'Snapshot and Gil ACKs must commit atomically through their captured owner permit.'
 Require (([regex]::Matches($runtime, 'configuration\.Save\(pluginInterface\)')).Count -eq 1) 'Only the framework save coalescer may write configuration.'

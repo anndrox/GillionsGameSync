@@ -26,6 +26,8 @@ Assert-NotContains $collectorSource "JsonSerializer.Serialize(prior) == JsonSeri
 Assert-Contains $collectorSource "prior.Items.SequenceEqual(read.Items)" "Retainer listing changes must use typed structural comparison."
 Assert-Contains $collectorSource 'JsonPropertyName("retainerId")' "Typed retainer rows must preserve the existing camel-case wire contract."
 Assert-Contains $collectorSource "SheetRowCache<T>.Get(dataManager)" "Static Lumina row catalogs must be cached."
+Assert-Contains $collectorSource "var catalog = GetCatalog(dataManager);" "Armoire catalog projection must be reused while live ownership is reread."
+Assert-Contains $pluginSource "uiRefreshPolicy.ShouldRefresh(settingsVisible, now)" "Settings publication must use the bounded visible-window cadence."
 
 $ventureResultCadenceIndex = $pluginSource.IndexOf("if (retainerWindowActive || now >= nextRetainerVentureResultCaptureUtc)", [StringComparison]::Ordinal)
 $ventureResultIndex = $pluginSource.IndexOf("CaptureRetainerResult", $ventureResultCadenceIndex, [StringComparison]::Ordinal)
@@ -58,9 +60,11 @@ Assert-NotContains $presenceBody "nextAutomaticSyncUtc" "Presence must not reset
 Assert-NotContains $presenceBody "RequestConfigurationSave" "Unchanged presence acceptance must not save configuration."
 Assert-Contains $pluginSource "nextRetainerUploadUtc" "Retainer uploads must have an independent due deadline."
 
-Assert-Contains $pluginSource "Start 10-minute diagnostic recording" "Public diagnostics must be explicitly started by the user."
+$publicUi = Get-Content -LiteralPath (Join-Path $pluginRoot "PluginPublicUi.cs") -Raw
+Assert-Contains $publicUi "Copy support summary" "Public support must use the safe summary, not raw recorded logs."
+Assert-NotContains $publicUi "Copy diagnostic report" "Normal UI must not export raw gameplay diagnostics."
 Assert-Contains $pluginSource "if (!IsDiagnosticRecording) return;" "Public diagnostics must remain idle by default."
 Assert-Contains $pluginSource "if (diagnostics.Count > 40)" "Diagnostic history must remain bounded."
-Assert-Contains $pluginSource "It never uploads logs, chat text, credentials, or device identifiers." "The public UI must state the diagnostic privacy boundary."
+Assert-NotContains $pluginSource "private void DrawDiagnostics" "The retired raw diagnostic UI must not remain a second public support surface."
 
 Write-Output "Gillions Game Sync performance contract checks passed."

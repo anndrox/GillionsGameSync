@@ -1,0 +1,572 @@
+{
+  "schemaVersion": 1,
+  "collectorSchema": "dashboard-facts-v1",
+  "uploadState": "local-only-no-server-contract",
+  "privacy": "private-personal-activity",
+  "generatedAtUtc": "2026-10-03T01:00:00Z",
+  "characterAssociation": "active-character-context-native-cache-ownership-unverified",
+  "automaticChecklistCompletion": "not-authorized-by-this-experimental-export",
+  "observations": [
+    {
+      "system": "challenge-log",
+      "scopeId": 0,
+      "observedAtUtc": "2026-10-03T01:00:00Z",
+      "nextAtUtc": "2026-10-05T01:00:00Z",
+      "gameVersion": "synthetic-game",
+      "nativeVersion": "synthetic-sdk",
+      "collectorVersion": "0.0.73.0",
+      "source": "ContentsNote.Loaded/natural-ContentsNote",
+      "cadence": "weekly",
+      "freshness": "OBSERVED",
+      "resetApplicability": "native-next-boundary-only-not-server-response-proof",
+      "values": [
+        {
+          "id": 1,
+          "relatedId": 0,
+          "progress": null,
+          "limit": null,
+          "remaining": null,
+          "completed": false,
+          "available": null
+        },
+        {
+          "id": 103,
+          "relatedId": 0,
+          "progress": null,
+          "limit": null,
+          "remaining": null,
+          "completed": true,
+          "available": null
+        }
+      ]
+    },
+    {
+      "system": "custom-deliveries-client",
+      "scopeId": 1,
+      "observedAtUtc": "2026-10-03T01:00:00Z",
+      "nextAtUtc": "2026-10-05T01:00:00Z",
+      "gameVersion": "synthetic-game",
+      "nativeVersion": "synthetic-sdk",
+      "collectorVersion": "0.0.73.0",
+      "source": "SatisfactionSupplyManager.catalog-index/AgentSatisfactionSupply.corroborated",
+      "cadence": "weekly-and-rank-progression",
+      "freshness": "OBSERVED",
+      "resetApplicability": "native-next-boundary-only-not-server-response-proof",
+      "values": [
+        {
+          "id": 0,
+          "relatedId": 0,
+          "progress": 6,
+          "limit": 6,
+          "remaining": 0,
+          "completed": null,
+          "available": null
+        },
+        {
+          "id": 1,
+          "relatedId": 0,
+          "progress": 50,
+          "limit": 100,
+          "remaining": null,
+          "completed": null,
+          "available": null
+        },
+        {
+          "id": 2,
+          "relatedId": 0,
+          "progress": 3,
+          "limit": 5,
+          "remaining": null,
+          "completed": null,
+          "available": null
+        }
+      ]
+    },
+    {
+      "system": "custom-deliveries-global",
+      "scopeId": 0,
+      "observedAtUtc": "2026-10-03T01:00:00Z",
+      "nextAtUtc": "2026-10-05T01:00:00Z",
+      "gameVersion": "synthetic-game",
+      "nativeVersion": "synthetic-sdk",
+      "collectorVersion": "0.0.73.0",
+      "source": "SatisfactionSupplyManager/natural-SatisfactionSupply",
+      "cadence": "weekly",
+      "freshness": "OBSERVED",
+      "resetApplicability": "native-next-boundary-only-not-server-response-proof",
+      "values": [
+        {
+          "id": 0,
+          "relatedId": 0,
+          "progress": 6,
+          "limit": 12,
+          "remaining": 6,
+          "completed": null,
+          "available": null
+        }
+      ]
+    },
+    {
+      "system": "doman-enclave-weekly",
+      "scopeId": 0,
+      "observedAtUtc": "2026-10-03T01:00:00Z",
+      "nextAtUtc": null,
+      "gameVersion": "synthetic-game",
+      "nativeVersion": "synthetic-sdk",
+      "collectorVersion": "0.0.73.0",
+      "source": "DomanEnclaveManager.IsLoaded/weekly-donation-state",
+      "cadence": "weekly",
+      "freshness": "OBSERVED",
+      "resetApplicability": "unavailable",
+      "values": [
+        {
+          "id": 0,
+          "relatedId": 0,
+          "progress": 10000,
+          "limit": 20000,
+          "remaining": 10000,
+          "completed": null,
+          "available": true
+        }
+      ]
+    },
+    {
+      "system": "frontline-weekly",
+      "scopeId": 0,
+      "observedAtUtc": "2026-10-03T01:00:00Z",
+      "nextAtUtc": null,
+      "gameVersion": "synthetic-game",
+      "nativeVersion": "synthetic-sdk",
+      "collectorVersion": "0.0.73.0",
+      "source": "PvPProfile.IsLoaded/weekly-counters",
+      "cadence": "weekly",
+      "freshness": "OBSERVED",
+      "resetApplicability": "unavailable",
+      "values": [
+        {
+          "id": 0,
+          "relatedId": 0,
+          "progress": 6,
+          "limit": null,
+          "remaining": null,
+          "completed": null,
+          "available": null
+        },
+        {
+          "id": 1,
+          "relatedId": 0,
+          "progress": 1,
+          "limit": null,
+          "remaining": null,
+          "completed": null,
+          "available": null
+        },
+        {
+          "id": 2,
+          "relatedId": 0,
+          "progress": 2,
+          "limit": null,
+          "remaining": null,
+          "completed": null,
+          "available": null
+        },
+        {
+          "id": 3,
+          "relatedId": 0,
+          "progress": 3,
+          "limit": null,
+          "remaining": null,
+          "completed": null,
+          "available": null
+        }
+      ]
+    },
+    {
+      "system": "leve-allowance",
+      "scopeId": 0,
+      "observedAtUtc": "2026-10-03T01:00:00Z",
+      "nextAtUtc": "2026-10-03T05:00:00Z",
+      "gameVersion": "synthetic-game",
+      "nativeVersion": "synthetic-sdk",
+      "collectorVersion": "0.0.73.0",
+      "source": "QuestManager/natural-ContentsInfo",
+      "cadence": "allowance-regeneration",
+      "freshness": "OBSERVED",
+      "resetApplicability": "native-next-boundary-only-not-server-response-proof",
+      "values": [
+        {
+          "id": 0,
+          "relatedId": 0,
+          "progress": null,
+          "limit": 100,
+          "remaining": 0,
+          "completed": null,
+          "available": null
+        }
+      ]
+    },
+    {
+      "system": "map-availability",
+      "scopeId": 0,
+      "observedAtUtc": "2026-10-03T01:00:00Z",
+      "nextAtUtc": "2026-10-03T11:00:00Z",
+      "gameVersion": "synthetic-game",
+      "nativeVersion": "synthetic-sdk",
+      "collectorVersion": "0.0.73.0",
+      "source": "UIState.cached-NextMapAllowanceTimestamp/natural-ContentsInfo",
+      "cadence": "next-availability",
+      "freshness": "OBSERVED",
+      "resetApplicability": "native-next-boundary-only-not-server-response-proof",
+      "values": [
+        {
+          "id": 0,
+          "relatedId": 0,
+          "progress": null,
+          "limit": null,
+          "remaining": null,
+          "completed": null,
+          "available": null
+        }
+      ]
+    },
+    {
+      "system": "rival-wings-weekly",
+      "scopeId": 0,
+      "observedAtUtc": "2026-10-03T01:00:00Z",
+      "nextAtUtc": null,
+      "gameVersion": "synthetic-game",
+      "nativeVersion": "synthetic-sdk",
+      "collectorVersion": "0.0.73.0",
+      "source": "PvPProfile.IsLoaded/weekly-counters",
+      "cadence": "weekly",
+      "freshness": "OBSERVED",
+      "resetApplicability": "unavailable",
+      "values": [
+        {
+          "id": 0,
+          "relatedId": 0,
+          "progress": 3,
+          "limit": null,
+          "remaining": null,
+          "completed": null,
+          "available": null
+        },
+        {
+          "id": 1,
+          "relatedId": 0,
+          "progress": 2,
+          "limit": null,
+          "remaining": null,
+          "completed": null,
+          "available": null
+        }
+      ]
+    },
+    {
+      "system": "roulette-reward",
+      "scopeId": 0,
+      "observedAtUtc": "2026-10-03T01:00:00Z",
+      "nextAtUtc": null,
+      "gameVersion": "synthetic-game",
+      "nativeVersion": "synthetic-sdk",
+      "collectorVersion": "0.0.73.0",
+      "source": "InstanceContent.IsRouletteComplete/natural-ContentsFinder",
+      "cadence": "daily",
+      "freshness": "OBSERVED",
+      "resetApplicability": "unavailable",
+      "values": [
+        {
+          "id": 1,
+          "relatedId": 0,
+          "progress": null,
+          "limit": null,
+          "remaining": null,
+          "completed": false,
+          "available": null
+        },
+        {
+          "id": 17,
+          "relatedId": 0,
+          "progress": null,
+          "limit": null,
+          "remaining": null,
+          "completed": true,
+          "available": null
+        }
+      ]
+    },
+    {
+      "system": "society-allowance",
+      "scopeId": 0,
+      "observedAtUtc": "2026-10-03T01:00:00Z",
+      "nextAtUtc": null,
+      "gameVersion": "synthetic-game",
+      "nativeVersion": "synthetic-sdk",
+      "collectorVersion": "0.0.73.0",
+      "source": "QuestManager/natural-ContentsInfo",
+      "cadence": "daily",
+      "freshness": "OBSERVED",
+      "resetApplicability": "unavailable",
+      "values": [
+        {
+          "id": 0,
+          "relatedId": 0,
+          "progress": null,
+          "limit": 12,
+          "remaining": 12,
+          "completed": null,
+          "available": null
+        }
+      ]
+    },
+    {
+      "system": "squadron-mission",
+      "scopeId": 0,
+      "observedAtUtc": "2026-10-03T01:00:00Z",
+      "nextAtUtc": "2026-10-03T19:00:00Z",
+      "gameVersion": "synthetic-game",
+      "nativeVersion": "synthetic-sdk",
+      "collectorVersion": "0.0.73.0",
+      "source": "PlayerState/natural-ContentsInfo",
+      "cadence": "expected-completion",
+      "freshness": "OBSERVED",
+      "resetApplicability": "native-next-boundary-only-not-server-response-proof",
+      "values": [
+        {
+          "id": 0,
+          "relatedId": 0,
+          "progress": null,
+          "limit": null,
+          "remaining": null,
+          "completed": null,
+          "available": null
+        }
+      ]
+    },
+    {
+      "system": "squadron-training",
+      "scopeId": 0,
+      "observedAtUtc": "2026-10-03T01:00:00Z",
+      "nextAtUtc": "2026-10-03T02:00:00Z",
+      "gameVersion": "synthetic-game",
+      "nativeVersion": "synthetic-sdk",
+      "collectorVersion": "0.0.73.0",
+      "source": "PlayerState/natural-ContentsInfo",
+      "cadence": "expected-completion",
+      "freshness": "OBSERVED",
+      "resetApplicability": "native-next-boundary-only-not-server-response-proof",
+      "values": [
+        {
+          "id": 0,
+          "relatedId": 0,
+          "progress": null,
+          "limit": null,
+          "remaining": null,
+          "completed": null,
+          "available": null
+        }
+      ]
+    },
+    {
+      "system": "weekly-tomestones",
+      "scopeId": 0,
+      "observedAtUtc": "2026-10-03T01:00:00Z",
+      "nextAtUtc": null,
+      "gameVersion": "synthetic-game",
+      "nativeVersion": "synthetic-sdk",
+      "collectorVersion": "0.0.73.0",
+      "source": "InventoryManager/loaded-Currency",
+      "cadence": "weekly",
+      "freshness": "OBSERVED",
+      "resetApplicability": "unavailable",
+      "values": [
+        {
+          "id": 47,
+          "relatedId": 0,
+          "progress": 100,
+          "limit": 900,
+          "remaining": 800,
+          "completed": null,
+          "available": null
+        }
+      ]
+    },
+    {
+      "system": "wondrous-tails",
+      "scopeId": 0,
+      "observedAtUtc": "2026-10-03T01:00:00Z",
+      "nextAtUtc": "2026-10-05T01:00:00Z",
+      "gameVersion": "synthetic-game",
+      "nativeVersion": "synthetic-sdk",
+      "collectorVersion": "0.0.73.0",
+      "source": "PlayerState/held-journal",
+      "cadence": "journal-expiration",
+      "freshness": "OBSERVED",
+      "resetApplicability": "native-next-boundary-only-not-server-response-proof",
+      "values": [
+        {
+          "id": 0,
+          "relatedId": 0,
+          "progress": 2,
+          "limit": 9,
+          "remaining": null,
+          "completed": null,
+          "available": true
+        },
+        {
+          "id": 1,
+          "relatedId": 0,
+          "progress": 0,
+          "limit": 9,
+          "remaining": null,
+          "completed": null,
+          "available": true
+        },
+        {
+          "id": 2,
+          "relatedId": 1,
+          "progress": 0,
+          "limit": null,
+          "remaining": null,
+          "completed": false,
+          "available": null
+        },
+        {
+          "id": 3,
+          "relatedId": 2,
+          "progress": 1,
+          "limit": null,
+          "remaining": null,
+          "completed": true,
+          "available": null
+        },
+        {
+          "id": 4,
+          "relatedId": 3,
+          "progress": 2,
+          "limit": null,
+          "remaining": null,
+          "completed": true,
+          "available": null
+        },
+        {
+          "id": 5,
+          "relatedId": 4,
+          "progress": 0,
+          "limit": null,
+          "remaining": null,
+          "completed": false,
+          "available": null
+        },
+        {
+          "id": 6,
+          "relatedId": 5,
+          "progress": 1,
+          "limit": null,
+          "remaining": null,
+          "completed": true,
+          "available": null
+        },
+        {
+          "id": 7,
+          "relatedId": 6,
+          "progress": 2,
+          "limit": null,
+          "remaining": null,
+          "completed": true,
+          "available": null
+        },
+        {
+          "id": 8,
+          "relatedId": 7,
+          "progress": 0,
+          "limit": null,
+          "remaining": null,
+          "completed": false,
+          "available": null
+        },
+        {
+          "id": 9,
+          "relatedId": 8,
+          "progress": 1,
+          "limit": null,
+          "remaining": null,
+          "completed": true,
+          "available": null
+        },
+        {
+          "id": 10,
+          "relatedId": 9,
+          "progress": 2,
+          "limit": null,
+          "remaining": null,
+          "completed": true,
+          "available": null
+        },
+        {
+          "id": 11,
+          "relatedId": 10,
+          "progress": 0,
+          "limit": null,
+          "remaining": null,
+          "completed": false,
+          "available": null
+        },
+        {
+          "id": 12,
+          "relatedId": 11,
+          "progress": 1,
+          "limit": null,
+          "remaining": null,
+          "completed": true,
+          "available": null
+        },
+        {
+          "id": 13,
+          "relatedId": 12,
+          "progress": 2,
+          "limit": null,
+          "remaining": null,
+          "completed": true,
+          "available": null
+        },
+        {
+          "id": 14,
+          "relatedId": 13,
+          "progress": 0,
+          "limit": null,
+          "remaining": null,
+          "completed": false,
+          "available": null
+        },
+        {
+          "id": 15,
+          "relatedId": 14,
+          "progress": 1,
+          "limit": null,
+          "remaining": null,
+          "completed": true,
+          "available": null
+        },
+        {
+          "id": 16,
+          "relatedId": 15,
+          "progress": 2,
+          "limit": null,
+          "remaining": null,
+          "completed": true,
+          "available": null
+        },
+        {
+          "id": 17,
+          "relatedId": 16,
+          "progress": 0,
+          "limit": null,
+          "remaining": null,
+          "completed": false,
+          "available": null
+        }
+      ]
+    }
+  ]
+}

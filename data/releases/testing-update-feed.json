@@ -1,0 +1,28 @@
+{
+  "channel": "testing",
+  "status": "published-and-anonymously-verified",
+  "feed": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json",
+  "policy": "Fixed rolling Testing update URL; replace only this manifest after authorized accepted successor publication. No repository URL change required.",
+  "version": "0.0.87.0",
+  "internalName": "GillionsGameSyncTest",
+  "dalamudApiLevel": 15,
+  "sourceCommit": "c286e5140470fd866cf43f2db92f18aa4d170f4c",
+  "manifestSha256": "a190a8808d82b32214f9a183a35ce6ff4b34fb087337c54ed7e7758fe7cb5e0d",
+  "download": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.87-testing/GillionsGameSyncTesting-0.0.87.zip",
+  "archiveSha256": "22a22f9b9d98f72fd924b74afd8f41185ac52c2a1126397dd9f7fa244346004c",
+  "previousAdvertisedVersion": "0.0.86.0",
+  "previousManifestSha256": "5df4c24c45ee290a361ec878759678e40e5c2f39bbdb7f4212d4d087eedfba51",
+  "rollingManifestAssetId": 620109136,
+  "authority": "Owner release-state correction: finish practical exact-c286 live gates, then advance only rolling JSON to existing immutable87; no rebuild/retag/replacement.",
+  "validation": [
+    "Anonymous normal GET at fixed URL resolves87; all4 existing immutable ZIP links and archive/all3members/embedded identity/manifest match frozen bytes",
+    "8585 enumerated maintained assertions plus additional checks PASS; exact packaged c286 tests PASS",
+    "Inherited unchanged b392 Security/Privacy and Compatibility acceptance, not a new independent c286 review",
+    "Owner physical geometry/input/lock/link independence/manual autoOFF/automatic focusON/no-repeat passed; real automatic FATE/Hunt receipts; controller/FC/fault-only limits explicit",
+    "35 prior releases/59 immutable assets, Stable manifest and both main heads preserved; only rolling64 JSON replaced; no rebuild"
+  ],
+  "effects": "Only rolling64 JSON advanced during final completion; immutable87 already published unchanged. Publication-only docs/task pushes. Stable/Public31/main/production/Site source/schema/Market architecture/Wardrobe untouched.",
+  "liveValidation": "Actual automatic FATE/private Hunt and command receipts plus owner physical checks; no controller/FC/fault-only claim. Stage/current-thread metrics, not frame/process totals; single automatic focus-bootstrap4.38s disclosed separately from prompt explicit Show.",
+  "siteDependency": "Accepted unchanged Site a0b8503765d9140b4ab790fc897228bb300ba966/schema0028. No contract blocker; two Hunt reference gaps are bounded Site follow-up.",
+  "verifiedAt": "2026-10-07T23:32:42.927940+00:00"
+}

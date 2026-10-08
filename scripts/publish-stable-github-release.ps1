@@ -1,11 +1,12 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidatePattern('^\d+\.\d+\.\d+$')]
+  [ValidatePattern('^\d+\.\d+\.\d+(?:\.\d+)?$')]
   [string]$Version
 )
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+$assemblyVersion = if ($Version.Split('.').Count -eq 3) { "$Version.0" } else { $Version }
 $tag = "v$Version"
 $assetName = "GillionsGameSync-$Version.zip"
 $assetPath = Join-Path $root "artifacts/package/stable/$Version/$assetName"
@@ -23,7 +24,7 @@ $canonicalContains = @(& git -C $root branch -r --contains $head) -match '^\s*up
 if (-not $canonicalContains) { throw 'The exact release source and manifest commit must be integrated into upstream/main first.' }
 
 $manifest = @([IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json -AsHashtable)[0]
-if ($manifest.AssemblyVersion -cne "$Version.0") { throw 'Canonical manifest version does not match the requested release.' }
+if ($manifest.AssemblyVersion -cne $assemblyVersion) { throw 'Canonical manifest version does not match the requested release.' }
 $expectedUrl = "https://github.com/anndrox/GillionsGameSync/releases/download/$tag/$assetName"
 foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate', 'DownloadLinkTesting')) {
   if ($manifest[$field] -cne $expectedUrl) { throw "$field does not match the requested immutable release asset." }

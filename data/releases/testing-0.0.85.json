@@ -1,0 +1,117 @@
+{
+  "channel": "testing",
+  "version": "0.0.85",
+  "assemblyVersion": "0.0.85.0",
+  "status": "published-and-anonymously-verified",
+  "repository": "Gillions/GillionsGameSync",
+  "branch": "codex/game-sync/beastmaster-party-finder-testing",
+  "startingPublishedVersion": "0.0.84.0",
+  "startingPublishedSource": "0a2c50605135812464768842690af03ae575d94b",
+  "startingTaskHead": "a19b655046e45b2bd2bfb71b74a1c03026ce6348",
+  "sourceCommit": "39f7a71a9d1d7d4f17068aff50c9d516aa9884fd",
+  "sourceTree": "cb5cfca651cadf09fa4b416a27af0d08eea955d6",
+  "publicationRecordIdentity": "Later publication-only commit containing this record; artifact source remains pinned above.",
+  "tag": "v0.0.85-testing",
+  "annotatedTag": "4dad847ac9b5ea08e14e8b0c680a5d0b3bb7f6e3",
+  "releaseId": 404126682,
+  "publishedAt": "2026-10-05T22:04:57Z",
+  "archiveSha256": "8e46200dc9f7cb41293d3aa13481d6b1273546e3689176b4525be05863c5c8bc",
+  "dllSha256": "428b819c2fcc3c9492461203db3a0ee888fa4f0b1dac08afa792429cf84daa4c",
+  "manifestSha256": "4114c60957cfcfcbaa6cd58abfe29cf11eec9b63806e3e7867c1525a40b491ee",
+  "embeddedManifestSha256": "d96ed9dfa18393b4f257dc3e2f5495cfd9e506226a37c6c46b940e20447646c9",
+  "archiveAssetId": 613722219,
+  "manifestAssetId": 613722217,
+  "rollingManifestAssetId": 613723088,
+  "archiveBytes": 397728,
+  "rollingUrl": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json",
+  "anonymousRollingVerificationAt": "2026-10-05T22:05:26.128083+00:00",
+  "collector": {
+    "mode": "Testing-only temporary Advanced diagnostic session; stopped by default, no persistent toggle",
+    "sources": "Maintained Dalamud IFateTable/IFate, IClientState/IPlayerState/ICondition and compatible Lumina typed references; no custom low-level parser",
+    "cadenceSeconds": 5,
+    "unchangedPositiveRenewalSeconds": 10,
+    "maxTableEntries": 64,
+    "maxBatchRows": 64,
+    "maxBatchBytes": 131072,
+    "maxRamSamples": 240,
+    "maxOccurrenceSupport": 128,
+    "occurrenceSupportExpirySeconds": 120,
+    "batchExpirySeconds": 30,
+    "coverage": "positive_only",
+    "history": "RAM only; no durable FATE history",
+    "context": "Settled ordinary public Overworld only; CurrentWorld not HomeWorld; typed public ordinal; before/after agreement; context changes discard unsent epoch",
+    "correction": "Bind first observed context to already settled epoch without invalidating it again; subsequent real context changes still clear support and batches."
+  },
+  "runtime": {
+    "samples": 15,
+    "initialSettlement": 1,
+    "consecutivePositiveReads": 14,
+    "positiveRowsPerRead": 3,
+    "states": "Preparing with unknown timing; Running with valid timing; direct progress/bonus/ordered levels/event geometry",
+    "allSampleCombinedMilliseconds": {
+      "median": 0.1313,
+      "p95": 11.5156,
+      "max": 11.5156
+    },
+    "allSampleReadMilliseconds": {
+      "median": 0.0176,
+      "p95": 1.7968,
+      "max": 1.7968
+    },
+    "allSamplePreparationMilliseconds": {
+      "median": 0.0755,
+      "p95": 10.3777,
+      "max": 10.3777
+    },
+    "final12PositiveCombinedMilliseconds": {
+      "median": 0.1112,
+      "p95": 0.1919,
+      "max": 0.1919
+    },
+    "final12ReadAllocationBytes": 1152,
+    "final12PreparationAllocationBytes": {
+      "median": 4776,
+      "max": 6816
+    },
+    "startupPreparationBytes": 335824,
+    "command": "Owner confirmed prompt, hitch-free/nonduplicated PF-link delivery while FATE measurement was active; concurrent Hunt/travel/Retainer sync acknowledged. Observational, not numerical command latency.",
+    "limitations": "Stage/current-thread metrics, not whole-frame totals. Startup cost disclosed; cold-JIT cause not proven. No individual sample timestamps, so exact inter-read wall gaps cannot be reconstructed. Corrected instance/world/logout/terminal transitions fixture-validated, not all individually live. No active wire freshness/traffic proof."
+  },
+  "transport": {
+    "status": "dormant-fail-closed",
+    "endpointReserved": "https://test.gillions.app/api/game-sync/fates/contribute",
+    "capability": "fate-live-observations-v1",
+    "schemaVersion": 1,
+    "collectorSchema": "fate-live-observations-v1",
+    "policy": "fate_public_observations",
+    "policyRevision": 1,
+    "liveGrantParser": false,
+    "httpSender": false,
+    "dependency": "Site must specify exact authenticated discovery response, source/reference admission, expiry/revocation/session binding and explicit independent consent. Bounded Native follow-up must wire agreed discovery/sender; endpoint availability alone cannot activate85.",
+    "payload": "Six envelope keys; exact source tuple; direct public event scalars only. No player/account/character/device identity, player position, participation, static localized reference data, private Hunt/travel or credentials."
+  },
+  "validation": {
+    "maintained": "8223 counted managed assertions:415 FATE,799 Hunt-map,542 Submarine,1516 personal,1792 Dashboard,2551 travel,224 Market,116 PF,268 orchestration; additional ordinary/Beastmaster/SDK/source/manifest/configuration/performance checks PASS.",
+    "exactPackage": "295 FATE exact-DLL checks plus inherited Hunt V2/focus/clocks/item-consume/issuer/config/consent/Market/Beastmaster/Submarine/Dashboard/travel/ordinary checks PASS; synthetic payload hash7b21db4ccb169f3faa07a715c9e1e11798dadadf9c5fce28aa0e805beefb3723.",
+    "builds": "Both product validation builds and exact85 packaging zero warnings/errors. No accepted85 rebuild after reviews/live validation/publication; post-publication suite uses separate validation output versions.",
+    "publication": "Anonymous immutable and rolling JSON/ZIP/contained DLL/embedded identity match accepted bytes; all four links85;33 prior releases/55 immutable assets unchanged, only rolling64 JSON advanced.",
+    "postPublication": "Maintained rerun PASS after publication-only docs/feed/test-pin updates; all8223 counted managed assertions plus additional checks, both product builds zero warnings/errors. Separate validation0.0.0/9.8.7 outputs only; released85 ZIP/DLL/JSON hashes remain unchanged. Local Markdown links and publication-record consistency PASS."
+  },
+  "reviews": {
+    "source": "39f7a71a9d1d7d4f17068aff50c9d516aa9884fd",
+    "exactArtifactsBound": true,
+    "securityPrivacy": "ACCEPTED; runtime condition closed, no outstanding findings.",
+    "compatibility": "ACCEPTED; remaining owner-observed command condition closed, no outstanding findings."
+  },
+  "site": {
+    "contractSource": "ab21c3bf2a904ed8edd07f2591e8035e6a910694",
+    "schema": "0026",
+    "contractRevision": 2,
+    "unchanged": true,
+    "activationAuthorizedHere": false
+  },
+  "preserved": "Hunt80 final completion/84 coverage margin/82 commands, mapV1/V2, PF/item links, Beastmaster, Market, Submarines, Dashboard/Custom Deliveries, travel privacy, ordinary sync, config/retention/performance and Testing/Stable separation.",
+  "effects": "Testing85 tag/prerelease/exact assets and rolling64 JSON; normal task pushes only. Stable/main/Site/schema/database/production/Market architecture/Wardrobe untouched; no gameplay writes/TLS bypass/default-ON sharing/alerts/Tracked FATE/static Site UI.",
+  "ownerProcedure": "Disable diagnostic dev-plugin entry before enabling installed Testing85; never run both. Existing rolling URL/config; no reset, re-pairing or extra gameplay. Temporary FATE session stops on reload.",
+  "endState": "LIVE FATE OBSERVATION COLLECTOR PUBLISHED TO TESTING — SITE INTAKE ACTIVATION MAY PROCEED through separately authorized exact discovery and Native sender follow-up."
+}

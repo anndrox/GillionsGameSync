@@ -1,0 +1,73 @@
+{
+  "channel": "testing",
+  "version": "0.0.76",
+  "assemblyVersion": "0.0.76.0",
+  "status": "published-and-anonymously-verified",
+  "startingHead": "e6ef4956e7081b0f1fddb951344e5324692f4325",
+  "startingRelease": "0.0.75.0",
+  "branch": "codex/game-sync/beastmaster-party-finder-testing",
+  "resource": "travel_context",
+  "contract": "docs/contracts/travel-context-v1.md",
+  "transport": "dormant-no-approved-Site-contract-no-send-path",
+  "costVerdict": "PARTIAL: observed loaded list Gil only; final charged cost and price-cache refresh generation unproven; actualCostGil null",
+  "consent": "ShareHuntRoutingLocation: default OFF; no expansion of Hunt/ordinary/PF/market grants",
+  "custody": "one current observation in RAM; no config payload or movement history; 15s cadence,45s TTL; no raw world precision/world/DC/player/account/housing identifiers",
+  "siteAudit": {
+    "revision": "432a46e3625de8708efe49ded865c5fb8a5be7e8",
+    "image": "sha256:46abd8a9cee84b82123b9a416bcfce4829567c546ee3977a886c01233eb6ed8b",
+    "resources": [
+      "hunt_bills",
+      "submarine_personal"
+    ],
+    "travel": "MISSING: permission/capability/intake/TTL/read model not activated"
+  },
+  "validation": {
+    "travelManaged": 2365,
+    "previousMaintainedNumbered": 3333,
+    "totalNumbered": 5698,
+    "actualSdkAndConfig": "12 fixtures per product plus travel SDK/public map utility/serializer/isolation assertions",
+    "live": "OUTSTANDING: no real player location or Teleport observation performed; no travel HTTP/auth/persistence claimed",
+    "transport": "dormant send-boundary/source test PASS; real auth/nonce/receipt/server lifecycle needs agreed Site contract",
+    "performance": "128-destination managed fixture approximately0.11ms/42,541 allocated bytes; native framework read/alloc timing OUTSTANDING",
+    "build": "Full maintained verify from exact19290cd PASS5698 numbered +source/SDK/config/performance; both products and replacement package zero warnings/errors",
+    "package": "Exact3 files/API15/product/version/embedded DLL/hash/PathMap/private-path scan/manual-generated manifest semantic equality PASS; final package12 actual SDK/serializer fixtures PASS"
+  },
+  "boundaries": "Testing only;75 immutable preserved; Stable/main/Site source/deployment/schema/production/Market architecture/Wardrobe untouched; no actions/radar/UI opening/game requests/public location/history",
+  "remaining": "READY_FOR_SITE_HUNT_ROUTING_HANDOFF",
+  "sourceCommit": "19290cdb82c1015fe09bc7b8ab612adceb1c37ea",
+  "artifact": "GillionsGameSyncTesting-0.0.76.zip",
+  "archiveSha256": "7c5d6ed2c0b441eac11aaffcce717a288491d5b7cbe59711d86d55f629c6d0f8",
+  "dllSha256": "4a1cccc847d588a8c81d5b9b138a0dbf758928d4c9e10d1e66162cdbb1fe291f",
+  "manifestSha256": "c70e4e1ed2314fb6685fb1896dd7166554fd3c10964caeef0cf4fb5b6d3625b9",
+  "review": {
+    "status": "ACCEPTED_NO_REMAINING_FINDINGS",
+    "source": "19290cdb82c1015fe09bc7b8ab612adceb1c37ea",
+    "reviewer": "independent-security-privacy",
+    "corrections": [
+      "Lifecycle/OFF-ON clear now preserves per-load admission deadline;51 added focused assertions",
+      "Five diagnostic quotes have bounded80-character public catalog names/IDs; no payload labels"
+    ],
+    "independentChecks": "2365 travel checks/source/hash/clean diff PASS; unchanged accepted surfaces inherit acceptance",
+    "superseded": "778b320d739c01120a2eda0d0f9620b659bde8d3 durably preserved unpublished"
+  },
+  "publication": {
+    "tag": "v0.0.76-testing",
+    "annotatedTag": "1825a51af81e99f498067147d41e9637041342b2",
+    "release": "https://github.com/anndrox/GillionsGameSync/releases/tag/v0.0.76-testing",
+    "publishedAt": "2026-10-03T17:57:36Z",
+    "isPrerelease": true,
+    "zipAssetId": 608265540,
+    "manifestAssetId": 608265543,
+    "rollingAssetId": 608266485,
+    "rollingReplacedAt": "2026-10-03T17:58:17Z",
+    "verifiedAt": "2026-10-03T17:58:41Z",
+    "fixedFeed": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json",
+    "previousVersion": "0.0.75.0",
+    "previousManifestSha256": "d5f90054dffc6cc97dd147fc9071ad3d7da5958bb0d9568eed4832d01ffebdd1",
+    "verification": "Anonymous exact versioned and rolling URL/product/API15/version/four links/download ZIP/embedded DLL hashes PASS; historical64 notes byte-exact and ZIP ID/date/digest preserved;75 and Stable assets/main SHAs unchanged",
+    "rebuildForReviewCorrection": true,
+    "rebuildAfterFinalValidation": false
+  },
+  "preservation": "Durable byte-equal final source-bound ZIP/DLL/manifest/log/synthetic fixture Evidence/GameSync/Testing-0.0.76/19290cdb82c1015fe09bc7b8ab612adceb1c37ea; superseded778 preparation retained separately",
+  "effects": "Owner-authorized Testing76 prerelease/tag plus original rolling JSON/current64 notes prefix; normal Forgejo/GitHub task branch pushes. No new travel network path or receipt/store validation claimed; no Stable/main/Site source/schema/deployment/production/Market architecture/Wardrobe/gameplay actions/TLS bypass/public location/history."
+}

@@ -2,6 +2,18 @@ using System;
 
 namespace GillionsGameSync;
 
+public sealed class PluginUiRefreshPolicy {
+    public static readonly TimeSpan Interval = TimeSpan.FromMilliseconds(250);
+    private DateTime nextRefresh;
+    public bool ShouldRefresh(bool visible, DateTime now) {
+        if (!visible) { nextRefresh = DateTime.MinValue; return false; }
+        if (now < nextRefresh) return false;
+        nextRefresh = now.Add(Interval);
+        return true;
+    }
+    public void Reset() => nextRefresh = DateTime.MinValue;
+}
+
 public sealed record PluginWindowModel(string Connection, string Status, string? Warning, bool CanSync) {
     public static PluginWindowModel Create(bool paired, bool needsPairing, bool loggedIn, bool automatic, bool busy, bool storagePaused, bool hadGap, string blockedCode) {
         var warnings = new System.Collections.Generic.List<string>();
@@ -17,9 +29,9 @@ public sealed record PluginWindowModel(string Connection, string Status, string?
     }
 }
 
-public sealed record PluginUiSnapshot(PluginWindowModel Model, bool Paired, bool Pairing, bool Automatic, bool ItemLinks,
+public sealed record PluginUiSnapshot(PluginWindowModel Model, bool Paired, bool Pairing, bool Automatic, bool ItemLinks, bool PartyFinderContributions,
     string Origin, DateTime? LastSync, string Message, string ReadChangelogVersion, bool RetainerSupported,
     string Availability, EvidenceBudgetUsage? Budget, bool Recording, DateTime RecordingUntil, string[] Diagnostics) {
     public static readonly PluginUiSnapshot Empty = new(PluginWindowModel.Create(false, false, false, true, false, false, false, ""),
-        false, false, true, true, "", null, "", "", false, "", null, false, default, []);
+        false, false, true, true, false, "", null, "", "", false, "", null, false, default, []);
 }

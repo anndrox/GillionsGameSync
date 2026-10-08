@@ -20,7 +20,7 @@ internal static class AuditRegressionTests {
 
     public static async Task RunAsync() {
         TestOwnershipAndLifetimes(); TestAcknowledgementsAndSales(); TestFreshnessAndTransientState(); TestBudgetAndReload();
-        await TestResponsesAsync(); TestWindowStates();
+        await TestResponsesAsync(); TestWindowStates(); TestUiRefreshCadence(); TestEmptyBudgetAccounting();
         Console.WriteLine($"Audit correction regression checks passed: {checks}.");
     }
 
@@ -205,6 +205,35 @@ internal static class AuditRegressionTests {
         using var canceled = new CancellationTokenSource(); canceled.Cancel();
         using var canceledContent = new StreamContent(new CountingStream(Encoding.UTF8.GetBytes(receipt)));
         await ThrowsAsync<OperationCanceledException>(async () => await SyncResponsePolicy.ReadAsync(canceledContent, canceled.Token), "Lifetime cancellation stops response reads.");
+    }
+
+    private static void TestUiRefreshCadence() {
+        var policy = new PluginUiRefreshPolicy();
+        var refreshes = 0;
+        for (var frame = 0; frame < 7200; frame++)
+            if (policy.ShouldRefresh(true, Now.AddTicks(frame * TimeSpan.TicksPerSecond / 120))) refreshes++;
+        Check(refreshes == 240, "A visible window at 120 FPS publishes only four snapshots per second.");
+        Check(!policy.ShouldRefresh(false, Now.AddSeconds(60)), "A closed window does no publication work.");
+        Check(policy.ShouldRefresh(true, Now.AddSeconds(60)), "Reopening publishes immediately.");
+        Check(!policy.ShouldRefresh(true, Now.AddSeconds(60).AddMilliseconds(1)), "Unchanged visible frames wait for the next refresh.");
+        policy.Reset();
+        Check(policy.ShouldRefresh(true, Now.AddSeconds(60).AddMilliseconds(2)), "Session and UI actions may refresh immediately.");
+        Console.WriteLine($"Synthetic UI cadence: {refreshes} publications / 7,200 frames (60 seconds at 120 FPS).");
+    }
+
+    private static void TestEmptyBudgetAccounting() {
+        var states = Enumerable.Range(1, 100).Select(id => new OwnedCharacterState {
+            Generation = "fixture-generation", CharacterContentId = id.ToString(),
+        }).ToArray();
+        var budget = new DurableEvidenceBudget();
+        budget.Measure(states); // Warm JIT and iterator paths before reporting allocations.
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var usage = budget.Measure(states);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Check(usage.Records == 0 && usage.Bytes == 2, "Empty owner queues have exactly an empty JSON-array budget.");
+        Check(usage.Bytes == DurableEvidenceBudget.SerializeAccountingDocument(states).LongLength,
+            "Skipping empty queue headers preserves exact accounting.");
+        Console.WriteLine($"Synthetic empty-queue accounting: {allocated:N0} allocated bytes / 100 owners.");
     }
 
     private static void TestWindowStates() {

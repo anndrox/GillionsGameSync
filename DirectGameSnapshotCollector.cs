@@ -704,14 +704,25 @@ internal sealed record RetainerListingItem(
 internal static class CurrencyCollector { public static object[] Read() => NativeInventoryCollector.ReadCurrencyItems(); }
 
 internal static class ArmoireCollector {
+    private static IDataManager? catalogSource;
+    private static ArmoireCatalogEntry[] catalog = [];
+
+    // Only static definitions are cached; ownership is read anew for every sync.
+    private static ArmoireCatalogEntry[] GetCatalog(IDataManager dataManager) {
+        if (ReferenceEquals(catalogSource, dataManager)) return catalog;
+        var entries = SheetRowCache<Lumina.Excel.Sheets.Cabinet>.Get(dataManager)
+            .Select(row => new ArmoireCatalogEntry(row.RowId, row.Item.RowId)).ToArray();
+        catalog = entries;
+        catalogSource = dataManager;
+        return catalog;
+    }
+
     public static unsafe ArmoireRead Read(IDataManager dataManager) {
         try {
             var uiState = UIState.Instance();
             if (uiState == null || !uiState->Cabinet.IsCabinetLoaded()) return new ArmoireRead(false, []);
             var cabinet = &uiState->Cabinet;
-            var catalog = SheetRowCache<Lumina.Excel.Sheets.Cabinet>.Get(dataManager)
-                .Select(row => new ArmoireCatalogEntry(row.RowId, row.Item.RowId))
-                .ToArray();
+            var catalog = GetCatalog(dataManager);
             if (catalog.Length == 0) return new ArmoireRead(false, []);
             var itemIds = ArmoireSnapshotPolicy.BuildOwnedItemIds(catalog, cabinet->IsItemInCabinet);
             return new ArmoireRead(true, itemIds.Select(itemId => (object)new {

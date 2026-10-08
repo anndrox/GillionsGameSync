@@ -1,0 +1,24 @@
+{
+  "channel": "testing",
+  "version": "0.0.63",
+  "status": "published-github-prerelease",
+  "internalName": "GillionsGameSyncTest",
+  "dalamudApiLevel": 15,
+  "publishedAtInput": 1790757874,
+  "archive": "GillionsGameSyncTesting-0.0.63.zip",
+  "archiveSha256": "afbce587f9140fc20906625edddc9138d5f131a4673ce0f6a3b8859378a041db",
+  "manifestSha256": "94caee1513b7295fac7048233d5e4f6dbf4b101ee4e852816519d92a7e24ecf1",
+  "assemblySha256": "bee9b06a28adb4f6d9fc3e50e93f13b80005bd3c8f7e4bf7ccb2aaad6aeba2cd",
+  "feed": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.63-testing/GillionsGameSyncTesting.json",
+  "download": "https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.63-testing/GillionsGameSyncTesting-0.0.63.zip",
+  "release": "https://github.com/anndrox/GillionsGameSync/releases/tag/v0.0.63-testing",
+  "previousVersion": "0.0.62",
+  "previousArchiveSha256": "8b1cb6c9e864a0c99f25e9604e1d40875815016d197f0feb51c0b12faca202d4",
+  "notes": "docs/releases/testing-0.0.63.md",
+  "requiredBeforePublication": [
+    "Full exact-candidate repository verification",
+    "Exact local and GitHub task-branch equality",
+    "Published asset checksum equality"
+  ],
+  "rollback": "Disable sampling/plugin and preserve configuration; no automatic downgrade to planner-capable 0.0.62."
+}

@@ -1,0 +1,201 @@
+using System.Diagnostics;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using GillionsGameSync;
+
+internal static class HuntBillItemCoverageTests {
+    internal static void Run(Action<bool,string> check) {
+        uint[] ids = [2001361,2001700,2001701,2001702,2001362,2001703,2002113,2002114,2002115,2002116,2002628,2002629,2002630,2002631,2003090,2003091,2003092,2003093,2003509,2003510,2003511,2003512];
+        var catalog = ids.Select((id,i) => new HuntBillItemDomain((byte)i,id,1,1,10)).ToArray();
+        var key = HuntBillRetentionPolicy.CharacterKey(123); var other = HuntBillRetentionPolicy.CharacterKey(456);
+        var now = new DateTime(2026,10,4,12,0,0,DateTimeKind.Utc); var mono = Stopwatch.GetTimestamp();
+        long At(double seconds) => mono + (long)(Stopwatch.Frequency * seconds);
+        var c = new HuntBillItemCoverage(); c.SetCatalog(catalog);
+        var slots = Enumerable.Range(0,4).Select(i => new HuntKeyItemSlot(i,2004,false,0,0)).ToArray();
+        void Observe(HuntKeyItemSlot[] input, double time=0, bool loaded=true, bool stable=true, int size=4, string? after=null, bool initialized=true, int container=2004, string sdk=PersonalObservationCompatibility.NativeVersion) =>
+            c.Observe(key, after ?? key, initialized, loaded, container, size, input, stable, now.AddSeconds(time), At(time), PersonalObservationCompatibility.GameBuild,"0.0.83.0",sdk);
+        var history = new HuntBillRetention { LocalRetentionEnabled = true };
+        var hp = new HuntBillRetentionPolicy(history);
+        var target = new HuntBillTarget(4,715,13000,1,1,0,2,1,1,1);
+        hp.Observe(key,[new(18,"daily",1,269,2003509,[target],now,"synthetic-game","synthetic-collector")]);
+        var retained = JsonSerializer.Serialize(history);
+        Observe(slots);
+        check(c.Current(key,now,mono)!.Domains.All(d => d.State == "absent_confirmed"),"A: complete absence failed");
+        check(c.Current(other,now,mono) is null,"D: other character absence leaked");
+        var absent = c.Payload(hp,key,now,mono)!;
+        check(PersonalSyncPolicy.HuntCoveragePayloadValid(absent),"V2 complete domain payload rejected");
+        check(!absent.Contains(key) && !absent.Contains("123456") && !absent.Contains("session",StringComparison.OrdinalIgnoreCase),"Private/session identifier exported");
+        var presentSlots = slots.ToArray(); presentSlots[0] = new(0,2004,false,2003509,1);
+        Observe(presentSlots,1);
+        var present = c.Current(key,now.AddSeconds(1),At(1))!;
+        check(present.Domains.Single(d => d.BillTypeId==18).State=="present_unresolved", "B/H: presence inferred exact order");
+        check(present.Domains.Where(d => d.BillTypeId!=18).All(d => d.State=="absent_confirmed"),"G: types not independent");
+        var presentPayload = c.Payload(hp,key,now.AddSeconds(1),At(1))!;
+        var alternateHistory = JsonSerializer.Deserialize<HuntBillRetention>(retained)!;
+        var alternatePolicy = new HuntBillRetentionPolicy(alternateHistory);
+        alternatePolicy.Observe(key,[new(18,"daily",1,270,2003509,[target],now.AddSeconds(1),"synthetic-game","synthetic-collector")]);
+        var differentOrderPayload = c.Payload(alternatePolicy,key,now.AddSeconds(1),At(1))!;
+        check(JsonNode.DeepEquals(JsonNode.Parse(presentPayload)!["billItemCoverage"],JsonNode.Parse(differentOrderPayload)!["billItemCoverage"]),"H: different cached order changed presence authority");
+        check(!JsonNode.Parse(presentPayload)!["billItemCoverage"]!.ToJsonString().Contains("269"),"H: coverage contains cached order");
+        check(JsonSerializer.Serialize(history)==retained,"F: coverage mutated historical counter/provenance");
+        foreach (var input in new[] { slots[..3], [slots[0] with { Symbolic=true },slots[1],slots[2],slots[3]],
+            [slots[0] with { Slot=2 },slots[1],slots[2],slots[3]], [slots[0] with { Container=0 },slots[1],slots[2],slots[3]],
+            [slots[0] with { ItemId=2003509 },slots[1],slots[2],slots[3]], [slots[0] with { Quantity=1 },slots[1],slots[2],slots[3]] }) {
+            Observe(input,2); check(c.Current(key,now.AddSeconds(2),At(2))!.Domains.All(d=>d.State=="unavailable"),"C: partial/malformed fabricated absence");
+        }
+        foreach(var reason in new[]{0,1,2,3,4}) {
+            Observe(slots,3,loaded:reason!=0,stable:reason!=1,initialized:reason!=2,container:reason==3?0:2004,sdk:reason==4?"unsupported":PersonalObservationCompatibility.NativeVersion);
+            check(c.Current(key,now.AddSeconds(3),At(3))!.Domains.All(d=>d.State=="unavailable"),"C: unavailable source gained authority");
+        }
+        Observe(slots,4,after:other); check(c.Current(key,now.AddSeconds(4),At(4)) is null,"D: transition retained previous absence");
+        var badSlot=slots.ToArray(); badSlot[0]=badSlot[0] with {ItemId=2003509,Quantity=0};
+        c.Observe(key,key,true,true,2004,4,badSlot,true,now,mono,PersonalObservationCompatibility.GameBuild,"0.0.83.0",PersonalObservationCompatibility.NativeVersion,new(1,0,1,1,0,1,1,0,1));
+        check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="unavailable"),"Getter diagnostics weakened completeness");
+        check(c.Status.Contains("positive-id-zero-qty=1") && c.Status.Contains("getter-empty=1") && !c.Status.Contains("2003509"),"Finite raw/getter diagnostic shape/private-ID exclusion failed");
+        c.Observe(key,key,true,true,2004,4,[slots[0] with{Quantity=1},slots[1],slots[2],slots[3]],true,now,mono,PersonalObservationCompatibility.GameBuild,"0.0.83.0",PersonalObservationCompatibility.NativeVersion);
+        check(c.Status.Contains("zero-id-nonzero-qty=1"),"Zero-id mismatch conflated with positive-id mismatch");
+        check(new HuntItemProbeDiagnostics(99,-1,99,99,99,99,99,99,99).Summary.StartsWith("getter-probes=8/8, getter-unavailable=0"),"Local getter diagnostics unbounded");
+        // Live-shaped residual quantity: only a separate same-read native empty
+        // proof admits it. Aggregate diagnostic counts above were insufficient.
+        var residual=slots.ToArray(); residual[0]=residual[0] with {Quantity=1,NativeConfirmedEmpty=true};
+        Observe(residual);
+        check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="absent_confirmed"),"Native-confirmed zero-ID empty slot rejected");
+        foreach(var rejected in new[]{residual[0] with{NativeConfirmedEmpty=false}, residual[0] with{ItemId=2003509}, residual[0] with{Quantity=-1}, residual[0] with{Quantity=0}, residual[0] with{Symbolic=true}, residual[0] with{Container=0}, residual[0] with{Slot=2}}) {
+            Observe([rejected,slots[1],slots[2],slots[3]]);
+            check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="unavailable"),"Residual-quantity correction weakened an unrelated gate");
+        }
+        Observe(residual,stable:false); check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="unavailable"),"Native empty proof bypassed snapshot stability");
+        Observe(residual,after:other); check(c.Current(key,now,mono) is null,"Native empty proof crossed character transition");
+        var tooMany=Enumerable.Range(0,9).Select(i=>new HuntKeyItemSlot(i,2004,false,0,1,true)).ToArray();
+        Observe(tooMany,size:9); check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="unavailable"),"More than8 exceptions admitted");
+        check(!c.Payload(hp,key,now,mono)!.Contains("nativeConfirmedEmpty",StringComparison.OrdinalIgnoreCase),"Internal source proof exported");
+        Observe(presentSlots,5); Observe(slots,6);
+        check(c.Current(key,now.AddSeconds(6),At(6))!.Domains.Single(d=>d.BillTypeId==18).State=="absent_confirmed","I: removal not observed");
+        check(c.Current(key,now.AddSeconds(22),At(22)) is null,"Expired UTC coverage remained current");
+        check(c.Current(key,now.AddSeconds(6),At(22)) is null,"Monotonic expiry bypassed by wall clock");
+        check(c.Current(key,now.AddSeconds(5),At(6)) is null,"Future sample admitted");
+        var payload = c.Payload(hp,key,now.AddSeconds(6),At(6))!;
+        var owner = PersonalSyncPolicy.Owner("generation",key); var sync = new HuntBillItemSync();
+        var first = sync.Prepare(owner,payload,c.Epoch,now.AddSeconds(6),At(6))!;
+        check(ReferenceEquals(first,sync.Prepare(owner,payload,c.Epoch,now.AddSeconds(7),At(7))),"Retry replaced nonce/body");
+        check(!PersonalSyncPolicy.CanSend(false,true,PersonalSyncPolicy.Origin,true,first),"E: permission OFF sent coverage");
+        check(!PersonalSyncPolicy.CanSend(true,true,"https://gillions.app",true,first),"Production coverage admitted");
+        check(sync.Current(first,owner,payload,c.Epoch,now.AddSeconds(7),At(7)),"Current retry rejected");
+        check(!sync.Current(first,owner,payload,c.Epoch,now.AddSeconds(17),At(17)),"Delayed response fixture did not expire preparation");
+        foreach(var status in new[]{503,429,200}) {
+            // Malformed200 has no accepted receipt; classification remains retry
+            // even if body parsing/framework delivery occurs after the sample lease.
+            var disposition=PersonalSyncPolicy.Disposition(true,false,false,true,false,PersonalSyncPolicy.TerminalStatus(status));
+            check(disposition==PersonalResponseDisposition.Retry && !HuntBillItemSync.NeedsCurrentSample(disposition),"Expired503/429/malformed200 lost failure accounting");
+            check(PersonalSyncPolicy.RetrySeconds(1)==120 && PersonalSyncPolicy.RetrySeconds(4)==900,"Delayed failure bypassed established backoff");
+        }
+        check(!HuntBillItemSync.NeedsCurrentSample(PersonalResponseDisposition.Retry)
+            && !sync.Current(first,owner,presentPayload,c.Epoch,now.AddSeconds(7),At(7)),"Semantic successor suppressed failure backoff");
+        check(HuntBillItemSync.NeedsCurrentSample(PersonalResponseDisposition.Acknowledged),"Stale ACK no longer requires current sample");
+        check(PersonalSyncPolicy.Disposition(true,false,true,true,false,false)==PersonalResponseDisposition.Canceled
+            && PersonalSyncPolicy.Disposition(false,false,false,true,false,false)==PersonalResponseDisposition.Canceled,"OFF/session change committed old retry classification");
+        // Deterministic queued-worker cancellation pattern, not native/HTTP proof.
+        var cancellation=new CancellationTokenSource(); var capturedToken=cancellation.Token;
+        var start=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        bool flight=true; int dispatches=0;
+        var worker=Task.Run(async () => {
+            try { await start.Task; capturedToken.ThrowIfCancellationRequested(); dispatches++; }
+            catch(OperationCanceledException) { }
+            finally { flight=false; }
+        });
+        cancellation.Cancel(); cancellation.Dispose(); start.SetResult(); worker.GetAwaiter().GetResult();
+        check(!flight && dispatches==0,"Queued worker OFF/logout stranded flight or dispatched");
+        check(!sync.Current(first,owner,presentPayload,c.Epoch,now.AddSeconds(7),At(7)),"Changed presence reused absence");
+        c.Clear(); check(!sync.Current(first,owner,payload,c.Epoch,now.AddSeconds(7),At(7)),"Session epoch replayed absence");
+        var next = sync.Prepare(owner,payload,c.Epoch,now.AddSeconds(7),At(7))!;
+        check(next.Nonce!=first.Nonce,"New session reused nonce");
+        sync.Block(next);
+        check(ReferenceEquals(next,sync.Prepare(owner,payload,c.Epoch,now.AddSeconds(30),At(30))),"Terminal unchanged input retried after expiry");
+        sync.Clear(); check(!sync.Current(next,owner,payload,c.Epoch,now.AddSeconds(8),At(8)),"OFF/reload kept pending coverage");
+        Observe(slots,8); history.LocalRetentionEnabled=false;
+        bool refused=false; try { c.Payload(hp,key,now.AddSeconds(8),At(8)); } catch(InvalidOperationException) { refused=true; }
+        check(refused,"E: retention OFF exported coverage");
+        history.LocalRetentionEnabled=true;
+        var empty = new HuntBillRetentionPolicy(new(){LocalRetentionEnabled=true});
+        check(c.Payload(empty,key,now.AddSeconds(8),At(8)) is not null,"No historical positives blocked absence-only payload");
+        check(!PersonalSyncPolicy.PayloadValid("hunt_bills",payload),"V2 silently admitted as legacy v1");
+        var ack=JsonSerializer.Serialize(new {ok=true,acceptedClientProduct="GillionsGameSyncTest", personalObservations=new {contractVersion=1,endpoint=PersonalSyncPolicy.Endpoint, resources=new[]{new {resourceType="hunt_bills",schemaVersion=2,collectorSchema="hunt-bills-v2",capability="hunt_bills_v2",maxPayloadBytes=65536}}}});
+        check(PersonalSyncPolicy.HuntCoverageCompatible(ack) && !PersonalSyncPolicy.Compatible(ack,"hunt_bills"),"V2 version admission/fallback broken");
+        foreach(var field in new[]{("hunt_bills_v2","hunt_bills_v1"),("hunt-bills-v2","hunt-bills-v1"),("65536","65535"),("GillionsGameSyncTest","GillionsGameSync")})
+            check(!PersonalSyncPolicy.HuntCoverageCompatible(ack.Replace(field.Item1,field.Item2)),"Wrong contract accepted");
+        var pnode=JsonNode.Parse(payload)!; pnode["billItemCoverage"]!["domains"]![0]!["state"]="complete";
+        check(!PersonalSyncPolicy.HuntCoveragePayloadValid(pnode.ToJsonString()),"Unknown state admitted");
+        c.SetCatalog(catalog[..21]); check(c.Current(key,now.AddSeconds(8),At(8)) is null,"Partial catalog authorized omissions");
+        check(!HuntBillItemCoverage.CatalogValid(catalog.Select(d=>d with {KeyItemId=1}).ToArray()),"Duplicate mapping admitted");
+        check(JsonSerializer.Serialize(history)==retained,"F: lifecycle tests mutated retained progress");
+        RefreshSchedule(check, catalog, hp, key, owner, now, mono, slots);
+        Console.WriteLine("Absence-only A-I, completeness/epoch/privacy/nonce/expiry/admission and refresh-margin fixtures PASS; synthetic, no live inventory proof.");
+    }
+    private static void RefreshSchedule(Action<bool,string> check, HuntBillItemDomain[] catalog,
+        HuntBillRetentionPolicy history, string key, string owner, DateTime origin, long mono, HuntKeyItemSlot[] slots) {
+        long At(double seconds) => mono + (long)(seconds * Stopwatch.Frequency);
+        var coverage = new HuntBillItemCoverage(); coverage.SetCatalog(catalog);
+        void Read(double t) => coverage.Observe(key,key,true,true,2004,slots.Length,slots,true,origin.AddSeconds(t),At(t),
+            "2026.09.15.0000.0000","0.0.84.0","7.56.2.9136");
+        Read(0);
+        // Existing83 drain at ACK, then5s routine checks, misses6s from preparation.
+        double legacyNext=2.1,legacyDispatch=0;
+        for(double t=2.1;t<20;t+=0.05)if(t>=legacyNext) {
+            legacyNext=t+5;
+            if(t-2>=6) {legacyDispatch=t;break;}
+        }
+        check(legacyDispatch-2>=10,"Baseline preparation/tick quantization was not reproduced");
+        var lane = new HuntBillItemSync();
+        var p = lane.Prepare(owner,coverage.Payload(history,key,origin,At(0))!,coverage.Epoch,origin.AddSeconds(2),At(2))!;
+        p.Acknowledged=true;
+        check(!lane.RefreshDue(origin.AddSeconds(5.99),At(5.99),origin.AddSeconds(3)),"Refresh advanced before observation deadline");
+        check(lane.RefreshDue(origin.AddSeconds(6),At(6),origin.AddSeconds(6)),"Refresh waited six seconds from preparation instead of observation");
+        check(!lane.RefreshDue(origin.AddSeconds(20),At(3),origin.AddSeconds(3)),"Wall jump invented monotonic refresh");
+        check(!lane.RefreshDue(origin.AddSeconds(1),At(20),origin),"Clock rollback invented refresh");
+        check(!lane.RefreshDue(origin.AddSeconds(8),At(8),origin),"Same observed sample invented a refresh");
+        check(ReferenceEquals(p,lane.Prepare(owner,p.Payload,coverage.Epoch,origin.AddSeconds(12),At(12))),"ACKed old sample issued another nonce after preparation expiry");
+        check(!PersonalSyncPolicy.Due(origin.AddSeconds(6),origin.AddSeconds(10),origin.AddSeconds(30),false,true,true),"Coverage deadline bypassed retry backoff");
+        check(!PersonalSyncPolicy.Due(origin.AddSeconds(6),origin.AddSeconds(10),origin,true,true,true),"Coverage deadline bypassed private single-flight");
+        check(!PersonalSyncPolicy.Due(origin.AddSeconds(6),origin.AddSeconds(10),origin,false,true,false),"Coverage deadline bypassed permission");
+        lane.Clear(); check(!lane.RefreshDue(origin.AddSeconds(8),At(8),origin.AddSeconds(6)),"OFF/session clear kept refresh deadline");
+        var failed=lane.Prepare(owner,p.Payload,coverage.Epoch,origin.AddSeconds(2),At(2))!;
+        check(!lane.RefreshDue(origin.AddSeconds(8),At(8),origin.AddSeconds(6)),"Unacknowledged network failure invented renewal");
+        check(!lane.Current(failed,owner,p.Payload,coverage.Epoch,origin.AddSeconds(18),At(18)),"Network-down assertion did not expire honestly");
+        check(!PersonalSyncPolicy.Due(origin.AddSeconds(8),origin,origin.AddSeconds(120),false,true,true),"Failed private lane ignored bounded backoff");
+        failed.Acknowledged=true;
+        check(!PersonalSyncPolicy.Due(origin.AddSeconds(6),origin,origin,true,true,true),"Unrelated private request allowed parallel coverage");
+        check(lane.RefreshDue(origin.AddSeconds(7),At(7),origin.AddSeconds(6)),"Finished bounded private request lost overdue coverage priority");
+        check(15-(7+0.5+4.5)>=3,"Bounded unrelated flight fixture did not retain3s lease margin");
+        // Repeated exact model cycles. Ordinary jitter and a bounded healthy
+        // shared-lane delay are not simulated network-failure guarantees.
+        foreach (var frameSeconds in new[]{0.025,0.15,0.5}) foreach(var responseSeconds in new[]{0.05,0.5,1.0}) {
+            var c=new HuntBillItemCoverage();c.SetCatalog(catalog);var sync=new HuntBillItemSync();
+            DateTime next=origin; double nextRead=0,finish=-1; PersonalPreparedSnapshot? flight=null;
+            var arrivals=new List<(double Received,double Observed)>();var nonces=new HashSet<string>();
+            for(double t=0;t<180;t+=frameSeconds) {
+                var utc=origin.AddSeconds(t);
+                if(t>=nextRead) {c.Observe(key,key,true,true,2004,slots.Length,slots,true,utc,At(t),"2026.09.15.0000.0000","0.0.84.0","7.56.2.9136");nextRead=t+3;}
+                if(flight is not null && t>=finish) {
+                    check(sync.Current(flight,owner,c.Payload(history,key,utc,At(t)),c.Epoch,utc,At(t)),"Healthy ACK lost current sample");
+                    flight.Acknowledged=true;flight=null;next=DateTime.MinValue;
+                }
+                if(!PersonalSyncPolicy.Due(utc,next,origin,flight is not null,sync.RefreshDue(utc,At(t),c.Current(key,utc,At(t))?.ObservedAtUtc),true))continue;
+                next=utc.AddSeconds(5);
+                var current=sync.Prepare(owner,c.Payload(history,key,utc,At(t))!,c.Epoch,utc,At(t))!;
+                if(current.Acknowledged||current.Blocked)continue;
+                check(nonces.Add(current.Nonce),"ACKed body dispatched twice or nonce reused for refresh");
+                using var body=JsonDocument.Parse(current.Payload);
+                double observed=(body.RootElement.GetProperty("billItemCoverage").GetProperty("observedAtUtc").GetDateTime()-origin).TotalSeconds;
+                if(arrivals.Count>0) {
+                    // Measured client/server skew is bounded separately; this
+                    // fixture adds4.5s pessimistic server-ahead offset, not a TTL change.
+                    double priorAgeAtArrival=t+responseSeconds+4.5-arrivals[^1].Observed;
+                    check(priorAgeAtArrival<13,"Healthy jitter exhausted lease safety margin");
+                }
+                arrivals.Add((t+responseSeconds,observed));flight=current;finish=t+responseSeconds;
+            }
+            check(arrivals.Count>20,"Repeated refresh cycles did not run");
+            check(arrivals.Zip(arrivals.Skip(1)).All(x=>x.Second.Received-x.First.Received<8),"Healthy refresh interval too long");
+        }
+    }
+}

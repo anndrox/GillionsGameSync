@@ -37,14 +37,17 @@ function Test-StableManifest([string]$Json) {
 
   Assert-Condition ($entry.InternalName -ceq 'GillionsGameSync') 'InternalName must be GillionsGameSync.'
   Assert-Condition ($entry.Name -ceq 'Gillions Game Sync') 'Name must be Gillions Game Sync.'
-  Assert-Condition ($entry.AssemblyVersion -is [string] -and $entry.AssemblyVersion -match '^\d+\.\d+\.\d+\.0$') 'AssemblyVersion must be a four-part stable version.'
+  Assert-Condition ($entry.AssemblyVersion -is [string] -and $entry.AssemblyVersion -match '^\d+\.\d+\.\d+\.\d+$') 'AssemblyVersion must be a four-part stable version.'
   Assert-Condition ($entry.DalamudApiLevel -is [long] -and $entry.DalamudApiLevel -gt 0) 'DalamudApiLevel must be a positive integer.'
   Assert-Condition ($entry.LoadSync -is [bool] -and $entry.CanUnloadAsync -is [bool] -and $entry.AcceptsFeedback -is [bool]) 'Manifest boolean fields must remain booleans.'
   Assert-Condition ($entry.Tags -is [object[]] -and $entry.Tags.Count -gt 0) 'Tags must be a non-empty array.'
   Assert-Condition ($entry.RepoUrl -ceq $canonicalRepositoryUrl) 'RepoUrl must identify the public GitHub repository.'
   Assert-Condition ($entry.LastUpdate -is [long] -and $entry.LastUpdate -gt 0) 'LastUpdate must be a positive Unix timestamp.'
 
-  $version = $entry.AssemblyVersion.Substring(0, $entry.AssemblyVersion.Length - 2)
+  $version = [regex]::Match($entry.DownloadLink, '^https://github\.com/anndrox/GillionsGameSync/releases/download/v(?<version>\d+\.\d+\.\d+(?:\.\d+)?)/').Groups['version'].Value
+  Assert-Condition ($version.Length -gt 0) 'DownloadLink must identify a three- or four-part immutable release version.'
+  $assemblyVersion = if ($version.Split('.').Count -eq 3) { "$version.0" } else { $version }
+  Assert-Condition ($entry.AssemblyVersion -ceq $assemblyVersion) 'Release and assembly versions disagree.'
   $expectedDownload = "https://github.com/anndrox/GillionsGameSync/releases/download/v$version/GillionsGameSync-$version.zip"
   foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate', 'DownloadLinkTesting')) {
     Assert-Condition ($entry[$field] -ceq $expectedDownload) "$field must reference the immutable stable $version ZIP."
@@ -80,9 +83,41 @@ $missing[0].Remove('DownloadLinkUpdate')
 Assert-Rejected ($missing | ConvertTo-Json -Depth 8) 'missing required field'
 $wrongIdentity = $json.Replace('"GillionsGameSync"', '"ForeignPlugin"')
 Assert-Rejected $wrongIdentity 'wrong plugin identity'
-$manifestVersion = @($json | ConvertFrom-Json -AsHashtable)[0].AssemblyVersion -replace '\.0$', ''
+$manifestVersion = [regex]::Match(@($json | ConvertFrom-Json -AsHashtable)[0].DownloadLink, '/v(?<version>\d+\.\d+\.\d+(?:\.\d+)?)/').Groups['version'].Value
 $privateQuery = $json.Replace("GillionsGameSync-$manifestVersion.zip`"", "GillionsGameSync-$manifestVersion.zip?characterId=1`"")
 Assert-Rejected $privateQuery 'private query data'
+
+# Synthetic identities only: do not run any release tool or touch the active feed.
+foreach ($version in @('1.0.30', '1.0.31.1', '1.0.31.0')) {
+  $fixture = @($json | ConvertFrom-Json -AsHashtable)
+  $fixture[0].AssemblyVersion = if ($version.Split('.').Count -eq 3) { "$version.0" } else { $version }
+  foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate', 'DownloadLinkTesting')) {
+    $fixture[0][$field] = "https://github.com/anndrox/GillionsGameSync/releases/download/v$version/GillionsGameSync-$version.zip"
+  }
+  Test-StableManifest (ConvertTo-Json -InputObject $fixture -Depth 8)
+  $fixture[0].AssemblyVersion = "$version.0"
+  if ($version.Split('.').Count -eq 4) { Assert-Rejected (ConvertTo-Json -InputObject $fixture -Depth 8) 'spurious fifth component' }
+}
+
+# Evaluate only parameter validation and the pure normalization AST, never tools.
+foreach ($script in @('package.ps1', 'prepare-stable-github-release.ps1', 'publish-stable-github-release.ps1', 'verify-public-stable-release.ps1')) {
+  $tokens = $null; $parseErrors = $null
+  $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $root "scripts/$script"), [ref]$tokens, [ref]$parseErrors)
+  Assert-Condition ($parseErrors.Count -eq 0) "$script must parse."
+  $parameter = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -ceq 'Version' }
+  $pattern = ($parameter.Attributes | Where-Object { $_.TypeName.Name -ceq 'ValidatePattern' }).PositionalArguments[0].Value
+  foreach ($version in @('1.0.30', '1.0.31.1')) { Assert-Condition ($version -match $pattern) "$script rejects supported identity $version." }
+  Assert-Condition ('1.0.31.1.0' -notmatch $pattern) "$script admits a fifth component."
+  if ($script -ne 'prepare-stable-github-release.ps1') {
+    $normalization = $ast.Find({ param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -ceq '$assemblyVersion' }, $true)
+    foreach ($version in @('1.0.30', '1.0.31.1')) {
+      $assemblyVersion = $null
+      . ([scriptblock]::Create($normalization.Extent.Text))
+      $expected = if ($version -ceq '1.0.30') { '1.0.30.0' } else { '1.0.31.1' }
+      Assert-Condition ($assemblyVersion -ceq $expected) "$script normalization failed for $version."
+    }
+  }
+}
 
 Assert-Condition (-not $json.Contains('gillions.app/downloads/plugins/')) 'The active stable manifest must not depend on Gillions-hosted artifacts.'
 

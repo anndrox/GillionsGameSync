@@ -69,7 +69,7 @@ public static class SyncOwnershipPolicy {
     }
 }
 
-public enum SyncRequestMode { Manual, Automatic, Hydration, ItemLink, Pair }
+public enum SyncRequestMode { Manual, Automatic, Hydration, ItemLink, Pair, Personal }
 
 // No generated record ToString: this object contains a credential, never diagnostics.
 public sealed class SyncRequestPermit {

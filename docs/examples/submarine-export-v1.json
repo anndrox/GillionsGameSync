@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "collectorSchema": "submarine-observation-v1",
+  "uploadState": "local-only-no-server-contract",
+  "voyages": [
+    {
+      "observationId": "303d667648fc4b4c866813ee70edaff6",
+      "schemaVersion": 1,
+      "collectorSchema": "submarine-observation-v1",
+      "gameVersion": "synthetic-game",
+      "collectorVersion": "0.0.66.0",
+      "resultGameVersion": "synthetic-result-game",
+      "resultCollectorVersion": "0.0.66.0",
+      "orderedSectorIds": "AQI=",
+      "expectedReturnAtUtc": "2026-09-30T12:01:40Z",
+      "departureAtUtc": null,
+      "firstObservedAtUtc": "2026-09-30T12:00:00Z",
+      "resultsObservedAtUtc": "2026-09-30T12:01:41Z",
+      "voyageBuild": {
+        "rank": 40,
+        "parts": {
+          "hull": 3,
+          "stern": 4,
+          "bow": 1,
+          "bridge": 2
+        },
+        "stats": {
+          "surveillanceBase": 50,
+          "retrievalBase": 60,
+          "speedBase": 70,
+          "rangeBase": 80,
+          "favorBase": 90,
+          "surveillanceBonus": 1,
+          "retrievalBonus": 2,
+          "speedBonus": 3,
+          "rangeBonus": 4,
+          "favorBonus": 5,
+          "logSpeed": 73
+        }
+      },
+      "buildEvidence": "observed-while-in-flight-not-dispatch-proof",
+      "resultTimeBuild": {
+        "rank": 41,
+        "parts": {
+          "hull": 7,
+          "stern": 8,
+          "bow": 5,
+          "bridge": 6
+        },
+        "stats": {
+          "surveillanceBase": 50,
+          "retrievalBase": 60,
+          "speedBase": 70,
+          "rangeBase": 80,
+          "favorBase": 90,
+          "surveillanceBonus": 1,
+          "retrievalBonus": 2,
+          "speedBonus": 3,
+          "rangeBonus": 4,
+          "favorBonus": 5,
+          "logSpeed": 73
+        }
+      },
+      "result": {
+        "rewardAssociation": "per-sector",
+        "sectors": [
+          {
+            "sectorId": 1,
+            "experience": 100,
+            "unlockedSectorId": 3,
+            "firstExploration": true,
+            "additionalSubmarineUnlocked": false,
+            "doubleDip": false,
+            "rewards": [
+              {
+                "itemId": 1000,
+                "quantity": 2,
+                "hq": true
+              }
+            ]
+          },
+          {
+            "sectorId": 2,
+            "experience": 200,
+            "unlockedSectorId": null,
+            "firstExploration": false,
+            "additionalSubmarineUnlocked": true,
+            "doubleDip": true,
+            "rewards": [
+              {
+                "itemId": 1001,
+                "quantity": 4,
+                "hq": false
+              }
+            ]
+          }
+        ],
+        "voyageRewards": [
+          {
+            "itemId": 1000,
+            "quantity": 2,
+            "hq": null
+          },
+          {
+            "itemId": 1001,
+            "quantity": 4,
+            "hq": null
+          }
+        ],
+        "totalExperience": 300,
+        "limitations": []
+      }
+    }
+  ]
+}
