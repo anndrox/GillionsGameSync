@@ -3,12 +3,14 @@ import argparse,json
 from pathlib import Path
 import numpy as np
 from PIL import Image,ImageDraw
-parser=argparse.ArgumentParser();parser.add_argument('directory',type=Path);args=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument('directory',type=Path)
+parser.add_argument('--background',choices=['dark','bright'],default='dark');args=parser.parse_args()
 for path in sorted(args.directory.glob('*.draw.json')):
     data=json.loads(path.read_text())
     atlas=np.frombuffer((args.directory/'font.rgba').read_bytes(),dtype=np.uint8).reshape(data['atlasHeight'],data['atlasWidth'],4)/255
     branding=np.array(Image.open(args.directory/'branding.png').convert('RGBA'),dtype=float)/255
-    canvas=np.empty((data['height'],data['width'],3),dtype=np.float64);canvas[:]=[.055,.065,.085]
+    canvas=np.empty((data['height'],data['width'],3),dtype=np.float64)
+    canvas[:]=[.86,.83,.72] if args.background=='bright' else [.055,.065,.085]
     xmax=ymax=0
     for tri in data['triangles']:
         tex=branding if tri['texture']==2 else atlas
@@ -37,6 +39,9 @@ for path in sorted(args.directory.glob('*.draw.json')):
         canvas[y0:y1,x0:x1]=rgba[:,:,:3]*alpha+canvas[y0:y1,x0:x1]*(1-alpha)
         xmax=max(xmax,x1);ymax=max(ymax,y1)
     image=Image.fromarray(np.round(np.clip(canvas,0,1)*255).astype('uint8')).crop((0,0,min(data['width'],xmax+24),min(data['height'],ymax+50)))
-    ImageDraw.Draw(image).text((10,image.height-25),'CONTROLLED: compiled UI / synthetic state / not FFXIV',fill=(230,230,230))
-    image.save(path.with_name(path.name.replace('.draw.json','.png')))
+    annotation=ImageDraw.Draw(image)
+    annotation.rectangle((0,image.height-32,image.width,image.height),fill=(14,17,22))
+    annotation.text((10,image.height-25),'CONTROLLED COMPILED RENDER / synthetic / not FFXIV',fill=(230,230,230))
+    suffix='-bright.png' if args.background=='bright' else '.png'
+    image.save(path.with_name(path.name.replace('.draw.json',suffix)))
 print('Controlled PNGs rendered from actual ImGui triangles; not live FFXIV evidence.')

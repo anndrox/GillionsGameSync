@@ -56,12 +56,41 @@ public sealed partial class Plugin {
     }
     private static void Label(string text)=>ImGui.TextWrapped(text);
     private void DrawBranding(float size) {
-        // Reuse the approved repository/feed icon through Dalamud's shared
-        // resource loader. No download, custom texture lifetime or new artwork.
+        // A shallow, non-interactive band around the approved coin/Aetheryte
+        // asset. Keep its full square aspect ratio at the current font scale.
+        // Shared resource loading owns lifetime; no download or new artwork.
+        float scale=ImGui.GetFontSize()/17f;
+        var start=ImGui.GetCursorScreenPos();
+        var band=new Vector2(ImGui.GetContentRegionAvail().X,size*scale);
+        var ink=ImGui.GetWindowDrawList();
+        ink.AddRectFilled(start,start+band,ImGui.GetColorU32(new Vector4(.055f,.10f,.16f,1)));
+        ink.AddLine(start+new Vector2(0,band.Y),start+band,
+            ImGui.GetColorU32(new Vector4(.68f,.52f,.24f,1)),scale);
         if(textureProvider?.GetFromManifestResource(typeof(Plugin).Assembly,"GillionsGameSync.Branding.png").TryGetWrap(out var icon,out _) == true) {
-            ImGui.Image(icon.Handle,new Vector2(size,size)); ImGui.SameLine();
+            ImGui.Image(icon.Handle,new Vector2(band.Y,band.Y));
         }
-        Label("GILLIONS");
+        ImGui.SetCursorScreenPos(start+new Vector2(band.Y+8*scale,(band.Y-ImGui.GetFontSize())/2));
+        ImGui.TextColored(new Vector4(.92f,.78f,.48f,1),"Gillions Game Sync");
+        ImGui.SetCursorScreenPos(start);
+        ImGui.Dummy(band);
+    }
+    private static void DrawConnection(string state) {
+        // Emphasis is redundant with readable text, never a color-only state.
+        ImGui.TextColored(state=="Connected" ? new Vector4(.54f,.86f,.87f,1) : ImGui.GetStyle().Colors[(int)ImGuiCol.Text],
+            state=="Connected" ? "Connected to Gillions" : state);
+    }
+    private static void DrawFeatureHealth(PublicHealth health) {
+        // Fixed label column, wrapping value column: no consent controls.
+        if(!ImGui.BeginTable("FeatureHealth",2,ImGuiTableFlags.SizingFixedFit)) return;
+        ImGui.TableSetupColumn("Feature",ImGuiTableColumnFlags.WidthFixed,105*ImGui.GetFontSize()/17f);
+        ImGui.TableSetupColumn("Health",ImGuiTableColumnFlags.WidthStretch);
+        DrawFeatureRow("Hunts",health.Hunts); DrawFeatureRow("Party Finder",health.PartyFinder);
+        DrawFeatureRow("FATEs",health.Fates); DrawFeatureRow("Market",health.Market);
+        ImGui.EndTable();
+    }
+    private static void DrawFeatureRow(string name,string status) {
+        ImGui.TableNextRow(); ImGui.TableNextColumn(); ImGui.TextUnformatted(name);
+        ImGui.TableNextColumn(); Label(status);
     }
     private static void Link(string label,string url) { if(ImGui.Button(label)) Util.OpenLink(url); }
     private void DrawPrivacy() {
@@ -70,8 +99,9 @@ public sealed partial class Plugin {
     }
     private void DrawMainPublic() {
         var h=publicHealth;
-        DrawBranding(32); ImGui.Separator(); Label(h.Connection); Label(h.Character);
-        Label(h.LastSync is { } t ? $"Last sync: {t.ToLocalTime():g}" : "Waiting for first sync");
+        DrawBranding(32); ImGui.Separator(); DrawConnection(h.Connection); Label(h.Character);
+        if(h.LastSync is { } t) ImGui.TextDisabled($"Last sync: {t.ToLocalTime():g}");
+        else Label("Waiting for first sync");
         if(uiState.Model.Warning is { } warning) Label(warning);
         if(h.Connection=="Not connected" || h.Connection=="Authorization expired or revoked") {
             Label("Connect Game Sync to your Gillions account to use supported current-game features.");
@@ -80,15 +110,14 @@ public sealed partial class Plugin {
         else if(h.Connection=="Gillions unavailable") Label("Gillions is temporarily unreachable. Local history is preserved; Game Sync will retry safely.");
         else if(h.Connection=="Account unavailable") Label("Check your Gillions account access on the website.");
         ImGui.Separator();
-        Label("Hunts — "+h.Hunts); Label("Party Finder — "+h.PartyFinder);
-        Label("FATEs — "+h.Fates); Label("Market — "+h.Market);
+        DrawFeatureHealth(h);
         ImGui.Separator(); DrawPrivacy();
         Link("Open Gillions",configuration.ActiveSession?.Origin ?? GillionsEndpoints.DefaultServerUrl);
         ImGui.SameLine();
         if(ImGui.Button("Settings")) publicUi.ShowSettings();
     }
     private void DrawPairingPublic() {
-        DrawBranding(64); ImGui.Separator();
+        DrawBranding(56); ImGui.Separator();
         if(uiState.Paired && !pairingRepair) {
             Label("Game Sync is ready"); Label("Connected as:"); Label(publicHealth.Character); DrawPrivacy();
             Link("Open Gillions",configuration.ActiveSession?.Origin ?? GillionsEndpoints.DefaultServerUrl);
@@ -132,7 +161,7 @@ public sealed partial class Plugin {
             ImGui.EndTabItem();
         }
         if(ImGui.BeginTabItem("Connection")) {
-            Label(publicHealth.Connection); Label(publicHealth.Character); DrawPrivacy();
+            DrawConnection(publicHealth.Connection); Label(publicHealth.Character); DrawPrivacy();
             DrawActionFeedback();
             Link("Open Gillions",configuration.ActiveSession?.Origin ?? GillionsEndpoints.DefaultServerUrl);
             if(ImGui.Button("Reconnect")) { pairingRepair=true; publicUi.ShowPairing(); }
@@ -144,10 +173,11 @@ public sealed partial class Plugin {
             ImGui.EndTabItem();
         }
         if(ImGui.BeginTabItem("Advanced")) {
+            ImGui.TextDisabled("Support information"); ImGui.Separator();
             Label("Game Sync "+PluginVersion+" · Channel: "+publicHealth.Channel);
             Label(publicHealth.Connection); Label("Game: "+publicHealth.GameVersion);
-            Label("Hunts — "+publicHealth.Hunts); Label("Party Finder — "+publicHealth.PartyFinder);
-            Label("FATEs — "+publicHealth.Fates); Label("Market — "+publicHealth.Market);
+            DrawFeatureHealth(publicHealth);
+            ImGui.Separator(); ImGui.TextDisabled("Recent sync & support");
             Label(publicHealth.LastSync is { } last ? $"Last successful sync: {last.ToLocalTime():g}" : "No successful sync recorded for this character.");
             if(ImGui.Button("Copy support summary")) { ImGui.SetClipboardText(publicHealth.SupportSummary()); supportCopyAcknowledged=true; }
             if(supportCopyAcknowledged) Label("Support summary copied.");
@@ -156,6 +186,7 @@ public sealed partial class Plugin {
             ImGui.BeginDisabled(!uiState.Model.CanSync);
             if(ImGui.Button("Sync now")) _=SyncAsync();
             ImGui.EndDisabled();
+            ImGui.Separator(); ImGui.TextDisabled("Data providers");
             ImGui.TextUnformatted("Data Provided by"); ImGui.SameLine();
             if(ImGui.Button("xivpf.com")) Util.OpenLink("https://xivpf.com");
 #if GILLIONS_TEST_BUILD

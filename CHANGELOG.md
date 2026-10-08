@@ -1,5 +1,15 @@
 # Changelog
 
+## Unpublished public UI polish (not a release)
+
+- Use shallow, scale-aware Gillions coin/Aetheryte headers for pairing, main and
+  the Settings shell; no decorative Hunt Progress header or new artwork.
+- Emphasize Connected to Gillions, align existing feature-health rows, and group
+  existing Advanced support details. Actions, permissions and collectors are unchanged.
+- Preserve the complete UX recommendation ledger in `docs/public-ui-polish.md`,
+  including explicit current-target and opacity deferrals.
+- Published Testing 0.0.87, Stable, feeds, tags and main are untouched.
+
 ## 0.0.87 - Unpublished permission reconciliation and public UX
 
 - Compact main/pairing windows, tabbed Settings, safe support summary and optional

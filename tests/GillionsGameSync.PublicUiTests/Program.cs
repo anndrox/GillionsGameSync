@@ -63,6 +63,22 @@ var cases=new[]{
     ("20-pairing-connecting","DrawPairingPublic",false,460f,1f,0),
     ("21-hunt-progress-narrow-scroll","DrawHuntProgress",true,220f,1f,0),
     ("22-hunt-progress-wide-static","DrawHuntProgress",true,480f,1f,0),
+    ("23-pairing-welcome-125","DrawPairingPublic",false,460f,1.25f,0),
+    ("24-pairing-welcome-150","DrawPairingPublic",false,460f,1.5f,0),
+    ("25-main-connected-125","DrawMainPublic",true,420f,1.25f,0),
+    ("26-main-connected-150","DrawMainPublic",true,420f,1.5f,0),
+    ("27-main-narrow","DrawMainPublic",true,320f,1f,0),
+    ("28-settings-general-125","DrawPublicSettings",true,520f,1.25f,0),
+    ("29-settings-hunts-150","DrawPublicSettings",true,520f,1.5f,1),
+    ("30-settings-connection-125","DrawPublicSettings",true,520f,1.25f,2),
+    ("31-settings-advanced-150","DrawPublicSettings",true,520f,1.5f,3),
+    ("32-hunt-progress-duplicate-names","DrawHuntProgress",true,300f,1f,0),
+    ("33-hunt-progress-125","DrawHuntProgress",true,300f,1.25f,0),
+    ("34-pairing-narrow","DrawPairingPublic",false,320f,1f,0),
+    ("35-main-waiting-context","DrawMainPublic",true,420f,1f,0),
+    ("36-main-update-required","DrawMainPublic",true,420f,1f,0),
+    ("37-main-site-unavailable","DrawMainPublic",true,420f,1f,0),
+    ("38-main-wide","DrawMainPublic",true,560f,1f,0),
 };
 foreach(var (name,method,paired,width,scale,tab) in cases) {
     object plugin=RuntimeHelpers.GetUninitializedObject(T("Plugin"));
@@ -77,18 +93,23 @@ foreach(var (name,method,paired,width,scale,tab) in cases) {
         Set("pairingRepair",true);Set("uiServerAddress","https://test.gillions.app");
     }
     if(name.StartsWith("19-"))Set("uiServerAddress","http://invalid.example/synthetic-secret");
-    Set("publicHealth",New("PublicHealth",paired?"Connected":"Not connected",paired?"Example Character · Example World":"Character unavailable",
+    var health=New("PublicHealth",paired?"Connected":"Not connected",paired?"Example Character · Example World":"Character unavailable",
         paired?"Ready":"Gillions unavailable",paired?"Ready":"Gillions unavailable",paired?"Ready":"Gillions unavailable",paired?"Ready":"Gillions unavailable",
-        paired?new DateTime(2026,10,7,12,0,0,DateTimeKind.Utc):null,testing?"Testing":"Public",assembly.GetName().Version!.ToString(4),"2026.09.15.0000.0000"));
+        paired?new DateTime(2026,10,7,12,0,0,DateTimeKind.Utc):null,testing?"Testing":"Public",assembly.GetName().Version!.ToString(4),"2026.09.15.0000.0000");
+    if(name.StartsWith("35-")) foreach(string field in new[]{"Hunts","PartyFinder","Fates","Market"})
+        health.GetType().GetProperty(field)!.SetValue(health,"Waiting for supported context");
+    if(name.StartsWith("36-"))health.GetType().GetProperty("Connection")!.SetValue(health,"Update required");
+    if(name.StartsWith("37-"))health.GetType().GetProperty("Connection")!.SetValue(health,"Gillions unavailable");
+    Set("publicHealth",health);
     var ui=T("PluginUiSnapshot").GetField("Empty",BindingFlags.Public|BindingFlags.Static)!.GetValue(null)!;
     ui=ui.GetType().GetMethod("<Clone>$")!.Invoke(ui,[])!;
     ui.GetType().GetProperty("Paired")!.SetValue(ui,paired);Set("uiState",ui);
     if(name.StartsWith("17-"))ui.GetType().GetProperty("Message")!.SetValue(ui,"Gillions could not complete the request. Pending records were kept; please try again.");
     if(name.StartsWith("20-"))ui.GetType().GetProperty("Pairing")!.SetValue(ui,true);
     var model=Activator.CreateInstance(T("HuntProgressState"),true)!;
-    var rows=Array.CreateInstance(T("HuntProgressRow"),name.Contains("scroll")||name.Contains("wide-static")?10:name.Contains("multiple")?2:name.Contains("updating")||name.Contains("all-complete")?0:1);
+    var rows=Array.CreateInstance(T("HuntProgressRow"),name.Contains("scroll")||name.Contains("wide-static")?10:name.Contains("duplicate-names")?3:name.Contains("multiple")?2:name.Contains("updating")||name.Contains("all-complete")?0:1);
     for(int i=0;i<rows.Length;i++) rows.SetValue(New("HuntProgressRow","fixture-"+i,
-        name.Contains("long-name")?"An exceptionally long localized-like Hunt target name that wraps on multiple lines":i==0?"Example hunt target":"Another example hunt target",
+        name.Contains("duplicate-names")?(i==1?"Horned lizard":"Aspis"):name.Contains("long-name")?"An exceptionally long localized-like Hunt target name that wraps on multiple lines":i==0?"Example hunt target":"Another example hunt target",
         name.Contains("complete")?3:name.Contains("one-left")?2:1,3),i);
     T("HuntProgressState").GetProperty("Display",flags)!.SetValue(model,New("HuntProgressDisplay","Example current area",
         name.Contains("updating")?"Hunt progress updating…":name.Contains("all-complete")?"All current Hunt targets here are complete.":"",rows));
@@ -105,7 +126,7 @@ Console.WriteLine($"Controlled UI evidence: {cases.Length} compiled states; no g
 unsafe void Render(string name,object plugin,MethodInfo draw,float width,float scale,int tab) {
     ImGui.CreateContext();
     try {
-        var io=ImGui.GetIO();io.DisplaySize=new Vector2(960,960);io.DeltaTime=1f/60;
+        var io=ImGui.GetIO();io.DisplaySize=new Vector2(1280,1400);io.DeltaTime=1f/60;
         io.IniFilename=null;io.LogFilename=null;io.FontGlobalScale=scale;
         string font=Path.GetFullPath(Path.Combine(libs,"../../../dalamudAssets/dev/UIRes/NotoSansCJKjp-Medium.otf"));
         if(!File.Exists(font))throw new FileNotFoundException("Installed Dalamud font required; do not substitute a missing-glyph preview.",font);
@@ -120,7 +141,7 @@ unsafe void Render(string name,object plugin,MethodInfo draw,float width,float s
         if(testing&&draw.Name!="DrawHuntProgress")title+=" [TESTING]";
         // Synthetic ImGui IO restricted to the Settings tab strip, not OS input.
         bool hunt=draw.Name=="DrawHuntProgress";
-        var chosenSize=new Vector2(width*scale,180*scale);
+        var chosenSize=new Vector2(width*scale,(name.Contains("duplicate-names")?300:180)*scale);
         var progressModel=hunt?T("Plugin").GetField("huntProgress",flags)!.GetValue(plugin):null;
         var displayProperty=T("HuntProgressState").GetProperty("Display",flags)!;
         var originalDisplay=hunt?displayProperty.GetValue(progressModel):null;
@@ -132,7 +153,7 @@ unsafe void Render(string name,object plugin,MethodInfo draw,float width,float s
                 for(int i=0;i<tab;i++)x+=ImGui.CalcTextSize(labels[i]).X+style.FramePadding.X*2+style.ItemInnerSpacing.X;
                 x+=ImGui.CalcTextSize(labels[tab]).X/2+style.FramePadding.X;
                 float line=ImGui.GetFontSize();
-                float y=24+style.FramePadding.Y*2+line+style.WindowPadding.Y+line+style.ItemSpacing.Y+(style.FramePadding.Y*2+line)/2;
+                float y=24+style.FramePadding.Y*2+line+style.WindowPadding.Y+20*scale+style.ItemSpacing.Y+(style.FramePadding.Y*2+line)/2;
                 io.AddMousePosEvent(x,y);io.AddMouseButtonEvent(0,frame==2);
             }
             ImGui.NewFrame();
@@ -173,7 +194,7 @@ unsafe void Render(string name,object plugin,MethodInfo draw,float width,float s
                 }
             }
         }
-        File.WriteAllText(Path.Combine(output,name+".draw.json"),JsonSerializer.Serialize(new{width=960,height=960,atlasWidth=w,atlasHeight=h,triangles}));
+        File.WriteAllText(Path.Combine(output,name+".draw.json"),JsonSerializer.Serialize(new{width=1280,height=1400,atlasWidth=w,atlasHeight=h,triangles}));
     }finally{ImGui.DestroyContext();}
 }
 
