@@ -8,7 +8,7 @@ a channel. Review packages use local-only version **0.0.0.0**, not release bytes
 ## Change classification and validation
 
 **Category A only:** shallow branded headers, connected-state emphasis, aligned
-wrapping feature-health rows, and Advanced support grouping. The approved embedded
+wrapping feature-health rows, narrow pairing-field sizing, and Advanced support grouping. The approved embedded
 coin/Aetheryte icon is fully contained and square, loaded through the same Dalamud
 shared-resource path. Pairing/main/Settings header heights are 56/32/20 logical px;
 pairing is smaller than the preceding 64 px treatment. No new artwork, animation,
@@ -63,6 +63,7 @@ verdicts do not delete recommendations. Every recommendation has a disposition.
 | Compact readable health rows, not consent | IMPLEMENTED NOW — fixed labels and wrapping existing status values; no policy editors. |
 | Update/help only when actionable | ALREADY IMPLEMENTED — unchanged conditional update/action state; Settings/Advanced is secondary support. |
 | Dedicated focused pairing and ready flow | ALREADY IMPLEMENTED — authoritative destinations, explanations, waiting/failure/ready states and Finish action preserved. |
+| Narrow pairing-field label readability | IMPLEMENTED NOW — reserve label width; unchanged field identity, masking, validation and action. |
 | No re-onboarding paired users | ALREADY IMPLEMENTED — first-run/lifecycle behavior unchanged. |
 | Site-owned privacy handoff | ALREADY IMPLEMENTED — exact /gillions-sync link; no duplicated privacy toggles. |
 | Four-tab Settings / real General preferences | ALREADY IMPLEMENTED — General/Hunts/Connection/Advanced; no placebo persistence checkboxes. |

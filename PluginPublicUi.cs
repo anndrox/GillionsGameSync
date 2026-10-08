@@ -143,7 +143,12 @@ public sealed partial class Plugin {
         }
         Label(uiState.Pairing ? "Waiting for Gillions authorization…" : publicHealth.Connection);
         DrawActionFeedback(pairing:true);
+        // Leave room for the established visible field label in narrow windows.
+        // Field identity, password masking and pairing actions stay unchanged.
+        ImGui.PushItemWidth(Math.Max(80*ImGui.GetFontSize()/17f,
+            ImGui.GetContentRegionAvail().X-ImGui.CalcTextSize("Pairing code").X-ImGui.GetStyle().ItemInnerSpacing.X));
         DrawPairingControls(uiState);
+        ImGui.PopItemWidth();
     }
     private void DrawPublicSettings() {
         DrawBranding(20);

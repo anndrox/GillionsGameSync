@@ -6,6 +6,8 @@
   the Settings shell; no decorative Hunt Progress header or new artwork.
 - Emphasize Connected to Gillions, align existing feature-health rows, and group
   existing Advanced support details. Actions, permissions and collectors are unchanged.
+- Keep the existing pairing-code label visible in narrow windows without changing
+  field identity, password masking or pairing behavior.
 - Preserve the complete UX recommendation ledger in `docs/public-ui-polish.md`,
   including explicit current-target and opacity deferrals.
 - Published Testing 0.0.87, Stable, feeds, tags and main are untouched.
