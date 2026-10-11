@@ -1,5 +1,14 @@
 # Changelog
 
+## Unpublished live status/window correction (not a release)
+
+- Make Main, Settings and Pairing manually resizable with readable defaults,
+  minimum widths and standard scrolling; preserve existing window identities.
+- Distinguish saved-connection Reconnect instructions from first-run onboarding.
+- Replace misleading fresh empty-area Hunt “updating” text with an explicit
+  observed-area/coverage qualification. Stale and unavailable data stay unknown.
+- Collection, permissions, transport, contribution and map behavior are unchanged.
+
 ## Unpublished Public 1.0.31 candidate freeze (not a release)
 
 - Promote the accepted Testing functionality into the actual public product,

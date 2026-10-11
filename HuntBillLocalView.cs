@@ -324,7 +324,7 @@ internal sealed class HuntBillLocalView : IDisposable {
             rows.Add(new($"{bill.BillTypeId}:{bill.OrderId}:{target.TargetIndex}:{target.TargetId}",
                 presentation.TargetName(target), target.ObservedKills, target.RequiredKills));
         }
-        Progress = new(territory, name, observations.Count == 0 && !complete ? "Hunt progress updating…" : "", complete,
+        Progress = new(territory, name, observations.Count == 0 && !complete ? "No current Hunt targets could be verified from this read. Bill state is unknown." : "", complete,
             rows.ToArray(), Environment.TickCount64 + 6000);
     }
 #if GILLIONS_TEST_BUILD

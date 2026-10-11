@@ -122,7 +122,7 @@ public sealed partial class Plugin {
     private void DrawMainPublic() {
         var h=publicHealth;
         DrawBranding(32); ImGui.Separator(); DrawConnection(h.Connection); Label(h.Character);
-        if(h.LastSync is { } t) ImGui.TextDisabled($"Last sync: {t.ToLocalTime():g}");
+        if(h.LastSync is { } t) Label($"Last sync: {t.ToLocalTime():g}");
         else Label("Waiting for first sync");
         if(uiState.Model.Warning is { } warning) Label(warning);
         if(h.Connection=="Not connected" || h.Connection=="Authorization expired or revoked") {
@@ -149,10 +149,16 @@ public sealed partial class Plugin {
             if(ImGui.Button("Finish")) { publicUi.FinishPairing(); QueueUiAction(()=> { configuration.OnboardingCompleted=true; RequestConfigurationSave(); }); }
             return;
         }
-        Label("Welcome to Gillions Game Sync");
-        Label("Connect supported current FFXIV information to Gillions so Hunts and other companion tools stay useful while you play.");
-        Label("Some public-world observations may be contributed according to your Gillions account settings.");
-        Label("Game Sync does not move your character, fight, teleport or automatically join parties.");
+        if(uiState.Paired && pairingRepair) {
+            Label("Reconnect Game Sync");
+            DrawConnection(publicHealth.Connection); Label(publicHealth.Character);
+            Label("You already have a saved pairing. Enter a new code only if you want to reconnect this device. Reconnect requests new authorization; saved history is not erased.");
+        } else {
+            Label("Welcome to Gillions Game Sync");
+            Label("Connect supported current FFXIV information to Gillions so Hunts and other companion tools stay useful while you play.");
+            Label("Some public-world observations may be contributed according to your Gillions account settings.");
+            Label("Game Sync does not move your character, fight, teleport or automatically join parties.");
+        }
         string nextOrigin=PublicConnectionPresentation.PairingOrigin(uiServerAddress);
         if(nextOrigin.Length>0) {
             if(pairingRepair) Label("Next pairing destination: "+nextOrigin);
@@ -180,7 +186,7 @@ public sealed partial class Plugin {
         DrawBranding(20);
         if(!ImGui.BeginTabBar("GillionsSettingsTabs")) return;
         if(ImGui.BeginTabItem("General")) {
-            Label("Window placement follows Dalamud. These compact windows size to their content. Game Sync never automates gameplay.");
+            Label("Window placement and resizing follow Dalamud. Drag a window edge to resize it; shorter windows scroll. Game Sync never automates gameplay.");
             ImGui.EndTabItem();
         }
         if(ImGui.BeginTabItem("Hunts")) {

@@ -19,17 +19,12 @@ internal sealed class PublicGameSyncUi : IDisposable {
         HuntProgressState progress, Func<bool> locked, Action closeHunts, bool firstRun, bool testing) {
         this.progress=progress; this.locked=locked; this.closeHunts=closeHunts;
         string badge=testing ? " [TESTING]" : "";
-        main=new("Gillions Game Sync"+badge+"###GillionsGameSync",drawMain,420);
-        settings=new("Gillions Settings"+badge+"###GillionsSettings",drawSettings,520);
-        pairing=new("Welcome to Gillions"+badge+"###GillionsPairing",drawPairing,460);
-        hunts=new("Hunt Progress###GillionsHuntProgress",drawHunts,300);
+        main=new("Gillions Game Sync"+badge+"###GillionsGameSync",drawMain,new(420,340),new(360,220));
+        settings=new("Gillions Settings"+badge+"###GillionsSettings",drawSettings,new(520,460),new(420,260));
+        pairing=new("Welcome to Gillions"+badge+"###GillionsPairing",drawPairing,new(460,520),new(400,300));
+        hunts=new("Hunt Progress###GillionsHuntProgress",drawHunts,new(300,180),new(220,100));
         // Keep the player's chosen geometry through content changes and reopenings.
         // FirstUseEver and the unchanged ID let Dalamud/ImGui own persistence.
-        hunts.Flags &= ~ImGuiWindowFlags.AlwaysAutoResize;
-        hunts.Size=new Vector2(300,180);
-        hunts.SizeConstraints=new WindowSizeConstraints {
-            MinimumSize=new Vector2(220,100), MaximumSize=new Vector2(float.MaxValue,float.MaxValue)
-        };
         hunts.Flags |= ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoNavFocus | ImGuiWindowFlags.NoNavInputs;
         hunts.RespectCloseHotkey=false; hunts.DisableWindowSounds=true; hunts.DisableFadeInFadeOut=true;
         foreach(var window in new[]{main,settings,pairing,hunts}) windows.AddWindow(window);
@@ -49,10 +44,15 @@ internal sealed class PublicGameSyncUi : IDisposable {
     public void Dispose()=>windows.RemoveAllWindows();
     private sealed class Surface : Window {
         private readonly Action draw;
-        internal Surface(string name,Action draw,float width) : base(name) {
+        internal Surface(string name,Action draw,Vector2 size,Vector2 minimum) : base(name) {
             this.draw=draw;
-            Size=new Vector2(width,0); SizeCondition=ImGuiCond.FirstUseEver;
-            Flags=ImGuiWindowFlags.AlwaysAutoResize;
+            // Constraints also repair a previously saved pathological width.
+            // Standard scrolling keeps actions reachable in a shortened window;
+            // FirstUseEver never fights the player's later size or placement.
+            Size=size; SizeCondition=ImGuiCond.FirstUseEver;
+            SizeConstraints=new WindowSizeConstraints {
+                MinimumSize=minimum, MaximumSize=new Vector2(float.MaxValue,float.MaxValue)
+            };
             AllowPinning=false; AllowClickthrough=false;
         }
         public override void Draw()=>draw();

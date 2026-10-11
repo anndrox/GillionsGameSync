@@ -12,9 +12,13 @@ assert 'BeginTab' not in main
 assert all('BeginTabItem("'+tab+'")' in ui for tab in ['General','Hunts','Connection','Advanced'])
 assert all(s in windows for s in ['WindowSystem','ImGuiCond.FirstUseEver','NoFocusOnAppearing','NoNavFocus','NoNavInputs','RespectCloseHotkey=false'])
 assert 'DisableFadeInFadeOut=true' in windows and 'override void OnClose' not in windows
-assert 'hunts.Flags &= ~ImGuiWindowFlags.AlwaysAutoResize' in windows
-assert 'hunts.Size=new Vector2(300,180)' in windows and 'MinimumSize=new Vector2(220,100)' in windows
-assert 'Flags=ImGuiWindowFlags.AlwaysAutoResize' in windows # other compact surfaces unchanged
+assert 'AlwaysAutoResize' not in windows
+assert 'drawHunts,new(300,180),new(220,100)' in windows
+assert 'drawMain,new(420,340),new(360,220)' in windows
+assert 'drawSettings,new(520,460),new(420,260)' in windows
+assert 'drawPairing,new(460,520),new(400,300)' in windows
+assert 'MinimumSize=minimum' in windows and 'Size=size;' in windows
+assert 'Reconnect requests new authorization; saved history is not erased.' in ui
 assert 'NoSavedSettings' not in windows and 'NoResize' not in windows and 'NoScrollbar' not in windows
 assert 'hunts.Flags = locked() ? hunts.Flags | ImGuiWindowFlags.NoMove' in windows
 assert 'huntWindow.Observe(requestedOpen,hunts.IsOpen' in windows
@@ -35,6 +39,7 @@ assert 'uiState.Model.Warning' in main
 progress=hunt.split('private void PublishProgress(',1)[1].split('#if GILLIONS_TEST_BUILD\n    private void Draw()',1)[0]
 assert 'store.Characters' not in progress and 'policy.Prepare' not in progress
 assert 'bool complete = false' in progress # item coverage does not prove current order/reset
+assert 'No current Hunt targets could be verified from this read. Bill state is unknown.' in progress
 assert 'target.MapId > 0' in progress and 'target.PlaceNameId > 0' in progress
 assert 'ReadEnabled => policy.RetentionEnabled || ProgressRequested' in hunt
 assert 'huntLocal.ProgressRequested = configuration.ShowHuntProgress' in plugin

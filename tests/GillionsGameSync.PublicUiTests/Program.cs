@@ -39,7 +39,6 @@ bool testing=assembly.GetName().Name=="GillionsGameSyncTest";
 Action noop=()=>{};
 using var actualWindows=(IDisposable)Activator.CreateInstance(T("PublicGameSyncUi"),flags,null,
     [noop,noop,noop,noop,Activator.CreateInstance(T("HuntProgressState"),true)!,(Func<bool>)(()=>false),noop,false,testing],null)!;
-var actualHuntWindow=(Window)T("PublicGameSyncUi").GetField("hunts",flags)!.GetValue(actualWindows)!;
 var cases=new[]{
     ("01-pairing-welcome","DrawPairingPublic",false,460f,1f,0),
     ("02-pairing-connected","DrawPairingPublic",true,460f,1f,0),
@@ -82,6 +81,13 @@ var cases=new[]{
     ("39-main-independent-failure","DrawMainPublic",true,420f,1f,0),
     ("40-main-shared-unavailable","DrawMainPublic",true,420f,1f,0),
     ("41-pairing-narrow-150","DrawPairingPublic",false,320f,1.5f,0),
+    ("42-main-owner-width-long-status","DrawMainPublic",true,180f,1f,0),
+    ("43-pairing-owner-width","DrawPairingPublic",false,180f,1f,0),
+    ("44-settings-owner-width-advanced","DrawPublicSettings",true,180f,1f,3),
+    ("45-main-long-status-150","DrawMainPublic",true,360f,1.5f,0),
+    ("46-hunt-current-area-empty","DrawHuntProgress",true,300f,1f,0),
+    ("47-pairing-short-scroll","DrawPairingPublic",false,400f,1f,0),
+    ("48-pairing-short-scroll-bottom","DrawPairingPublic",false,400f,1.5f,0),
 };
 if(args.Length==4) {
     string[] selected=["01","02","03","04","08","09","18","19","20","23","24","25","26","30","31","34","37","39","40","41"];
@@ -108,6 +114,8 @@ foreach(var (name,method,paired,width,scale,tab) in cases) {
     if(name.StartsWith("36-"))health.GetType().GetProperty("Connection")!.SetValue(health,"Update required");
     if(name.StartsWith("37-"))health.GetType().GetProperty("Connection")!.SetValue(health,"Gillions unavailable");
     if(name.StartsWith("39-"))health.GetType().GetProperty("Fates")!.SetValue(health,"Temporarily unavailable");
+    if(name.StartsWith("42-")||name.StartsWith("44-")||name.StartsWith("45-"))
+        foreach(string field in new[]{"Fates","Market"})health.GetType().GetProperty(field)!.SetValue(health,"Temporarily unavailable");
     if(name.StartsWith("40-")) {
         health.GetType().GetProperty("Connection")!.SetValue(health,"Gillions unavailable");
         foreach(string field in new[]{"Hunts","PartyFinder","Fates","Market"})health.GetType().GetProperty(field)!.SetValue(health,"Gillions unavailable");
@@ -119,17 +127,17 @@ foreach(var (name,method,paired,width,scale,tab) in cases) {
     if(name.StartsWith("17-"))ui.GetType().GetProperty("Message")!.SetValue(ui,"Gillions could not complete the request. Pending records were kept; please try again.");
     if(name.StartsWith("20-"))ui.GetType().GetProperty("Pairing")!.SetValue(ui,true);
     var model=Activator.CreateInstance(T("HuntProgressState"),true)!;
-    var rows=Array.CreateInstance(T("HuntProgressRow"),name.Contains("scroll")||name.Contains("wide-static")?10:name.Contains("duplicate-names")?3:name.Contains("multiple")?2:name.Contains("updating")||name.Contains("all-complete")?0:1);
+    var rows=Array.CreateInstance(T("HuntProgressRow"),name.Contains("scroll")||name.Contains("wide-static")?10:name.Contains("duplicate-names")?3:name.Contains("multiple")?2:name.Contains("updating")||name.Contains("all-complete")||name.Contains("current-area-empty")?0:1);
     for(int i=0;i<rows.Length;i++) rows.SetValue(New("HuntProgressRow","fixture-"+i,
         name.Contains("duplicate-names")?(i==1?"Horned lizard":"Aspis"):name.Contains("long-name")?"An exceptionally long localized-like Hunt target name that wraps on multiple lines":i==0?"Example hunt target":"Another example hunt target",
         name.Contains("complete")?3:name.Contains("one-left")?2:1,3),i);
     T("HuntProgressState").GetProperty("Display",flags)!.SetValue(model,New("HuntProgressDisplay","Example current area",
-        name.Contains("updating")?"Hunt progress updating…":name.Contains("all-complete")?"All current Hunt targets here are complete.":"",rows));
+        name.Contains("updating")?"Hunt progress updating…":name.Contains("all-complete")?"All current Hunt targets here are complete.":name.Contains("current-area-empty")?"No observed Hunt targets in this area. Current bill coverage is unverified.":"",rows));
     Set("huntProgress",model);
     Render(name,plugin,T("Plugin").GetMethod(method,flags)!,width,scale,tab);
 }
 File.WriteAllText(Path.Combine(output,"controlled-render.json"),JsonSerializer.Serialize(new{
-    mode="CONTROLLED OFFLINE: actual compiled Draw methods and exact Hunt window flags; synthetic state, installed Dalamud Noto Sans font and default ImGui style. Hunt geometry checks simulate resize and close/reopen in ImGui only, not OS input. Not FFXIV screenshots, runtime admission, installed-game focus, keyboard, WindowSystem placement or live performance proof.",
+    mode="CONTROLLED OFFLINE: actual compiled Draw methods and all actual Window defaults/constraints/flags; synthetic state, installed Dalamud Noto Sans font and default ImGui style. Geometry checks simulate resize and close/reopen in ImGui only, not OS input. Not FFXIV screenshots, runtime admission, installed-game focus, keyboard, WindowSystem placement or live performance proof.",
     product=assembly.GetName().Name,version=assembly.GetName().Version!.ToString(4),dllSha256=Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(binary))).ToLowerInvariant(),
     allComplete="Model-only fixture: runtime cannot prove exact current-order/reset coverage, so all-complete remains fail-closed.",cases=cases.Select(c=>c.Item1)
 },new JsonSerializerOptions{WriteIndented=true}));
@@ -153,7 +161,12 @@ unsafe void Render(string name,object plugin,MethodInfo draw,float width,float s
         if(testing&&draw.Name!="DrawHuntProgress")title+=" [TESTING]";
         // Synthetic ImGui IO restricted to the Settings tab strip, not OS input.
         bool hunt=draw.Name=="DrawHuntProgress";
-        var chosenSize=new Vector2(width*scale,(name.Contains("duplicate-names")?300:180)*scale);
+        string surface=hunt?"hunts":draw.Name=="DrawPublicSettings"?"settings":draw.Name=="DrawPairingPublic"?"pairing":"main";
+        var actualWindow=(Window)T("PublicGameSyncUi").GetField(surface,flags)!.GetValue(actualWindows)!;
+        var constraints=actualWindow.SizeConstraints!.Value;
+        var chosenSize=new Vector2(width*scale,(hunt?(name.Contains("duplicate-names")?300:180):actualWindow.Size!.Value.Y)*scale);
+        if(name.Contains("short"))chosenSize.Y=constraints.MinimumSize.Y*scale;
+        chosenSize=Vector2.Max(chosenSize,constraints.MinimumSize*scale);
         var progressModel=hunt?T("Plugin").GetField("huntProgress",flags)!.GetValue(plugin):null;
         var displayProperty=T("HuntProgressState").GetProperty("Display",flags)!;
         var originalDisplay=hunt?displayProperty.GetValue(progressModel):null;
@@ -169,21 +182,23 @@ unsafe void Render(string name,object plugin,MethodInfo draw,float width,float s
                 io.AddMousePosEvent(x,y);io.AddMouseButtonEvent(0,frame==2);
             }
             ImGui.NewFrame();
-            if(hunt&&frame==3) { ImGui.Render();continue; } // closed for one frame
+            if(frame==3) { ImGui.Render();continue; } // closed for one frame
             if(hunt&&frame==4) displayProperty.SetValue(progressModel,New("HuntProgressDisplay","Example current area","Hunt progress updating…",Array.CreateInstance(T("HuntProgressRow"),0)));
             if(hunt&&frame==5) displayProperty.SetValue(progressModel,originalDisplay);
             ImGui.SetNextWindowPos(new Vector2(24,24),ImGuiCond.Always);
-            if(hunt) {
-                var constraints=actualHuntWindow.SizeConstraints!.Value;
-                ImGui.SetNextWindowSizeConstraints(constraints.MinimumSize*scale,constraints.MaximumSize);
-                ImGui.SetNextWindowSize(frame==2?chosenSize:actualHuntWindow.Size!.Value*scale,
-                    frame==2?ImGuiCond.Always:actualHuntWindow.SizeCondition);
-            } else ImGui.SetNextWindowSize(new Vector2(width*scale,0),ImGuiCond.Always);
+            ImGui.SetNextWindowSizeConstraints(constraints.MinimumSize*scale,constraints.MaximumSize);
+            // One synthetic player resize, including the owner's 180px saved
+            // width. Do not force size on subsequent frames or reopenings.
+            ImGui.SetNextWindowSize(frame==2?new Vector2(width*scale,chosenSize.Y):actualWindow.Size!.Value*scale,
+                frame==2?ImGuiCond.Always:actualWindow.SizeCondition);
             bool open=true;
-            if(ImGui.Begin(hunt?actualHuntWindow.WindowName:title,ref open,hunt?actualHuntWindow.Flags:ImGuiWindowFlags.AlwaysAutoResize))draw.Invoke(plugin,[]);
-            if(hunt&&frame>=4) {
+            if(ImGui.Begin(actualWindow.WindowName,ref open,actualWindow.Flags)) {
+                draw.Invoke(plugin,[]);
+                if(name.Contains("scroll-bottom")&&frame>=4)ImGui.SetScrollY(ImGui.GetScrollMaxY());
+            }
+            if(frame>=4) {
                 var size=ImGui.GetWindowSize();
-                if(Vector2.Distance(size,chosenSize)>1)throw new InvalidOperationException("Hunt content/reopen reset the user's chosen size: "+name);
+                if(Vector2.Distance(size,chosenSize)>1)throw new InvalidOperationException("Content/reopen reset the constrained user's chosen size: "+name);
                 scrollMax=ImGui.GetScrollMaxY();
             }
             ImGui.End();ImGui.Render();
