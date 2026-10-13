@@ -17,7 +17,7 @@ internal static class StableUpgradeTests {
         void Check(bool ok,string message) { checks++; if(!ok)throw new Exception("Stable upgrade: "+message); }
         string Save(object value)=>(string)serialize.Invoke(null,[value])!;
         JObject Parse(string text) { using var reader=new JsonTextReader(new StringReader(text)){DateParseHandling=DateParseHandling.None};return JObject.Load(reader); }
-        if(mode is "--current-upgrade-write" or "--current-upgrade-check") {
+        if(mode is "--current-upgrade-write" or "--current-upgrade-check" or "--regression-upgrade-check") {
             Check(assembly.GetName().Name=="GillionsGameSync","same Public product required");
             if(mode=="--current-upgrade-write") {
                 Check(assembly.GetName().Version!.ToString(4)=="1.0.31.2","exact published predecessor required");
@@ -40,7 +40,8 @@ internal static class StableUpgradeTests {
                 Console.WriteLine($"Exact Stable31.2 serializer fixture PASS: {checks} identity checks; OFF and ON synthetic preference sets.");
                 return;
             }
-            Check(assembly.GetName().Version!.ToString(4)=="1.0.31.3","distinguishable successor required");
+            var expectedSuccessor=mode=="--regression-upgrade-check" ? "1.0.31.4" : "1.0.31.3";
+            Check(assembly.GetName().Version!.ToString(4)==expectedSuccessor,"exact distinguishable successor required");
             for(int fixture=0;fixture<2;fixture++) {
                 var originalCurrent=File.ReadAllText(Path.Combine(directory,$"current-predecessor-{fixture}.json"));
                 File.WriteAllText(path,originalCurrent);
@@ -55,7 +56,7 @@ internal static class StableUpgradeTests {
                 var restart=load.Invoke(storage,["GillionsGameSync"])!;
                 Check(JToken.DeepEquals(afterCurrent,Parse(Save(restart))),"reload must preserve the entire predecessor configuration");
             }
-            Console.WriteLine($"Exact Stable31.2 -> Public31.3 upgrade PASS: {checks} checks; all serialized fields, OFF/ON preferences, pairing and restart preserved; synthetic only.");
+            Console.WriteLine($"Exact Stable31.2 -> Public{expectedSuccessor} upgrade PASS: {checks} checks; all serialized fields, OFF/ON preferences, pairing and restart preserved; synthetic only.");
             return;
         }
         if(mode=="--upgrade-write") {

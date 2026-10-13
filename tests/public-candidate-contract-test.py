@@ -12,7 +12,7 @@ def old(p):return subprocess.check_output(['git','show',base+':'+p],cwd=r).decod
 assert (r/'docs/public-ui-polish.md').read_text(encoding='utf-8')==old('docs/public-ui-polish.md')
 runtime_base='54492975c7b6ff2f90f3745bcf6bcde12365fbee'
 cs=(r/'GillionsGameSync.csproj').read_text()
-assert '<Version>1.0.31.3</Version>' in cs and 'GILLIONS_PUBLIC_BUILD' in cs
+assert '<Version>1.0.31.4</Version>' in cs and 'GILLIONS_PUBLIC_BUILD' in cs
 assert 'https://xivpf.com/contribute/multiple' not in cs
 for p in ['FateTransport.cs','FateDiscovery.cs','PersonalSync.cs','TravelSync.cs','MarketContributionCore.cs','PartyFinderLinkRequests.cs']:
  text=(r/p).read_text()

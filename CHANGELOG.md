@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.31.4 - Prepared regression diagnostic (unpublished)
+
+- Adds privacy-safe stage/status/method-stack context to intermittent sync failures.
+- Preserves verified pairing, retained state, permission/version gates and31.3 UI.
+- This is diagnosis, not a confirmed fix or new game-patch compatibility claim.
+
 ## 1.0.31.3 - Prepared Public window/status correction (unpublished)
 
 - Make Main, Settings and Pairing manually resizable with readable defaults,

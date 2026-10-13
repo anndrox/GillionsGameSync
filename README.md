@@ -1,5 +1,14 @@
 # Gillions Game Sync
 
+## Prepared Stable regression diagnostic
+
+Public1.0.31.4 is an unpublished diagnostic candidate, not a confirmed fix.
+It preserves1.0.31.3 UI corrections and existing pairing. Sync failures now log
+bounded operation stages, HTTP status, fixed allowlisted messages and managed
+method frames—not credentials, payloads or arbitrary exception messages.
+The October game/SDK tuple remains unsupported for exact Hunt/FATE sources;
+ordinary sync is independent. See [diagnostic scope](docs/releases/v1.0.31.4.md).
+
 ## Public release and prepared successor
 
 The published Public release is **1.0.31.2**. The unchanged Stable repository

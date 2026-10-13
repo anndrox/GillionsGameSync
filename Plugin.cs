@@ -1255,8 +1255,12 @@ public sealed partial class Plugin : IDalamudPlugin {
         CapturedSnapshotBatch? captured = null;
         SyncRequestPermit? operationPermit = null;
         var ownsSync = false;
+        var failureStage = "capture_scheduled";
+        var failureResource = "none";
+        int? failureHttpStatus = null;
         try {
             captured = await framework.RunOnFrameworkThread(() => {
+                failureStage = "capture_framework";
                 var captureStopwatch = Stopwatch.StartNew();
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
                 // Manual personal refresh is independent of ordinary-sync flight
@@ -1278,6 +1282,8 @@ public sealed partial class Plugin : IDalamudPlugin {
                 var state = CurrentState;
                 var selectedScopes = (scopes ?? RetainerClientPolicy.BuildSyncScopes(SyncScopes, retainerUploadServerSupported))
                     .Where(scope => retainerUploadServerSupported || scope != RetainerClientPolicy.ResourceType).ToArray();
+                failureStage = "capture_native";
+                failureResource = selectedScopes.Length == 1 ? selectedScopes[0] : "multiple";
                 // An empty Gil flush and unrelated resources do no Retainer work.
                 if (selectedScopes.Contains(RetainerClientPolicy.ResourceType, StringComparer.Ordinal)) {
                     if (CaptureRetainerResult(state, out _)) RequestConfigurationSave();
@@ -1301,6 +1307,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 return batch;
             });
             var snapshots = captured.Snapshots;
+            failureStage = "prepare_snapshots";
             // Managed preparation receives only copied data and no live config.
             var preparedSnapshots = await Task.Run(() => snapshots.Select(snapshot => PrepareSnapshot(snapshot, captured.RecordDiagnostics)).ToArray(), captured.Permit.Cancellation);
             var submitted = 0;
@@ -1308,9 +1315,14 @@ public sealed partial class Plugin : IDalamudPlugin {
                 if (!force && snapshot.SentResultFingerprints.Count == 0 && captured.PayloadHashes.TryGetValue(snapshot.ResourceType, out var previousHash)
                     && previousHash == snapshot.PayloadHash) continue;
                 var nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+                failureResource = snapshot.ResourceType; failureHttpStatus = null;
+                failureStage = "snapshot_request";
                 using var request = SnapshotRequest("/api/game-sync/sync", captured.Permit, snapshot.ResourceType, nonce, snapshot.PayloadUtf8);
+                failureStage = "snapshot_http";
                 using var response = await SendAsync(request, captured.Permit);
+                failureHttpStatus = (int)response.StatusCode; failureStage = "snapshot_status";
                 await EnsureSuccessfulResponse(response, captured.Permit.Cancellation);
+                failureStage = "snapshot_receipt";
                 var receipt = await SyncResponsePolicy.ReadAsync(response.Content, captured.Permit.Cancellation);
                 string[] acceptedEventIds = [];
                 if (snapshot.ResourceType == RetainerClientPolicy.ResourceType) {
@@ -1318,6 +1330,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                         throw new InvalidOperationException("Invalid Retainer receipt.");
                 } else if (!SyncResponsePolicy.IsSnapshotReceipt(receipt, snapshot.ResourceType, snapshot.AllowEmptySnapshotReceipt))
                     throw new InvalidOperationException("Invalid sync receipt.");
+                failureStage = "snapshot_commit";
                 await CommitAsync(captured.Permit, state => {
                     var retired = 0;
                     if (snapshot.ResourceType == RetainerClientPolicy.ResourceType) {
@@ -1339,13 +1352,19 @@ public sealed partial class Plugin : IDalamudPlugin {
                 submitted++;
             }
             foreach (var events in captured.GilEvents.Chunk(200)) {
+                failureResource = "gil_ledger"; failureHttpStatus = null; failureStage = "gil_prepare";
                 var payload = GilLedgerPolicy.PreparePayload(captured.CharacterName, captured.CharacterWorld, captured.GilSessionId, events);
                 var nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+                failureStage = "gil_request";
                 using var request = SnapshotRequest("/api/game-sync/sync", captured.Permit, "gil_ledger", nonce, payload);
+                failureStage = "gil_http";
                 using var response = await SendAsync(request, captured.Permit);
+                failureHttpStatus = (int)response.StatusCode; failureStage = "gil_status";
                 await EnsureSuccessfulResponse(response, captured.Permit.Cancellation);
+                failureStage = "gil_receipt";
                 if (!SyncResponsePolicy.IsSnapshotReceipt(await SyncResponsePolicy.ReadAsync(response.Content, captured.Permit.Cancellation), "gil_ledger"))
                     throw new InvalidOperationException("Invalid Gil receipt.");
+                failureStage = "gil_commit";
                 await CommitAsync(captured.Permit, state => {
                     var retired = GilLedgerPolicy.Acknowledge(state.PendingGilLedgerEvents, events);
                     state.LastSyncUtc = DateTime.UtcNow; AfterAcknowledgedDrain(retired);
@@ -1353,6 +1372,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 });
                 submitted++;
             }
+            failureStage = "final_commit";
             await CommitAsync(captured.Permit, _ => {
                 if (submitted > 0 && !string.IsNullOrEmpty(configuration.SyncBlockedCode)) {
                     configuration.SyncBlockedCode = ""; configuration.SyncBlockedMessage = ""; RequestConfigurationSave();
@@ -1361,6 +1381,10 @@ public sealed partial class Plugin : IDalamudPlugin {
                 if (!background) settingsMessage = submitted > 0 ? "Sync completed." : "Your supported data is already current.";
             });
         } catch (Exception error) {
+            // Record the original failure before framework recovery can fail or
+            // become unavailable during unload. This helper reads no live state.
+            log.Debug("Gillions sync did not complete: {Diagnostic}",
+                SyncFailureDiagnostic.Describe(error, failureStage, failureResource, failureHttpStatus));
             if (!disposed) await framework.RunOnFrameworkThread(() => {
                 if (disposed || operationPermit is not null && !PermitIsCurrent(operationPermit)) return;
                 ObserveConnectionFailure(error);
@@ -1376,7 +1400,6 @@ public sealed partial class Plugin : IDalamudPlugin {
                 if (!background || error is GillionsSyncRejectedException) settingsMessage = OperationFailureMessage(error);
                 RecordDiagnostic($"Sync did not complete ({error.GetType().Name}); pending records were preserved.");
             });
-            log.Debug("Gillions sync did not complete ({Type}).", error.GetType().Name);
         } finally {
             if (ownsSync && !disposed) await framework.RunOnFrameworkThread(() => { if (!disposed) syncInFlight = false; });
         }
