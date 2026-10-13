@@ -194,13 +194,16 @@ public sealed partial class Plugin : IDalamudPlugin {
         "Testing Party Finder contribution requires fresh Testing pairing with site permission and a separate local opt-in. Public listings go to Gillions HTTPS, not directly to xivpf.com or localhost.",
         "Gillions keeps only an expiring, runtime current-listing cache; the paired token is used only for Gillions Authorization, never listing data. Permission denials stay stopped across logout/reload until fresh pairing.",
 #else
+        "Main, Settings and Pairing are manually resizable with readable minimum widths and scrolling; saved window identities are preserved.",
+        "Hunt Progress distinguishes observed current-area targets from unknown bill coverage. No observed rows is not proof of no bills or completion.",
+        "Updating from Public 1.0.31.2 preserves existing verified pairing and preferences; no configuration reset or new sharing permission is needed.",
         "Optional public Party Finder listings use authenticated Gillions intake; Gillions supplies the established xivpf.com contribution path.",
         "Private Hunts, submarines, routing and website commands require independent Gillions permission and exact compatible admission. Unsupported or missing state remains unknown.",
         "Public FATE observations run automatically only under fresh exact Gillions source and policy admission. No diagnostic command or gameplay automation is required.",
 #endif
         "Retainer observations, venture results, inventory, listings and ordinary character sync remain available.",
         "Venture planning and AutoRetainer integration have been removed. Existing stored plans and backups are preserved without further control.",
-        "Pair once after updating so new records belong to the correct connection and character. Older local history stays preserved and inactive.",
+        "Only older credentials from before 1.0.30 need a fresh pairing. Existing verified pairing and older inactive local history are preserved.",
         "Offline storage keeps admitted records and reports a coverage gap if it fills. The main window now focuses on connection and sync controls.",
     ];
     // Automatic work must remain below a visible frame hitch. One resource is

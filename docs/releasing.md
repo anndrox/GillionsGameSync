@@ -1,5 +1,16 @@
 # Releasing
 
+## Prepared Public 1.0.31.3 successor
+
+Published Stable remains 1.0.31.2. The isolated window/status correction now has
+the unused distinguishable Public identity 1.0.31.3; see its
+[candidate notes](releases/v1.0.31.3.md). Package preparation alone must not
+advance either feed, create a public tag or integrate main. Current exact Site
+admission rejects this successor. Preserve its package/source and finish compatible
+admission and physical runtime acceptance before requesting publication approval.
+Older freeze sections below are historical candidate context, not current
+publication status or authority to reuse an old admitted version.
+
 ## Public candidate identity immutability
 
 PUBLIC CANDIDATE VERSION IDENTITIES ARE IMMUTABLE FOR ADMISSION.

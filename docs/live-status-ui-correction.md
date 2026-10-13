@@ -4,6 +4,12 @@ Preparation from published Stable 1.0.31.2's source lineage; no new publication,
 Site admission, main integration, permission change or rollout is authorized here.
 The original released source/artifacts remain immutable.
 
+The owner resumed bounded release-candidate preparation on 2026-10-13. The
+source correction now uses Public 1.0.31.3 for a distinguishable local package;
+publication, main integration, Site mutation and player installation remain held.
+See [candidate prerequisites](releases/v1.0.31.3.md). This does not retroactively
+turn the earlier 0.0.0.0 offline renderer into a release or live acceptance.
+
 Main, Settings and Pairing now use standard persistent, manually resizable Dalamud
 windows instead of AlwaysAutoResize. Logical default/minimum dimensions are
 420x340 / 360x220, 520x460 / 420x260, and 460x520 / 400x300 respectively.

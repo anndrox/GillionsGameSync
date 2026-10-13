@@ -1,6 +1,6 @@
 # Changelog
 
-## Unpublished live status/window correction (not a release)
+## 1.0.31.3 - Prepared Public window/status correction (unpublished)
 
 - Make Main, Settings and Pairing manually resizable with readable defaults,
   minimum widths and standard scrolling; preserve existing window identities.
@@ -8,6 +8,9 @@
 - Replace misleading fresh empty-area Hunt “updating” text with an explicit
   observed-area/coverage qualification. Stale and unavailable data stay unknown.
 - Collection, permissions, transport, contribution and map behavior are unchanged.
+- Use a distinguishable Public successor identity; the published 1.0.31.2
+  package remains unchanged. Exact Site admission and physical FFXIV validation
+  are required before release. No update feed has advanced.
 
 ## Unpublished Public 1.0.31 candidate freeze (not a release)
 

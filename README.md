@@ -1,5 +1,17 @@
 # Gillions Game Sync
 
+## Public release and prepared successor
+
+The published Public release is **1.0.31.2**. The unchanged Stable repository
+URL and GitHub release identify the installed update, not this task branch.
+Prepared **1.0.31.3** corrects Main/Settings/Pairing window sizing, reconnect
+instructions and uncertain Hunt Progress messages. It changes no collectors,
+permissions or transport contracts. It is **not published or runtime-accepted**;
+the current Site exact-version profile does not admit its optional features yet.
+See [prepared successor notes](docs/releases/v1.0.31.3.md).
+The older version-specific sections below preserve Testing and historical
+release context; they do not supersede this Public release status.
+
 ## Published Testing 0.0.87
 
 Testing87 adds a compact connection/health window, dedicated pairing,
