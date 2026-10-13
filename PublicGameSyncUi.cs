@@ -19,10 +19,11 @@ internal sealed class PublicGameSyncUi : IDisposable {
         HuntProgressState progress, Func<bool> locked, Action closeHunts, bool firstRun, bool testing) {
         this.progress=progress; this.locked=locked; this.closeHunts=closeHunts;
         string badge=testing ? " [TESTING]" : "";
-        main=new("Gillions Game Sync"+badge+"###GillionsGameSync",drawMain,new(420,340),new(360,220));
-        settings=new("Gillions Settings"+badge+"###GillionsSettings",drawSettings,new(520,460),new(420,260));
-        pairing=new("Welcome to Gillions"+badge+"###GillionsPairing",drawPairing,new(460,520),new(400,300));
-        hunts=new("Hunt Progress###GillionsHuntProgress",drawHunts,new(300,180),new(220,100));
+        string idSuffix=testing ? "Test" : "";
+        main=new("Gillions Game Sync"+badge+"###GillionsGameSync"+idSuffix,drawMain,new(420,340),new(360,220));
+        settings=new("Gillions Settings"+badge+"###GillionsSettings"+idSuffix,drawSettings,new(520,460),new(420,260));
+        pairing=new("Welcome to Gillions"+badge+"###GillionsPairing"+idSuffix,drawPairing,new(460,520),new(400,300));
+        hunts=new("Hunt Progress###GillionsHuntProgress"+idSuffix,drawHunts,new(300,180),new(220,100));
         // Keep the player's chosen geometry through content changes and reopenings.
         // FirstUseEver and the unchanged ID let Dalamud/ImGui own persistence.
         hunts.Flags |= ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoNavFocus | ImGuiWindowFlags.NoNavInputs;

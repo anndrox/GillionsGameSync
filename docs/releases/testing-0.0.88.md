@@ -9,6 +9,9 @@ No second source fork, custom updater or Stable promotion exists.
 The maintained dual-channel source includes published Testing87 in its ancestry.
 Shared window sizing, repositioning, reconnect and Hunt-status implementations
 come from frozen Public1.0.31.3 source43a8694. Testing adds only a channel notice.
+Testing88 also separates saved window IDs from Public; Public IDs are unchanged.
+Old shared Testing geometry is not imported or erased; Testing starts from the
+readable defaults so moving it cannot overwrite Public geometry.
 It is a different assembly, version and conditional diagnostic UI—not the exact
 frozen Public DLL or proof of its physical execution.
 
@@ -21,8 +24,8 @@ In Dalamud settings, add the custom repository, then find **Gillions Game Sync
 Testing** in the plugin installer. This is a separate identity from Public.
 Only one Game Sync copy may be enabled at a time: disable installed Public and
 any dev copies before enabling Testing. Both may remain installed, but simultaneous
-runtime operation is not supported (duplicate collection and shared Hunt-window
-geometry are possible). Disabling does not reset configuration or pairing.
+runtime operation is not supported (duplicate collection/uploads are possible).
+Disabling does not reset configuration or pairing.
 
 Existing Testing users disable/uninstall only the old Testing plugin without
 reset/delete-configuration, remove only the old Testing feed, then install from

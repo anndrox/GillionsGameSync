@@ -25,18 +25,18 @@ internal static class HuntWindowPackagedTests {
         var passive=ImGuiWindowFlags.NoFocusOnAppearing|ImGuiWindowFlags.NoNavFocus|ImGuiWindowFlags.NoNavInputs;
         Check((hunts.Flags&passive)==passive&&!hunts.RespectCloseHotkey&&hunts.DisableWindowSounds&&hunts.DisableFadeInFadeOut,
             "Manual resize must preserve passive overlay/focus/sound boundaries.");
-        Check(hunts.WindowName=="Hunt Progress###GillionsHuntProgress", "Saved Hunt window identity changed.");
-        foreach(var (name,size,minimum,id) in new[]{
-            ("main",new Vector2(420,340),new Vector2(360,220),"Gillions Game Sync"),
-            ("settings",new Vector2(520,460),new Vector2(420,260),"Gillions Settings"),
-            ("pairing",new Vector2(460,520),new Vector2(400,300),"Welcome to Gillions")}) {
+        Check(hunts.WindowName=="Hunt Progress###GillionsHuntProgress"+(testing?"Test":""), "Hunt geometry must be channel-separated, with Public identity unchanged.");
+        foreach(var (name,size,minimum,id,saved) in new[]{
+            ("main",new Vector2(420,340),new Vector2(360,220),"Gillions Game Sync","GillionsGameSync"),
+            ("settings",new Vector2(520,460),new Vector2(420,260),"Gillions Settings","GillionsSettings"),
+            ("pairing",new Vector2(460,520),new Vector2(400,300),"Welcome to Gillions","GillionsPairing")}) {
             var window=(Window)type.GetField(name,nonpublic)!.GetValue(ui)!;
             Check((window.Flags&(ImGuiWindowFlags.AlwaysAutoResize|ImGuiWindowFlags.NoResize|ImGuiWindowFlags.NoSavedSettings|ImGuiWindowFlags.NoScrollbar))==0,
                 name+" must respect player resizing, saved geometry and standard scrolling.");
             Check(window.Size==size&&window.SizeCondition==ImGuiCond.FirstUseEver,name+" default must not fight later resizing/reopen.");
             Check(window.SizeConstraints is { } limits&&limits.MinimumSize==minimum&&limits.MaximumSize==new Vector2(float.MaxValue,float.MaxValue),
                 name+" must repair previously saved narrow widths using standard constraints.");
-            Check(window.WindowName.StartsWith(id+(testing?" [TESTING]":"")+"###",StringComparison.Ordinal),name+" identity/channel changed.");
+            Check(window.WindowName==id+(testing?" [TESTING]":"")+"###"+saved+(testing?"Test":""),name+" must isolate saved geometry without changing Public identity.");
         }
         Console.WriteLine($"Exact packaged windows: {checks} geometry/persistence/passive/manual-sizing checks PASS; no live UI or game invocation.");
     }

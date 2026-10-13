@@ -4,8 +4,11 @@ import subprocess
 
 r=Path(__file__).resolve().parents[1]
 public='43a86941f8f8e60c583c961b1502345df76c7e64'
-for name in ['PublicGameSyncUi.cs','PublicExperience.cs','HuntBillLocalView.cs']:
+for name in ['PublicExperience.cs','HuntBillLocalView.cs']:
     assert (r/name).read_bytes().replace(b'\r\n',b'\n')==subprocess.check_output(['git','show',public+':'+name],cwd=r).replace(b'\r\n',b'\n'),name
+windows=(r/'PublicGameSyncUi.cs').read_text(encoding='utf-8')
+normalized=windows.replace('        string idSuffix=testing ? "Test" : "";\n','').replace('+idSuffix','')
+assert normalized==subprocess.check_output(['git','show',public+':PublicGameSyncUi.cs'],cwd=r).decode().replace('\r\n','\n')
 ui=(r/'PluginPublicUi.cs').read_text(encoding='utf-8')
 for phrase in ['Reconnect Game Sync','You already have a saved pairing.','shorter windows scroll']:
     assert phrase in ui
