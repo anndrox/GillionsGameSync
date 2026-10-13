@@ -12,15 +12,19 @@ internal static class StableUpgradeTests {
         var serialize=typeof(PluginConfigurations).GetMethod("SerializeConfig",BindingFlags.Static|BindingFlags.NonPublic)!;
         var storage=new PluginConfigurations(directory);
         var load=typeof(PluginConfigurations).GetMethod("LoadForType")!.MakeGenericMethod(type);
-        string path=storage.GetConfigFile("GillionsGameSync").FullName;
+        bool testingUpgrade=mode is "--testing-upgrade-write" or "--testing-upgrade-check";
+        string product=testingUpgrade?"GillionsGameSyncTest":"GillionsGameSync";
+        string predecessorVersion=testingUpgrade?"0.0.87.0":"1.0.31.2";
+        string candidateVersion=testingUpgrade?"0.0.88.0":"1.0.31.3";
+        string path=storage.GetConfigFile(product).FullName;
         int checks=0;
         void Check(bool ok,string message) { checks++; if(!ok)throw new Exception("Stable upgrade: "+message); }
         string Save(object value)=>(string)serialize.Invoke(null,[value])!;
         JObject Parse(string text) { using var reader=new JsonTextReader(new StringReader(text)){DateParseHandling=DateParseHandling.None};return JObject.Load(reader); }
-        if(mode is "--current-upgrade-write" or "--current-upgrade-check") {
-            Check(assembly.GetName().Name=="GillionsGameSync","same Public product required");
-            if(mode=="--current-upgrade-write") {
-                Check(assembly.GetName().Version!.ToString(4)=="1.0.31.2","exact published predecessor required");
+        if(mode is "--current-upgrade-write" or "--current-upgrade-check" or "--testing-upgrade-write" or "--testing-upgrade-check") {
+            Check(assembly.GetName().Name==product,"same product required");
+            if(mode.EndsWith("-write",StringComparison.Ordinal)) {
+                Check(assembly.GetName().Version!.ToString(4)==predecessorVersion,"exact published predecessor required");
                 for(int fixture=0;fixture<2;fixture++) {
                     var value=Activator.CreateInstance(type)!;
                     foreach(var property in type.GetProperties().Where(p=>p.PropertyType==typeof(bool)&&p.CanWrite))
@@ -29,22 +33,23 @@ internal static class StableUpgradeTests {
                     const string device="00000000-0000-4000-8000-000000000001";
                     type.GetProperty("DeviceToken")!.SetValue(value,token);
                     type.GetProperty("DeviceId")!.SetValue(value,device);
-                    type.GetProperty("ServerUrl")!.SetValue(value,"https://gillions.app");
+                    string origin=testingUpgrade&&fixture==1?"https://test.gillions.app":"https://gillions.app";
+                    type.GetProperty("ServerUrl")!.SetValue(value,origin);
                     type.GetProperty("ActiveSession")!.SetValue(value,assembly.GetType("GillionsGameSync.PairedSession",true)!
-                        .GetMethod("Create")!.Invoke(null,["https://gillions.app",device,token]));
+                        .GetMethod("Create")!.Invoke(null,[origin,device,token]));
                     type.GetProperty("PairingRequired")!.SetValue(value,false);
-                    type.GetProperty("LastReadChangelogVersion")!.SetValue(value,"1.0.31.2");
+                    type.GetProperty("LastReadChangelogVersion")!.SetValue(value,predecessorVersion);
                     type.GetProperty("AutoRetainerVenturePlanBackups")!.SetValue(value,JObject.Parse("{\"synthetic\":{\"unknownLegacyField\":17}}"));
                     File.WriteAllText(Path.Combine(directory,$"current-predecessor-{fixture}.json"),Save(value));
                 }
-                Console.WriteLine($"Exact Stable31.2 serializer fixture PASS: {checks} identity checks; OFF and ON synthetic preference sets.");
+                Console.WriteLine($"Exact {product}/{predecessorVersion} serializer fixture PASS: {checks} identity checks; OFF and ON synthetic preference sets.");
                 return;
             }
-            Check(assembly.GetName().Version!.ToString(4)=="1.0.31.3","distinguishable successor required");
+            Check(assembly.GetName().Version!.ToString(4)==candidateVersion,"distinguishable successor required");
             for(int fixture=0;fixture<2;fixture++) {
                 var originalCurrent=File.ReadAllText(Path.Combine(directory,$"current-predecessor-{fixture}.json"));
                 File.WriteAllText(path,originalCurrent);
-                var current=load.Invoke(storage,["GillionsGameSync"])!;
+                var current=load.Invoke(storage,[product])!;
                 var beforeCurrent=Parse(originalCurrent); var afterCurrent=Parse(Save(current));
                 Check(JToken.DeepEquals(beforeCurrent,afterCurrent),"upgrade must preserve every serialized setting, credential binding and retained field");
                 var currentSession=type.GetProperty("ActiveSession")!.GetValue(current)!;
@@ -52,10 +57,10 @@ internal static class StableUpgradeTests {
                     [type.GetProperty("DeviceId")!.GetValue(current),type.GetProperty("DeviceToken")!.GetValue(current)])!,"captured pairing remains valid");
                 Check(!(bool)type.GetProperty("PairingRequired")!.GetValue(current)!,"upgrade must not force re-pairing");
                 File.WriteAllText(path,Save(current));
-                var restart=load.Invoke(storage,["GillionsGameSync"])!;
+                var restart=load.Invoke(storage,[product])!;
                 Check(JToken.DeepEquals(afterCurrent,Parse(Save(restart))),"reload must preserve the entire predecessor configuration");
             }
-            Console.WriteLine($"Exact Stable31.2 -> Public31.3 upgrade PASS: {checks} checks; all serialized fields, OFF/ON preferences, pairing and restart preserved; synthetic only.");
+            Console.WriteLine($"Exact {product}/{predecessorVersion} -> {candidateVersion} upgrade PASS: {checks} checks; all serialized fields, OFF/ON preferences, pairing and restart preserved; synthetic only.");
             return;
         }
         if(mode=="--upgrade-write") {

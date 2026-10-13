@@ -14,7 +14,7 @@ AssemblyLoadContext.Default.Resolving += (_, name) => {
     return File.Exists(path) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(path) : null;
 };
 var pluginAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(assemblyPath);
-if (args.Length == 4 && args[3] is "--upgrade-write" or "--upgrade-check" or "--rollback-check" or "--current-upgrade-write" or "--current-upgrade-check") {
+if (args.Length == 4 && args[3] is "--upgrade-write" or "--upgrade-check" or "--rollback-check" or "--current-upgrade-write" or "--current-upgrade-check" or "--testing-upgrade-write" or "--testing-upgrade-check") {
     StableUpgradeTests.Run(pluginAssembly, fixturePath, args[3]);
     return;
 }
