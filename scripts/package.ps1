@@ -7,7 +7,7 @@ param(
   [ValidatePattern('^\d+\.\d+\.\d+(?:\.\d+)?$')]
   [string]$Version,
 
-  [string]$PublicBaseUrl = 'https://gillions.app',
+  [string]$PublicBaseUrl = '',
   [string]$RepositoryUrl = 'https://github.com/anndrox/GillionsGameSync',
   [string]$StableReleaseBaseUrl = 'https://github.com/anndrox/GillionsGameSync/releases/download',
   [string]$TestingReleaseBaseUrl = '',
@@ -18,23 +18,29 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $root 'GillionsGameSync.csproj'
+if (-not $PublicBaseUrl) { $PublicBaseUrl = if ($Channel -eq 'testing') { 'https://test.gillions.app' } else { 'https://gillions.app' } }
 $parsedOrigin = $null
 $PublicBaseUrl = $PublicBaseUrl.Trim().TrimEnd('/')
 $RepositoryUrl = $RepositoryUrl.Trim().TrimEnd('/')
 $StableReleaseBaseUrl = $StableReleaseBaseUrl.Trim().TrimEnd('/')
 $TestingReleaseBaseUrl = $TestingReleaseBaseUrl.Trim().TrimEnd('/')
 $StableIconUrl = $StableIconUrl.Trim()
-$allowedSchemes = if ($Channel -eq 'testing') { @('http', 'https') } else { @('https') }
+$allowedSchemes = @('https')
 if (-not [Uri]::TryCreate($PublicBaseUrl, [UriKind]::Absolute, [ref]$parsedOrigin) -or
     $parsedOrigin.Scheme -notin $allowedSchemes -or $parsedOrigin.AbsolutePath -ne '/') {
   throw "PublicBaseUrl must be an absolute $($allowedSchemes -join ' or ') origin without a path."
 }
+if ($Channel -eq 'testing' -and $PublicBaseUrl -cne 'https://test.gillions.app') {
+  throw 'Testing packages must use the established exact HTTPS TEST default.'
+}
+$allowedRepositories = @('/anndrox/GillionsGameSync')
+if ($Channel -eq 'testing') { $allowedRepositories += '/anndrox/GillionsGameSync-Testing' }
 $parsedRepository = $null
 if (-not [Uri]::TryCreate($RepositoryUrl, [UriKind]::Absolute, [ref]$parsedRepository) -or
     $parsedRepository.Scheme -ne 'https' -or
     $parsedRepository.Host -ne 'github.com' -or
-    $parsedRepository.AbsolutePath -ne '/anndrox/GillionsGameSync') {
-  throw 'RepositoryUrl must be https://github.com/anndrox/GillionsGameSync.'
+    $parsedRepository.AbsolutePath -notin $allowedRepositories -or $parsedRepository.Query -or $parsedRepository.Fragment -or $parsedRepository.UserInfo) {
+  throw 'RepositoryUrl must be an approved channel-specific GitHub repository.'
 }
 $parsedReleaseBase = $null
 if (-not [Uri]::TryCreate($StableReleaseBaseUrl, [UriKind]::Absolute, [ref]$parsedReleaseBase) -or
@@ -49,8 +55,8 @@ if ($TestingReleaseBaseUrl) {
       -not [Uri]::TryCreate($TestingReleaseBaseUrl, [UriKind]::Absolute, [ref]$parsedTestingReleaseBase) -or
       $parsedTestingReleaseBase.Scheme -ne 'https' -or
       $parsedTestingReleaseBase.Host -ne 'github.com' -or
-      $parsedTestingReleaseBase.AbsolutePath -ne '/anndrox/GillionsGameSync/releases/download' -or
-      $parsedTestingReleaseBase.Query -or $parsedTestingReleaseBase.UserInfo) {
+      $parsedTestingReleaseBase.AbsolutePath -notin @('/anndrox/GillionsGameSync/releases/download', '/anndrox/GillionsGameSync-Testing/releases/download') -or
+      $parsedTestingReleaseBase.Query -or $parsedTestingReleaseBase.Fragment -or $parsedTestingReleaseBase.UserInfo) {
     throw 'TestingReleaseBaseUrl is testing-only and must be the canonical GillionsGameSync GitHub Releases download path.'
   }
 }
@@ -74,7 +80,7 @@ $zipPath = Join-Path $packageDirectory "$zipBase-$Version.zip"
 $manifestPath = Join-Path $packageDirectory "$zipBase.json"
 
 New-Item -ItemType Directory -Path $output -Force | Out-Null
-$arguments = @('build', $project, '-c', 'Release', '-warnaserror', "-p:Version=$Version", "-p:GillionsPublicBaseUrl=$PublicBaseUrl", "-p:OutputPath=$output")
+$arguments = @('build', $project, '-c', 'Release', '-warnaserror', "-p:Version=$Version", "-p:GillionsPublicBaseUrl=$PublicBaseUrl", "-p:GillionsRepositoryUrl=$RepositoryUrl", "-p:OutputPath=$output")
 if ($isTesting) { $arguments += '-p:GillionsTestBuild=true' }
 dotnet @arguments
 if ($LASTEXITCODE -ne 0) { throw "$displayName build failed." }
@@ -121,7 +127,7 @@ $manifest = @([ordered]@{
   Name = $displayName
   InternalName = $internalName
   AssemblyVersion = $assemblyVersion
-  Description = if ($isTesting) { 'Unreleased, opt-in test build for Gillions Game Sync. Install only when directed for in-game verification.' } else { 'Opt-in character synchronization for Gillions with read-only Retainer observations. Never automates gameplay or sends Square Enix credentials.' }
+  Description = if ($isTesting) { 'Opt-in experimental Gillions Game Sync. Separate TEST pairing only; keep Public disabled while Testing is enabled.' } else { 'Opt-in character synchronization for Gillions with read-only Retainer observations. Never automates gameplay or sends Square Enix credentials.' }
   ApplicableVersion = 'any'
   RepoUrl = $RepositoryUrl
   Tags = if ($isTesting) { @('inventory', 'collection', 'testing') } else { @('inventory', 'collection', 'utility') }
@@ -130,7 +136,7 @@ $manifest = @([ordered]@{
   LoadSync = $false
   CanUnloadAsync = $false
   LoadPriority = 0
-  Punchline = if ($isTesting) { 'Unreleased Gillions sync test build.' } else { 'Opt-in account sync for your Gillions profile.' }
+  Punchline = if ($isTesting) { 'Opt-in experimental Gillions Game Sync.' } else { 'Opt-in account sync for your Gillions profile.' }
   AcceptsFeedback = $true
   IconUrl = $iconUrl
   DownloadLink = $downloadUrl

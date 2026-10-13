@@ -23,6 +23,7 @@ internal static class OriginPackagedTests {
         foreach(var origin in origins) {
             bool allowed=origin==test || !testing && origin==prod;
             Check((bool)Call("NativeProduct","TransportOrigin",origin)! == allowed,"exact allow-list "+origin);
+            Check((bool)Call("NativeProduct","RequestOrigin",origin)! == (!testing || origin==test),"Testing ALL-request destination fence "+origin);
             Check((bool)Call("HuntMapPolicy","Admit",true,true,origin,true)! == allowed,"Hunt admission "+origin);
             Check(!(bool)Call("HuntMapPolicy","Admit",false,true,origin,true)!,"origin never grants Hunt consent");
             Check((bool)Call("TravelSyncPolicy","Admit",true,true,true,true,origin,true)! == allowed,"travel admission "+origin);
@@ -69,11 +70,15 @@ internal static class OriginPackagedTests {
             var permit=lifetime.GetType().GetMethod("Capture")!.Invoke(lifetime,[mode,1UL,session,origin,token])!;
             var plugin=RuntimeHelpers.GetUninitializedObject(T("Plugin"));
             foreach(var path in new[]{"/api/game-sync/presence","/api/game-sync/item-links/poll","/api/game-sync/item-links/consume"}) {
-                using var request=(HttpRequestMessage)T("Plugin").GetMethod("Request",instance)!.Invoke(plugin,[path,permit,new{synthetic=true}])!;
-                Check(request.RequestUri!.AbsoluteUri==origin+path && request.Headers.Authorization?.Parameter==token,"request keeps paired origin/token");
+                try {
+                    using var request=(HttpRequestMessage)T("Plugin").GetMethod("Request",instance)!.Invoke(plugin,[path,permit,new{synthetic=true}])!;
+                    Check(allowed && request.RequestUri!.AbsoluteUri==origin+path && request.Headers.Authorization?.Parameter==token,"request keeps permitted paired origin/token");
+                } catch(TargetInvocationException e) when(e.InnerException is InvalidOperationException) {Check(!allowed,"Testing refuses production pairing/presence/commands before dispatch");}
             }
-            using var snapshot=(HttpRequestMessage)T("Plugin").GetMethod("SnapshotRequest",instance)!.Invoke(plugin,["/api/game-sync/sync",permit,"hunt_bills","nonce","{}"u8.ToArray()])!;
-            Check(snapshot.RequestUri!.AbsoluteUri==origin+"/api/game-sync/sync" && snapshot.Headers.Authorization?.Parameter==token,"personal request keeps pairing");
+            try {
+                using var snapshot=(HttpRequestMessage)T("Plugin").GetMethod("SnapshotRequest",instance)!.Invoke(plugin,["/api/game-sync/sync",permit,"hunt_bills","nonce","{}"u8.ToArray()])!;
+                Check(allowed && snapshot.RequestUri!.AbsoluteUri==origin+"/api/game-sync/sync" && snapshot.Headers.Authorization?.Parameter==token,"snapshot keeps permitted pairing");
+            } catch(TargetInvocationException e) when(e.InnerException is InvalidOperationException) {Check(!allowed,"Testing refuses production ordinary/personal snapshots before dispatch");}
             foreach(var responseOrigin in new[]{origin,other,"http://gillions.app","https://other.example"}) {
                 using var response=new HttpResponseMessage(System.Net.HttpStatusCode.OK){RequestMessage=new HttpRequestMessage(HttpMethod.Post,responseOrigin+"/api/game-sync/presence")};
                 response.Headers.Date=DateTimeOffset.UtcNow;

@@ -104,7 +104,11 @@ public sealed partial class Plugin : IDalamudPlugin {
     private bool huntMapPollInFlight;
     private volatile string huntMapStatus = "Automatic Hunt maps OFF.";
 #endif
+#if GILLIONS_TEST_BUILD
+    private readonly HttpClient http = PartyFinderHttp.CreateClient();
+#else
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(30) };
+#endif
     private readonly HttpClient partyFinderHttp = PartyFinderHttp.CreateClient();
     private readonly PluginConfiguration configuration;
     private readonly IPartyFinderContributor partyFinderContributor;
@@ -177,6 +181,8 @@ public sealed partial class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Testing88 uses a dedicated public Testing feed, separate configuration and TEST-only HTTPS requests. No production pairing is imported; historical Testing production bindings remain preserved but inactive.",
+        "Main, Settings and Pairing share the accepted Public1.0.31.3 resizing/reconnect/Hunt-status corrections. This separate Testing DLL is not the frozen Public binary.",
         "Testing85 adds temporary Advanced FATE diagnostics: bounded read-only public overworld observations and cost measurements in RAM. No remote contributions until an exact independent Site policy/admission contract is wired. Missing FATEs are UNKNOWN; no player coordinates or persistent history.",
         "Testing84 refreshes acknowledged Hunt coverage at a six-second observation deadline using newer RAM snapshots, without waiting for the routine personal tick. Reads remain three seconds; permission, single-flight, backoff and the 15-second freshness boundary remain unchanged.",
         "Testing83 reports private Hunt bill Key Item absence only after a complete loaded snapshot. Presence remains unresolved; unavailable state never supersedes history. Exact order/acquisition/reset is unsupported, and historical progress is unchanged.",
@@ -332,8 +338,9 @@ public sealed partial class Plugin : IDalamudPlugin {
         try {
             permit = await framework.RunOnFrameworkThread(() => {
                 if (disposed || pairingInFlight) throw new OperationCanceledException();
-                if (string.IsNullOrWhiteSpace(configuration.PairingCode) || !SyncOrigin.TryNormalize(configuration.ServerUrl, out var origin))
-                    throw new InvalidOperationException("Enter a pairing code and a valid HTTPS server address.");
+                if (string.IsNullOrWhiteSpace(configuration.PairingCode) || !SyncOrigin.TryNormalize(configuration.ServerUrl, out var origin)
+                    || !NativeProduct.RequestOrigin(origin))
+                    throw new InvalidOperationException("Enter a pairing code and a supported HTTPS server address for this channel.");
                 pairingInFlight = true;
                 ownsPairAttempt = true;
                 configuration.PairingRequired = true;
@@ -1427,7 +1434,8 @@ public sealed partial class Plugin : IDalamudPlugin {
     }
 
     private bool HasPairedSession => SyncOwnershipPolicy.IsBoundSession(configuration.ActiveSession,
-        configuration.PairingRequired, configuration.DeviceId, configuration.DeviceToken);
+        configuration.PairingRequired, configuration.DeviceId, configuration.DeviceToken)
+        && NativeProduct.RequestOrigin(configuration.ActiveSession?.Origin);
     private OwnedCharacterState CurrentState => activeOwnedState ?? throw new InvalidOperationException("Pair and log into a character before syncing.");
 
     private void RequestConfigurationSave() => savePolicy.RequestDurable();
@@ -1739,7 +1747,7 @@ public sealed partial class Plugin : IDalamudPlugin {
     }
 #endif
     private bool PermitIsCurrent(SyncRequestPermit permit) {
-        if (disposed) return false;
+        if (disposed || !NativeProduct.RequestOrigin(permit.Origin)) return false;
         RefreshSessionContext();
         return (permit.Mode == SyncRequestMode.Pair || HasPairedSession) && requestLifetime.Accepts(permit,
             activeRetainerCharacterContentId, configuration.ActiveSession, configuration.DeviceToken,
@@ -2088,6 +2096,7 @@ public sealed partial class Plugin : IDalamudPlugin {
     }
 
     private HttpRequestMessage Request(string path, SyncRequestPermit permit, object body) {
+        if (!NativeProduct.RequestOrigin(permit.Origin)) throw new InvalidOperationException("Unsupported destination for this Game Sync channel.");
         var request = new HttpRequestMessage(HttpMethod.Post, permit.Origin + path) { Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json") };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", permit.Token);
         request.Headers.UserAgent.ParseAdd($"{RetainerClient.ProductName}/{PluginVersion}");
@@ -2095,6 +2104,7 @@ public sealed partial class Plugin : IDalamudPlugin {
     }
 
     private HttpRequestMessage SnapshotRequest(string path, SyncRequestPermit permit, string resourceType, string nonce, byte[] payloadUtf8) {
+        if (!NativeProduct.RequestOrigin(permit.Origin)) throw new InvalidOperationException("Unsupported destination for this Game Sync channel.");
         var buffer = new ArrayBufferWriter<byte>(payloadUtf8.Length + 256);
         using (var writer = new Utf8JsonWriter(buffer)) {
             writer.WriteStartObject();

@@ -27,6 +27,8 @@ var endpoint = (Uri)pluginAssembly.GetType("GillionsGameSync.XivpfEndpoints", tr
     .GetProperty("ContributionUrl", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
 var testingProduct = pluginAssembly.GetName().Name == "GillionsGameSyncTest";
 PublicCandidatePackagedTests.Run(pluginAssembly);
+ChannelIsolationPackagedTests.Run(pluginAssembly,fixturePath);
+DistributionManifestPackagedTests.Run(pluginAssembly);
 OriginPackagedTests.Run(pluginAssembly);
 var nativeCapabilities = pluginAssembly.GetType("GillionsGameSync.FateLocalView") is not null;
 FatePackagedTests.Run(pluginAssembly,testingProduct,fixturePath);

@@ -29,7 +29,16 @@ public sealed partial class Plugin {
 #else
     private const bool IsTesting=false;
 #endif
-    private string PrivacyUrl => (SyncOrigin.TryNormalize(configuration.ActiveSession?.Origin,out var current) ? current : GillionsEndpoints.DefaultServerUrl)+"/gillions-sync";
+    private string UiOrigin {
+        get {
+#if GILLIONS_TEST_BUILD
+            return NativeProduct.TransportOrigin(configuration.ActiveSession?.Origin) ? configuration.ActiveSession!.Origin : GillionsEndpoints.DefaultServerUrl;
+#else
+            return configuration.ActiveSession?.Origin ?? GillionsEndpoints.DefaultServerUrl;
+#endif
+        }
+    }
+    private string PrivacyUrl => (SyncOrigin.TryNormalize(UiOrigin,out var current) ? current : GillionsEndpoints.DefaultServerUrl)+"/gillions-sync";
     private void DrawActionFeedback(bool pairing=false) {
         string message=PublicConnectionPresentation.ActionMessage(uiState.Message,pairing);
         if(message.Length>0) Label(message);
@@ -120,6 +129,11 @@ public sealed partial class Plugin {
         Link("Open privacy & data settings",PrivacyUrl);
     }
     private void DrawMainPublic() {
+#if GILLIONS_TEST_BUILD
+        Label("TESTING — offline unless separately paired to supported HTTPS TEST. Keep installed Public disabled while this copy is enabled.");
+        if(configuration.ActiveSession is not null && !NativeProduct.TransportOrigin(configuration.ActiveSession.Origin))
+            Label("Existing non-TEST pairing is inactive and preserved. Do not copy or reset Public settings.");
+#endif
         var h=publicHealth;
         DrawBranding(32); ImGui.Separator(); DrawConnection(h.Connection); Label(h.Character);
         if(h.LastSync is { } t) Label($"Last sync: {t.ToLocalTime():g}");
@@ -137,7 +151,7 @@ public sealed partial class Plugin {
             && h.Fates=="Gillions unavailable" && h.Market=="Gillions unavailable";
         DrawFeatureHealth(h,sharedUnavailable);
         ImGui.Separator(); DrawPrivacy();
-        Link("Open Gillions",configuration.ActiveSession?.Origin ?? GillionsEndpoints.DefaultServerUrl);
+        Link("Open Gillions",UiOrigin);
         ImGui.SameLine();
         if(ImGui.Button("Settings")) publicUi.ShowSettings();
     }
@@ -145,7 +159,7 @@ public sealed partial class Plugin {
         DrawPairingBranding(); ImGui.Separator();
         if(uiState.Paired && !pairingRepair) {
             Label("Game Sync is ready"); Label("Connected as:"); Label(publicHealth.Character); DrawPrivacy();
-            Link("Open Gillions",configuration.ActiveSession?.Origin ?? GillionsEndpoints.DefaultServerUrl);
+            Link("Open Gillions",UiOrigin);
             if(ImGui.Button("Finish")) { publicUi.FinishPairing(); QueueUiAction(()=> { configuration.OnboardingCompleted=true; RequestConfigurationSave(); }); }
             return;
         }
@@ -200,7 +214,7 @@ public sealed partial class Plugin {
         if(ImGui.BeginTabItem("Connection")) {
             DrawConnection(publicHealth.Connection); Label(publicHealth.Character); DrawPrivacy();
             DrawActionFeedback();
-            Link("Open Gillions",configuration.ActiveSession?.Origin ?? GillionsEndpoints.DefaultServerUrl);
+            Link("Open Gillions",UiOrigin);
             if(ImGui.Button("Reconnect")) { pairingRepair=true; publicUi.ShowPairing(); }
             if(uiState.Paired) { ImGui.Spacing(); ImGui.Separator(); }
             if(uiState.Paired && ImGui.Button("Disconnect Game Sync")) QueueUiAction(()=> {

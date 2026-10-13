@@ -1,5 +1,19 @@
 # Releasing
 
+## Dedicated public Testing distribution
+
+Owner-authorized Testing88 uses `anndrox/GillionsGameSync-Testing`, a
+distribution-only repository. Source stays here on a reviewed task branch.
+Use the maintained Testing package script with RepositoryUrl and
+TestingReleaseBaseUrl set to that exact repository; its raw main-backed
+`data/GillionsGameSyncTesting.json` is the update pointer. Publish the immutable
+versioned Testing prerelease first, anonymously validate its ZIP/manifests/hash,
+then advance only that distribution feed. Preserve all older immutable releases
+and the historical v0.0.64 rolling feed. Stable source/feed/tag/artifacts remain
+unchanged. Follow [Testing88 limits](releases/testing-0.0.88.md), including one
+enabled copy and separate TEST-only enrollment. Historical feed instructions
+below apply only to the original stream and do not authorize overwriting it now.
+
 ## Prepared Public 1.0.31.3 successor
 
 Published Stable remains 1.0.31.2. The isolated window/status correction now has

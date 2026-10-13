@@ -16,7 +16,7 @@ foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate'
   Assert-Condition ($stable[$field] -ceq $stableUrl) "Stable packaging generated the wrong $field."
 }
 
-$testingOrigin = 'https://testing.invalid'
+$testingOrigin = 'https://test.gillions.app'
 & (Join-Path $root 'scripts/package.ps1') -Channel stable -Version 9.8.7.6 -PublishedAt 1
 if ($LASTEXITCODE -ne 0) { throw 'Four-part public identity package fixture failed.' }
 $fourRoot = Join-Path $root 'artifacts/package/stable/9.8.7.6'
@@ -29,12 +29,13 @@ foreach ($field in @('DownloadLink', 'DownloadLinkInstall', 'DownloadLinkUpdate'
   Assert-Condition ($four[$field] -ceq 'https://github.com/anndrox/GillionsGameSync/releases/download/v9.8.7.6/GillionsGameSync-9.8.7.6.zip') "Four-part packaging generated the wrong $field."
 }
 Assert-Condition ($stable.AssemblyVersion -ceq '9.8.7.0') 'Existing three-part public version normalization changed.'
-$testingReleaseBase = 'https://github.com/anndrox/GillionsGameSync/releases/download'
-& (Join-Path $root 'scripts/package.ps1') -Channel testing -Version 0.0.0 -PublicBaseUrl $testingOrigin -TestingReleaseBaseUrl $testingReleaseBase -PublishedAt 1
+$testingReleaseBase = 'https://github.com/anndrox/GillionsGameSync-Testing/releases/download'
+& (Join-Path $root 'scripts/package.ps1') -Channel testing -Version 0.0.0 -PublicBaseUrl $testingOrigin -RepositoryUrl 'https://github.com/anndrox/GillionsGameSync-Testing' -TestingReleaseBaseUrl $testingReleaseBase -PublishedAt 1
 if ($LASTEXITCODE -ne 0) { throw 'Testing package fixture failed.' }
 $testing = @([IO.File]::ReadAllText((Join-Path $root 'artifacts/package/testing/0.0.0/GillionsGameSyncTesting.json')) | ConvertFrom-Json -AsHashtable)[0]
 $embeddedTesting = [IO.File]::ReadAllText((Join-Path $root 'artifacts/package/testing/0.0.0/build/GillionsGameSyncTest.json')) | ConvertFrom-Json
 Assert-Condition ($embeddedTesting.IconUrl -ceq $testing.IconUrl) 'Embedded testing manifest and feed must agree on the canonical icon.'
+Assert-Condition ($embeddedTesting.RepoUrl -ceq 'https://github.com/anndrox/GillionsGameSync-Testing' -and $testing.RepoUrl -ceq $embeddedTesting.RepoUrl) 'Testing distribution metadata must agree without changing Stable.'
 $testingUrl = "$testingReleaseBase/v0.0.0-testing/GillionsGameSyncTesting-0.0.0.zip"
 Assert-Condition ($testing.AssemblyVersion -ceq '0.0.0.0' -and $embeddedTesting.AssemblyVersion -ceq '0.0.0.0') 'Existing three-part Testing version normalization changed.'
 Assert-Condition ($testing.InternalName -ceq 'GillionsGameSyncTest') 'Testing packaging changed the separate plugin identity.'

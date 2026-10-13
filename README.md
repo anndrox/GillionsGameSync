@@ -1,5 +1,20 @@
 # Gillions Game Sync
 
+## Dedicated public Testing channel
+
+The separately identified experimental product is distributed through
+`https://github.com/anndrox/GillionsGameSync-Testing` with this custom repository:
+
+`https://raw.githubusercontent.com/anndrox/GillionsGameSync-Testing/main/data/GillionsGameSyncTesting.json`
+
+Use only one enabled Game Sync copy. Public configuration/pairing are separate.
+Testing88 carries the Public1.0.31.3 shared UI corrections but is not its frozen
+DLL. Offline local UI testing needs no pairing; online testing requires separate
+secure TEST access and permissions, never production admission. FATE88 is not
+currently Site-admitted. See [Testing88 notes](docs/releases/testing-0.0.88.md).
+Historical Testing URLs and release records below remain historical, not the
+new channel's update target.
+
 ## Public release and prepared successor
 
 The published Public release is **1.0.31.2**. The unchanged Stable repository

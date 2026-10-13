@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.88 - Dedicated public Testing channel
+
+- Publish the existing separate Testing product through a distribution-only
+  GitHub repository and standard Dalamud custom feed; keep one source repository.
+- Carry the accepted Public1.0.31.3 window/reconnect/Hunt-status corrections.
+- Fence all Testing requests to exact HTTPS TEST; preserve but inactivate old
+  Testing production pairings, with no Public configuration change.
+- Keep one Game Sync copy enabled at a time. FATE88 exact Site admission remains
+  unavailable; offline UI testing needs no pairing or contribution permission.
+
 ## 1.0.31.3 - Prepared Public window/status correction (unpublished)
 
 - Make Main, Settings and Pairing manually resizable with readable defaults,
