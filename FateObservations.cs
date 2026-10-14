@@ -49,12 +49,16 @@ internal static class FatePolicy {
     };
     internal static bool Compatible(FateSource? s) => s is not null
         && s.Family == "dalamud-fate-table" && Version.TryParse(s.CollectorVersion, out _)
-        && s.GameVersion == "2026.09.15.0000.0000" && s.ReferenceGameVersion == s.GameVersion
-        && s.DalamudApiLevel == 15 && s.DalamudVersion == "15.0.3.6"
-        && s.DalamudRevision == "b666d821a47306fb447c60155b5d99377f91a5ee"
-        && s.ClientStructsVersion == "7.56.2.9136"
-        && s.ClientStructsRevision == "313161e448e335adddd928f8a0212b2c328b5659"
-        && s.LuminaVersion == "7.7.0" && s.ExcelVersion == "7.5.1";
+        && s.ReferenceGameVersion == s.GameVersion && s.DalamudApiLevel == 15
+        && s.LuminaVersion == "7.7.0" && s.ExcelVersion == "7.5.1"
+        && (s.GameVersion == "2026.09.15.0000.0000" && s.DalamudVersion == "15.0.3.6"
+            && s.DalamudRevision == "b666d821a47306fb447c60155b5d99377f91a5ee"
+            && s.ClientStructsVersion == "7.56.2.9136"
+            && s.ClientStructsRevision == "313161e448e335adddd928f8a0212b2c328b5659"
+            || s.GameVersion == "2026.10.06.0000.0000" && s.DalamudVersion == "15.0.3.7"
+            && s.DalamudRevision == "c9dacb095340ebe6513f13af6c38b13517ae70e4"
+            && s.ClientStructsVersion == "7.57.0.9378"
+            && s.ClientStructsRevision == "78975d8306c2766250ee4dca1925ef81f5dfd4f7");
     internal static FateStateValue? State(byte raw) => raw switch {
         3 => new("preparing",3), 4 => new("running",4), 5 => new("ending",5),
         7 => new("ended",7), 8 => new("failed",8), _ => null

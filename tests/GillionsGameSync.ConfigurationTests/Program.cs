@@ -14,7 +14,7 @@ AssemblyLoadContext.Default.Resolving += (_, name) => {
     return File.Exists(path) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(path) : null;
 };
 var pluginAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(assemblyPath);
-if (args.Length == 4 && args[3] is "--upgrade-write" or "--upgrade-check" or "--rollback-check" or "--current-upgrade-write" or "--current-upgrade-check" or "--testing-upgrade-write" or "--testing-upgrade-check") {
+if (args.Length == 4 && args[3] is "--upgrade-write" or "--upgrade-check" or "--rollback-check" or "--current-upgrade-write" or "--current-upgrade-check" or "--testing-upgrade-write" or "--testing-upgrade-check" or "--october-public-check" or "--october-testing-write" or "--october-testing-check") {
     StableUpgradeTests.Run(pluginAssembly, fixturePath, args[3]);
     return;
 }
@@ -27,6 +27,7 @@ var endpoint = (Uri)pluginAssembly.GetType("GillionsGameSync.XivpfEndpoints", tr
     .GetProperty("ContributionUrl", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
 var testingProduct = pluginAssembly.GetName().Name == "GillionsGameSyncTest";
 PublicCandidatePackagedTests.Run(pluginAssembly);
+OctoberCompatibilityPackagedTests.Run(pluginAssembly,libraryPath);
 ChannelIsolationPackagedTests.Run(pluginAssembly,fixturePath);
 DistributionManifestPackagedTests.Run(pluginAssembly);
 OriginPackagedTests.Run(pluginAssembly);
@@ -150,7 +151,14 @@ if (nativeCapabilities) {
         && (bool)configurationType.GetProperty("AutomaticSync")!.GetValue(roundTrip)! && !(bool)marketSetting!.GetValue(roundTrip)!,"Travel OFF changed unrelated choices.");
     Assert(!configurationType.GetProperties().Any(p=>p.PropertyType.Name.StartsWith("Travel",StringComparison.Ordinal)),"Configuration must not retain travel data.");
     var native=AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(libraryPath,"FFXIVClientStructs.dll"));
-    Assert(native.GetName().Version?.ToString()=="7.56.2.9136","Travel SDK gate needs reassessment.");
+    var installedNativeVersion=native.GetName().Version?.ToString();
+    Assert(installedNativeVersion is "7.56.2.9136" or "7.57.0.9378","Uninspected SDK fixture requires reassessment.");
+    var personalCompatibility=pluginAssembly.GetType("GillionsGameSync.PersonalObservationCompatibility",true)!;
+    var supportsTuple=personalCompatibility.GetMethod("Supports",BindingFlags.Static|BindingFlags.NonPublic)!;
+    Assert((bool)supportsTuple.Invoke(null,["2026.09.15.0000.0000",installedNativeVersion])!
+        == (installedNativeVersion=="7.56.2.9136"),"New runtime must not bypass unrelated personal SDK gates.");
+    Assert(!(bool)supportsTuple.Invoke(null,["2026.10.06.0000.0000",installedNativeVersion])!,
+        "October Submarine/Dashboard/travel support must not follow Hunt-only qualification.");
     var info=native.GetType("FFXIVClientStructs.FFXIV.Client.Game.UI.TeleportInfo",true)!;
     foreach(var name in new[] { "AetheryteId","GilCost","TerritoryId","IsFavourite","IsFreeAetheryte" }) Assert(info.GetField(name) is not null,"Travel field changed.");
     var agent=native.GetType("FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentTeleport",true)!;

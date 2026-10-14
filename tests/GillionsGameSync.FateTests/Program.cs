@@ -12,6 +12,20 @@ var context=new FateContext(123,21,134,2); // Synthetic local identity NEVER ser
 FateObservation Row(DateTime? time=null) => new(1000,21,134,new("public_instance",2),new("running",4),time??now,
     35,true,15,20,new(120,7,-250),75,new((int)new DateTimeOffset(now).ToUnixTimeSeconds()-180,900));
 Check(FatePolicy.Compatible(source),"exact researched matrix");
+var october=source with {CollectorVersion="0.0.89.0",GameVersion="2026.10.06.0000.0000",ReferenceGameVersion="2026.10.06.0000.0000",
+    DalamudVersion="15.0.3.7",DalamudRevision="c9dacb095340ebe6513f13af6c38b13517ae70e4",
+    ClientStructsVersion="7.57.0.9378",ClientStructsRevision="78975d8306c2766250ee4dca1925ef81f5dfd4f7"};
+Check(FatePolicy.Compatible(october),"exact inspected October source matrix");
+foreach(var bad in new[] {october with {GameVersion="2026.10.07.0000.0000",ReferenceGameVersion="2026.10.07.0000.0000"},
+    october with {GameVersion=source.GameVersion,ReferenceGameVersion=source.GameVersion},
+    october with {DalamudVersion=source.DalamudVersion},october with {DalamudRevision=source.DalamudRevision},
+    october with {ClientStructsVersion=source.ClientStructsVersion},october with {ClientStructsRevision=source.ClientStructsRevision},
+    october with {ReferenceGameVersion=source.GameVersion},october with {DalamudApiLevel=16},
+    october with {LuminaVersion="future"},october with {ExcelVersion="future"},october with {CollectorVersion="unknown"},
+    october with {Family="unknown"}}) Check(!FatePolicy.Compatible(bad),"mixed/future/unknown October source fails closed");
+var octoberPrepared=FatePolicy.Prepare(1,october,[Row()],now);
+Check(octoberPrepared is not null,"October positive row managed preparation");
+Check(!FateTransportPolicy.CanSend(null,october,"synthetic",true,true,octoberPrepared,1,now),"Local qualification cannot authorize Site contributions");
 foreach(var bad in new[] {
     source with {GameVersion="next"},source with {ReferenceGameVersion="next"},source with {DalamudApiLevel=16},
     source with {DalamudVersion="15.0.3.7"},source with {DalamudRevision="next"},source with {ClientStructsVersion="next"},

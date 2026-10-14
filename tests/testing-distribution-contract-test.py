@@ -4,8 +4,9 @@ import subprocess
 
 r=Path(__file__).resolve().parents[1]
 public='43a86941f8f8e60c583c961b1502345df76c7e64'
-for name in ['PublicExperience.cs','HuntBillLocalView.cs']:
-    assert (r/name).read_bytes().replace(b'\r\n',b'\n')==subprocess.check_output(['git','show',public+':'+name],cwd=r).replace(b'\r\n',b'\n'),name
+assert (r/'PublicExperience.cs').read_bytes().replace(b'\r\n',b'\n')==subprocess.check_output(['git','show',public+':PublicExperience.cs'],cwd=r).replace(b'\r\n',b'\n')
+hunt=(r/'HuntBillLocalView.cs').read_text(encoding='utf-8')
+assert hunt.replace('HuntObservationCompatibility.Supports','PersonalObservationCompatibility.Supports')==subprocess.check_output(['git','show',public+':HuntBillLocalView.cs'],cwd=r).decode().replace('\r\n','\n')
 windows=(r/'PublicGameSyncUi.cs').read_text(encoding='utf-8')
 normalized=windows.replace('        string idSuffix=testing ? "Test" : "";\n','').replace('+idSuffix','')
 assert normalized==subprocess.check_output(['git','show',public+':PublicGameSyncUi.cs'],cwd=r).decode().replace('\r\n','\n')
@@ -28,4 +29,4 @@ assert "if ($Channel -eq 'testing') { $allowedRepositories += '/anndrox/Gillions
 assert "$PublicBaseUrl -cne 'https://test.gillions.app'" in pack
 for name in ['data/GillionsGameSync.json','data/GillionsGameSyncTesting.json']:
     assert (r/name).read_bytes().replace(b'\r\n',b'\n')==subprocess.check_output(['git','show',public+':'+name],cwd=r).replace(b'\r\n',b'\n')
-print('Testing distribution source PASS: shared corrected components identical; pairing/permit/build/redirect fences; Stable and historical Testing feeds unchanged.')
+print('Testing distribution source PASS: accepted UI unchanged; only inspected Hunt source qualification differs; pairing/permit/build/redirect fences; Stable and historical Testing feeds unchanged.')

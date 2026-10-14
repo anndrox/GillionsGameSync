@@ -19,6 +19,11 @@ internal static class HuntBillItemCoverageTests {
         var target = new HuntBillTarget(4,715,13000,1,1,0,2,1,1,1);
         hp.Observe(key,[new(18,"daily",1,269,2003509,[target],now,"synthetic-game","synthetic-collector")]);
         var retained = JsonSerializer.Serialize(history);
+        c.Observe(key,key,true,true,2004,4,slots,true,now,mono,HuntObservationCompatibility.OctoberGameBuild,"0.0.89.0",HuntObservationCompatibility.OctoberNativeVersion);
+        check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="absent_confirmed"),"Inspected October complete coverage rejected");
+        check(JsonSerializer.Serialize(history)==retained,"October coverage changed retained bill history");
+        c.Observe(key,key,true,true,2004,4,slots,true,now,mono,HuntObservationCompatibility.OctoberGameBuild,"0.0.89.0","7.57.0.9379");
+        check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="unavailable"),"Future October SDK fabricated negative coverage");
         Observe(slots);
         check(c.Current(key,now,mono)!.Domains.All(d => d.State == "absent_confirmed"),"A: complete absence failed");
         check(c.Current(other,now,mono) is null,"D: other character absence leaked");

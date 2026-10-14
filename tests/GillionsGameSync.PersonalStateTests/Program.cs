@@ -139,6 +139,12 @@ foreach (var bad in new[] {
     (index: (byte)0, flags: 1, loaded: true, item: 0u, present: true)
 }) Check(!HuntObservationAdmission.CanUseBillCache(bad.index, bad.flags, bad.loaded, bad.item, bad.present), "Unavailable/foreign/absent bill admitted.");
 Check(PersonalObservationCompatibility.Supports("2026.09.15.0000.0000", "7.56.2.9136"), "Known candidate pair disabled.");
+Check(HuntObservationCompatibility.Supports("2026.10.06.0000.0000", "7.57.0.9378"), "Inspected October Hunt pair rejected.");
+Check(HuntObservationCompatibility.Supports("2026.09.15.0000.0000", "7.56.2.9136"), "Legacy Hunt pair rejected.");
+Check(!PersonalObservationCompatibility.Supports("2026.10.06.0000.0000", "7.57.0.9378"), "Hunt qualification expanded unrelated readers.");
+foreach (var pair in new[] { ("2026.10.06.0000.0000","7.56.2.9136"), ("2026.09.15.0000.0000","7.57.0.9378"),
+    ("2026.10.07.0000.0000","7.57.0.9378"), ("2026.10.06.0000.0000","7.57.0.9379"), ("unavailable","7.57.0.9378") })
+    Check(!HuntObservationCompatibility.Supports(pair.Item1,pair.Item2),"Mixed/future Hunt pair admitted.");
 foreach (var pair in new[] { ("unknown", "7.56.2.9136"), ("2026.09.15.0000.0000", "7.56.3.0"), ("2026.10.01.0000.0000", "7.56.2.9136") })
     Check(!PersonalObservationCompatibility.Supports(pair.Item1, pair.Item2), "Unsupported patch/SDK admitted.");
 var store = new HuntBillRetention(); var policy = new HuntBillRetentionPolicy(store);

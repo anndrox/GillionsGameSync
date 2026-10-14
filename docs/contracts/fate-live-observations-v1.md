@@ -8,6 +8,11 @@ Earlier [Testing85 results](../releases/testing-0.0.85.md) prove local collectio
 
 ## Maintained sources and supported context
 
+Testing89 / prepared Public31.5 adds the second exact locally qualified October
+source matrix after layout/API comparison. The wire contract below is unchanged.
+This grants neither Site admission nor physical acceptance; see
+[October matrix and limits](../releases/testing-0.0.89.md).
+
 The collector uses Dalamud `IFateTable`/`IFate`, `IClientState`, `IPlayerState` and
 `ICondition`, with Lumina typed World, TerritoryType and Fate references. It copies
 primitives on the framework thread; it never retains IFate wrappers or addresses,

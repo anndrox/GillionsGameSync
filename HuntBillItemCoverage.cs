@@ -49,7 +49,7 @@ internal sealed class HuntBillItemCoverage {
             || !PersonalObservationCompatibility.Utc(now) || !PersonalObservationCompatibility.Metadata(game)
             || !PersonalObservationCompatibility.Metadata(collector) || !PersonalObservationCompatibility.Metadata(sdk)
             || catalog is null) { Clear(); return; }
-        bool complete = PersonalObservationCompatibility.Supports(game, sdk) && initialized && loaded && stable && container == KeyItemsContainer && size is >= 1 and <= 256
+        bool complete = HuntObservationCompatibility.Supports(game, sdk) && initialized && loaded && stable && container == KeyItemsContainer && size is >= 1 and <= 256
             && slots.Length == size && slots.Count(s => s.NativeConfirmedEmpty) <= 8 && slots.Select((s, i) => s.Slot == i && s.Container == container && !s.Symbolic
                 && ItemShapeValid(s)).All(v => v);
         var present = complete ? slots.Where(s => s.ItemId > 0).Select(s => s.ItemId).ToHashSet() : [];

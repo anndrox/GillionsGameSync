@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.0.89 / prepared Public1.0.31.5 — October compatibility
+
+- Add exact October Hunt/FATE source qualifications after maintained layout/API
+  comparison and actual installed managed ABI checks; mixed/future sources stay blocked.
+- Preserve Hunt final-completion and coverage, FATE world/instance/episode/freshness,
+  consent, cadence, retention, Market/PF and ordinary inventory behavior.
+- Keep unrelated personal readers on their existing safety matrix.
+- Consolidate accepted window/input/reconnect/Hunt-status corrections and bounded
+  private-safe diagnostics. No new contribution scope or gameplay writes.
+- Testing uses its established TEST-only channel. October Hunts need qualified Site
+  references; FATE89 needs exact source/reference admission. Physical acceptance and
+  Public31.5 production admission/publication remain held.
+
+## 1.0.31.4 — frozen regression diagnostic (unpublished)
+
+- Added bounded failure stage/status/method context without credentials or payloads.
+- Identified a Site SQL inventory error, repaired separately by Site Operations.
+- This diagnostic did not qualify the October game/SDK tuple.
+
 ## 0.0.88 - Dedicated public Testing channel
 
 - Publish the existing separate Testing product through a distribution-only

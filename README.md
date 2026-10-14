@@ -1,5 +1,16 @@
 # Gillions Game Sync
 
+## October compatibility candidate
+
+Testing0.0.89.0 qualifies the inspected October Hunt pair and exact FATE source
+matrix without weakening future-build guards. It preserves accepted resizing,
+position/input, reconnect, honest Hunt status and bounded privacy-safe diagnostics.
+Shared TEST FATE89 source/reference admission is still a separate dependency;
+local qualification alone cannot start collection or authorize contribution.
+See [Testing89](docs/releases/testing-0.0.89.md) and the unpublished consolidated
+[Public1.0.31.5](docs/releases/v1.0.31.5.md). Stable remains1.0.31.2;
+frozen31.3/31.4 and published88 are unchanged. The Site inventory repair is closed.
+
 ## Dedicated public Testing channel
 
 The separately identified experimental product is distributed through
