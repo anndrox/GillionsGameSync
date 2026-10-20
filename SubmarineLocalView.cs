@@ -125,7 +125,7 @@ internal sealed class SubmarineLocalView : IDisposable {
     private unsafe void OnAddon(AddonEvent kind, AddonArgs args) {
         if (disposed || !policy.RetentionEnabled || !framework.IsInFrameworkUpdateThread) return;
         // Gate before ALL native pointers/signature calls, including PlayerState.
-        if (!PersonalObservationCompatibility.Supports(GameVersion(), typeof(HousingManager).Assembly.GetName().Version?.ToString())) {
+        if (!NativeCompatibility.Supports(NativeFamily.Submarine, GameVersion(), typeof(HousingManager).Assembly.GetName().Version?.ToString())) {
             activeWorkshopKey = ""; personalExport = "";
             Publish("Unsupported game/SDK build; no submarine native read. Retained history preserved."); return;
         }

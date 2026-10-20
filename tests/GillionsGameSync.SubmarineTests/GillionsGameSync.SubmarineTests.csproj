@@ -10,6 +10,7 @@
   <ItemGroup>
     <Compile Include="..\..\SubmarineVoyages.cs" Link="SubmarineVoyages.cs" />
     <Compile Include="..\..\PersonalObservationPolicy.cs" Link="PersonalObservationPolicy.cs" />
+    <Compile Include="..\..\NativeCompatibility.cs" Link="NativeCompatibility.cs" />
   </ItemGroup>
   <ItemGroup><Compile Include="../../NativeProduct.cs" Link="NativeProduct.cs" /></ItemGroup>
 </Project>

@@ -6,7 +6,7 @@ r=Path(__file__).resolve().parents[1]
 public='43a86941f8f8e60c583c961b1502345df76c7e64'
 assert (r/'PublicExperience.cs').read_bytes().replace(b'\r\n',b'\n')==subprocess.check_output(['git','show',public+':PublicExperience.cs'],cwd=r).replace(b'\r\n',b'\n')
 hunt=(r/'HuntBillLocalView.cs').read_text(encoding='utf-8')
-assert hunt.replace('HuntObservationCompatibility.Supports','PersonalObservationCompatibility.Supports')==subprocess.check_output(['git','show',public+':HuntBillLocalView.cs'],cwd=r).decode().replace('\r\n','\n')
+assert hunt.replace('NativeCompatibility.Supports(NativeFamily.Hunt, ','PersonalObservationCompatibility.Supports(')==subprocess.check_output(['git','show',public+':HuntBillLocalView.cs'],cwd=r).decode().replace('\r\n','\n')
 windows=(r/'PublicGameSyncUi.cs').read_text(encoding='utf-8')
 normalized=windows.replace('        string idSuffix=testing ? "Test" : "";\n','').replace('+idSuffix','')
 assert normalized==subprocess.check_output(['git','show',public+':PublicGameSyncUi.cs'],cwd=r).decode().replace('\r\n','\n')

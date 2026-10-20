@@ -31,7 +31,7 @@ internal sealed class TravelContextLocalView : IDisposable {
     internal bool Available(ulong character) => !disposed && state.Enabled && client.IsLoggedIn && player.IsLoaded
         && character != 0 && player.ContentId == character && !client.IsPvP && !client.IsGPosing
         && !conditions[ConditionFlag.BetweenAreas] && !conditions[ConditionFlag.BetweenAreas51]
-        && PersonalObservationCompatibility.Supports(GameVersion(), nativeVersion);
+        && NativeCompatibility.Supports(NativeFamily.Travel, GameVersion(), nativeVersion);
     internal TravelObservation? Current(ulong character, DateTime now) => Available(character) ? state.Current(character,now) : null;
     internal void ClearSession() { state.Clear(); Reset(); }
     private bool disposed;
@@ -111,7 +111,7 @@ internal sealed class TravelContextLocalView : IDisposable {
         var start = Stopwatch.GetTimestamp(); var allocated = GC.GetAllocatedBytesForCurrentThread();
         try {
             var native = typeof(Telepo).Assembly.GetName().Version?.ToString() ?? "unavailable";
-            if (!PersonalObservationCompatibility.Supports(GameVersion(),native)) { Unavailable("Unsupported game/SDK: no travel reads."); return; }
+            if (!NativeCompatibility.Supports(NativeFamily.Travel, GameVersion(),native)) { Unavailable("Unsupported game/SDK: no travel reads."); return; }
             if (!client.IsLoggedIn || !player.IsLoaded || player.ContentId == 0 || client.IsPvP || client.IsGPosing
                 || conditions[ConditionFlag.BetweenAreas] || conditions[ConditionFlag.BetweenAreas51]) { Unavailable("Player/location unavailable; no current context."); return; }
             var character = player.ContentId; var territory = client.TerritoryType; var mapId = client.MapId;

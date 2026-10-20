@@ -33,7 +33,7 @@ internal static class TravelPolicy {
         && value.TerritoryId is > 0 and <= 65535 && value.MapId is > 0 and <= 65535
         && Coordinate(value.MapX) && Coordinate(value.MapY)
         && PersonalObservationCompatibility.Utc(value.ObservedAtUtc)
-        && PersonalObservationCompatibility.Supports(value.GameBuild,value.NativeVersion)
+        && NativeCompatibility.Supports(NativeFamily.Travel, value.GameBuild,value.NativeVersion)
         && PersonalObservationCompatibility.Metadata(value.CollectorVersion)
         && value.TeleportSupport is "OBSERVED_PARTIAL" or "UNAVAILABLE"
         && value.Destinations is not null && value.Destinations.Length <= MaximumDestinations

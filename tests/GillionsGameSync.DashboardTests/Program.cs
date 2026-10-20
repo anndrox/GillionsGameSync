@@ -178,8 +178,10 @@ Check(largeRows.Length == DashboardRetentionPolicy.MaximumGroups && largeRows.Al
 for (ulong id = 1; id <= 16; id++) bytePolicy.Observe(DashboardRetentionPolicy.CharacterKey(id), largeRows);
 Check(byteLimited.CapacityReached && byteLimited.Characters.Count < 16 && JsonSerializer.SerializeToUtf8Bytes(byteLimited).Length < DashboardRetentionPolicy.MaximumBytes,
     "byte capacity did not refuse atomically");
-Check(!PersonalObservationCompatibility.Supports("future-game", PersonalObservationCompatibility.NativeVersion)
-    && !PersonalObservationCompatibility.Supports(PersonalObservationCompatibility.GameBuild, "future-sdk"), "patch gate failed");
+Check(NativeCompatibility.Supports(NativeFamily.Dashboard, NativeCompatibility.September.GameBuild, NativeCompatibility.September.ClientStructsVersion)
+    && !NativeCompatibility.Supports(NativeFamily.Dashboard, "future-game", NativeCompatibility.September.ClientStructsVersion)
+    && !NativeCompatibility.Supports(NativeFamily.Dashboard, NativeCompatibility.September.GameBuild, "future-sdk")
+    && !NativeCompatibility.Supports(NativeFamily.Dashboard, NativeCompatibility.October.GameBuild, NativeCompatibility.October.ClientStructsVersion), "patch gate failed");
 var schedule = new DashboardSchedule();
 Check(schedule.Begin(now, false) is null, "OFF cadence admitted");
 Check(schedule.Begin(now, true) == 0, "initial schedule");

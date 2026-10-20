@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — native compatibility table
+
+- Move every patch-sensitive native build check (Hunt, submarine, travel, FATE,
+  Dashboard) into one per-collector table, `NativeCompatibility.cs`. Admissions are
+  unchanged; qualifying one collector never admits another.
+- Add packaged per-collector layout fingerprints of the shipped ClientStructs
+  members, re-proved in CI on the earlier official archive. Document the evidence
+  and patch-day procedure in `docs/native-compatibility.md`.
+- CI also runs on `codex/**` pushes; the obsolete `feature/venture-planner` trigger is removed.
+
 ## Unreleased — collectible observation readiness
 
 - Withhold the whole Collectibles snapshot while native definitions, character

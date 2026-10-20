@@ -5,6 +5,10 @@ using Dalamud.Plugin;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
+if (args is ["--native-layout-report" or "--native-layout-check", var reportLibraries]) {
+    NativeCompatibilityPackagedTests.Report(Path.GetFullPath(reportLibraries), check: args[0] == "--native-layout-check");
+    return;
+}
 if (args.Length is not (3 or 4)) throw new ArgumentException("Expected plugin binary, Dalamud library directory, synthetic fixture directory, and optional running-Site proof.");
 var assemblyPath = Path.GetFullPath(args[0]);
 var libraryPath = Path.GetFullPath(args[1]);
@@ -32,7 +36,7 @@ var endpoint = (Uri)pluginAssembly.GetType("GillionsGameSync.XivpfEndpoints", tr
 var testingProduct = pluginAssembly.GetName().Name == "GillionsGameSyncTest";
 CollectibleReadinessPackagedTests.Run(pluginAssembly);
 PublicCandidatePackagedTests.Run(pluginAssembly);
-OctoberCompatibilityPackagedTests.Run(pluginAssembly,libraryPath);
+NativeCompatibilityPackagedTests.Run(pluginAssembly,libraryPath);
 ChannelIsolationPackagedTests.Run(pluginAssembly,fixturePath);
 DistributionManifestPackagedTests.Run(pluginAssembly);
 OriginPackagedTests.Run(pluginAssembly);
@@ -158,12 +162,15 @@ if (nativeCapabilities) {
     var native=AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(libraryPath,"FFXIVClientStructs.dll"));
     var installedNativeVersion=native.GetName().Version?.ToString();
     Assert(installedNativeVersion is "7.56.2.9136" or "7.57.0.9378","Uninspected SDK fixture requires reassessment.");
-    var personalCompatibility=pluginAssembly.GetType("GillionsGameSync.PersonalObservationCompatibility",true)!;
-    var supportsTuple=personalCompatibility.GetMethod("Supports",BindingFlags.Static|BindingFlags.NonPublic)!;
-    Assert((bool)supportsTuple.Invoke(null,["2026.09.15.0000.0000",installedNativeVersion])!
-        == (installedNativeVersion=="7.56.2.9136"),"New runtime must not bypass unrelated personal SDK gates.");
-    Assert(!(bool)supportsTuple.Invoke(null,["2026.10.06.0000.0000",installedNativeVersion])!,
-        "October Submarine/Dashboard/travel support must not follow Hunt-only qualification.");
+    var nativeCompatibility=pluginAssembly.GetType("GillionsGameSync.NativeCompatibility",true)!;
+    var nativeFamily=pluginAssembly.GetType("GillionsGameSync.NativeFamily",true)!;
+    var supportsTuple=nativeCompatibility.GetMethod("Supports",BindingFlags.Static|BindingFlags.NonPublic)!;
+    bool NativeSupports(string family,string game)=>(bool)supportsTuple.Invoke(null,[Enum.Parse(nativeFamily,family),game,installedNativeVersion])!;
+    Assert(NativeSupports("Dashboard","2026.09.15.0000.0000") == (installedNativeVersion=="7.56.2.9136")
+        && !NativeSupports("Dashboard","2026.10.06.0000.0000") && !NativeSupports("Dashboard","2026.10.16.0000.0000"),"New runtime must not bypass unrelated personal SDK gates.");
+    foreach(var family in new[]{"Submarine","Travel"})
+        Assert(!NativeSupports(family,"2026.10.06.0000.0000") && !NativeSupports(family,"2026.10.16.0000.0000"),
+            "October Submarine/travel support must not follow Hunt-only qualification.");
     var info=native.GetType("FFXIVClientStructs.FFXIV.Client.Game.UI.TeleportInfo",true)!;
     foreach(var name in new[] { "AetheryteId","GilCost","TerritoryId","IsFavourite","IsFreeAetheryte" }) Assert(info.GetField(name) is not null,"Travel field changed.");
     var agent=native.GetType("FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentTeleport",true)!;

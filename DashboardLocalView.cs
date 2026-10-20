@@ -63,7 +63,7 @@ internal sealed class DashboardLocalView : IDisposable {
     }
     internal void Show() => visible = true;
     private string GameVersion() => data.GameData.Repositories.TryGetValue("ffxiv", out var repo) ? repo.Version : "unavailable";
-    private bool Compatible() => PersonalObservationCompatibility.Supports(GameVersion(), typeof(PlayerState).Assembly.GetName().Version?.ToString());
+    private bool Compatible() => NativeCompatibility.Supports(NativeFamily.Dashboard, GameVersion(), typeof(PlayerState).Assembly.GetName().Version?.ToString());
     private unsafe string CurrentKey() {
         if (!Compatible() || !client.IsLoggedIn || conditions[ConditionFlag.BetweenAreas] || conditions[ConditionFlag.BetweenAreas51]) return "";
         var player = PlayerState.Instance();

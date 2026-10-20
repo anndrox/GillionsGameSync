@@ -13,7 +13,7 @@ for text in (hunt, sub):
     assert "framework.Update" not in text
     assert not re.search(r"HttpClient|SendAsync|RequestData|HookFrom|FireCallback|ReceiveEvent|GetIpcSubscriber|ObjectTable", text)
     event = text.split("private unsafe void OnAddon" if text is sub else "internal unsafe void Tick", 1)[1]
-    assert event.index("PersonalObservationCompatibility.Supports" if text is sub else "HuntObservationCompatibility.Supports") < event.index("PlayerState.Instance()" if text is sub else "CurrentCharacterKey()")
+    assert event.index("NativeCompatibility.Supports(NativeFamily.Submarine," if text is sub else "NativeCompatibility.Supports(NativeFamily.Hunt,") < event.index("PlayerState.Instance()" if text is sub else "CurrentCharacterKey()")
     assert "!framework.IsInFrameworkUpdateThread" in event
     assert "ReadEnabled" in event if text is hunt else "policy.RetentionEnabled" in event
     assert "client.Logout -= OnLogout" in text
@@ -21,7 +21,7 @@ for text in (hunt, sub):
 assert "nextReadUtc" in sub and "AddSeconds(1)" in sub
 assert "RegisterListener" not in hunt and "args.Addon" not in hunt
 tick = hunt.split("internal unsafe void Tick", 1)[1]
-assert tick.index("schedule.TryBegin") < tick.index("HuntObservationCompatibility.Supports") < tick.index("InventoryManager.Instance()")
+assert tick.index("schedule.TryBegin") < tick.index("NativeCompatibility.Supports(NativeFamily.Hunt,") < tick.index("InventoryManager.Instance()")
 assert "InventoryType.KeyItems" in hunt and "!keyItems->IsLoaded" in hunt
 assert "keyItems->Size is < 1 or > 256" in hunt and "item.Quantity > 0" in hunt
 assert "presentItems.Contains(type.EventItem.RowId)" in hunt and "HuntObservationAdmission.CanUseBillCache" in hunt
