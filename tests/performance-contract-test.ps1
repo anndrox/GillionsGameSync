@@ -25,7 +25,7 @@ Assert-NotContains $pluginSource "GetPayloadHash(object payload)" "The legacy se
 Assert-NotContains $collectorSource "JsonSerializer.Serialize(prior) == JsonSerializer.Serialize(read)" "Retainer listing comparisons must not serialize both snapshots."
 Assert-Contains $collectorSource "prior.Items.SequenceEqual(read.Items)" "Retainer listing changes must use typed structural comparison."
 Assert-Contains $collectorSource 'JsonPropertyName("retainerId")' "Typed retainer rows must preserve the existing camel-case wire contract."
-Assert-Contains $collectorSource "SheetRowCache<T>.Get(dataManager)" "Static Lumina row catalogs must be cached."
+Assert-Contains $collectorSource "SheetRowCache<T>.GetRequired(dataManager)" "Collectible catalogs must use the readiness-checked static row cache."
 Assert-Contains $collectorSource "var catalog = GetCatalog(dataManager);" "Armoire catalog projection must be reused while live ownership is reread."
 Assert-Contains $pluginSource "uiRefreshPolicy.ShouldRefresh(settingsVisible, now)" "Settings publication must use the bounded visible-window cadence."
 

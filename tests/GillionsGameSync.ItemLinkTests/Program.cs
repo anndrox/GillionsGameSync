@@ -6,6 +6,7 @@ using System.Text.Json;
 PublicExperienceTests.Run();
 PermissionAuthorityTests.Run();
 SyncFailureDiagnosticTests.Run();
+CollectibleReadinessTests.Run();
 
 static void Assert(bool condition, string message) {
     if (!condition) throw new InvalidOperationException(message);

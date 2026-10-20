@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — collectible observation readiness
+
+- Withhold the whole Collectibles snapshot while native definitions, character
+  unlock state or BannerCondition EXD rows are unavailable. Retry missing catalogs
+  on later ordinary syncs; never cache unavailable definitions as owned-empty.
+- Preserve complete-empty ownership after a successful full read, separate
+  BannerCondition kit IDs from BannerFrame element IDs, and reread ownership for
+  every capture. Existing payloads, permissions and publication feeds are unchanged.
+
 ## 0.0.89 / prepared Public1.0.31.5 — October compatibility
 
 - Add exact October Hunt/FATE source qualifications after maintained layout/API
