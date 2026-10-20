@@ -1,83 +1,183 @@
 # Testing 0.0.90 — 7.57 hotfix compatibility (unpublished candidate)
 
-Status: **source qualified, physical client pending**. Nothing is published.
+Status: **source qualified, physical client pending**. Nothing is published. The
+short owner checklist is [testing-0.0.90-checklist.md](testing-0.0.90-checklist.md).
+Site requirements are in [the Site admission handoff](../contracts/hotfix-2026.10.16-site-admission.md).
 
 ## What changes
 
-- A single per-collector compatibility table (`NativeCompatibility.cs`) replaces
-  the exact build checks that were scattered across the Hunt, submarine, travel,
-  Dashboard and FATE collectors. See [native compatibility](../native-compatibility.md).
-- Hunt, submarine and travel native reads, and the client side of the FATE source
-  match, are qualified for the current release runtime:
-  game `2026.10.16.0000.0000`, Dalamud 15.0.3.9
-  (`30509c3b4fd00edd9a3d65b7bbf16433d84be03b`), FFXIVClientStructs 7.57.0.9414
-  (`dd57986b8287e7c6ed9c27198f8c76cb04a81dfe`), Lumina 7.7.0, Excel 7.5.1.
-- Dashboard facts stay September-only, because they were not requalified.
-- Dalamud 15.0.3.8 (ClientStructs 7.57.0.9386) is not admitted.
+- A single per-collector compatibility table (`NativeCompatibility.cs`, merged in
+  anndrox/GillionsGameSync#7) replaces the scattered exact build checks. See
+  [native compatibility](../native-compatibility.md).
+- The current release runtime is admitted for the Hunt, Submarine and Travel
+  native reads and the client side of the FATE source match:
+  - game `2026.10.16.0000.0000`;
+  - Dalamud 15.0.3.9 (`30509c3b4fd00edd9a3d65b7bbf16433d84be03b`);
+  - FFXIVClientStructs 7.57.0.9414 (`dd57986b8287e7c6ed9c27198f8c76cb04a81dfe`);
+  - Lumina 7.7.0, Excel 7.5.1.
+- Dashboard facts stay September-only. Dalamud 15.0.3.8 (ClientStructs 7.57.0.9386)
+  is not admitted. Every other runtime keeps failing closed.
 - Collectible readiness from PR #6 is included unchanged.
 
 Consent, Site permission leases, capability negotiation, payload shapes, cadences
-and retention are unchanged. Hunt-routing location still defaults OFF. No new
-collection, no new upload resource and no gameplay writes.
+and retention are unchanged. No new collection, upload resource or gameplay writes.
 
-## What still depends on the Site
+## What this test can and cannot prove
 
-As of its 2026-10-20 source, the Site validates only the September tuple for:
-- FATE source admission (it also needs the exact Dalamud revision and collector version `0.0.90.0`);
-- Hunt item coverage;
-- travel context.
+| Area | Proven by this procedure | Needs the Site first |
+|---|---|---|
+| Hunt Progress, local Hunt reads and retention | Yes | — |
+| Submarine local reads and retention | Yes | — |
+| Hunt / submarine private uploads | No | Hotfix references, and admission of collector version `0.0.90.0` |
+| FATE observations | Only that the client offers the right source and reads nothing until granted | FATE source admission |
+| Travel (Hunt routing location) | Only that nothing is read without consent | Travel tuple admission, plus your account's routing consent |
 
-It also checks Hunt and submarine personal observations against game-version
-reference catalogs. Until Site Operations admits the hotfix tuple, those uploads
-are expected to be rejected, and the client backs off without changing local state.
+A Site rejection of a correct local observation is a **Site dependency**, not a
+plugin failure. The FATE diagnostics show the Site's own reason code, so the two
+can be told apart.
 
-## Owner physical acceptance procedure
+## Candidate build
 
-Use only a Testing build produced from the exact candidate commit.
+- **Identity:** `Gillions Game Sync Testing`, InternalName `GillionsGameSyncTest`,
+  version `0.0.90.0`, built from the PR #8 head commit.
+- **Product scope:** TEST-only HTTPS (`https://test.gillions.app`); it never contacts
+  production. It shares the existing Testing configuration (same InternalName),
+  so an existing TEST pairing is reused and no new pairing is needed. Unpaired
+  local checks also work.
+- **Build (the existing approved method):** from a checkout of the PR #8 head,
+  with Dalamud's dev hooks or `DALAMUD_HOME` pointing at Dalamud 15.0.3.9:
 
-1. **Prepare.**
-   - Launch through XIVLauncher so Dalamud updates.
-   - In `/xldev` → About, confirm Dalamud **15.0.3.9**.
-   - Confirm the game reports **2026.10.16**.
-   - If either differs, stop and record what you see. Other runtimes must show
-     "unsupported" and read nothing.
-2. **Install.**
-   - Disable Public and any dev copy.
-   - Install Testing 0.0.90.0 from the Testing feed, or as a dev plugin when
-     testing an unpublished build.
-   - Never enable two copies at once.
-3. **Hunts.**
-   - With at least one Hunt bill held, open Hunt Progress. Bill names and counts
-     should appear and should match the in-game Hunt log.
-   - With no bills held, it must say that no rows is not proof of no bills.
-   - Teleport once and confirm the status recovers after the loading screen.
-4. **Submarines** (only if you have workshop access):
-   - Enable private submarine retention.
-   - Open the voyage list in the workshop.
-   - The Testing diagnostics should list the loaded submarines, with names, ranks
-     and return times matching the game.
-   - Leave the workshop and confirm history is preserved, not emptied.
-5. **Travel** (optional, since its upload is Site-held):
-   - Turn on Hunt routing location consent.
-   - Open the Teleport window. The Testing travel diagnostic should show your
-     rounded map position and a partial destination list.
-   - Turn consent OFF and confirm the volatile context clears.
-6. **FATE.**
-   - Until the Site admits the hotfix source, the status shows "Update required"
-     (Site reason `FATE_SOURCE_UNSUPPORTED`) or "Temporarily unavailable".
-   - The only FATE traffic before that admission is the existing capability
-     discovery request, which offers the client's source identity. No FATE table
-     reads or contributions happen until the Site grants the source.
-7. **Ordinary sync and performance.**
-   - Inventory, character and retainer sync behave as before.
-   - Watch `/xldev` plugin statistics for Game Sync frame time during normal play.
-8. **Unsupported fallback.**
-   - If Dalamud updates again before the test, confirm Hunt Progress reports
-     "Update required" and no Hunt read occurs.
-9. **Report.**
-   - Report only safe summaries, cropped screenshots or bounded failure lines.
-   - Never share configuration files or credentials.
+  ```powershell
+  ./scripts/package.ps1 -Channel testing -Version 0.0.90 -PublishedAt 1792540800
+  ```
 
-Passing steps 1–4 and 7 is the physical evidence required to move the Hunt and
-Submarine families from *physical client pending* to accepted for this runtime.
-Steps 5 and 6 additionally need Site admission.
+  The DLL is then in `artifacts/package/testing/0.0.90/build/GillionsGameSyncTest.dll`.
+  The completion report of the preparing session records the exact path, commit
+  and SHA-256 of a prebuilt copy.
+
+Nothing in this procedure changes a feed, a custom repository URL or the
+published Testing 0.0.88 install. Every plugin change below is an action you
+take in Dalamud's own settings.
+
+## Detailed procedure
+
+### 1. Runtime
+
+1. Launch the game through XIVLauncher as usual, so Dalamud updates itself.
+2. Use the **release** Dalamud channel. In Dalamud settings, under the
+   staging/beta setting, no beta or staging key should be active.
+3. After launch, `%APPDATA%\XIVLauncher\addon\Hooks\15.0.3.9` should exist.
+   The in-plugin check in step 3.2 is authoritative.
+
+### 2. Install the candidate (your explicit action)
+
+1. `/xlplugins` → Installed: **disable** "Gillions Game Sync" (Public) and
+   "Gillions Game Sync Testing", if installed. Disable, don't uninstall, so their
+   configuration stays.
+2. `/xlsettings` → Experimental → Dev Plugin Locations: add the folder containing
+   the candidate `GillionsGameSyncTest.dll`, enable it and save.
+3. `/xlplugins` → Dev Tools: enable the development copy of
+   "Gillions Game Sync Testing". Never enable two copies of Game Sync at once.
+
+### 3. Identity and compatibility
+
+1. `/gillionssynctest` → Settings → Advanced.
+   - Expect `Game Sync 0.0.90.0 · Channel: Testing` and `Game: 2026.10.16.0000.0000`.
+2. Advanced → Testing diagnostics → **Hunt diagnostics** → *Copy aggregate Hunt
+   diagnostics*.
+   - The copied text must show `Game: 2026.10.16.0000.0000; SDK: 7.57.0.9414`.
+   - Its status must **not** say `Unsupported game/SDK build`.
+   - This text has no character names or IDs and is safe to share.
+3. If you are paired to TEST, Advanced → feature health **Hunts** must not show
+   `Update required`.
+
+If the SDK shows any other version, stop. That runtime is not qualified, and every
+gated collector must report unsupported and read nothing. That is correct
+behaviour, so record it as such.
+
+### 4. Hunts (local, no Site needed)
+
+1. Settings → Hunts → enable **Show Hunt Progress**. Off is the default.
+2. With at least one Hunt bill held, go to an area with its targets. Rows and
+   counts should match your in-game Hunt log.
+3. Teleport or change zone once. The panel recovers after the loading screen
+   without inventing completion.
+4. With no matching bill, the panel must say that no rows is not proof of no bills.
+5. Optional: in `/gillionshunts`, *Retain naturally loaded Hunt Bill observations
+   locally* (default off) keeps history on this PC only.
+
+### 5. Submarines (only with workshop access)
+
+1. `/gillionssubs`. Note that local retention and community preparation are off
+   unless you changed them before.
+2. Enable *Retain naturally loaded submarine observations locally*.
+3. In the Company Workshop, open the submarine voyage list normally.
+   - The window rows list your loaded submarines, with rank and return times
+     matching the game.
+   - The status must not say `Unsupported game/SDK build`.
+4. Leave the workshop. History is preserved, not emptied.
+5. *Copy aggregate diagnostics* excludes names and is safe to share. Leave
+   community preparation **off**.
+
+### 6. FATE (Site-dependent)
+
+1. `/gillionsfates`. The status must not say `Unsupported source/game matrix`.
+2. Expected results:
+   - **Unpaired:** no reads. Nothing is collected until Gillions grants the source.
+   - **Paired to TEST, before the Site admits the source:** *Remote contribution*
+     shows a Site reason such as `FATE_SOURCE_UNSUPPORTED`, and the Hunts-style
+     health shows FATEs `Update required` or `Temporarily unavailable`. The only
+     traffic is the existing capability discovery request, which offers the
+     client's source identity. Record this as **Site-dependent**.
+   - **After Site admission:** in a normal public zone with a naturally occurring
+     FATE, rows show progress for the FATE's own position. No player coordinates
+     are recorded.
+3. Do not copy *PRIVATE FATE diagnostics* unless asked. It reveals your world and
+   location.
+
+### 7. Travel (Site-dependent; not exercised in this pass)
+
+Hunt routing location consent lives in your Gillions account, is off by default,
+and has no in-game switch. Leave it off for this test.
+
+Confirm that nothing in Game Sync suggests location sharing. A full travel test
+waits until the Site admits the hotfix travel tuple.
+
+### 8. Ordinary behaviour and performance
+
+1. Play normally for 10–15 minutes: inventory changes, a retainer bell if
+   convenient, and a zone change.
+2. `/xlstats` (Dalamud plugin statistics): note Game Sync's framework-update
+   time. Frame hitches should be no worse than with the published build.
+3. Market, Party Finder and item-link settings are unchanged. Nothing new is
+   shared.
+
+### 9. Restore
+
+1. Disable the development copy.
+2. Remove its Dev Plugin Location if you like.
+3. Re-enable whichever Game Sync copy you normally use.
+
+Published Public 1.0.31.2 will still show Hunts `Update required` on this game
+version. That is expected until a successor is published.
+
+## Evidence to report
+
+Report pass, fail or Site-dependent for each step, plus:
+- the copied aggregate Hunt diagnostics;
+- the copied aggregate submarine diagnostics (if you tested submarines);
+- the FATE *Remote contribution* line text;
+- cropped screenshots of Hunt Progress next to the in-game Hunt log, with your
+  character name cropped out;
+- the `/xlstats` number.
+
+Never share configuration files, pairing codes, PRIVATE JSON exports, or logs that
+contain your character name.
+
+## Acceptance rule
+
+- Steps 3, 4 and 8 passing accepts the **Hunt** family on this runtime.
+- Step 5 passing accepts the **Submarine** family.
+- FATE and Travel stay **Site-dependent** until the Site admits the tuple.
+- PR #8 may then be merged (source integration). Publication remains a separate
+  owner decision.

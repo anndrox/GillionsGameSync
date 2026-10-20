@@ -88,6 +88,8 @@ passes.
 
 ## Site dependencies (outside this repository)
 
+Exact hotfix tuple, endpoints and fields for Site Engineering: [hotfix Site admission handoff](contracts/hotfix-2026.10.16-site-admission.md).
+
 The Site validates its own exact tuples. As of its 2026-10-20 source, it still
 accepts only the September tuple (`2026.09.15.0000.0000` / `7.56.2.9136`) for:
 
