@@ -10,7 +10,7 @@ assert model.startswith('#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GIL
 assert not re.search(r'SendAsync|HttpClient|UpdateAetheryteList\(|GetTeleportCost\(|Teleport\(|TeleportTo|FireCallback|ReceiveEvent|GetIpc|\.Refresh\(',source)
 assert 'objects.LocalPlayer' in source and 'foreach (var' not in source.split('internal void Tick',1)[1].split('private void Unavailable',1)[0]
 assert 'IAetheryteList' in source and not re.search(r'private .*IAetheryteList',source)
-assert 'state.Begin(now)' in source and source.index('!PersonalObservationCompatibility.Supports') < source.index('var character = player.ContentId')
+assert 'state.Begin(now)' in source and source.index('!NativeCompatibility.Supports(NativeFamily.Travel,') < source.index('var character = player.ContentId')
 assert 'client.MapIdChanged += Changed' in source and 'client.MapIdChanged -= Changed' in source
 assert 'agent->AetheryteList != &telepo->TeleportList' in source and 'agent->AddonId != addon->Id' in source
 assert 'agent->AetheryteCount != count' in source and 'IsAetheryteUnlocked' in source

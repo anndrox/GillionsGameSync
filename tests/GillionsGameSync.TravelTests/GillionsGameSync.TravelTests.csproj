@@ -11,6 +11,7 @@
     <Compile Include="../../TravelContext.cs" Link="TravelContext.cs" />
     <Compile Include="../../TravelSync.cs" Link="TravelSync.cs" />
     <Compile Include="../../PersonalObservationPolicy.cs" Link="PersonalObservationPolicy.cs" />
+    <Compile Include="../../NativeCompatibility.cs" Link="NativeCompatibility.cs" />
   </ItemGroup>
   <ItemGroup><Compile Include="../../NativeProduct.cs" Link="NativeProduct.cs" /></ItemGroup>
 </Project>

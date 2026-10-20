@@ -138,15 +138,23 @@ foreach (var bad in new[] {
     (index: (byte)22, flags: 1, loaded: true, item: 2000001u, present: true),
     (index: (byte)0, flags: 1, loaded: true, item: 0u, present: true)
 }) Check(!HuntObservationAdmission.CanUseBillCache(bad.index, bad.flags, bad.loaded, bad.item, bad.present), "Unavailable/foreign/absent bill admitted.");
-Check(PersonalObservationCompatibility.Supports("2026.09.15.0000.0000", "7.56.2.9136"), "Known candidate pair disabled.");
-Check(HuntObservationCompatibility.Supports("2026.10.06.0000.0000", "7.57.0.9378"), "Inspected October Hunt pair rejected.");
-Check(HuntObservationCompatibility.Supports("2026.09.15.0000.0000", "7.56.2.9136"), "Legacy Hunt pair rejected.");
-Check(!PersonalObservationCompatibility.Supports("2026.10.06.0000.0000", "7.57.0.9378"), "Hunt qualification expanded unrelated readers.");
-foreach (var pair in new[] { ("2026.10.06.0000.0000","7.56.2.9136"), ("2026.09.15.0000.0000","7.57.0.9378"),
-    ("2026.10.07.0000.0000","7.57.0.9378"), ("2026.10.06.0000.0000","7.57.0.9379"), ("unavailable","7.57.0.9378") })
-    Check(!HuntObservationCompatibility.Supports(pair.Item1,pair.Item2),"Mixed/future Hunt pair admitted.");
-foreach (var pair in new[] { ("unknown", "7.56.2.9136"), ("2026.09.15.0000.0000", "7.56.3.0"), ("2026.10.01.0000.0000", "7.56.2.9136") })
-    Check(!PersonalObservationCompatibility.Supports(pair.Item1, pair.Item2), "Unsupported patch/SDK admitted.");
+bool NativeAdmits(NativeFamily family, string game, string sdk) => NativeCompatibility.Supports(family, game, sdk);
+foreach (var build in new[] { NativeCompatibility.September, NativeCompatibility.October })
+    Check(NativeAdmits(NativeFamily.Hunt, build.GameBuild, build.ClientStructsVersion), "Qualified Hunt build rejected: " + build.GameBuild);
+foreach (var family in new[] { NativeFamily.Submarine, NativeFamily.Travel }) {
+    Check(NativeAdmits(family, "2026.09.15.0000.0000", "7.56.2.9136"), "Qualified private build rejected.");
+    Check(!NativeAdmits(family, "2026.10.06.0000.0000", "7.57.0.9378"), "Hunt-only October qualification expanded " + family + ".");
+}
+Check(NativeAdmits(NativeFamily.Dashboard, "2026.09.15.0000.0000", "7.56.2.9136"), "Known Dashboard pair disabled.");
+Check(!NativeAdmits(NativeFamily.Dashboard, "2026.10.06.0000.0000", "7.57.0.9378") && !NativeAdmits(NativeFamily.Dashboard, "2026.10.16.0000.0000", "7.57.0.9414"),
+    "Unqualified Dashboard readers followed other families.");
+foreach (var family in new[] { NativeFamily.Hunt, NativeFamily.Submarine, NativeFamily.Travel, NativeFamily.Dashboard })
+    foreach (var pair in new[] { ("2026.10.06.0000.0000","7.56.2.9136"), ("2026.09.15.0000.0000","7.57.0.9378"),
+        ("2026.10.07.0000.0000","7.57.0.9378"), ("2026.10.06.0000.0000","7.57.0.9379"), ("unavailable","7.57.0.9378"),
+        ("2026.10.16.0000.0000","7.57.0.9386"), ("2026.10.16.0000.0000","7.57.0.9378"), ("2026.10.16.0000.0000","7.57.0.9414"),
+        ("2026.10.06.0000.0000","7.57.0.9414"), ("unknown", "7.56.2.9136"),
+        ("2026.09.15.0000.0000", "7.56.3.0"), ("2026.10.01.0000.0000", "7.56.2.9136") })
+        Check(!NativeAdmits(family, pair.Item1, pair.Item2), "Mixed/future " + family + " pair admitted.");
 var store = new HuntBillRetention(); var policy = new HuntBillRetentionPolicy(store);
 var progressionStore = new HuntBillRetention { LocalRetentionEnabled = true };
 var progression = new HuntBillRetentionPolicy(progressionStore);

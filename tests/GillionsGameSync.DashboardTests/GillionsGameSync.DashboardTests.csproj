@@ -12,6 +12,7 @@
   <ItemGroup>
     <Compile Include="..\..\DashboardFacts.cs" Link="DashboardFacts.cs" />
     <Compile Include="..\..\PersonalObservationPolicy.cs" Link="PersonalObservationPolicy.cs" />
+    <Compile Include="..\..\NativeCompatibility.cs" Link="NativeCompatibility.cs" />
     <Reference Include="Newtonsoft.Json" HintPath="$(DalamudLibPath)/Newtonsoft.Json.dll" />
   </ItemGroup>
   <ItemGroup><Compile Include="../../NativeProduct.cs" Link="NativeProduct.cs" /></ItemGroup>

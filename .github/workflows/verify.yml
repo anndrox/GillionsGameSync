@@ -2,7 +2,8 @@ name: Verify
 
 on:
   push:
-    branches: [main, feature/venture-planner]
+    # Release candidates are tagged from codex/** branches; verify them too.
+    branches: [main, 'codex/**']
   pull_request:
 
 permissions:
@@ -27,7 +28,8 @@ jobs:
         run: |
           $archive = Join-Path $env:RUNNER_TEMP 'dalamud.zip'
           $destination = Join-Path $env:RUNNER_TEMP 'dalamud'
-          # Keep the exact ABI/source qualification exercised by packaged tests.
+          # The exact archive whose runtime is listed in NativeCompatibility.cs
+          # and inspected by packaged tests.
           Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/goatcorp/dalamud-distrib/853cb60ca310596ec2efc5400e901933ebff9c60/stg/latest.zip' -OutFile $archive
           if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -cne '82D3EFAD4615D4B40FDABD458132473D6B69E341CD700293A6BB3FF2B5B77547') {
             throw 'The qualified Dalamud archive checksum did not match.'
@@ -41,3 +43,21 @@ jobs:
       - name: Verify plugin
         shell: pwsh
         run: ./scripts/verify.ps1
+
+      - name: Recheck recorded native layouts of earlier qualified runtimes
+        shell: pwsh
+        run: |
+          # Each family's admission rests on equal layouts across its qualified
+          # runtimes; re-prove the recorded values on the official archives.
+          $archives = @(
+            @{ Name = '15.0.3.6'; Uri = 'https://raw.githubusercontent.com/goatcorp/dalamud-distrib/3e8e6eb456c928401febd1d9452c4b8d4cad0eb5/latest.zip'; Hash = '560D283B63D5D70DD5FA7EEB79E7A9CB5139B3DCC63E0CB01B466A57B020FCAA' }
+          )
+          foreach ($archive in $archives) {
+            $zip = Join-Path $env:RUNNER_TEMP "dalamud-$($archive.Name).zip"
+            $destination = Join-Path $env:RUNNER_TEMP "dalamud-$($archive.Name)"
+            Invoke-WebRequest -Uri $archive.Uri -OutFile $zip
+            if ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash -cne $archive.Hash) { throw "Dalamud $($archive.Name) checksum did not match." }
+            Expand-Archive -LiteralPath $zip -DestinationPath $destination
+            dotnet run --project tests/GillionsGameSync.ConfigurationTests/GillionsGameSync.ConfigurationTests.csproj -c Release --no-build -- --native-layout-check $destination
+            if ($LASTEXITCODE -ne 0) { throw "Recorded native layouts differ for Dalamud $($archive.Name)." }
+          }

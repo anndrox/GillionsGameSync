@@ -258,7 +258,9 @@ using (var unknownDoc = JsonDocument.Parse(personalPolicy.PreparePersonalExport(
 personal.LocalRetentionEnabled = false;
 refused = false; try { personalPolicy.PreparePersonalExport(workshopKey); } catch (InvalidOperationException) { refused = true; }
 Check(refused && personal.Current.Count == 2, "Opt-out allowed private export or erased history.");
-Check(!PersonalObservationCompatibility.Supports("unavailable", PersonalObservationCompatibility.NativeVersion), "Unsupported patch admitted.");
+Check(!NativeCompatibility.Supports(NativeFamily.Submarine, "unavailable", NativeCompatibility.September.ClientStructsVersion), "Unsupported patch admitted.");
+Check(!NativeCompatibility.Supports(NativeFamily.Submarine, NativeCompatibility.October.GameBuild, NativeCompatibility.October.ClientStructsVersion),
+    "Submarine admission differs from its own qualification.");
 
 if (args.Length >= 2 && args[0] == "--fixture") {
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(args[1]))!);

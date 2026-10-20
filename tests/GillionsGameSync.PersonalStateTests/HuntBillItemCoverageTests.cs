@@ -12,17 +12,17 @@ internal static class HuntBillItemCoverageTests {
         long At(double seconds) => mono + (long)(Stopwatch.Frequency * seconds);
         var c = new HuntBillItemCoverage(); c.SetCatalog(catalog);
         var slots = Enumerable.Range(0,4).Select(i => new HuntKeyItemSlot(i,2004,false,0,0)).ToArray();
-        void Observe(HuntKeyItemSlot[] input, double time=0, bool loaded=true, bool stable=true, int size=4, string? after=null, bool initialized=true, int container=2004, string sdk=PersonalObservationCompatibility.NativeVersion) =>
-            c.Observe(key, after ?? key, initialized, loaded, container, size, input, stable, now.AddSeconds(time), At(time), PersonalObservationCompatibility.GameBuild,"0.0.83.0",sdk);
+        void Observe(HuntKeyItemSlot[] input, double time=0, bool loaded=true, bool stable=true, int size=4, string? after=null, bool initialized=true, int container=2004, string sdk="7.56.2.9136") =>
+            c.Observe(key, after ?? key, initialized, loaded, container, size, input, stable, now.AddSeconds(time), At(time), NativeCompatibility.September.GameBuild,"0.0.83.0",sdk);
         var history = new HuntBillRetention { LocalRetentionEnabled = true };
         var hp = new HuntBillRetentionPolicy(history);
         var target = new HuntBillTarget(4,715,13000,1,1,0,2,1,1,1);
         hp.Observe(key,[new(18,"daily",1,269,2003509,[target],now,"synthetic-game","synthetic-collector")]);
         var retained = JsonSerializer.Serialize(history);
-        c.Observe(key,key,true,true,2004,4,slots,true,now,mono,HuntObservationCompatibility.OctoberGameBuild,"0.0.89.0",HuntObservationCompatibility.OctoberNativeVersion);
+        c.Observe(key,key,true,true,2004,4,slots,true,now,mono,NativeCompatibility.October.GameBuild,"0.0.89.0",NativeCompatibility.October.ClientStructsVersion);
         check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="absent_confirmed"),"Inspected October complete coverage rejected");
         check(JsonSerializer.Serialize(history)==retained,"October coverage changed retained bill history");
-        c.Observe(key,key,true,true,2004,4,slots,true,now,mono,HuntObservationCompatibility.OctoberGameBuild,"0.0.89.0","7.57.0.9379");
+        c.Observe(key,key,true,true,2004,4,slots,true,now,mono,NativeCompatibility.October.GameBuild,"0.0.89.0","7.57.0.9379");
         check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="unavailable"),"Future October SDK fabricated negative coverage");
         Observe(slots);
         check(c.Current(key,now,mono)!.Domains.All(d => d.State == "absent_confirmed"),"A: complete absence failed");
@@ -49,15 +49,15 @@ internal static class HuntBillItemCoverageTests {
             Observe(input,2); check(c.Current(key,now.AddSeconds(2),At(2))!.Domains.All(d=>d.State=="unavailable"),"C: partial/malformed fabricated absence");
         }
         foreach(var reason in new[]{0,1,2,3,4}) {
-            Observe(slots,3,loaded:reason!=0,stable:reason!=1,initialized:reason!=2,container:reason==3?0:2004,sdk:reason==4?"unsupported":PersonalObservationCompatibility.NativeVersion);
+            Observe(slots,3,loaded:reason!=0,stable:reason!=1,initialized:reason!=2,container:reason==3?0:2004,sdk:reason==4?"unsupported":NativeCompatibility.September.ClientStructsVersion);
             check(c.Current(key,now.AddSeconds(3),At(3))!.Domains.All(d=>d.State=="unavailable"),"C: unavailable source gained authority");
         }
         Observe(slots,4,after:other); check(c.Current(key,now.AddSeconds(4),At(4)) is null,"D: transition retained previous absence");
         var badSlot=slots.ToArray(); badSlot[0]=badSlot[0] with {ItemId=2003509,Quantity=0};
-        c.Observe(key,key,true,true,2004,4,badSlot,true,now,mono,PersonalObservationCompatibility.GameBuild,"0.0.83.0",PersonalObservationCompatibility.NativeVersion,new(1,0,1,1,0,1,1,0,1));
+        c.Observe(key,key,true,true,2004,4,badSlot,true,now,mono,NativeCompatibility.September.GameBuild,"0.0.83.0",NativeCompatibility.September.ClientStructsVersion,new(1,0,1,1,0,1,1,0,1));
         check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="unavailable"),"Getter diagnostics weakened completeness");
         check(c.Status.Contains("positive-id-zero-qty=1") && c.Status.Contains("getter-empty=1") && !c.Status.Contains("2003509"),"Finite raw/getter diagnostic shape/private-ID exclusion failed");
-        c.Observe(key,key,true,true,2004,4,[slots[0] with{Quantity=1},slots[1],slots[2],slots[3]],true,now,mono,PersonalObservationCompatibility.GameBuild,"0.0.83.0",PersonalObservationCompatibility.NativeVersion);
+        c.Observe(key,key,true,true,2004,4,[slots[0] with{Quantity=1},slots[1],slots[2],slots[3]],true,now,mono,NativeCompatibility.September.GameBuild,"0.0.83.0",NativeCompatibility.September.ClientStructsVersion);
         check(c.Status.Contains("zero-id-nonzero-qty=1"),"Zero-id mismatch conflated with positive-id mismatch");
         check(new HuntItemProbeDiagnostics(99,-1,99,99,99,99,99,99,99).Summary.StartsWith("getter-probes=8/8, getter-unavailable=0"),"Local getter diagnostics unbounded");
         // Live-shaped residual quantity: only a separate same-read native empty

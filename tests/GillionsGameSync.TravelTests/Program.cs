@@ -6,8 +6,8 @@ int checks=0;
 void Check(bool ok,string name) { checks++; if (!ok) throw new Exception(name); }
 var now = new DateTime(2026,10,3,18,0,0,DateTimeKind.Utc);
 TravelDestination Destination(uint id=2) => new(id,132,"OBSERVED_IN_PERSONAL_LIST","UNKNOWN",120,null,false,false,true);
-TravelObservation Row() => new(132,2,10.1,20.2,now,PersonalObservationCompatibility.GameBuild,
-    PersonalObservationCompatibility.NativeVersion,"0.0.77.0","OBSERVED_PARTIAL",[Destination()]);
+TravelObservation Row() => new(132,2,10.1,20.2,now,NativeCompatibility.September.GameBuild,
+    NativeCompatibility.September.ClientStructsVersion,"0.0.77.0","OBSERVED_PARTIAL",[Destination()]);
 var state = new TravelContextState();
 Check(!state.Enabled && !state.Begin(now) && !state.Observe(1,Row(),now) && state.Current(1,now)==null,"default OFF");
 Check(!TravelSyncPolicy.Admit(true,true,false,true,TravelSyncPolicy.Origin,true),"transport OFF without distinct consent");
@@ -46,6 +46,9 @@ foreach(var invalid in new[] {
     Destination() with { ActualCostGil=120 },Destination() with { ObservedListGil=null },Destination() with { ObservedListGil=100000 }
 }) Check(!TravelPolicy.Valid(Row() with { Destinations=[invalid] }),"bad destination/fabricated usability/final cost");
 Check(TravelPolicy.Valid(Row() with { TeleportSupport="UNAVAILABLE",Destinations=[] }),"unavailable teleports preserve location");
+foreach(var build in new[] { (NativeCompatibility.October.GameBuild,NativeCompatibility.October.ClientStructsVersion),
+    ("2026.10.16.0000.0000","7.57.0.9414"),("2026.10.16.0000.0000",NativeCompatibility.September.ClientStructsVersion) })
+    Check(!TravelPolicy.Valid(Row() with { GameBuild=build.Item1,NativeVersion=build.Item2 }),"unqualified travel build admitted");
 Check(TravelPolicy.Valid(Row() with { Destinations=[Destination() with { ObservedListGil=0,Free=true,Home=true,Favored=false }] }),"observed free/home/favored flags with zero quote, NOT final charge");
 Check(TravelPolicy.Valid(Row() with { Destinations=[Destination() with { Home=null,Free=null,Favored=null }] }),"unknown relationships");
 Check(TravelPolicy.Fresh(Row(),now.AddSeconds(44)) && !TravelPolicy.Fresh(Row(),now.AddSeconds(45)),"TTL exact");
