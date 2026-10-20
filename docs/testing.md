@@ -21,7 +21,7 @@ requires Site PR93 or its reviewed successor to be separately deployed. Whole
 resource omission is compatible with the recorded older Site generations.
 
 CI checks out complete source history for existing historical assertions and uses
-the immutable official Dalamud 15.0.3.7 archive, whose runtime is listed in
+the immutable official Dalamud 15.0.3.9 release archive, whose runtime is listed in
 `NativeCompatibility.cs` and inspected by packaged layout tests. This does not
 qualify a different installed SDK/game tuple; see [native compatibility](native-compatibility.md). Frozen published
 versions/tags remain untouched; source integration is not plugin publication.

@@ -23,15 +23,15 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Install qualified Dalamud 15.0.3.7 build references
+      - name: Install qualified Dalamud 15.0.3.9 release references
         shell: pwsh
         run: |
           $archive = Join-Path $env:RUNNER_TEMP 'dalamud.zip'
           $destination = Join-Path $env:RUNNER_TEMP 'dalamud'
-          # The exact archive whose runtime is listed in NativeCompatibility.cs
-          # and inspected by packaged tests.
-          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/goatcorp/dalamud-distrib/853cb60ca310596ec2efc5400e901933ebff9c60/stg/latest.zip' -OutFile $archive
-          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -cne '82D3EFAD4615D4B40FDABD458132473D6B69E341CD700293A6BB3FF2B5B77547') {
+          # The exact release-channel archive (promotion commit) whose runtime is
+          # listed in NativeCompatibility.cs and inspected by packaged tests.
+          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/goatcorp/dalamud-distrib/261006903b8fd45513910a5d8a072bafe15e7f28/latest.zip' -OutFile $archive
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -cne '3E11E262426747B939BD8E1164A0F7D18BFDA2DCC35B3F3EE7EE9FC7DF78D2D9') {
             throw 'The qualified Dalamud archive checksum did not match.'
           }
           Expand-Archive -LiteralPath $archive -DestinationPath $destination
@@ -50,7 +50,8 @@ jobs:
           # Each family's admission rests on equal layouts across its qualified
           # runtimes; re-prove the recorded values on the official archives.
           $archives = @(
-            @{ Name = '15.0.3.6'; Uri = 'https://raw.githubusercontent.com/goatcorp/dalamud-distrib/3e8e6eb456c928401febd1d9452c4b8d4cad0eb5/latest.zip'; Hash = '560D283B63D5D70DD5FA7EEB79E7A9CB5139B3DCC63E0CB01B466A57B020FCAA' }
+            @{ Name = '15.0.3.6'; Uri = 'https://raw.githubusercontent.com/goatcorp/dalamud-distrib/3e8e6eb456c928401febd1d9452c4b8d4cad0eb5/latest.zip'; Hash = '560D283B63D5D70DD5FA7EEB79E7A9CB5139B3DCC63E0CB01B466A57B020FCAA' },
+            @{ Name = '15.0.3.7'; Uri = 'https://raw.githubusercontent.com/goatcorp/dalamud-distrib/853cb60ca310596ec2efc5400e901933ebff9c60/stg/latest.zip'; Hash = '82D3EFAD4615D4B40FDABD458132473D6B69E341CD700293A6BB3FF2B5B77547' }
           )
           foreach ($archive in $archives) {
             $zip = Join-Path $env:RUNNER_TEMP "dalamud-$($archive.Name).zip"

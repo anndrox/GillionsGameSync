@@ -46,8 +46,9 @@ foreach(var invalid in new[] {
     Destination() with { ActualCostGil=120 },Destination() with { ObservedListGil=null },Destination() with { ObservedListGil=100000 }
 }) Check(!TravelPolicy.Valid(Row() with { Destinations=[invalid] }),"bad destination/fabricated usability/final cost");
 Check(TravelPolicy.Valid(Row() with { TeleportSupport="UNAVAILABLE",Destinations=[] }),"unavailable teleports preserve location");
+Check(TravelPolicy.Valid(Row() with { GameBuild=NativeCompatibility.OctoberHotfix.GameBuild,NativeVersion=NativeCompatibility.OctoberHotfix.ClientStructsVersion }),"qualified hotfix travel build");
 foreach(var build in new[] { (NativeCompatibility.October.GameBuild,NativeCompatibility.October.ClientStructsVersion),
-    ("2026.10.16.0000.0000","7.57.0.9414"),("2026.10.16.0000.0000",NativeCompatibility.September.ClientStructsVersion) })
+    (NativeCompatibility.OctoberHotfix.GameBuild,"7.57.0.9386"),(NativeCompatibility.OctoberHotfix.GameBuild,NativeCompatibility.September.ClientStructsVersion) })
     Check(!TravelPolicy.Valid(Row() with { GameBuild=build.Item1,NativeVersion=build.Item2 }),"unqualified travel build admitted");
 Check(TravelPolicy.Valid(Row() with { Destinations=[Destination() with { ObservedListGil=0,Free=true,Home=true,Favored=false }] }),"observed free/home/favored flags with zero quote, NOT final charge");
 Check(TravelPolicy.Valid(Row() with { Destinations=[Destination() with { Home=null,Free=null,Favored=null }] }),"unknown relationships");
