@@ -139,9 +139,14 @@ Add the stable custom repository URL to Dalamud:
 
 Keep that URL when updating through Dalamud's plugin installer. Existing users must **pair once after updating to `1.0.30`** because older credentials did not record a verified issuing origin. Do not delete the configuration. Confirm the pairing destination shown in the plugin, enter a fresh one-time code from Gillions, and choose **Pair this device**. Website history is unchanged; older local records with unverified ownership will not be assigned to the newly paired account or uploaded automatically.
 
-The testing feed is separate and should be installed only when a Gillions test is requested:
+The testing feed is separate and should be installed only when a Gillions test is requested.
+Since Testing 0.0.88 it is the dedicated repository feed:
 
-`https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
+`https://raw.githubusercontent.com/anndrox/GillionsGameSync-Testing/main/data/GillionsGameSyncTesting.json`
+
+The older `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json` URL still resolves, but it is frozen at Testing 0.0.87 and no
+longer receives updates. Nothing redirects it; testers who still use it should
+follow the [Testing 0.0.88 move instructions](docs/releases/testing-0.0.88.md).
 
 Updating this plugin does not cancel external AutoRetainer plans or guarantee cancellation of callbacks already queued by an older loaded plugin. Use AutoRetainer's own controls when you need that automation to stop. See the [release notes](docs/releases/v1.0.30.md).
 
@@ -184,8 +189,9 @@ The combined testing candidate includes an opt-in Beastmaster view, disabled
 by default. Open **Beastmaster local test** in testing settings or use /gillionsbst.
 Results stay in memory and are not uploaded. See [local test instructions](docs/beastmaster-local-test.md).
 
-For the combined Beastmaster and Party Finder test, add this URL to Dalamud's
-custom plugin repositories:
+*Historical (Testing 0.0.64–0.0.87).* The combined Beastmaster and Party Finder test used
+this custom repository, which is now frozen at 0.0.87; current Testing builds use
+`https://raw.githubusercontent.com/anndrox/GillionsGameSync-Testing/main/data/GillionsGameSyncTesting.json`:
 
 `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
 

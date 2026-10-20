@@ -68,9 +68,11 @@ diagnostics, not private JSON/configuration. Source/catalog/compiled fixtures ar
 not corrected live proof. Publication identity is recorded separately under
 `data/releases`; the repository URL stays unchanged.
 
-## Fixed Testing update URL
+## Fixed Testing update URL (historical, Testing 0.0.64–0.0.87)
 
-Keep `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
+Current Testing builds use `https://raw.githubusercontent.com/anndrox/GillionsGameSync-Testing/main/data/GillionsGameSyncTesting.json`
+(see [Testing 0.0.88](releases/testing-0.0.88.md)); the older URL below is frozen at
+0.0.87 and is not redirected. Previously: keep `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
 in Dalamud. This JSON is the rolling Testing channel pointer, not a version pin.
 Use the committed `data/releases/testing-update-feed.json` for the latest
 anonymously verified publication identity. Refresh

@@ -61,9 +61,15 @@ Do not run Stable manifest preparation/publication without the separate
 assemblies/conditional capabilities prevent a byte-identical cross-channel
 promotion; each eventual exact artifact requires equivalent acceptance.
 
-## Fixed Testing update feed
+## Historical fixed Testing update feed (Testing 0.0.64–0.0.87)
 
-Owner direction establishes this existing URL as the rolling Testing feed:
+Superseded by the dedicated distribution repository from Testing 0.0.88:
+`https://raw.githubusercontent.com/anndrox/GillionsGameSync-Testing/main/data/GillionsGameSyncTesting.json`.
+The rolling JSON below is frozen at 0.0.87 and stays resolvable; moving or
+redirecting it needs a separate owner-approved migration. The rest of this
+section records how it was maintained.
+
+Owner direction established this existing URL as the rolling Testing feed:
 
 `https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json`
 
