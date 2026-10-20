@@ -1,5 +1,30 @@
 # Testing
 
+## Collectible readiness source correction (unreleased)
+
+The whole `collectibles` resource is omitted until its static catalogs, loaded
+own-player state and native BannerCondition rows are available. No partial or
+`complete:false` payload is sent: older Sites cannot preserve its category/raw
+proof reliably. The next ordinary/manual capture retries unavailable definitions;
+only successful definitions are cached, never character ownership. A fully read
+catalog with no owned conditions still sends the existing complete-empty array.
+`portraitConditions` remains BannerCondition IDs; `portraitFrames` remains
+BannerFrame element IDs. No reputation, quest or held-Item inference is added.
+
+Managed fault/lifecycle tests and compiled collector/cache/serializer tests are
+not physical game proof. Before a future authorized release, verify startup before
+player readiness, ordinary sync recovery, two character sessions, reconnect and a
+naturally obtained kit in one enabled client copy. Confirm no false ownership
+clear while unavailable and normal authoritative refresh when ready; never share
+configuration, credentials or private payloads. Correct Kit interpretation also
+requires Site PR93 or its reviewed successor to be separately deployed. Whole
+resource omission is compatible with the recorded older Site generations.
+
+CI checks out complete source history for existing historical assertions and uses
+the immutable official Dalamud15.0.3.7 archive qualified by existing ABI tests.
+This does not qualify a different installed SDK/game tuple. Frozen published
+versions/tags remain untouched; source integration is not plugin publication.
+
 ## Unpublished public UX candidate
 
 The [public candidate](public-release-candidate.md) is prepared separately from

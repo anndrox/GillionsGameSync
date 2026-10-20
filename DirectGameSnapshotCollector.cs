@@ -10,6 +10,7 @@ using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Component.Exd;
 using Lumina.Excel.Sheets;
 
 namespace GillionsGameSync;
@@ -133,13 +134,16 @@ public static class DirectGameSnapshotCollector {
                 }).ToArray(),
             });
         }
-        if (selected.Contains("collectibles")) yield return new GameSnapshot("collectibles", new {
+        if (selected.Contains("collectibles")) {
+            var collectibles = CollectibleSnapshotPolicy.Capture(() => CollectibleCollector.ReadCharacter(clientState), () => new {
             character = identity, complete = true,
             cards = CollectibleCollector.ReadCards(dataManager, unlockState), minions = CollectibleCollector.ReadMinions(dataManager, unlockState), mounts = CollectibleCollector.ReadMounts(dataManager, unlockState), bardings = CollectibleCollector.ReadBardings(dataManager, unlockState), emotes = CollectibleCollector.ReadEmotes(dataManager, unlockState),
             orchestrions = CollectibleCollector.ReadOrchestrions(dataManager, unlockState), fashions = CollectibleCollector.ReadFashions(dataManager, unlockState), blueMageSpells = CollectibleCollector.ReadBlueMageSpells(dataManager, unlockState), sightseeingLogIds = CollectibleCollector.ReadSightseeingLog(dataManager, unlockState), aetherCurrentIds = CollectibleCollector.ReadAetherCurrents(dataManager, unlockState),
             portraitBackgrounds = CollectibleCollector.ReadPortraitBackgrounds(dataManager, unlockState), portraitConditions = CollectibleCollector.ReadPortraitConditions(dataManager, unlockState), portraitDecorations = CollectibleCollector.ReadPortraitDecorations(dataManager, unlockState), portraitFacials = CollectibleCollector.ReadPortraitFacials(dataManager, unlockState), portraitFrames = CollectibleCollector.ReadPortraitFrames(dataManager, unlockState), portraitPoses = CollectibleCollector.ReadPortraitPoses(dataManager, unlockState),
             masterRecipeBookIds = CollectibleCollector.ReadMasterRecipeBooks(dataManager, unlockState), folkloreBookIds = CollectibleCollector.ReadFolkloreBookIds(dataManager)
-        });
+            });
+            if (collectibles is not null) yield return new GameSnapshot("collectibles", collectibles);
+        }
         if (selected.Contains("glamour_plates")) {
             var plates = GlamourPlateCollector.Read();
             // The manager is unavailable outside some normal client states.
@@ -767,6 +771,12 @@ internal static class CharacterProgressCollector {
 internal sealed record CharacterProgressRead(uint CurrentJobId, object[] Jobs, object[] EquippedItems, long[] CraftingRecipeIds, long[] GatheringLogIds);
 
 internal static class CollectibleCollector {
+    internal static unsafe ulong ReadCharacter(IClientState clientState) {
+        if (!clientState.IsLoggedIn) return 0;
+        var player = PlayerState.Instance();
+        return player != null && player->IsLoaded ? player->ContentId : 0;
+    }
+
     public static long[] ReadCards(IDataManager dataManager, IUnlockState unlockState) {
         return Read<TripleTriadCard>(dataManager, unlockState.IsTripleTriadCardUnlocked);
     }
@@ -783,14 +793,19 @@ internal static class CollectibleCollector {
     public static long[] ReadEmotes(IDataManager dataManager, IUnlockState unlockState) {
         return Read<Emote>(dataManager, unlockState.IsEmoteUnlocked);
     }
-    private static long[] Read<T>(IDataManager dataManager, Func<T,bool> unlocked) where T : struct, Lumina.Excel.IExcelRow<T> => SheetRowCache<T>.Get(dataManager).Where(unlocked).Select(row => (long)row.RowId).ToArray();
+    private static long[] Read<T>(IDataManager dataManager, Func<T,bool> unlocked) where T : struct, Lumina.Excel.IExcelRow<T> => SheetRowCache<T>.GetRequired(dataManager).Where(unlocked).Select(row => (long)row.RowId).ToArray();
     public static long[] ReadOrchestrions(IDataManager dataManager, IUnlockState unlockState) => Read<Orchestrion>(dataManager, unlockState.IsOrchestrionUnlocked);
     public static long[] ReadFashions(IDataManager dataManager, IUnlockState unlockState) => Read<Ornament>(dataManager, unlockState.IsOrnamentUnlocked);
     public static long[] ReadBlueMageSpells(IDataManager dataManager, IUnlockState unlockState) => Read<AozAction>(dataManager, unlockState.IsAozActionUnlocked);
     public static long[] ReadSightseeingLog(IDataManager dataManager, IUnlockState unlockState) => Read<Adventure>(dataManager, unlockState.IsAdventureComplete);
     public static long[] ReadAetherCurrents(IDataManager dataManager, IUnlockState unlockState) => Read<AetherCurrent>(dataManager, unlockState.IsAetherCurrentUnlocked);
     public static long[] ReadPortraitBackgrounds(IDataManager dataManager, IUnlockState unlockState) => Read<BannerBg>(dataManager, unlockState.IsBannerBgUnlocked);
-    public static long[] ReadPortraitConditions(IDataManager dataManager, IUnlockState unlockState) => Read<BannerCondition>(dataManager, unlockState.IsBannerConditionUnlocked);
+    public static unsafe long[] ReadPortraitConditions(IDataManager dataManager, IUnlockState unlockState) => Read<BannerCondition>(dataManager, row => {
+        // IUnlockState returns false for an unavailable native EXD row, too.
+        // Check its maintained source before interpreting false as not owned.
+        if (ExdModule.GetBannerConditionByIndex(row.RowId) == null) throw new CollectibleSourceUnavailableException();
+        return unlockState.IsBannerConditionUnlocked(row);
+    });
     public static long[] ReadPortraitDecorations(IDataManager dataManager, IUnlockState unlockState) => Read<BannerDecoration>(dataManager, unlockState.IsBannerDecorationUnlocked);
     public static long[] ReadPortraitFacials(IDataManager dataManager, IUnlockState unlockState) => Read<BannerFacial>(dataManager, unlockState.IsBannerFacialUnlocked);
     public static long[] ReadPortraitFrames(IDataManager dataManager, IUnlockState unlockState) => Read<BannerFrame>(dataManager, unlockState.IsBannerFrameUnlocked);
@@ -803,8 +818,8 @@ internal static class CollectibleCollector {
     // are deduplicated before the complete Collectibles snapshot is sent.
     public static unsafe long[] ReadFolkloreBookIds(IDataManager dataManager) {
         var player = PlayerState.Instance();
-        var books = SheetRowCache<GatheringSubCategory>.Get(dataManager);
-        if (player == null) return [];
+        var books = SheetRowCache<GatheringSubCategory>.GetRequired(dataManager);
+        if (player == null || !player->IsLoaded) throw new CollectibleSourceUnavailableException();
         return books
             .Where(row => row.RowId > 0 && row.Item.RowId > 0 && player->IsFolkloreBookUnlocked((uint)row.RowId))
             .Select(row => (long)row.Item.RowId)
@@ -816,15 +831,19 @@ internal static class CollectibleCollector {
 
 internal static class SheetRowCache<T> where T : struct, Lumina.Excel.IExcelRow<T> {
     private static readonly object CacheLock = new();
-    private static IDataManager? source;
-    private static T[] rows = [];
+    private static readonly ObservedSheetRows<T> Cache = new();
 
     public static T[] Get(IDataManager dataManager) {
         lock (CacheLock) {
-            if (ReferenceEquals(source, dataManager)) return rows;
-            rows = dataManager.GetExcelSheet<T>()?.Where(row => row.RowId > 0).ToArray() ?? [];
-            source = dataManager;
-            return rows;
+            return Cache.Get(dataManager, () => dataManager.GetExcelSheet<T>()?.Where(row => row.RowId > 0)) ?? [];
         }
+    }
+
+    public static T[] GetRequired(IDataManager dataManager) {
+        var rows = Get(dataManager);
+        // These supported catalogs contain definitions even for an owner with
+        // zero unlocks. Empty definitions cannot prove complete-empty ownership.
+        if (rows.Length == 0) throw new CollectibleSourceUnavailableException();
+        return rows;
     }
 }

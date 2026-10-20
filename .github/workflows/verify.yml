@@ -14,18 +14,24 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0 # Historical compatibility assertions inspect accepted commits.
 
       - name: Install .NET 10
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: 10.0.x
 
-      - name: Install patch-current Dalamud build references
+      - name: Install qualified Dalamud 15.0.3.7 build references
         shell: pwsh
         run: |
           $archive = Join-Path $env:RUNNER_TEMP 'dalamud.zip'
           $destination = Join-Path $env:RUNNER_TEMP 'dalamud'
-          Invoke-WebRequest -Uri 'https://goatcorp.github.io/dalamud-distrib/stg/latest.zip' -OutFile $archive
+          # Keep the exact ABI/source qualification exercised by packaged tests.
+          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/goatcorp/dalamud-distrib/853cb60ca310596ec2efc5400e901933ebff9c60/stg/latest.zip' -OutFile $archive
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -cne '82D3EFAD4615D4B40FDABD458132473D6B69E341CD700293A6BB3FF2B5B77547') {
+            throw 'The qualified Dalamud archive checksum did not match.'
+          }
           Expand-Archive -LiteralPath $archive -DestinationPath $destination
           if (-not (Test-Path -LiteralPath (Join-Path $destination 'Dalamud.dll'))) {
             throw 'The official Dalamud distribution did not contain Dalamud.dll.'
