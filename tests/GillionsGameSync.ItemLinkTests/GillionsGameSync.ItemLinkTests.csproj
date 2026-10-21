@@ -10,6 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\CollectibleReadiness.cs" Link="CollectibleReadiness.cs" />
+    <Compile Include="..\..\NativeObservationPolicy.cs" Link="NativeObservationPolicy.cs" />
     <Compile Include="..\..\BeastmasterReadiness.cs" Link="BeastmasterReadiness.cs" />
     <Compile Include="..\..\ItemLinkRequests.cs" Link="ItemLinkRequests.cs" />
     <Compile Include="..\..\PublicUrlConfiguration.cs" Link="PublicUrlConfiguration.cs" />

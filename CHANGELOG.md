@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased — native observation integrity
+
+- Never send unavailable native data as an empty or zero result. Inventory,
+  currencies and character are withheld until their native sources are loaded,
+  and the Site keeps its last value. Withheld resources are named after a
+  manual sync.
+- Carry each owned character's last loaded saddlebag contents while they are
+  unopened, so an unopened saddlebag no longer deletes items on the Site. The
+  inventory payload gains additive observed/carried/unobserved location lists.
+- Ignore the gil balance until the Currency container is loaded, so login can
+  no longer produce a phantom full-balance ledger income.
+- Attribute retainer bags and listings only to a retainer that has been
+  stably active for 1.5 s; resident pages from a previous retainer are ignored.
+- Retry an unavailable armoire catalog instead of caching it empty.
+- A sync that cannot start (already running, no character, loading screen)
+  no longer reports Gillions as unavailable.
+- Manual sync collects one resource per framework tick. Freshness-only
+  configuration saves (measured about 19 ms for a 1.5 MB config) now happen at
+  most every 5 minutes instead of every 30 seconds.
+- Hunt, submarine, FATE, travel, consent and native compatibility are unchanged.
+
 ## 0.0.90 (published Testing) / prepared Public1.0.31.6 (unpublished) — 7.57 hotfix compatibility
 
 - Move every native build check into one per-collector table

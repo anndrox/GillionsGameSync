@@ -18,6 +18,10 @@ AssemblyLoadContext.Default.Resolving += (_, name) => {
     return File.Exists(path) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(path) : null;
 };
 var pluginAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(assemblyPath);
+if (args.Length == 4 && args[3].StartsWith("--measure-config-save=", StringComparison.Ordinal)) {
+    NativeObservationPackagedTests.MeasureSave(pluginAssembly, fixturePath, int.Parse(args[3]["--measure-config-save=".Length..]));
+    return;
+}
 if (args.Length == 4 && args[3] == "--collectible-baseline") {
     CollectibleReadinessPackagedTests.ReproduceBaseline(pluginAssembly);
     return;
@@ -618,6 +622,7 @@ using (var inner = new JsonTextReader(new StringReader("{\"AutoRetainerVenturePl
         "Malformed legacy input must fail and restore the reader's original date policy.");
 }
 Console.WriteLine($"Actual Dalamud config load / plugin Save / serializer: {product}, {cases.Count} fixtures passed.");
+NativeObservationPackagedTests.Run(pluginAssembly, configurations, load, savedViaPlugin, product);
 
 static JObject Parse(string value) => (JObject)ParseToken(value);
 static JToken ParseToken(string value) {

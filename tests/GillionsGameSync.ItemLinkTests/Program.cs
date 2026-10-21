@@ -7,6 +7,7 @@ PublicExperienceTests.Run();
 PermissionAuthorityTests.Run();
 SyncFailureDiagnosticTests.Run();
 CollectibleReadinessTests.Run();
+NativeObservationPolicyTests.Run();
 
 static void Assert(bool condition, string message) {
     if (!condition) throw new InvalidOperationException(message);
