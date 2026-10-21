@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.90 / prepared Public1.0.31.6 — 7.57 hotfix compatibility (unpublished)
+## 0.0.90 (published Testing) / prepared Public1.0.31.6 (unpublished) — 7.57 hotfix compatibility
 
 - Move every native build check into one per-collector table
   (`NativeCompatibility.cs`); qualifying one collector never admits another.
