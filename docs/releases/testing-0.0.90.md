@@ -1,10 +1,15 @@
-# Testing 0.0.90 — 7.57 hotfix compatibility (unpublished candidate)
+# Testing 0.0.90 — 7.57 hotfix compatibility (published)
 
 Status: **Hunt Progress physically accepted** on game `2026.10.16.0000.0000` /
 Dalamud 15.0.3.9 / ClientStructs 7.57.0.9414 (owner test, below). Submarine reads are
 **source qualified, not physically tested** (no workshop access). FATE client
 identity was observed; FATE collection is **pending Site admission**. Travel was
-**not exercised** (consent stayed OFF). Nothing is published. The
+**not exercised** (consent stayed OFF).
+
+Published as [`v0.0.90-testing`](https://github.com/anndrox/GillionsGameSync-Testing/releases/tag/v0.0.90-testing) in the Testing distribution repository,
+from source `1aeafe68190e052d72129fa7a68a4a9a1cc5a0d9`. The ZIP sha256 is
+`954dd0c914e832f05e4a0c73661772a312cb384b94f955ee769811f40a760beb`, and the
+canonical feed advertises `0.0.90.0`. Stable is unchanged (1.0.31.2). The
 short owner checklist is [testing-0.0.90-checklist.md](testing-0.0.90-checklist.md).
 Site requirements are in [the Site admission handoff](../contracts/hotfix-2026.10.16-site-admission.md).
 
