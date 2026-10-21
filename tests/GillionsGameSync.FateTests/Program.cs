@@ -23,6 +23,17 @@ foreach(var bad in new[] {october with {GameVersion="2026.10.07.0000.0000",Refer
     october with {ReferenceGameVersion=source.GameVersion},october with {DalamudApiLevel=16},
     october with {LuminaVersion="future"},october with {ExcelVersion="future"},october with {CollectorVersion="unknown"},
     october with {Family="unknown"}}) Check(!FatePolicy.Compatible(bad),"mixed/future/unknown October source fails closed");
+var hotfix=october with {CollectorVersion="0.0.90.0",GameVersion="2026.10.16.0000.0000",ReferenceGameVersion="2026.10.16.0000.0000",
+    DalamudVersion="15.0.3.9",DalamudRevision="30509c3b4fd00edd9a3d65b7bbf16433d84be03b",
+    ClientStructsVersion="7.57.0.9414",ClientStructsRevision="dd57986b8287e7c6ed9c27198f8c76cb04a81dfe"};
+Check(FatePolicy.Compatible(hotfix),"exact inspected hotfix source matrix");
+foreach(var bad in new[] {hotfix with {DalamudVersion="15.0.3.8",DalamudRevision="f7d06f363955251991222363a7c008b8998b6565",
+        ClientStructsVersion="7.57.0.9386",ClientStructsRevision="d6397a76b3a63c2b247025dc296653182b718ca6"},
+    hotfix with {GameVersion=october.GameVersion,ReferenceGameVersion=october.GameVersion},
+    hotfix with {DalamudRevision=october.DalamudRevision},hotfix with {ClientStructsRevision=october.ClientStructsRevision},
+    hotfix with {ReferenceGameVersion=october.GameVersion},october with {GameVersion=hotfix.GameVersion,ReferenceGameVersion=hotfix.GameVersion}})
+    Check(!FatePolicy.Compatible(bad),"mixed/unqualified hotfix source fails closed");
+Check(!FateTransportPolicy.CanSend(null,hotfix,"synthetic",true,true,FatePolicy.Prepare(1,hotfix,[Row()],now),1,now),"Hotfix qualification cannot authorize Site contributions");
 var octoberPrepared=FatePolicy.Prepare(1,october,[Row()],now);
 Check(octoberPrepared is not null,"October positive row managed preparation");
 Check(!FateTransportPolicy.CanSend(null,october,"synthetic",true,true,octoberPrepared,1,now),"Local qualification cannot authorize Site contributions");

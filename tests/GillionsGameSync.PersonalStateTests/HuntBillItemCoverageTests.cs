@@ -24,6 +24,11 @@ internal static class HuntBillItemCoverageTests {
         check(JsonSerializer.Serialize(history)==retained,"October coverage changed retained bill history");
         c.Observe(key,key,true,true,2004,4,slots,true,now,mono,NativeCompatibility.October.GameBuild,"0.0.89.0","7.57.0.9379");
         check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="unavailable"),"Future October SDK fabricated negative coverage");
+        c.Observe(key,key,true,true,2004,4,slots,true,now,mono,NativeCompatibility.OctoberHotfix.GameBuild,"0.0.90.0",NativeCompatibility.OctoberHotfix.ClientStructsVersion);
+        check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="absent_confirmed"),"Qualified hotfix complete coverage rejected");
+        check(JsonSerializer.Serialize(history)==retained,"Hotfix coverage changed retained bill history");
+        c.Observe(key,key,true,true,2004,4,slots,true,now,mono,NativeCompatibility.OctoberHotfix.GameBuild,"0.0.90.0","7.57.0.9386");
+        check(c.Current(key,now,mono)!.Domains.All(d=>d.State=="unavailable"),"Unqualified 15.0.3.8 SDK fabricated hotfix negative coverage");
         Observe(slots);
         check(c.Current(key,now,mono)!.Domains.All(d => d.State == "absent_confirmed"),"A: complete absence failed");
         check(c.Current(other,now,mono) is null,"D: other character absence leaked");

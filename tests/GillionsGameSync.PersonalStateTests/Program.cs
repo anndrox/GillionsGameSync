@@ -139,20 +139,21 @@ foreach (var bad in new[] {
     (index: (byte)0, flags: 1, loaded: true, item: 0u, present: true)
 }) Check(!HuntObservationAdmission.CanUseBillCache(bad.index, bad.flags, bad.loaded, bad.item, bad.present), "Unavailable/foreign/absent bill admitted.");
 bool NativeAdmits(NativeFamily family, string game, string sdk) => NativeCompatibility.Supports(family, game, sdk);
-foreach (var build in new[] { NativeCompatibility.September, NativeCompatibility.October })
+foreach (var build in new[] { NativeCompatibility.September, NativeCompatibility.October, NativeCompatibility.OctoberHotfix })
     Check(NativeAdmits(NativeFamily.Hunt, build.GameBuild, build.ClientStructsVersion), "Qualified Hunt build rejected: " + build.GameBuild);
 foreach (var family in new[] { NativeFamily.Submarine, NativeFamily.Travel }) {
-    Check(NativeAdmits(family, "2026.09.15.0000.0000", "7.56.2.9136"), "Qualified private build rejected.");
+    Check(NativeAdmits(family, "2026.09.15.0000.0000", "7.56.2.9136") && NativeAdmits(family, "2026.10.16.0000.0000", "7.57.0.9414"), "Qualified private build rejected.");
     Check(!NativeAdmits(family, "2026.10.06.0000.0000", "7.57.0.9378"), "Hunt-only October qualification expanded " + family + ".");
 }
 Check(NativeAdmits(NativeFamily.Dashboard, "2026.09.15.0000.0000", "7.56.2.9136"), "Known Dashboard pair disabled.");
 Check(!NativeAdmits(NativeFamily.Dashboard, "2026.10.06.0000.0000", "7.57.0.9378") && !NativeAdmits(NativeFamily.Dashboard, "2026.10.16.0000.0000", "7.57.0.9414"),
     "Unqualified Dashboard readers followed other families.");
+// Dalamud 15.0.3.8's ClientStructs and pre-hotfix runtimes are not qualified for the hotfix game.
 foreach (var family in new[] { NativeFamily.Hunt, NativeFamily.Submarine, NativeFamily.Travel, NativeFamily.Dashboard })
     foreach (var pair in new[] { ("2026.10.06.0000.0000","7.56.2.9136"), ("2026.09.15.0000.0000","7.57.0.9378"),
         ("2026.10.07.0000.0000","7.57.0.9378"), ("2026.10.06.0000.0000","7.57.0.9379"), ("unavailable","7.57.0.9378"),
-        ("2026.10.16.0000.0000","7.57.0.9386"), ("2026.10.16.0000.0000","7.57.0.9378"), ("2026.10.16.0000.0000","7.57.0.9414"),
-        ("2026.10.06.0000.0000","7.57.0.9414"), ("unknown", "7.56.2.9136"),
+        ("2026.10.16.0000.0000","7.57.0.9386"), ("2026.10.16.0000.0000","7.57.0.9378"), ("2026.10.16.0000.0000","7.57.0.9415"),
+        ("2026.10.17.0000.0000","7.57.0.9414"), ("2026.10.06.0000.0000","7.57.0.9414"), ("unknown", "7.56.2.9136"),
         ("2026.09.15.0000.0000", "7.56.3.0"), ("2026.10.01.0000.0000", "7.56.2.9136") })
         Check(!NativeAdmits(family, pair.Item1, pair.Item2), "Mixed/future " + family + " pair admitted.");
 var store = new HuntBillRetention(); var policy = new HuntBillRetentionPolicy(store);

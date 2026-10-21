@@ -1,6 +1,6 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>1.0.31.5</Version>
+    <Version>1.0.31.6</Version>
     <DefineConstants Condition="'$(GillionsTestBuild)' != 'true'">$(DefineConstants);GILLIONS_PUBLIC_BUILD</DefineConstants>
     <AssemblyName>GillionsGameSync</AssemblyName>
     <RootNamespace>GillionsGameSync</RootNamespace>
@@ -46,7 +46,7 @@
   <!-- A separate Dalamud identity keeps the test repository from updating or
        sharing configuration with the stable member plugin. -->
   <PropertyGroup Condition="'$(GillionsTestBuild)' == 'true'">
-    <Version>0.0.89</Version>
+    <Version>0.0.90</Version>
     <AssemblyName>GillionsGameSyncTest</AssemblyName>
     <Name>Gillions Game Sync Testing</Name>
     <Punchline>Opt-in experimental Gillions Game Sync.</Punchline>

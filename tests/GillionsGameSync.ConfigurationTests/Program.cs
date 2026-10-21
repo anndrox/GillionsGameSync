@@ -161,7 +161,7 @@ if (nativeCapabilities) {
     Assert(!configurationType.GetProperties().Any(p=>p.PropertyType.Name.StartsWith("Travel",StringComparison.Ordinal)),"Configuration must not retain travel data.");
     var native=AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Combine(libraryPath,"FFXIVClientStructs.dll"));
     var installedNativeVersion=native.GetName().Version?.ToString();
-    Assert(installedNativeVersion is "7.56.2.9136" or "7.57.0.9378","Uninspected SDK fixture requires reassessment.");
+    Assert(installedNativeVersion is "7.56.2.9136" or "7.57.0.9378" or "7.57.0.9414","Uninspected SDK fixture requires reassessment.");
     var nativeCompatibility=pluginAssembly.GetType("GillionsGameSync.NativeCompatibility",true)!;
     var nativeFamily=pluginAssembly.GetType("GillionsGameSync.NativeFamily",true)!;
     var supportsTuple=nativeCompatibility.GetMethod("Supports",BindingFlags.Static|BindingFlags.NonPublic)!;
@@ -169,7 +169,7 @@ if (nativeCapabilities) {
     Assert(NativeSupports("Dashboard","2026.09.15.0000.0000") == (installedNativeVersion=="7.56.2.9136")
         && !NativeSupports("Dashboard","2026.10.06.0000.0000") && !NativeSupports("Dashboard","2026.10.16.0000.0000"),"New runtime must not bypass unrelated personal SDK gates.");
     foreach(var family in new[]{"Submarine","Travel"})
-        Assert(!NativeSupports(family,"2026.10.06.0000.0000") && !NativeSupports(family,"2026.10.16.0000.0000"),
+        Assert(!NativeSupports(family,"2026.10.06.0000.0000") && NativeSupports(family,"2026.10.16.0000.0000") == (installedNativeVersion=="7.57.0.9414"),
             "October Submarine/travel support must not follow Hunt-only qualification.");
     var info=native.GetType("FFXIVClientStructs.FFXIV.Client.Game.UI.TeleportInfo",true)!;
     foreach(var name in new[] { "AetheryteId","GilCost","TerritoryId","IsFavourite","IsFreeAetheryte" }) Assert(info.GetField(name) is not null,"Travel field changed.");

@@ -181,7 +181,7 @@ Check(byteLimited.CapacityReached && byteLimited.Characters.Count < 16 && JsonSe
 Check(NativeCompatibility.Supports(NativeFamily.Dashboard, NativeCompatibility.September.GameBuild, NativeCompatibility.September.ClientStructsVersion)
     && !NativeCompatibility.Supports(NativeFamily.Dashboard, "future-game", NativeCompatibility.September.ClientStructsVersion)
     && !NativeCompatibility.Supports(NativeFamily.Dashboard, NativeCompatibility.September.GameBuild, "future-sdk")
-    && !NativeCompatibility.Supports(NativeFamily.Dashboard, NativeCompatibility.October.GameBuild, NativeCompatibility.October.ClientStructsVersion), "patch gate failed");
+    && !NativeCompatibility.Supports(NativeFamily.Dashboard, NativeCompatibility.OctoberHotfix.GameBuild, NativeCompatibility.OctoberHotfix.ClientStructsVersion), "patch gate failed");
 var schedule = new DashboardSchedule();
 Check(schedule.Begin(now, false) is null, "OFF cadence admitted");
 Check(schedule.Begin(now, true) == 0, "initial schedule");

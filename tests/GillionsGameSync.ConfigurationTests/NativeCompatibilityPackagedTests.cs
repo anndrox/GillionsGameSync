@@ -52,16 +52,17 @@ internal static class NativeCompatibilityPackagedTests {
         ]),
     ];
     // Measured with --native-layout-report against the official Dalamud
-    // 15.0.3.6/15.0.3.7 release archives. Equality across a family's qualified versions is the
+    // 15.0.3.6/15.0.3.7/15.0.3.9 release archives (15.0.3.8 also matched but is
+    // not qualified). Equality across a family's qualified versions is the
     // reference evidence for its admission; CI rechecks every recorded archive
     // with --native-layout-check.
     private const string HuntLayout = "2312d897d65b4177", SubmarineLayout = "8c4e37e328c571a9",
         TravelLayout = "22c25911f7cc88bf", FateLayout = "6923c1e09b662322";
     private static readonly Dictionary<(string Family, string ClientStructs), string> Expected = new() {
-        [("Hunt", "7.56.2.9136")] = HuntLayout, [("Hunt", "7.57.0.9378")] = HuntLayout,
-        [("Submarine", "7.56.2.9136")] = SubmarineLayout,
-        [("Travel", "7.56.2.9136")] = TravelLayout,
-        [("Fate", "7.56.2.9136")] = FateLayout, [("Fate", "7.57.0.9378")] = FateLayout,
+        [("Hunt", "7.56.2.9136")] = HuntLayout, [("Hunt", "7.57.0.9378")] = HuntLayout, [("Hunt", "7.57.0.9414")] = HuntLayout,
+        [("Submarine", "7.56.2.9136")] = SubmarineLayout, [("Submarine", "7.57.0.9414")] = SubmarineLayout,
+        [("Travel", "7.56.2.9136")] = TravelLayout, [("Travel", "7.57.0.9414")] = TravelLayout,
+        [("Fate", "7.56.2.9136")] = FateLayout, [("Fate", "7.57.0.9378")] = FateLayout, [("Fate", "7.57.0.9414")] = FateLayout,
     };
 
     internal static void Run(Assembly plugin,string libraries) {

@@ -1,16 +1,23 @@
 # Changelog
 
-## Unreleased — native compatibility table
+## 0.0.90 / prepared Public1.0.31.6 — 7.57 hotfix compatibility (unpublished)
 
-- Move every patch-sensitive native build check (Hunt, submarine, travel, FATE,
-  Dashboard) into one per-collector table, `NativeCompatibility.cs`. Admissions are
-  unchanged; qualifying one collector never admits another.
-- Add packaged per-collector layout fingerprints of the shipped ClientStructs
-  members, re-proved in CI on the earlier official archive. Document the evidence
-  and patch-day procedure in `docs/native-compatibility.md`.
-- CI also runs on `codex/**` pushes; the obsolete `feature/venture-planner` trigger is removed.
+- Move every native build check into one per-collector table
+  (`NativeCompatibility.cs`); qualifying one collector never admits another.
+- Qualify Hunt, submarine and travel reads and the FATE source match for game
+  2026.10.16 with Dalamud 15.0.3.9 (ClientStructs 7.57.0.9414) after source and
+  shipped-binary layout comparison. Dashboard stays September-only; 15.0.3.8 is
+  not admitted. Owner in-game test: Hunt Progress accepted on this runtime.
+  Submarine reads are source qualified but not physically tested; FATE collection
+  and travel await Site admission and were not exercised.
+- CI pins the Dalamud 15.0.3.9 release archive, inspects per-collector layout
+  fingerprints, re-proves the recorded 15.0.3.6/15.0.3.7 layouts and also runs on
+  `codex/**` pushes (the obsolete `feature/venture-planner` trigger is removed).
+- Supersedes the unpublished 1.0.31.5/0.0.89 candidates. Consent, Site authority,
+  payloads and cadences are unchanged; FATE, Hunt coverage and travel uploads
+  still need Site admission of the hotfix tuple.
 
-## Unreleased — collectible observation readiness
+### Collectible observation readiness
 
 - Withhold the whole Collectibles snapshot while native definitions, character
   unlock state or BannerCondition EXD rows are unavailable. Retry missing catalogs

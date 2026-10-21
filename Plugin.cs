@@ -181,6 +181,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Testing90 qualifies Hunt, submarine and travel reads and the FATE source for the 7.57 hotfix (Dalamud 15.0.3.9) from one per-collector compatibility table. FATE, Hunt coverage and travel uploads still need Gillions admission of the new patch.",
         "October Hunt/FATE sources are qualified with exact future-build guards. Connected FATE testing requires matching Gillions source/reference admission and independent policy.",
         "Testing88 uses a dedicated public Testing feed, separate configuration and TEST-only HTTPS requests. No production pairing is imported; historical Testing production bindings remain preserved but inactive.",
         "Main, Settings and Pairing share the accepted Public1.0.31.3 resizing/reconnect/Hunt-status corrections. This separate Testing DLL is not the frozen Public binary.",
@@ -201,6 +202,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         "Testing Party Finder contribution requires fresh Testing pairing with site permission and a separate local opt-in. Public listings go to Gillions HTTPS, not directly to xivpf.com or localhost.",
         "Gillions keeps only an expiring, runtime current-listing cache; the paired token is used only for Gillions Authorization, never listing data. Permission denials stay stopped across logout/reload until fresh pairing.",
 #else
+        "Hunt Progress supports the current 7.57 hotfix game version with Dalamud 15.0.3.9. Each Hunt, submarine, routing and FATE reader still checks its own exact compatibility first.",
         "Main, Settings and Pairing are manually resizable with readable minimum widths and scrolling; saved window identities are preserved.",
         "October Hunt/FATE compatibility retains exact source and Site permission guards; unsupported future patches still fail closed.",
         "Hunt Progress distinguishes observed current-area targets from unknown bill coverage. No observed rows is not proof of no bills or completion.",
