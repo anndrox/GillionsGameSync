@@ -12,11 +12,17 @@ function Assert-NotContains([string]$Text, [string]$Needle, [string]$Message) {
   if ($Text.IndexOf($Needle, [StringComparison]::Ordinal) -ge 0) { throw $Message }
 }
 
-$collectIndex = $pluginSource.IndexOf("DirectGameSnapshotCollector.Collect", [StringComparison]::Ordinal)
-$workerIndex = $pluginSource.IndexOf("Task.Run(() => snapshots.Select(snapshot => PrepareSnapshot", [StringComparison]::Ordinal)
-if ($collectIndex -lt 0 -or $workerIndex -lt 0 -or $collectIndex -ge $workerIndex) {
+$syncStart = $pluginSource.IndexOf("private async Task SyncAsync(", [StringComparison]::Ordinal)
+$firstCapture = $pluginSource.IndexOf("CollectScopes(state, selectedScopes.Take(1).ToArray()", $syncStart, [StringComparison]::Ordinal)
+$laterCapture = $pluginSource.IndexOf("framework.RunOnTick(() => {", $syncStart, [StringComparison]::Ordinal)
+$laterCollect = $pluginSource.IndexOf("CollectScopes(CurrentState, [scope]", $syncStart, [StringComparison]::Ordinal)
+$workerIndex = $pluginSource.IndexOf("Task.Run(() => snapshots.Select(snapshot => PrepareSnapshot", $syncStart, [StringComparison]::Ordinal)
+if ($syncStart -lt 0 -or $firstCapture -lt 0 -or $laterCapture -lt 0 -or $laterCollect -lt $laterCapture -or $workerIndex -lt 0 -or $firstCapture -ge $workerIndex -or $laterCollect -ge $workerIndex) {
   throw "Native collection must finish before managed payload preparation moves off-thread."
 }
+$helper = $pluginSource.Substring($pluginSource.IndexOf("private GameSnapshot[] CollectScopes(", [StringComparison]::Ordinal))
+Assert-Contains $helper.Substring(0, $helper.IndexOf("private static string[] WithheldResources", [StringComparison]::Ordinal)) "DirectGameSnapshotCollector.Collect(" "Scope collection must use the native collector only through the framework-thread helper."
+Assert-Contains $pluginSource "delayTicks: 1, cancellationToken: permit.Cancellation" "Later manual-sync scopes must each run on a following framework tick."
 Assert-Contains $pluginSource "await framework.RunOnFrameworkThread" "All game-owned state capture must be marshaled to the framework thread."
 
 Assert-Contains $pluginSource "JsonSerializer.SerializeToUtf8Bytes(snapshot.Payload)" "Snapshots must be serialized once into UTF-8 bytes."

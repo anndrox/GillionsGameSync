@@ -64,23 +64,45 @@ public static class DirectGameSnapshotCollector {
     internal static bool CaptureRetainerInventoryCoverage(RetainerVentureLocalState state) =>
         RetainerVentureSnapshotPolicy.MergeInventorySources(state, NativeInventoryCollector.ReadRetainerInventoryCoverage(state.Retainers));
 
-    public static IEnumerable<GameSnapshot> Collect(IDalamudPluginInterface pluginInterface, IClientState clientState, IObjectTable objects, IDataManager dataManager, IUnlockState unlockState, IReadOnlyDictionary<string, long>? retainerGilBalances, RetainerVentureLocalState? retainerVentureState, IEnumerable<string> scopes) {
+    // Resources whose native source is not ready are withheld (named in
+    // `withheld`), never sent as an empty or zero result: the Site replaces
+    // these resources wholesale, so an empty upload would delete valid data.
+    public static IEnumerable<GameSnapshot> Collect(IDalamudPluginInterface pluginInterface, IClientState clientState, IObjectTable objects, IDataManager dataManager, IUnlockState unlockState, IReadOnlyDictionary<string, long>? retainerGilBalances, RetainerVentureLocalState? retainerVentureState, IEnumerable<string> scopes,
+        IDictionary<string, InventoryContainerObservation>? inventoryContainers = null, ICollection<string>? withheld = null) {
         var selected = new HashSet<string>(scopes ?? [], StringComparer.Ordinal);
         var identity = new { name = objects.LocalPlayer?.Name.TextValue ?? "", world = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "" };
-        if (selected.Contains("inventory")) {
-            var inventory = NativeInventoryCollector.ReadAllContainers(dataManager);
-            if (inventory.Items.Length == 0) throw new InvalidOperationException("No player inventory is currently loaded. Log into the selected character, open Inventory once, then try sync again.");
-            var retainerGil = (retainerGilBalances ?? new Dictionary<string, long>()).Where(entry => !string.IsNullOrWhiteSpace(entry.Key) && entry.Value >= 0).Select(entry => new { retainerId = entry.Key, gil = entry.Value }).ToArray();
-            yield return new GameSnapshot("inventory", new { character = identity, items = inventory.Items, armoireItems = inventory.ArmoireItems, armoireObserved = inventory.ArmoireObserved, retainerListings = inventory.RetainerListings, retainerListingsObserved = inventory.RetainerListingsObserved, retainerListingRetainerIds = inventory.RetainerListingRetainerIds, retainerBags = inventory.RetainerBags, retainerBagsObserved = inventory.RetainerBagsObserved, retainerGil });
+        if (identity.name.Length == 0 || identity.world.Length == 0) {
+            // Loading screens and logout clear the local player before the
+            // permit's character does; nothing is attributable until it returns.
+            foreach (var scope in selected) withheld?.Add(scope + ":" + NativeAvailability.StaleContext);
+            yield break;
         }
-        if (selected.Contains("currencies")) yield return new GameSnapshot("currencies", new { character = identity, items = CurrencyCollector.Read() });
+        if (selected.Contains("inventory")) {
+            var inventory = NativeInventoryCollector.ReadAllContainers(dataManager, inventoryContainers ?? new Dictionary<string, InventoryContainerObservation>(StringComparer.Ordinal));
+            if (inventory is null) withheld?.Add("inventory:" + NativeAvailability.NotLoaded);
+            else {
+                var retainerGil = (retainerGilBalances ?? new Dictionary<string, long>()).Where(entry => !string.IsNullOrWhiteSpace(entry.Key) && entry.Value >= 0).Select(entry => new { retainerId = entry.Key, gil = entry.Value }).ToArray();
+                yield return new GameSnapshot("inventory", new { character = identity, items = inventory.Items, armoireItems = inventory.ArmoireItems, armoireObserved = inventory.ArmoireObserved, retainerListings = inventory.RetainerListings, retainerListingsObserved = inventory.RetainerListingsObserved, retainerListingRetainerIds = inventory.RetainerListingRetainerIds, retainerBags = inventory.RetainerBags, retainerBagsObserved = inventory.RetainerBagsObserved, retainerGil,
+                    // Additive, ignored by older Sites: which player containers were
+                    // read now, carried from their last loaded read, or never seen.
+                    observedLocations = inventory.ObservedLocations, carriedLocations = inventory.CarriedLocations, unobservedLocations = inventory.UnobservedLocations,
+                    retainerBagRetainerIds = inventory.RetainerBagRetainerIds });
+            }
+        }
+        if (selected.Contains("currencies")) {
+            var currencies = CurrencyCollector.Read();
+            if (currencies is null) withheld?.Add("currencies:" + NativeAvailability.NotLoaded);
+            else yield return new GameSnapshot("currencies", new { character = identity, items = currencies });
+        }
         if (selected.Contains("achievements")) {
             var achievements = AchievementCollector.ReadUnlockedIds(dataManager, unlockState);
             if (achievements.Loaded) yield return new GameSnapshot("achievements", new { character = identity, ids = achievements.Ids, complete = true });
         }
         if (selected.Contains("character")) {
+            // The Site replaces jobs, gear, recipes and fish wholesale.
             var progress = CharacterProgressCollector.Read(dataManager, unlockState);
-            yield return new GameSnapshot("character", new { character = identity, currentJobId = progress.CurrentJobId, jobs = progress.Jobs, equippedItems = progress.EquippedItems, craftingRecipeIds = progress.CraftingRecipeIds, gatheringLogIds = progress.GatheringLogIds });
+            if (progress is null) withheld?.Add("character:" + NativeAvailability.NotLoaded);
+            else yield return new GameSnapshot("character", new { character = identity, currentJobId = progress.CurrentJobId, jobs = progress.Jobs, equippedItems = progress.EquippedItems, craftingRecipeIds = progress.CraftingRecipeIds, gatheringLogIds = progress.GatheringLogIds });
         }
         if (selected.Contains("quest_journal")) {
             var quests = QuestJournalCollector.Read(dataManager, unlockState);
@@ -427,12 +449,29 @@ internal static class NativeInventoryCollector {
     private static readonly object RetainerListingCacheLock = new();
     private static readonly Dictionary<string, RetainerListingRead> RetainerListingCache = new(StringComparer.Ordinal);
     private static readonly Dictionary<uint, (RetainerContext Context, DateTime ObservedAtUtc)> RecentRetainerItems = new();
+    private static readonly RetainerContextStability ActiveRetainer = new();
     internal static void ClearTransientState() {
-        lock (RetainerListingCacheLock) { RecentRetainerItems.Clear(); RetainerListingCache.Clear(); }
+        lock (RetainerListingCacheLock) { RecentRetainerItems.Clear(); RetainerListingCache.Clear(); ActiveRetainer.Clear(); }
     }
     internal static void MaintainTransientState(DateTime now) {
         lock (RetainerListingCacheLock) TransientEvidencePolicy.Prune(RecentRetainerItems, now, TimeSpan.FromSeconds(10), entry => entry.ObservedAtUtc);
+        StableActiveRetainerId(now);
     }
+
+    // The active retainer's id once it has been active for the stability
+    // window; otherwise null. Framework thread only (reads RetainerManager).
+    private static unsafe string? StableActiveRetainerId(DateTime now) {
+        var retainerManager = RetainerManager.Instance();
+        var activeRetainer = retainerManager == null ? null : retainerManager->GetActiveRetainer();
+        var id = activeRetainer == null || activeRetainer->RetainerId == 0 ? null : activeRetainer->RetainerId.ToString();
+        lock (RetainerListingCacheLock) {
+            ActiveRetainer.Observe(id, now);
+            return ActiveRetainer.IsStable(id, now) ? id : null;
+        }
+    }
+
+    private static unsafe bool Loaded(InventoryContainer* container) =>
+        container != null && container->IsLoaded && container->Items != null && container->Size > 0;
     // These are player-owned containers resident in normal client state. Retainer
     // bags/listings and specialized storage are intentionally not inferred.
     private static readonly InventoryType[] PlayerContainers = [
@@ -448,9 +487,11 @@ internal static class NativeInventoryCollector {
 
     public static string GetAvailabilityStatus() => "Native Gillions collector is active: it reads loaded player bags, armoury, currencies, crystals, and saddlebags directly from the client. It does not use Allagan Tools, packet capture, or another download.";
 
+    // GetGil reads the Currency container. Before it loads that read is 0, and
+    // a 0 baseline would turn the real balance into a phantom ledger income.
     public static unsafe long? ReadGil() {
         var manager = InventoryManager.Instance();
-        return manager == null ? null : manager->GetGil();
+        return manager == null ? null : CurrencyObservationPolicy.Gil(Loaded(manager->GetInventoryContainer(InventoryType.Currency)), manager->GetGil());
     }
 
     public static unsafe RetainerBalanceRead? ReadActiveRetainerGil() {
@@ -514,8 +555,9 @@ internal static class NativeInventoryCollector {
         unsafe {
             // Do not walk retained inventory containers while normal gameplay
             // is active. The manager can keep stale page data resident after
-            // leaving a bell; only a currently active retainer is valid data.
-            if (!HasActiveRetainer()) return false;
+            // leaving a bell or switching retainers; only a stably active
+            // retainer is valid data.
+            if (StableActiveRetainerId(DateTime.UtcNow) is null) return false;
             var manager = InventoryManager.Instance();
             if (manager == null) return false;
             CacheLoadedRetainerItems(manager);
@@ -532,27 +574,29 @@ internal static class NativeInventoryCollector {
         }
     }
 
-    public static unsafe InventoryRead ReadAllContainers(IDataManager dataManager) {
+    // Null when the player inventory is not a usable read (see
+    // InventoryObservationPolicy). Unopened saddlebags are carried from their
+    // last loaded contents for this owned character, never reported as empty.
+    public static unsafe InventoryRead? ReadAllContainers(IDataManager dataManager, IDictionary<string, InventoryContainerObservation> carried) {
         var manager = InventoryManager.Instance();
-        if (manager == null) return new InventoryRead([], [], false, [], [], false, [], false);
-        var items = new List<object>();
+        if (manager == null) return null;
+        var reads = new List<ContainerRead>(PlayerContainers.Length);
         foreach (var containerType in PlayerContainers) {
             var container = manager->GetInventoryContainer(containerType);
-            if (container == null || !container->IsLoaded || container->Items == null || container->Size <= 0) continue;
+            var location = containerType.ToString();
+            if (!Loaded(container)) { reads.Add(new(location, false, [])); continue; }
+            var rows = new List<InventoryRow>();
             for (var index = 0; index < container->Size; index++) {
                 var item = container->Items[index];
                 if (item.ItemId == 0 || item.Quantity <= 0 || item.IsSymbolic) continue;
                 var highQuality = (item.Flags & InventoryItem.ItemFlags.HighQuality) != 0;
-                items.Add(new {
-                    itemId = item.ItemId,
-                    quantity = highQuality ? 0 : item.Quantity,
-                    hqQuantity = highQuality ? item.Quantity : 0,
-                    equippedQuantity = containerType == InventoryType.EquippedItems ? item.Quantity : 0,
-                    location = containerType.ToString(),
-                    source = "native_client_state",
-                });
+                rows.Add(new(item.ItemId, highQuality ? 0 : item.Quantity, highQuality ? item.Quantity : 0,
+                    containerType == InventoryType.EquippedItems ? item.Quantity : 0, location, InventoryObservationPolicy.NativeSource));
             }
+            reads.Add(new(location, true, rows.ToArray()));
         }
+        var assembled = InventoryObservationPolicy.Assemble(reads, carried, DateTime.UtcNow);
+        if (assembled is null) return null;
         var retainerBags = ReadLoadedRetainerBags(manager);
         var armoire = ArmoireCollector.Read(dataManager);
         CaptureLoadedRetainerListings();
@@ -561,14 +605,16 @@ internal static class NativeInventoryCollector {
             var cached = RetainerListingCache.Values.ToArray();
             retainerListings = new RetainerListingRead(cached.SelectMany((entry) => entry.Items).ToArray(), cached.Length > 0, cached.SelectMany((entry) => entry.RetainerIds).Distinct(StringComparer.Ordinal).ToArray());
         }
-        return new InventoryRead(items.ToArray(), retainerListings.Items, retainerListings.Observed, retainerListings.RetainerIds, retainerBags.Items, retainerBags.Observed, armoire.Items, armoire.Observed);
+        return new InventoryRead(assembled.Items, retainerListings.Items, retainerListings.Observed, retainerListings.RetainerIds, retainerBags.Items, retainerBags.Observed, armoire.Items, armoire.Observed,
+            assembled.ObservedLocations, assembled.CarriedLocations, assembled.UnobservedLocations, retainerBags.RetainerIds);
     }
 
-    public static unsafe object[] ReadEquippedItems() {
+    // Null when the equipped container is not loaded.
+    public static unsafe object[]? ReadEquippedItems() {
         var manager = InventoryManager.Instance();
-        if (manager == null) return [];
+        if (manager == null) return null;
         var container = manager->GetInventoryContainer(InventoryType.EquippedItems);
-        if (container == null || !container->IsLoaded || container->Items == null || container->Size <= 0) return [];
+        if (!Loaded(container)) return null;
         return Enumerable.Range(0, container->Size).Select(index => {
             var item = container->Items[index];
             return (object)new { slot = $"Equipped {index + 1}", itemId = item.ItemId, quantity = item.Quantity, isHq = (item.Flags & InventoryItem.ItemFlags.HighQuality) != 0 };
@@ -577,29 +623,27 @@ internal static class NativeInventoryCollector {
 
     // Retainer containers only exist after that retainer has been opened in this
     // game session. Enum parsing keeps this patch-tolerant across client names;
-    // absent/unloaded containers are deliberately not reported as empty.
+    // absent/unloaded containers are deliberately not reported as empty. Pages
+    // stay resident after leaving a bell or switching retainers, so they are
+    // attributed only to the stably active retainer.
     private static unsafe RetainerBagRead ReadLoadedRetainerBags(InventoryManager* manager) {
-        var retainerManager = RetainerManager.Instance();
-        var retainerId = retainerManager == null ? 0UL : retainerManager->LastSelectedRetainerId;
-        // A page container can remain cached after leaving a bell. Only claim a
-        // complete retainer observation while the client identifies the active
-        // retainer for this session.
-        if (retainerId == 0) return new RetainerBagRead([], false);
+        var retainerId = StableActiveRetainerId(DateTime.UtcNow);
+        if (retainerId is null) return new RetainerBagRead([], false, []);
         var result = new List<object>();
         var observed = false;
         foreach (var name in new[] { "RetainerPage1", "RetainerPage2", "RetainerPage3", "RetainerPage4", "RetainerPage5", "RetainerPage6", "RetainerPage7", "RetainerCrystals" }) {
             if (!Enum.TryParse<InventoryType>(name, out var containerType)) continue;
             var container = manager->GetInventoryContainer(containerType);
-            if (container == null || !container->IsLoaded || container->Items == null || container->Size <= 0) continue;
+            if (!Loaded(container)) continue;
             observed = true;
             for (var index = 0; index < container->Size; index++) {
                 var item = container->Items[index];
                 if (item.ItemId == 0 || item.Quantity <= 0 || item.IsSymbolic) continue;
                 var highQuality = (item.Flags & InventoryItem.ItemFlags.HighQuality) != 0;
-                result.Add(new { retainerId = retainerId.ToString(), itemId = item.ItemId, quantity = highQuality ? 0 : item.Quantity, hqQuantity = highQuality ? item.Quantity : 0, location = containerType.ToString(), slot = index, source = "native_loaded_retainer_state" });
+                result.Add(new { retainerId, itemId = item.ItemId, quantity = highQuality ? 0 : item.Quantity, hqQuantity = highQuality ? item.Quantity : 0, location = containerType.ToString(), slot = index, source = "native_loaded_retainer_state" });
             }
         }
-        return new RetainerBagRead(result.ToArray(), observed);
+        return new RetainerBagRead(result.ToArray(), observed, observed ? [retainerId] : []);
     }
 
     // RetainerMarket is the native container backing the active retainer's
@@ -634,18 +678,20 @@ internal static class NativeInventoryCollector {
         return new RetainerListingRead(result.ToArray(), true, [retainerId.ToString()]);
     }
 
-    public static unsafe object[] ReadCurrencyItems() {
+    // Null when the Currency container is not loaded. A loaded container with
+    // no positive balances is a genuine empty list (all balances zero).
+    public static unsafe CurrencyRow[]? ReadCurrencyItems() {
         var manager = InventoryManager.Instance();
-        if (manager == null) return [];
+        if (manager == null) return null;
         var container = manager->GetInventoryContainer(InventoryType.Currency);
-        if (container == null || !container->IsLoaded || container->Items == null || container->Size <= 0) return [];
-        var result = new List<object>();
+        if (!Loaded(container)) return CurrencyObservationPolicy.Rows(false, []);
+        var result = new List<CurrencyRow>();
         for (var index = 0; index < container->Size; index++) {
             var item = container->Items[index];
             if (item.ItemId == 0 || item.Quantity <= 0 || item.IsSymbolic) continue;
-            result.Add(new { itemId = item.ItemId, quantity = item.Quantity, source = "native_client_state" });
+            result.Add(new(item.ItemId, item.Quantity, "native_client_state"));
         }
-        return result.ToArray();
+        return CurrencyObservationPolicy.Rows(true, result);
     }
 
     public static unsafe RetainerInventorySourceRead[] ReadRetainerInventoryCoverage(IEnumerable<RetainerVentureProfile> retainers) {
@@ -691,8 +737,9 @@ internal static class NativeInventoryCollector {
     }
 }
 
-internal sealed record InventoryRead(object[] Items, object[] RetainerListings, bool RetainerListingsObserved, string[] RetainerListingRetainerIds, object[] RetainerBags, bool RetainerBagsObserved, object[] ArmoireItems, bool ArmoireObserved);
-internal sealed record RetainerBagRead(object[] Items, bool Observed);
+internal sealed record InventoryRead(InventoryRow[] Items, object[] RetainerListings, bool RetainerListingsObserved, string[] RetainerListingRetainerIds, object[] RetainerBags, bool RetainerBagsObserved, object[] ArmoireItems, bool ArmoireObserved,
+    string[] ObservedLocations, string[] CarriedLocations, string[] UnobservedLocations, string[] RetainerBagRetainerIds);
+internal sealed record RetainerBagRead(object[] Items, bool Observed, string[] RetainerIds);
 internal sealed record RetainerContext(string RetainerId, string RetainerName);
 internal sealed record RetainerBalanceRead(string RetainerId, string RetainerName, string Town, long Gil);
 internal sealed record RetainerListingRead(RetainerListingItem[] Items, bool Observed, string[] RetainerIds);
@@ -705,7 +752,7 @@ internal sealed record RetainerListingItem(
     [property: JsonPropertyName("isHq")] bool IsHq,
     [property: JsonPropertyName("slot")] short Slot,
     [property: JsonPropertyName("source")] string Source);
-internal static class CurrencyCollector { public static object[] Read() => NativeInventoryCollector.ReadCurrencyItems(); }
+internal static class CurrencyCollector { public static CurrencyRow[]? Read() => NativeInventoryCollector.ReadCurrencyItems(); }
 
 internal static class ArmoireCollector {
     private static IDataManager? catalogSource;
@@ -716,6 +763,8 @@ internal static class ArmoireCollector {
         if (ReferenceEquals(catalogSource, dataManager)) return catalog;
         var entries = SheetRowCache<Lumina.Excel.Sheets.Cabinet>.Get(dataManager)
             .Select(row => new ArmoireCatalogEntry(row.RowId, row.Item.RowId)).ToArray();
+        // An unavailable sheet is retried on the next read, never cached.
+        if (entries.Length == 0) return entries;
         catalog = entries;
         catalogSource = dataManager;
         return catalog;
@@ -754,18 +803,20 @@ internal static class AchievementCollector {
 internal sealed record AchievementRead(bool Loaded, long[] Ids);
 
 internal static class CharacterProgressCollector {
-    public static unsafe CharacterProgressRead Read(IDataManager dataManager, IUnlockState unlockState) {
+    // Null unless the player state, equipped container and every catalog are
+    // loaded: the Site replaces jobs, gear, recipes and fish wholesale.
+    public static unsafe CharacterProgressRead? Read(IDataManager dataManager, IUnlockState unlockState) {
         var player = PlayerState.Instance();
-        var jobs = new List<object>();
-        if (player != null) {
-            var classJobs = SheetRowCache<ClassJob>.Get(dataManager);
-            jobs = classJobs.Select(row => new { id = (int)row.RowId, name = row.Name.ToString(), abbreviation = row.Abbreviation.ToString(), level = (int)player->GetClassJobLevel((int)row.RowId, false) }).Where(row => row.level > 0).Cast<object>().ToList();
-        }
+        if (player == null || !player->IsLoaded) return null;
+        var classJobs = SheetRowCache<ClassJob>.Get(dataManager);
         var recipes = SheetRowCache<Recipe>.Get(dataManager);
-        var crafting = recipes.Where(unlockState.IsRecipeUnlocked).Select(row => (long)row.RowId).ToArray();
         var fish = SheetRowCache<FishParameter>.Get(dataManager);
-        var gathering = player == null ? [] : fish.Where(row => row.IsInLog && player->IsFishCaught((uint)row.RowId)).Select(row => (long)row.RowId).ToArray();
-        return new CharacterProgressRead(player == null ? 0 : (uint)player->CurrentClassJobId, jobs.ToArray(), NativeInventoryCollector.ReadEquippedItems(), crafting, gathering);
+        var equipped = NativeInventoryCollector.ReadEquippedItems();
+        if (classJobs.Length == 0 || recipes.Length == 0 || fish.Length == 0 || equipped is null) return null;
+        var jobs = classJobs.Select(row => new { id = (int)row.RowId, name = row.Name.ToString(), abbreviation = row.Abbreviation.ToString(), level = (int)player->GetClassJobLevel((int)row.RowId, false) }).Where(row => row.level > 0).Cast<object>().ToArray();
+        var crafting = recipes.Where(unlockState.IsRecipeUnlocked).Select(row => (long)row.RowId).ToArray();
+        var gathering = fish.Where(row => row.IsInLog && player->IsFishCaught((uint)row.RowId)).Select(row => (long)row.RowId).ToArray();
+        return new CharacterProgressRead((uint)player->CurrentClassJobId, jobs, equipped, crafting, gathering);
     }
 }
 internal sealed record CharacterProgressRead(uint CurrentJobId, object[] Jobs, object[] EquippedItems, long[] CraftingRecipeIds, long[] GatheringLogIds);

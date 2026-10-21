@@ -5,7 +5,10 @@ using System.Linq;
 namespace GillionsGameSync;
 
 public sealed class ObservationSavePolicy {
-    public static readonly TimeSpan FreshnessInterval = TimeSpan.FromSeconds(30);
+    // A freshness-only save rewrites the whole configuration on the framework
+    // thread (measured ~19 ms median for a 1.5 MB config), so timestamp-only
+    // refreshes persist rarely. Durable changes still save on the next tick.
+    public static readonly TimeSpan FreshnessInterval = TimeSpan.FromMinutes(5);
     private DateTime nextFreshnessSave;
     private bool durable;
     private bool freshness;

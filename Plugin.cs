@@ -14,6 +14,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Game.Chat;
+using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Command;
 using Dalamud.Configuration;
 using Dalamud.Game.Inventory;
@@ -534,7 +535,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             _ = PollItemLinkRequestsAsync();
         }
 #endif
-        if (pairedClientHydration.TryBeginCharacterSync(syncInFlight)) {
+        if (pairedClientHydration.TryBeginCharacterSync(syncInFlight, now)) {
             _ = SyncAutomaticallyAsync([PairedClientHydrationState.CharacterResource], SyncRequestMode.Hydration);
             return;
         }
@@ -1269,6 +1270,8 @@ public sealed partial class Plugin : IDalamudPlugin {
         var failureStage = "capture_scheduled";
         var failureResource = "none";
         int? failureHttpStatus = null;
+        var withheld = new List<string>(); // framework thread only
+        string[] laterScopes = [];
         try {
             captured = await framework.RunOnFrameworkThread(() => {
                 failureStage = "capture_framework";
@@ -1286,7 +1289,13 @@ public sealed partial class Plugin : IDalamudPlugin {
                         TickPersonalSync(DateTime.UtcNow, prompt: true);
                 }
 #endif
-                if (disposed || syncInFlight) throw new OperationCanceledException();
+                // Local preconditions are not connection failures.
+                if (disposed) throw new SyncNotStartedException("Game Sync is shutting down.");
+                if (syncInFlight) throw new SyncNotStartedException("A sync is already in progress. Please wait.");
+                RefreshSessionContext();
+                if (!HasPairedSession || activeOwnedState is null) throw new SyncNotStartedException("Pair and log into a character before syncing.");
+                if (marketConditions[ConditionFlag.BetweenAreas] || marketConditions[ConditionFlag.BetweenAreas51])
+                    throw new SyncNotStartedException("Wait for the loading screen to finish, then sync again.");
                 var permit = CapturePermit(mode);
                 operationPermit = permit;
                 syncInFlight = true; ownsSync = true;
@@ -1306,17 +1315,29 @@ public sealed partial class Plugin : IDalamudPlugin {
                     if (DirectGameSnapshotCollector.CaptureRetainerInventoryCoverage(state.RetainerState)) RequestConfigurationSave();
                     savePolicy.Refresh();
                 }
-                var snapshots = DirectGameSnapshotCollector.Collect(pluginInterface, clientState, objects, dataManager, unlockState,
-                    state.RetainerGilBalances, state.RetainerState, selectedScopes).ToArray();
-                if (!background && selectedScopes.Contains("shared_fates", StringComparer.Ordinal)) RecordDiagnostic(SharedFateCollector.LastAttemptDiagnostic);
+                // Several resources are collected one per framework tick, so a
+                // manual sync never does every native walk in a single frame.
+                laterScopes = selectedScopes.Skip(1).ToArray();
+                var snapshots = CollectScopes(state, selectedScopes.Take(1).ToArray(), background, withheld);
                 var batch = new CapturedSnapshotBatch(state.CharacterName, state.CharacterWorld, permit, snapshots,
                     state.PendingGilLedgerEvents.Select(entry => entry with { LogIntegerParameters = entry.LogIntegerParameters.ToArray() }).ToArray(),
                     state.GilLedgerSessionId, new(state.LastPayloadHashes, StringComparer.Ordinal),
                     new(state.LastInventoryComponentHashes, StringComparer.Ordinal), IsDiagnosticRecording);
                 captureStopwatch.Stop();
-                if (batch.RecordDiagnostics) RecordDiagnostic($"Native collection [{string.Join(",", selectedScopes)}]: {captureStopwatch.Elapsed.TotalMilliseconds:N2} ms on framework thread; {snapshots.Length} snapshots.");
+                if (batch.RecordDiagnostics) RecordDiagnostic($"Native collection [{string.Join(",", selectedScopes.Take(1))}]: {captureStopwatch.Elapsed.TotalMilliseconds:N2} ms on framework thread; {snapshots.Length} snapshots.");
                 return batch;
             });
+            foreach (var scope in laterScopes) {
+                var permit = captured.Permit;
+                var more = await framework.RunOnTick(() => {
+                    RequirePermit(permit);
+                    var captureStopwatch = Stopwatch.StartNew();
+                    var collected = CollectScopes(CurrentState, [scope], background, withheld);
+                    if (captured.RecordDiagnostics) RecordDiagnostic($"Native collection [{scope}]: {captureStopwatch.Elapsed.TotalMilliseconds:N2} ms on framework thread; {collected.Length} snapshots.");
+                    return collected;
+                }, delayTicks: 1, cancellationToken: permit.Cancellation);
+                captured = captured with { Snapshots = [.. captured.Snapshots, .. more] };
+            }
             var snapshots = captured.Snapshots;
             failureStage = "prepare_snapshots";
             // Managed preparation receives only copied data and no live config.
@@ -1389,7 +1410,20 @@ public sealed partial class Plugin : IDalamudPlugin {
                     configuration.SyncBlockedCode = ""; configuration.SyncBlockedMessage = ""; RequestConfigurationSave();
                 }
                 publicConnectionFailure = "";
-                if (!background) settingsMessage = submitted > 0 ? "Sync completed." : "Your supported data is already current.";
+                var notReady = WithheldResources(withheld);
+                if (mode == SyncRequestMode.Hydration && notReady.Contains(PairedClientHydrationState.CharacterResource, StringComparer.Ordinal))
+                    pairedClientHydration.RetryCharacterSync(DateTime.UtcNow.AddSeconds(5));
+                if (notReady.Length > 0) RecordDiagnostic($"Not ready, not uploaded (Site keeps prior data): {string.Join("; ", withheld.Distinct(StringComparer.Ordinal))}.");
+                if (!background) settingsMessage = notReady.Length > 0
+                    ? (submitted > 0 ? "Sync completed. " : "") + $"Not ready yet, kept unchanged on Gillions: {string.Join(", ", notReady)}. Try again in a moment."
+                    : submitted > 0 ? "Sync completed." : "Your supported data is already current.";
+            });
+        } catch (SyncNotStartedException notStarted) {
+            if (!disposed) await framework.RunOnFrameworkThread(() => {
+                if (disposed) return;
+                if (!background) settingsMessage = notStarted.Message;
+                // Hydration is one character sync per pairing/start; keep it pending.
+                if (mode == SyncRequestMode.Hydration) pairedClientHydration.RetryCharacterSync(DateTime.UtcNow.AddSeconds(5));
             });
         } catch (Exception error) {
             // Record the original failure before framework recovery can fail or
@@ -1415,6 +1449,26 @@ public sealed partial class Plugin : IDalamudPlugin {
             if (ownsSync && !disposed) await framework.RunOnFrameworkThread(() => { if (!disposed) syncInFlight = false; });
         }
     }
+
+    // Framework thread only. Persists the saddlebag store when a loaded read
+    // changed it; withheld resources are recorded with their availability.
+    private GameSnapshot[] CollectScopes(OwnedCharacterState state, string[] scopes, bool background, List<string> withheld) {
+        state.InventoryContainers ??= new(StringComparer.Ordinal);
+        var stamp = CarriedStamp(state.InventoryContainers);
+        var withheldBefore = withheld.Count;
+        var snapshots = DirectGameSnapshotCollector.Collect(pluginInterface, clientState, objects, dataManager, unlockState,
+            state.RetainerGilBalances, state.RetainerState, scopes, state.InventoryContainers, withheld).ToArray();
+        if (CarriedStamp(state.InventoryContainers) != stamp) RequestConfigurationSave();
+        if (!background && withheld.Count == withheldBefore && scopes.Contains("shared_fates", StringComparer.Ordinal)) RecordDiagnostic(SharedFateCollector.LastAttemptDiagnostic);
+        return snapshots;
+    }
+    private static int CarriedStamp(Dictionary<string, InventoryContainerObservation> store) {
+        var stamp = new HashCode();
+        foreach (var pair in store.OrderBy(entry => entry.Key, StringComparer.Ordinal)) { stamp.Add(pair.Key); stamp.Add(pair.Value?.ObservedAtUtc); }
+        return stamp.ToHashCode();
+    }
+    private static string[] WithheldResources(IEnumerable<string> withheld) =>
+        withheld.Select(entry => entry.Split(':')[0]).Distinct(StringComparer.Ordinal).ToArray();
 
     private void QueueUiAction(System.Action action) {
         if (disposed) return;
@@ -2264,6 +2318,8 @@ internal sealed record PreparedSnapshot(
     IReadOnlyDictionary<string, string> SentResultFingerprints,
     bool AllowEmptySnapshotReceipt);
 
+// A sync that never began (already running, not ready); not a connection failure.
+internal sealed class SyncNotStartedException(string message) : OperationCanceledException(message);
 internal sealed record CapturedSnapshotBatch(string CharacterName, string CharacterWorld, SyncRequestPermit Permit,
     GameSnapshot[] Snapshots, GilLedgerEvent[] GilEvents, string GilSessionId, Dictionary<string, string> PayloadHashes,
     Dictionary<string, string> InventoryHashes, bool RecordDiagnostics);

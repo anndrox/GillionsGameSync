@@ -70,9 +70,14 @@ internal static class CollectibleReadinessPackagedTests {
             : throw new Exception("Unexpected object read in logged-out fixture.");
         var dataCalls = source.Calls;
         var unlockCalls = unlockProxy.Calls;
+        var withheld = new List<string>();
         var snapshots = (System.Collections.IEnumerable)plugin.GetType("GillionsGameSync.DirectGameSnapshotCollector", true)!
-            .GetMethod("Collect", statics)!.Invoke(null, [null, client, objects, source, unlocks, null, null, new[] { "collectibles" }])!;
+            .GetMethod("Collect", statics)!.Invoke(null, [null, client, objects, source, unlocks, null, null, new[] { "collectibles" }, null, withheld])!;
         Check(!snapshots.Cast<object>().Any(), "actual collector withholds whole resource while logged out/not initialized");
+        // With no local player the outer identity guard now withholds every resource
+        // before the collectible gate runs; that gate's own logged-out behaviour is
+        // covered by CollectibleSnapshotPolicy fixtures in the ItemLink tests.
+        Check(withheld.SequenceEqual(["collectibles:StaleContext"]), "withheld resource is named with its availability, not sent empty");
         Check(source.Calls == dataCalls && unlockProxy.Calls == unlockCalls, "unready entrypoint performs no sheet/unlock observation");
         Console.WriteLine($"Packaged collectible readiness PASS: {checks}; actual cache/typed adapter/entrypoint, synthetic only.");
     }

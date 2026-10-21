@@ -110,18 +110,20 @@ internal static class AuditRegressionTests {
         Check(RetainerVentureSnapshotPolicy.MergeRoster(state, roster, Now), "Initial roster is a semantic change.");
         var save = new ObservationSavePolicy(); save.RequestDurable(); save.Saved(Now);
         var freshnessSaves = 0;
-        for (var second = 1; second <= 60; second++) {
+        var window = (int)ObservationSavePolicy.FreshnessInterval.TotalSeconds * 2;
+        for (var second = 1; second <= window; second++) {
             var instant = Now.AddSeconds(second);
             Check(!RetainerVentureSnapshotPolicy.MergeRoster(state, roster with { ObservedAtUtc = instant }, instant), "Identical active roster refresh does not schedule changed-data work.");
             save.Refresh();
             if (save.ShouldSave(instant)) { freshnessSaves++; save.Saved(instant); }
         }
-        Check(freshnessSaves == 2 && state.RosterObservation.LastObservedAtUtc == Now.AddSeconds(60), "Freshness persists at most once per 30 seconds while in-memory observation stays current.");
+        Check(ObservationSavePolicy.FreshnessInterval >= TimeSpan.FromMinutes(5), "Freshness-only full-configuration saves stay rare on the framework thread.");
+        Check(freshnessSaves == 2 && state.RosterObservation.LastObservedAtUtc == Now.AddSeconds(window), "Freshness persists at most once per freshness interval while in-memory observation stays current.");
         save.RequestDurable(); save.RequestDurable();
-        Check(save.ShouldSave(Now.AddSeconds(60)), "Durable changes do not wait for the freshness deadline.");
-        save.Saved(Now.AddSeconds(60)); Check(!save.ShouldSave(Now.AddSeconds(60)), "Same-turn durable requests coalesce into one save.");
-        Check(RetainerVentureSnapshotPolicy.MarkRosterUnavailable(state, Now.AddSeconds(61)), "A loss of availability is a semantic change.");
-        Check(!RetainerVentureSnapshotPolicy.MarkRosterUnavailable(state, Now.AddSeconds(62)), "Unavailable-to-unavailable is freshness only.");
+        Check(save.ShouldSave(Now.AddSeconds(window)), "Durable changes do not wait for the freshness deadline.");
+        save.Saved(Now.AddSeconds(window)); Check(!save.ShouldSave(Now.AddSeconds(window)), "Same-turn durable requests coalesce into one save.");
+        Check(RetainerVentureSnapshotPolicy.MarkRosterUnavailable(state, Now.AddSeconds(window + 1)), "A loss of availability is a semantic change.");
+        Check(!RetainerVentureSnapshotPolicy.MarkRosterUnavailable(state, Now.AddSeconds(window + 2)), "Unavailable-to-unavailable is freshness only.");
         var view = new RetainerResultViewCache();
         var read = new RetainerVentureResultRead("100", 1, 1788264000, Now, 0, [new(5, 1)]);
         Check(view.Changed("111", read), "A new native result view is captured.");

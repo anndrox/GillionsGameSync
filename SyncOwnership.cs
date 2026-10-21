@@ -49,6 +49,9 @@ public sealed class OwnedCharacterState {
     public List<GilLedgerEvent> PendingRetainerGilReceipts { get; set; } = [];
     public List<GilLedgerEvent> PendingRetainerGilDeposits { get; set; } = [];
     public List<PendingRetainerSale> PendingRetainerSales { get; set; } = [];
+    // Last loaded contents of on-demand containers (saddlebags) for this owned
+    // character, carried into inventory uploads while they are not loaded.
+    public Dictionary<string, InventoryContainerObservation> InventoryContainers { get; set; } = new(StringComparer.Ordinal);
 }
 
 public static class SyncOwnershipPolicy {
