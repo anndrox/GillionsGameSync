@@ -43,6 +43,21 @@ state is not verified.
   backs off, without touching local history.
 - **Hunt Progress and local retention:** these work without the Site.
 
+## Status reported by Site Engineering
+
+- **Forgejo `Gillions/FFXIV-Gillions` PR #98** turns the gates into exact lists
+  and pins the rejections above in tests. It changes no admission.
+- **PR #99 (draft HOLD)** adds only:
+  - the exact pair `2026.10.16.0000.0000` / `7.57.0.9414` for travel and Hunt coverage;
+  - TEST Public `1.0.31.6`. Production stays `1.0.31.2`.
+- **FATE, Hunt v1 and submarines** additionally need a reviewed 2026.10.16
+  reference/territory set and personal catalog, via Scribe or a reviewed
+  statement that the rows are unchanged from 2026.09.15. Game Sync has not
+  diffed those rows. The client only validates catalog shape at runtime, and
+  that check fails closed.
+- **Client acceptance:** Hunt Progress is physically accepted on this tuple.
+  Submarines are not physically tested. FATE and travel were not exercised.
+
 ## Requested
 
 The Site should admit, through its own separate review:

@@ -7,7 +7,9 @@
 - Qualify Hunt, submarine and travel reads and the FATE source match for game
   2026.10.16 with Dalamud 15.0.3.9 (ClientStructs 7.57.0.9414) after source and
   shipped-binary layout comparison. Dashboard stays September-only; 15.0.3.8 is
-  not admitted. Physical client acceptance is pending.
+  not admitted. Owner in-game test: Hunt Progress accepted on this runtime.
+  Submarine reads are source qualified but not physically tested; FATE collection
+  and travel await Site admission and were not exercised.
 - CI pins the Dalamud 15.0.3.9 release archive, inspects per-collector layout
   fingerprints, re-proves the recorded 15.0.3.6/15.0.3.7 layouts and also runs on
   `codex/**` pushes (the obsolete `feature/venture-planner` trigger is removed).

@@ -1,6 +1,10 @@
 # Testing 0.0.90 — 7.57 hotfix compatibility (unpublished candidate)
 
-Status: **source qualified, physical client pending**. Nothing is published. The
+Status: **Hunt Progress physically accepted** on game `2026.10.16.0000.0000` /
+Dalamud 15.0.3.9 / ClientStructs 7.57.0.9414 (owner test, below). Submarine reads are
+**source qualified, not physically tested** (no workshop access). FATE client
+identity was observed; FATE collection is **pending Site admission**. Travel was
+**not exercised** (consent stayed OFF). Nothing is published. The
 short owner checklist is [testing-0.0.90-checklist.md](testing-0.0.90-checklist.md).
 Site requirements are in [the Site admission handoff](../contracts/hotfix-2026.10.16-site-admission.md).
 
@@ -22,6 +26,39 @@ Site requirements are in [the Site admission handoff](../contracts/hotfix-2026.1
 Consent, Site permission leases, capability negotiation, payload shapes, cadences
 and retention are unchanged. No new collection, upload resource or gameplay writes.
 
+## Owner acceptance record
+
+The owner ran the local Testing 0.0.90.0 candidate in the game. The prepared build's
+`GillionsGameSyncTest.dll` sha256 is
+`03716a48128ea122e782fd78bbbddc56579582f28f1af7141a392c13a8e230ea`, from compiled
+source `24e4548`.
+
+**What the plugin reported:**
+- game `2026.10.16.0000.0000`;
+- ClientStructs `7.57.0.9414`;
+- five positive Hunt bill cache snapshots;
+- zero partial or unmatched positive bill snapshots;
+- raw and accessor target counters in agreement;
+- no unsupported game/SDK status for Hunts.
+
+**What the owner confirmed:**
+- Hunt bills matched the in-game Hunt log.
+- Individual target kill counts matched the in-game Hunt log.
+- Hunt Progress stayed accurate after teleporting or changing zones.
+- The plugin was used during normal gameplay, including inventory and retainer
+  interaction, with no performance problem reported.
+
+| Family | Result on this runtime |
+|---|---|
+| Hunt (local Hunt Progress and Hunt reads) | **Physically accepted** |
+| Submarine | Source qualified; **not physically tested** (no workshop access). Neither accepted nor failed. |
+| FATE | Client source identity observed with no native-version mismatch. Diagnostic status: `Site policy unavailable; session/context changed.` No FATE observations were measured and no contribution occurred. **Collection pending Site admission** and a later runtime check. |
+| Travel | **Not exercised**: Hunt-routing location consent stayed OFF. Consent and Site permission gates are unchanged. |
+
+**Not tested:**
+- private Site uploads (Hunt bills v1/v2, submarines);
+- Site acceptance of any upload.
+
 ## What this test can and cannot prove
 
 | Area | Proven by this procedure | Needs the Site first |
@@ -31,6 +68,7 @@ and retention are unchanged. No new collection, upload resource or gameplay writ
 | Hunt / submarine private uploads | No | Hotfix references, and admission of collector version `0.0.90.0` |
 | FATE observations | Only that the client offers the right source and reads nothing until granted | FATE source admission |
 | Travel (Hunt routing location) | Only that nothing is read without consent | Travel tuple admission, plus your account's routing consent |
+| Site reference data (Hunt targets, submarine parts/sectors, FATE references) | No | A reviewed 2026.10.16 catalog on the Site, via Scribe or a reviewed no-change statement |
 
 A Site rejection of a correct local observation is a **Site dependency**, not a
 plugin failure. The FATE diagnostics show the Site's own reason code, so the two
@@ -176,8 +214,10 @@ contain your character name.
 
 ## Acceptance rule
 
-- Steps 3, 4 and 8 passing accepts the **Hunt** family on this runtime.
-- Step 5 passing accepts the **Submarine** family.
+- Steps 3, 4 and 8 passing accepts the **Hunt** family on this runtime. This has
+  happened (see the owner acceptance record).
+- Step 5 needs workshop access. The owner has none, so submarines remain
+  source-qualified. That alone does not block a Testing release.
 - FATE and Travel stay **Site-dependent** until the Site admits the tuple.
 - PR #8 may then be merged (source integration). Publication remains a separate
   owner decision.

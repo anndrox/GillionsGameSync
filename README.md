@@ -5,8 +5,8 @@
 Unpublished Testing0.0.90 and Public1.0.31.6 qualify Hunt, submarine and travel
 reads and the client side of the FATE source match for game 2026.10.16 with Dalamud
 15.0.3.9, from one per-collector [compatibility table](docs/native-compatibility.md).
-Physical client acceptance is pending, and FATE, Hunt coverage and travel uploads
-still need Site admission. See [Testing90](docs/releases/testing-0.0.90.md) and
+The owner's in-game test accepted Hunt Progress. Submarines are not physically tested,
+and FATE collection, travel and private uploads still need Site admission. See [Testing90](docs/releases/testing-0.0.90.md) and
 [Public1.0.31.6](docs/releases/v1.0.31.6.md). Stable remains1.0.31.2 and
 published Testing remains0.0.88; the unpublished31.5/89 candidates are superseded.
 

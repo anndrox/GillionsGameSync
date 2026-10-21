@@ -86,6 +86,15 @@ still differ in ways ClientStructs doesn't describe. Each newly listed runtime
 stays **physical client pending** until the owner procedure in the release notes
 passes.
 
+## Physical acceptance on 2026.10.16 / 15.0.3.9
+
+| Family | State |
+|---|---|
+| Hunt | Physically accepted (owner, Testing 0.0.90) |
+| Submarine | Source qualified, not physically tested |
+| Travel | Source qualified, not exercised (consent OFF, Site-held) |
+| FATE | Client source identity observed; collection Site-held |
+
 ## Site dependencies (outside this repository)
 
 Exact hotfix tuple, endpoints and fields for Site Engineering: [hotfix Site admission handoff](contracts/hotfix-2026.10.16-site-admission.md).
