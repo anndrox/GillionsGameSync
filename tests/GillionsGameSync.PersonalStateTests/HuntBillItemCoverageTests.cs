@@ -46,7 +46,16 @@ internal static class HuntBillItemCoverageTests {
         alternatePolicy.Observe(key,[new(18,"daily",1,270,2003509,[target],now.AddSeconds(1),"synthetic-game","synthetic-collector")]);
         var differentOrderPayload = c.Payload(alternatePolicy,key,now.AddSeconds(1),At(1))!;
         check(JsonNode.DeepEquals(JsonNode.Parse(presentPayload)!["billItemCoverage"],JsonNode.Parse(differentOrderPayload)!["billItemCoverage"]),"H: different cached order changed presence authority");
-        check(!JsonNode.Parse(presentPayload)!["billItemCoverage"]!.ToJsonString().Contains("269"),"H: coverage contains cached order");
+        // Structural, not textual: the random observationId hex can contain "269".
+        static bool CarriesOrder(JsonNode? node) => node switch {
+            JsonObject o => o.Any(p => p.Key.Equals("orderId", StringComparison.OrdinalIgnoreCase) || CarriesOrder(p.Value)),
+            JsonArray a => a.Any(CarriesOrder),
+            JsonValue v => v.TryGetValue<long>(out var number) && number == 269 || v.TryGetValue<string>(out var text) && text == "269",
+            _ => false,
+        };
+        check(!CarriesOrder(JsonNode.Parse(presentPayload)!["billItemCoverage"]),"H: coverage contains cached order");
+        check(CarriesOrder(JsonNode.Parse("{\"domains\":[{\"orderId\":1}]}")) && CarriesOrder(JsonNode.Parse("{\"x\":[269]}"))
+            && !CarriesOrder(JsonNode.Parse("{\"observationId\":\"ab269cd\"}")),"H: cached-order detector is structural");
         check(JsonSerializer.Serialize(history)==retained,"F: coverage mutated historical counter/provenance");
         foreach (var input in new[] { slots[..3], [slots[0] with { Symbolic=true },slots[1],slots[2],slots[3]],
             [slots[0] with { Slot=2 },slots[1],slots[2],slots[3]], [slots[0] with { Container=0 },slots[1],slots[2],slots[3]],
