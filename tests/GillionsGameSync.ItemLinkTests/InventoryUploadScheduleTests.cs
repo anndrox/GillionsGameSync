@@ -31,14 +31,43 @@ internal static class InventoryUploadScheduleTests {
         Check(worstDelay <= InventoryUploadSchedule.Window + TimeSpan.FromMilliseconds(100), "no change waits longer than the window (" + worstDelay + ")");
         Check(uploads.Count is >= 6 and <= 8 && uploads[^1] >= t0.AddSeconds(60), "31 changes in 60 s become about 7 uploads, the last one covering the final change (" + uploads.Count + ")");
 
-        // The old pure debounce never uploaded until the burst stopped.
-        var legacyDue = DateTime.MaxValue; var legacyFirst = DateTime.MaxValue;
-        for (var ms = 0; ms <= 60000; ms += 100) {
+        // A fast burst (every 500 ms) never settles, so only the 10 s cap uploads it.
+        var fast = new InventoryUploadSchedule(); var fastUploads = new List<DateTime>();
+        var fastFirstUnsent = DateTime.MaxValue; var fastWorst = TimeSpan.Zero;
+        for (var ms = 0; ms <= 40000; ms += 100) {
             var now = t0.AddMilliseconds(ms);
-            if (ms % 2000 == 0) legacyDue = now + settle;
-            if (now >= legacyDue) { legacyFirst = now; break; }
+            if (ms <= 30000 && ms % 500 == 0) { fast.Changed(now, settle); if (fastFirstUnsent == DateTime.MaxValue) fastFirstUnsent = now; }
+            if (fast.TryDispatch(now)) {
+                fastUploads.Add(now);
+                if (now - fastFirstUnsent > fastWorst) fastWorst = now - fastFirstUnsent;
+                fastFirstUnsent = DateTime.MaxValue;
+            }
         }
-        Check(legacyFirst == t0.AddMilliseconds(1500), "fixture matches the previous behaviour: each 2 s change uploaded after its own 1.5 s settle");
+        var fastTrace = string.Join(",", fastUploads.Select(u => (u - t0).TotalSeconds));
+        Check(fastUploads[0] == t0.AddSeconds(10), "a change that never settles still uploads at the 10 s cap (" + fastTrace + ")");
+        Check(fastWorst == InventoryUploadSchedule.Window && fastUploads.Zip(fastUploads.Skip(1)).All(pair => pair.Second - pair.First >= InventoryUploadSchedule.Window),
+            "the cap counts from the first unsent change; uploads stay at least 10 s apart (" + fastTrace + ")");
+        Check(fastUploads.Count == 3 && fastUploads[^1] <= t0.AddSeconds(40), "61 changes in 30 s become 3 uploads, the last covering the final change (" + fastTrace + ")");
+
+        // A retainer-listing change (250 ms settle) after an inventory change does not wait the longer settle.
+        var listing = new InventoryUploadSchedule();
+        listing.Changed(t0, settle); listing.Changed(t0.AddMilliseconds(100), TimeSpan.FromMilliseconds(250));
+        Check(listing.Due == t0.AddMilliseconds(350), "the latest change's settle applies");
+
+        // A dispatched upload that could not run is retried rather than waiting for the next event.
+        var requeued = new InventoryUploadSchedule();
+        requeued.Changed(t0, settle); Check(requeued.TryDispatch(t0 + settle), "dispatched");
+        requeued.Requeue(t0.AddSeconds(2), TimeSpan.FromSeconds(2));
+        Check(!requeued.TryDispatch(t0.AddSeconds(3)) && requeued.TryDispatch(t0.AddSeconds(4)), "a loading-screen refusal retries after 2 s");
+        requeued.Requeue(t0.AddSeconds(5), TimeSpan.FromSeconds(10));
+        requeued.Changed(t0.AddSeconds(6), settle);
+        Check(requeued.Due <= t0.AddSeconds(15), "a failure retry is not pushed later by a new change");
+
+        // A wall clock moved backwards does not stall uploads.
+        var clock = new InventoryUploadSchedule();
+        clock.Changed(t0.AddHours(1), settle); clock.TryDispatch(t0.AddHours(1) + settle);
+        clock.Changed(t0, settle);
+        Check(clock.Due == t0 + settle, "after the clock jumps back an hour, a change uploads after the normal settle");
 
         // After a quiet period, a new change is not delayed by the old window.
         var quiet = new InventoryUploadSchedule();

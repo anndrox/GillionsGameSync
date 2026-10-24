@@ -30,6 +30,9 @@ public sealed class InventoryUploadSchedule {
     private DateTime lastDispatch = DateTime.MinValue, pendingSince = DateTime.MaxValue;
     public DateTime Due { get; private set; } = DateTime.MaxValue;
     public void Changed(DateTime now, TimeSpan settle) {
+        // A wall clock moved backwards must not hold uploads back.
+        if (lastDispatch > now) lastDispatch = DateTime.MinValue;
+        if (pendingSince != DateTime.MaxValue && pendingSince > now) pendingSince = now;
         if (pendingSince == DateTime.MaxValue) pendingSince = now;
         var latest = pendingSince.Add(Window);
         var target = now.Add(settle) < latest ? now.Add(settle) : latest;
@@ -40,6 +43,13 @@ public sealed class InventoryUploadSchedule {
         if (now < Due) return false;
         Due = DateTime.MaxValue; pendingSince = DateTime.MaxValue; lastDispatch = now;
         return true;
+    }
+    // A dispatched upload that could not run (loading screen, not loaded, failure)
+    // keeps its change pending instead of waiting for the next inventory event.
+    public void Requeue(DateTime now, TimeSpan delay) {
+        if (pendingSince == DateTime.MaxValue || pendingSince > now) pendingSince = now;
+        var retry = now.Add(delay);
+        if (Due == DateTime.MaxValue || retry < Due) Due = retry;
     }
     public void Reset() { Due = DateTime.MaxValue; pendingSince = DateTime.MaxValue; lastDispatch = DateTime.MinValue; }
 }

@@ -1433,6 +1433,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 // A sync that sent nothing proves nothing about an earlier refusal.
                 if (submitted > 0 || publicConnectionFailure is not (SiteRefusalPolicy.CharacterNotLinked or SiteRefusalPolicy.Rejected)) ClearConnectionFailure(presence: false);
                 var notReady = WithheldResources(withheld);
+                if (background && notReady.Contains("inventory", StringComparer.Ordinal)) inventoryUploads.Requeue(DateTime.UtcNow, TimeSpan.FromSeconds(2));
                 if (mode == SyncRequestMode.Hydration && notReady.Contains(PairedClientHydrationState.CharacterResource, StringComparer.Ordinal))
                     pairedClientHydration.RetryCharacterSync(DateTime.UtcNow.AddSeconds(5));
                 if (notReady.Length > 0) RecordDiagnostic($"Not ready, not uploaded (Site keeps prior data): {string.Join("; ", withheld.Distinct(StringComparer.Ordinal))}.");
@@ -1449,6 +1450,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 // A loading screen refuses every frame; retry a Gil flush after a short wait instead.
                 if (background && activeOwnedState?.PendingGilLedgerEvents.Count > 0 && nextGilLedgerUploadUtc == DateTime.MaxValue)
                     nextGilLedgerUploadUtc = DateTime.UtcNow.AddSeconds(2);
+                if (background && scopes?.Contains("inventory") == true) inventoryUploads.Requeue(DateTime.UtcNow, TimeSpan.FromSeconds(2));
             });
         } catch (Exception error) {
             // Record the original failure before framework recovery can fail or
@@ -1472,6 +1474,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                     // A Retainer retry always schedules that resource explicitly.
                     if (activeOwnedState?.RetainerState.PendingResultEvents.Count > 0 || scopes?.Contains(RetainerClientPolicy.ResourceType) == true)
                         nextRetainerUploadUtc = DateTime.UtcNow.AddSeconds(AutomaticFailureRetrySeconds);
+                    if (scopes?.Contains("inventory") == true) inventoryUploads.Requeue(DateTime.UtcNow, TimeSpan.FromSeconds(AutomaticFailureRetrySeconds));
                 }
                 // The connection state names a background refusal; only an account stop replaces the action message.
                 if (!background || error is GillionsSyncRejectedException blockedAccount && IsAccountAccessBlocked(blockedAccount.Code)) settingsMessage = OperationFailureMessage(error);

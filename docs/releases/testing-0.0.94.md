@@ -20,7 +20,12 @@ within about 10 seconds of the game.
 - An inventory change still waits the 1.5 s settle (250 ms after retainer
   listings change).
 - Uploads are at least **10 s apart**.
-- No change waits more than **10 s** from the first unsent change.
+- No change waits more than about **10 s** from the first unsent change, plus any
+  upload already in progress.
+- A dispatched upload refused by a loading screen or unloaded inventory is
+  retried after 2 s, and a failed one after 10 s, so the change isn't left for
+  the next inventory event.
+- A wall clock moving backwards doesn't stall uploads.
 - A session reset drops any pending schedule.
 
 | Activity | Before | After |
