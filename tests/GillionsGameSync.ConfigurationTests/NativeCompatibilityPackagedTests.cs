@@ -94,6 +94,7 @@ internal static class NativeCompatibilityPackagedTests {
             Check(!fingerprints[family].Lines.Any(l=>l.Contains("MISSING",StringComparison.Ordinal)),family+" member missing");
         }
         Check(!Builds("Dashboard").Any(b=>P(b,"ClientStructsVersion")!="7.56.2.9136"),"Dashboard readers were never requalified after September");
+        Check(!Builds("Beastmaster").Any(b=>P(b,"ClientStructsVersion")!="7.56.2.9136"),"Beastmaster readers were never requalified after September");
 
         // Explicit, human-readable offsets kept from the October qualification.
         Type N(string name)=>native.GetType("FFXIVClientStructs.FFXIV.Client.Game."+name,true)!;

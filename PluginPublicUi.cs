@@ -45,22 +45,34 @@ public sealed partial class Plugin {
     }
     private void PublishPublicHealth(DateTime now) {
         string code=publicConnectionFailure.Length>0 ? publicConnectionFailure : configuration.SyncBlockedCode;
-        string connection=code=="UNAVAILABLE" ? "Gillions unavailable" : PublicHealth.ConnectionState(HasPairedSession,pairingInFlight,code);
+        string connection=pairingInFlight ? "Connecting" : code=="UNAVAILABLE" ? "Gillions unavailable" : PublicHealth.ConnectionState(HasPairedSession,false,code);
         string character=activeOwnedState is { } c ? $"{c.CharacterName} · {c.CharacterWorld}" : "Character unavailable";
         string waiting=HasPairedSession ? "Waiting for supported context" : "Gillions unavailable";
         string game=dataManager.GameData.Repositories.TryGetValue("ffxiv",out var repo) ? repo.Version : "unavailable";
-        string hunts=waiting, fates=waiting, market=waiting;
-        if (HasPairedSession) hunts=!NativeCompatibility.Supports(NativeFamily.Hunt, game,typeof(FFXIVClientStructs.FFXIV.Client.Game.UI.MobHunt).Assembly.GetName().Version?.ToString())
-            ? "Update required" : huntLocal.Progress.ExpiresAt>Environment.TickCount64 && huntLocal.Progress.Availability.Length==0 ? "Ready" : "Waiting for supported context";
+        string hunts=waiting, partyFinder=waiting, fates=waiting, market=waiting;
+        if (HasPairedSession) hunts=PublicHealth.HuntState(NativeCompatibility.Supports(NativeFamily.Hunt, game,typeof(FFXIVClientStructs.FFXIV.Client.Game.UI.MobHunt).Assembly.GetName().Version?.ToString()),
+            huntLocal.Reading, huntLocal.Progress.ExpiresAt>Environment.TickCount64 && huntLocal.Progress.Availability.Length==0);
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         if (HasPairedSession) {
-            fates=PublicHealth.FateState(FatePolicy.Compatible(fateLocal.ObservedSource),fateSender.Grant?.Reason,
-                fateSender.Grant?.Admission.Granted,fateSender.Grant?.PolicyEnabled);
-            market=ExplicitPermission("marketContribution") && !MarketEnabled ? "Off on Gillions"
-                : MarketEnabled && marketAcceptedGeneration.Length>0 ? "Ready" : "Temporarily unavailable";
+            long clock=Environment.TickCount64;
+            bool loggedIn=activeOwnedState is not null && clientState.IsLoggedIn;
+            bool fresh=SitePermissionOrigin && permissionAuthority.Fresh(clock);
+            string Decision(string key) { var id=permissionAuthority.Identity(key,clock); return id.StartsWith("explicit:",StringComparison.Ordinal) ? "explicit" : id; }
+            fates=PublicHealth.FateState(FatePolicy.Compatible(fateLocal.ObservedSource),fateSender.Binding.Length>0,fateSender.Grant?.Reason,
+                fateSender.Grant?.Admission.Granted,fateSender.Grant?.PolicyEnabled,fateSender.Authorized(now,clock),fateLocal.ContextReady);
+            market=PublicHealth.ContributionState(SitePermissionOrigin,loggedIn,fresh,Decision("marketContribution"),
+                permissionAuthority.Allows("marketContribution",configuration.ContributeObservedMarketData,clock),
+                marketAcceptedGeneration.Length>0 && marketAcceptedGeneration==configuration.ActiveSession?.Generation,
+                // The transport is frozen; its persisted Site denial is the observable stop.
+                configuration.GillionsMarketBlockedGeneration.Length>0 && configuration.GillionsMarketBlockedGeneration==ContributionAuthority("marketContribution"));
+            partyFinder=PublicHealth.ContributionState(SitePermissionOrigin,loggedIn,fresh,Decision("partyFinderContribution"),
+                permissionAuthority.Allows("partyFinderContribution",configuration.EnableGillionsPartyFinderContributions,clock),
+                true,partyFinderContributor is GillionsPartyFinderContributor { Stopped: true });
         }
+#else
+        if (HasPairedSession) partyFinder=configuration.EnablePartyFinderContributions ? "Ready" : "Off";
 #endif
-        publicHealth=new(connection,character,hunts,HasPairedSession ? "Ready" : waiting,fates,market,
+        publicHealth=new(connection,character,hunts,partyFinder,fates,market,
             activeOwnedState?.LastSyncUtc,IsTesting ? "Testing" : "Public",PluginVersion,game);
     }
     private static void Label(string text)=>ImGui.TextWrapped(text);
@@ -142,7 +154,7 @@ public sealed partial class Plugin {
         if(h.Connection=="Not connected" || h.Connection=="Authorization expired or revoked") {
             Label("Connect Game Sync to your Gillions account to use supported current-game features.");
             if(ImGui.Button("Connect to Gillions")) { pairingRepair=HasPairedSession; publicUi.ShowPairing(); }
-        } else if(h.Connection=="Update required") Link("Update Game Sync","https://github.com/anndrox/GillionsGameSync");
+        } else if(h.Connection=="Update required") Link("Update Game Sync",IsTesting ? "https://github.com/anndrox/GillionsGameSync-Testing/releases" : "https://github.com/anndrox/GillionsGameSync/releases");
         else if(h.Connection=="Gillions unavailable") Label("Gillions is temporarily unreachable. Local history is preserved; Game Sync will retry safely.");
         else if(h.Connection=="Account unavailable") Label("Check your Gillions account access on the website.");
         ImGui.Separator();

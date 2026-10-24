@@ -4,8 +4,15 @@ import subprocess
 
 r=Path(__file__).resolve().parents[1]
 public='43a86941f8f8e60c583c961b1502345df76c7e64'
-assert (r/'PublicExperience.cs').read_bytes().replace(b'\r\n',b'\n')==subprocess.check_output(['git','show',public+':PublicExperience.cs'],cwd=r).replace(b'\r\n',b'\n')
-hunt=(r/'HuntBillLocalView.cs').read_text(encoding='utf-8')
+# The owner-directed status correction (2026-10-24 regression audit) replaces only
+# the PublicHealth status record; every other presentation rule stays byte-frozen.
+def outside_status(text):
+    head,rest=text.split('internal sealed record PublicHealth(',1)
+    return head+rest.split('\n}\n',1)[1]
+experience=(r/'PublicExperience.cs').read_bytes().replace(b'\r\n',b'\n').decode('utf-8')
+accepted=subprocess.check_output(['git','show',public+':PublicExperience.cs'],cwd=r).replace(b'\r\n',b'\n').decode('utf-8')
+assert outside_status(experience)==outside_status(accepted)
+hunt=(r/'HuntBillLocalView.cs').read_text(encoding='utf-8').replace('    internal bool Reading => ReadEnabled;\n','')
 assert hunt.replace('NativeCompatibility.Supports(NativeFamily.Hunt, ','PersonalObservationCompatibility.Supports(')==subprocess.check_output(['git','show',public+':HuntBillLocalView.cs'],cwd=r).decode().replace('\r\n','\n')
 windows=(r/'PublicGameSyncUi.cs').read_text(encoding='utf-8')
 normalized=windows.replace('        string idSuffix=testing ? "Test" : "";\n','').replace('+idSuffix','')

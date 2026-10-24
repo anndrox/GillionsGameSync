@@ -10,6 +10,9 @@ namespace GillionsGameSync;
 // Only locally defined fixed messages and managed method metadata are admitted.
 internal static class SyncFailureDiagnostic {
     internal const int MaximumLength = 3072;
+    // Stages where a request was sent to Gillions or its response was read.
+    internal static bool IsTransportStage(string stage) => stage.EndsWith("_http", StringComparison.Ordinal)
+        || stage.EndsWith("_status", StringComparison.Ordinal) || stage.EndsWith("_receipt", StringComparison.Ordinal);
     private static readonly string[] KnownMessages = [
         "Pair and log into a character before syncing.",
         "The current character is not ready.",

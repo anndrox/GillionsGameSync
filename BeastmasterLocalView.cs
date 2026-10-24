@@ -35,6 +35,7 @@ internal sealed class BeastmasterLocalView : IDisposable {
     private string sampledAt = "Never";
     private string counts = "Ownership unknown";
     private (uint Id, string Name)[]? catalog;
+    private const string UnsupportedRuntime = "UNSUPPORTED game/SDK: Beastmaster native reads stopped. Ownership unknown.";
 
     public BeastmasterLocalView(IDalamudPluginInterface pluginInterface, ICommandManager commands,
         IFramework framework, IClientState clientState, IDataManager dataManager) {
@@ -61,6 +62,12 @@ internal sealed class BeastmasterLocalView : IDisposable {
         if (disposed) return;
         if (resetPending) { resetPending = false; Clear("Session changed; awaiting fresh loading state."); nextSample = DateTime.MinValue; }
         if (!enabled || !visible) return;
+        // Fail closed before any native read on a runtime this view was never qualified on.
+        if (!NativeCompatibility.Supports(NativeFamily.Beastmaster, data.GameData.Repositories.TryGetValue("ffxiv", out var repo) ? repo.Version : null,
+                typeof(XBMManager).Assembly.GetName().Version?.ToString())) {
+            if (status != UnsupportedRuntime) Clear(UnsupportedRuntime);
+            nextSample = DateTime.MinValue; return;
+        }
         // Check character validity on every active frame; native pet reads run once a second.
         var player = PlayerState.Instance();
         if (!client.IsLoggedIn || player == null || !player->IsLoaded || player->ContentId == 0) {

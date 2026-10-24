@@ -71,9 +71,11 @@ public static class RetainerPresenceResponsePolicy {
                 && acceptedContract.ValueKind == JsonValueKind.Number
                 && acceptedContract.TryGetInt32(out acceptedContractVersion);
             if ((hasAcceptedProduct && !string.Equals(acceptedProduct.GetString(), client.ProductName, StringComparison.Ordinal))
-                || (hasAcceptedContract && acceptedContractVersion != RetainerClientPolicy.ContractVersion)
-                || (client.RequiresExplicitServerProductAcceptance && (!hasAcceptedProduct || !hasAcceptedContract))) return false;
-            uploadSupported = observations.GetString() == "supported" && results.GetString() == "supported";
+                || (hasAcceptedContract && acceptedContractVersion != RetainerClientPolicy.ContractVersion)) return false;
+            // Missing explicit acceptance withholds Retainer uploads only. The
+            // presence (and its separately device-bound permission lease) stays valid.
+            uploadSupported = (!client.RequiresExplicitServerProductAcceptance || hasAcceptedProduct && hasAcceptedContract)
+                && observations.GetString() == "supported" && results.GetString() == "supported";
             return true;
         } catch (Exception error) when (error is JsonException or InvalidOperationException or FormatException) { return false; }
     }

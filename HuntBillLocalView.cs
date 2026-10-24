@@ -59,6 +59,7 @@ internal sealed class HuntBillLocalView : IDisposable {
     internal bool ProgressRequested { get; set; }
     internal void ClearProgress() => Progress = HuntProgressSnapshot.Unavailable;
     private bool ReadEnabled => policy.RetentionEnabled || ProgressRequested;
+    internal bool Reading => ReadEnabled;
     private readonly Dictionary<uint, uint> targetTerritories = new();
     private sealed record View(bool Enabled, string Status, string[] Rows, double Milliseconds,
         int Attempts = 0, DateTime? LastAttemptUtc = null, string CoverageStatus = "Hunt item coverage UNAVAILABLE.",

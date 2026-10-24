@@ -253,8 +253,8 @@ var presenceResponse = JsonSerializer.Serialize(new { ok = true, schemaVersion =
     featureCompatibility = new { observations = "supported", results = "supported", planner = "server_disabled" } });
 Assert(RetainerPresenceResponsePolicy.TryParse(presenceResponse, RetainerClientPolicy.Testing, out var uploadSupported) && uploadSupported,
     "a compatible testing presence response must enable only the scoped upload path");
-Assert(!RetainerPresenceResponsePolicy.TryParse(presenceResponse, RetainerClientPolicy.Stable, out _),
-    "an older server response must not enable stable Retainer traffic without explicit product acceptance");
+Assert(RetainerPresenceResponsePolicy.TryParse(presenceResponse, RetainerClientPolicy.Stable, out var unacceptedStableUpload) && !unacceptedStableUpload,
+    "an older server response must not enable stable Retainer traffic without explicit product acceptance, but keeps presence and its permission lease");
 var stablePresenceResponse = JsonSerializer.Serialize(new { ok = true, schemaVersion = 1, serverTimeUtc = ventureNow,
     acceptedClientProduct = RetainerClientPolicy.Stable.ProductName,
     acceptedContractVersion = RetainerClientPolicy.ContractVersion,
@@ -363,3 +363,4 @@ Assert(accountIsolation == ItemLinkDeliveryResult.ConsumeRejected && !isolatedPr
 
 Console.WriteLine("Gillions item-link protocol tests passed.");
 await AuditRegressionTests.RunAsync();
+await StatusAccuracyTests.RunAsync();
