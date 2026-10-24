@@ -1,7 +1,18 @@
-# Testing 0.0.91 — regression audit and accurate status
+# Testing 0.0.91 — regression audit and accurate status (published)
 
-Status: **release candidate.** Its publication state is recorded separately once
-the Testing release and feed are verified.
+Status: **published** as [`v0.0.91-testing`](https://github.com/anndrox/GillionsGameSync-Testing/releases/tag/v0.0.91-testing)
+in the Testing distribution repository, from source
+`020cce9e6aaaa68f4225a370d3a52da62a363a8c` (main CI run 40084603375 passed).
+
+| Item | Value |
+|---|---|
+| ZIP | `GillionsGameSyncTesting-0.0.91.zip`, sha256 `8a5fefc7320982fe7a5322b8d44c8d86e86d6ff85764e6082b4cbe31e35748de` (two builds byte-identical) |
+| DLL | `GillionsGameSyncTest.dll` 0.0.91.0, sha256 `72ca1bdad63440919cc96a80e878e48b3a6ac76be12f4bd71bcd7fb06a57e38c` |
+| Feed | canonical `https://raw.githubusercontent.com/anndrox/GillionsGameSync-Testing/main/data/GillionsGameSyncTesting.json`, sha256 `f8b601de9aaf6bf17baa515cd3a6a4df6c4deb5f6fba81491c40ea3ec3046903`, distribution commit `8d50ab1` |
+| Upgrade | real-serializer upgrade from the published 0.0.90.0 DLL passed on this exact DLL |
+
+The public assets and the live feed were verified anonymously after publication.
+Stable (1.0.31.2), its feed and the historical Testing feeds are unchanged.
 
 This release was qualified without owner-run in-game testing. Every change is
 source-qualified and covered by synthetic, real-serializer and packaged tests.

@@ -1,8 +1,8 @@
 # Gillions Game Sync
 
-## Testing 0.0.91 candidate
+## Testing 0.0.91 (published)
 
-Testing 0.0.91 adds accurate per-feature status (unsupported game, Off, Not
+Testing 0.0.91 ([release](https://github.com/anndrox/GillionsGameSync-Testing/releases/tag/v0.0.91-testing)) adds accurate per-feature status (unsupported game, Off, Not
 available on Gillions, waiting, ready) and command, sync and retainer
 reliability fixes found by a whole-plugin regression audit. It also includes the
 native observation integrity work merged after 0.0.90. Native compatibility and
