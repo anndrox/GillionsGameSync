@@ -22,6 +22,28 @@ public sealed class ObservationSavePolicy {
     public bool Failed(DateTime now) { retryAfter = now.AddSeconds(Math.Min(60, 5 << Math.Min(failures, 4))); return failures++ == 0; }
 }
 
+// Inventory changes arrive in bursts while gathering or crafting. Upload at
+// most once per window, and never later than one window after the first unsent
+// change, so the website stays within about ten seconds of the game.
+public sealed class InventoryUploadSchedule {
+    public static readonly TimeSpan Window = TimeSpan.FromSeconds(10);
+    private DateTime lastDispatch = DateTime.MinValue, pendingSince = DateTime.MaxValue;
+    public DateTime Due { get; private set; } = DateTime.MaxValue;
+    public void Changed(DateTime now, TimeSpan settle) {
+        if (pendingSince == DateTime.MaxValue) pendingSince = now;
+        var latest = pendingSince.Add(Window);
+        var target = now.Add(settle) < latest ? now.Add(settle) : latest;
+        var earliest = lastDispatch == DateTime.MinValue ? DateTime.MinValue : lastDispatch.Add(Window);
+        Due = target > earliest ? target : earliest;
+    }
+    public bool TryDispatch(DateTime now) {
+        if (now < Due) return false;
+        Due = DateTime.MaxValue; pendingSince = DateTime.MaxValue; lastDispatch = now;
+        return true;
+    }
+    public void Reset() { Due = DateTime.MaxValue; pendingSince = DateTime.MaxValue; lastDispatch = DateTime.MinValue; }
+}
+
 public static class TransientEvidencePolicy {
     public const int MaximumEntries = 256;
     public static void Prune<T>(List<T> entries, DateTime now, TimeSpan horizon, Func<T, DateTime> observed) {

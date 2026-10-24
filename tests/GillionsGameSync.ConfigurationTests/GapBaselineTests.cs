@@ -27,7 +27,7 @@ internal static class GapBaselineTests {
             // Only managed production recovery/observation/correlation methods are invoked.
             var plugin = RuntimeHelpers.GetUninitializedObject(pluginType);
             foreach (var name in new[] { "evidenceBudget", "savePolicy", "uiRefreshPolicy", "recentRetainerWithdrawals", "recentGilLedgerLogs",
-                "recentGilLedgerChat", "emittedRetainerChatEvidence", "diagnosticsLock", "diagnostics" }) {
+                "recentGilLedgerChat", "emittedRetainerChatEvidence", "diagnosticsLock", "diagnostics", "inventoryUploads" }) {
                 var field = pluginType.GetField(name, PrivateInstance)!;
                 field.SetValue(plugin, Activator.CreateInstance(field.FieldType));
             }

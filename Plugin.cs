@@ -143,7 +143,7 @@ public sealed partial class Plugin : IDalamudPlugin {
     private DateTime nextRetainerListingCaptureUtc = DateTime.MinValue;
     private DateTime nextGilLedgerPollUtc = DateTime.MinValue;
     private DateTime nextGilLedgerUploadUtc = DateTime.MaxValue;
-    private DateTime nextInventorySyncUtc = DateTime.MaxValue;
+    private readonly InventoryUploadSchedule inventoryUploads = new();
     private DateTime nextGilLedgerFlushUtc = DateTime.MinValue;
 #if !GILLIONS_TEST_BUILD && !GILLIONS_PUBLIC_BUILD
     private DateTime nextItemLinkPollUtc = DateTime.MinValue;
@@ -583,7 +583,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         }
         if (now >= nextRetainerListingCaptureUtc) {
             nextRetainerListingCaptureUtc = now.AddSeconds(RetainerCaptureIntervalSeconds);
-            if (DirectGameSnapshotCollector.CaptureLoadedRetainerListings()) nextInventorySyncUtc = now.AddMilliseconds(250);
+            if (DirectGameSnapshotCollector.CaptureLoadedRetainerListings()) inventoryUploads.Changed(now, TimeSpan.FromMilliseconds(250));
         }
         if (syncInFlight) return;
         // A due ordinary resource keeps its cadence even during repeated Retainer
@@ -593,8 +593,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             _ = SyncAutomaticallyAsync([NextAutomaticScope()]);
             return;
         }
-        if (now >= nextInventorySyncUtc) {
-            nextInventorySyncUtc = DateTime.MaxValue;
+        if (inventoryUploads.TryDispatch(now)) {
             _ = SyncAutomaticallyAsync(["inventory"]);
             return;
         }
@@ -625,7 +624,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         gilLedgerDirty = true;
         nextGilLedgerFlushUtc = DateTime.UtcNow.AddMilliseconds(750);
         if (configuration.AutomaticSync && !string.IsNullOrWhiteSpace(configuration.DeviceToken))
-            nextInventorySyncUtc = DateTime.UtcNow.AddMilliseconds(InventoryChangeDebounceMilliseconds);
+            inventoryUploads.Changed(DateTime.UtcNow, TimeSpan.FromMilliseconds(InventoryChangeDebounceMilliseconds));
     }
 
     private async Task PollItemLinkRequestsAsync() {
@@ -1578,7 +1577,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         lock (diagnosticsLock) diagnostics.Clear();
         uiState = PluginUiSnapshot.Empty;
         uiRefreshPolicy.Reset();
-        gilLedgerDirty = false; nextInventorySyncUtc = DateTime.MaxValue; nextGilLedgerUploadUtc = DateTime.MaxValue;
+        gilLedgerDirty = false; inventoryUploads.Reset(); nextGilLedgerUploadUtc = DateTime.MaxValue;
     }
 
     private void OnLogin() { logoutPending = false; huntProgress.Invalidate(endTerritorySession: true); ResetSessionContext(); }
