@@ -124,7 +124,12 @@ internal sealed class FateLocalView : IDisposable {
                 Invalidate(); outcome="Unsupported source/game matrix; no FATE reads."; return;
             }
             before=Context();
-            if (before is null) { Invalidate(); outcome="Unavailable/unsupported public context. No negative inference."; return; }
+            // Invalidate once on leaving a supported context. Re-invalidating every
+            // read would change the epoch, and with it the Site discovery binding.
+            if (before is null) {
+                if (settled is not null || state.Prepared is not null || state.Current.Length>0) Invalidate();
+                outcome="Unavailable/unsupported public context. No negative inference."; return;
+            }
             // Two independently scheduled stable context checks, rather than a
             // guessed settle timeout or reading inside a zoning event.
             if (settled!=before || settleEpoch!=state.Epoch) {

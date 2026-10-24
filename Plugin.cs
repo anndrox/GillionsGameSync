@@ -2,6 +2,7 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -83,6 +84,7 @@ public sealed partial class Plugin : IDalamudPlugin {
     private readonly HuntBillItemSync huntCoverageSync = new();
     private readonly Dictionary<string, CancellationTokenSource> personalCancellation = new(StringComparer.Ordinal);
     private bool personalInFlight;
+    private string lastPersonalDispatch = "";
     private DateTime nextPersonalUtc;
     private DateTime personalRetryUtc;
     private int personalFailures;
@@ -129,6 +131,8 @@ public sealed partial class Plugin : IDalamudPlugin {
     private bool observedItemLinks;
     private DateTime nextRetainerUploadUtc = DateTime.MinValue;
     private DateTime nextTransientMaintenanceUtc = DateTime.MinValue;
+    private DateTime nextObservationFaultLogUtc = DateTime.MinValue;
+    private string lastObservationFault = "";
     private string settingsMessage = "";
     // A paired background sync must never interrupt login with its settings
     // window. Open it explicitly from Dalamud configuration when needed.
@@ -375,7 +379,8 @@ public sealed partial class Plugin : IDalamudPlugin {
             });
         } catch (Exception error) {
             if (!disposed) await framework.RunOnFrameworkThread(() => {
-                if (!disposed && (permit is null || PermitIsCurrent(permit))) { settingsMessage = OperationFailureMessage(error); ObserveConnectionFailure(error); }
+                // A refused local input or overlapping attempt never reached Gillions.
+                if (!disposed && (permit is null || PermitIsCurrent(permit))) { settingsMessage = OperationFailureMessage(error); if (permit is not null) ObserveConnectionFailure(error); }
             });
             log.Warning("Gillions pairing did not complete ({Type}).", error.GetType().Name);
         } finally {
@@ -482,7 +487,14 @@ public sealed partial class Plugin : IDalamudPlugin {
     private void OnFrameworkUpdate(IFramework frameworkInstance) {
         if (disposed) return;
         try { UpdateOwnedState(); }
-        catch (Exception error) { log.Warning("Gillions background observation paused ({Type}).", error.GetType().Name); }
+        catch (Exception error) {
+            // A persistent fault recurs every frame; log it once a minute, not 60 times a second.
+            var now = DateTime.UtcNow;
+            if (error.GetType().Name != lastObservationFault || now >= nextObservationFaultLogUtc) {
+                lastObservationFault = error.GetType().Name; nextObservationFaultLogUtc = now.AddMinutes(1);
+                log.Warning("Gillions background observation paused ({Type}).", error.GetType().Name);
+            }
+        }
         finally { FlushConfigurationSave(); PublishUiState(); }
     }
 
@@ -627,11 +639,15 @@ public sealed partial class Plugin : IDalamudPlugin {
             });
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
             var pfAllowed = await framework.RunOnFrameworkThread(() => PartyFinderLinksPermitted(permit));
-            using var pollRequest = Request("/api/game-sync/item-links/poll", permit, new {
-                capability = "native_item_link", pluginVersion = PluginVersion,
-                nativeRequests = new { contract = PartyFinderLinkPolicy.Contract, contractVersion = 1,
-                    capabilities = pfAllowed ? new[] { PartyFinderLinkPolicy.Capability } : Array.Empty<string>() }
-            });
+            // Only a PF-capable poll advertises native requests: the Site routes any
+            // advertisement through its stricter PF admission, which must not refuse item links.
+            using var pollRequest = pfAllowed
+                ? Request("/api/game-sync/item-links/poll", permit, new {
+                    capability = "native_item_link", pluginVersion = PluginVersion,
+                    nativeRequests = new { contract = PartyFinderLinkPolicy.Contract, contractVersion = 1,
+                        capabilities = new[] { PartyFinderLinkPolicy.Capability } }
+                })
+                : Request("/api/game-sync/item-links/poll", permit, new { capability = "native_item_link", pluginVersion = PluginVersion });
 #else
             using var pollRequest = Request("/api/game-sync/item-links/poll", permit, new { capability = "native_item_link", pluginVersion = PluginVersion });
 #endif
@@ -1424,6 +1440,9 @@ public sealed partial class Plugin : IDalamudPlugin {
                 if (!background) settingsMessage = notStarted.Message;
                 // Hydration is one character sync per pairing/start; keep it pending.
                 if (mode == SyncRequestMode.Hydration) pairedClientHydration.RetryCharacterSync(DateTime.UtcNow.AddSeconds(5));
+                // A loading screen refuses every frame; retry a Gil flush after a short wait instead.
+                if (background && activeOwnedState?.PendingGilLedgerEvents.Count > 0 && nextGilLedgerUploadUtc == DateTime.MaxValue)
+                    nextGilLedgerUploadUtc = DateTime.UtcNow.AddSeconds(2);
             });
         } catch (Exception error) {
             // Record the original failure before framework recovery can fail or
@@ -1432,7 +1451,13 @@ public sealed partial class Plugin : IDalamudPlugin {
                 SyncFailureDiagnostic.Describe(error, failureStage, failureResource, failureHttpStatus));
             if (!disposed) await framework.RunOnFrameworkThread(() => {
                 if (disposed || operationPermit is not null && !PermitIsCurrent(operationPermit)) return;
-                ObserveConnectionFailure(error);
+                // Only a request that reached, or failed to reach, Gillions is a
+                // connection state; local collection/validation failures are not.
+                if (SyncFailureDiagnostic.IsTransportStage(failureStage)) ObserveConnectionFailure(error);
+                // Retry hydration only after an unreachable Gillions; a refusal or a
+                // local failure would repeat on every attempt.
+                if (mode == SyncRequestMode.Hydration && SyncFailureDiagnostic.IsTransportStage(failureStage) && error is not GillionsSyncRejectedException)
+                    pairedClientHydration.RetryCharacterSync(DateTime.UtcNow.AddSeconds(60));
                 if (error is GillionsSyncRejectedException rejection && IsAccountAccessBlocked(rejection.Code)) {
                     configuration.AutomaticSync = false; configuration.SyncBlockedCode = rejection.Code;
                     configuration.SyncBlockedMessage = OperationFailureMessage(error); RequestConfigurationSave(); RefreshSessionContext();
@@ -1520,12 +1545,17 @@ public sealed partial class Plugin : IDalamudPlugin {
     private OwnedCharacterState CurrentState => activeOwnedState ?? throw new InvalidOperationException("Pair and log into a character before syncing.");
 
     private void RequestConfigurationSave() => savePolicy.RequestDurable();
-    private void FlushConfigurationSave(bool receivedAuthorizationDenial = false, bool force = false) {
+    private void FlushConfigurationSave(bool receivedAuthorizationDenial = false, bool force = false, bool urgent = false) {
         if (force && disposed) throw new InvalidOperationException("Configuration persistence is unavailable after disposal.");
         var now = DateTime.UtcNow;
-        if ((!disposed || receivedAuthorizationDenial) && (force || savePolicy.ShouldSave(now))) {
-            configuration.Save(pluginInterface);
-            savePolicy.Saved(now);
+        // A Site denial and the unload flush must not wait out an earlier failure's backoff.
+        if ((!disposed || receivedAuthorizationDenial) && ((force || savePolicy.ShouldSave(now))
+            || (receivedAuthorizationDenial || urgent) && savePolicy.ShouldSave(now, ignoreBackoff: true))) {
+            // A forced save reports failure to its caller (send-before-persist gates).
+            try { configuration.Save(pluginInterface); savePolicy.Saved(now); }
+            catch (Exception error) when (!force) {
+                if (savePolicy.Failed(now)) log.Warning("Gillions settings could not be saved ({Type}); changes are kept and will be retried.", error.GetType().Name);
+            }
         }
     }
 
@@ -1981,7 +2011,8 @@ public sealed partial class Plugin : IDalamudPlugin {
             personalStatus = "Private prepared state invalid/oversized; preserved and fail-closed. Ordinary sync unchanged."; return;
         }
         var owner = PersonalSyncPolicy.Owner(configuration.ActiveSession.Generation, HuntBillRetentionPolicy.CharacterKey(activeRetainerCharacterContentId));
-        foreach (var resource in PersonalSyncPolicy.Resources) {
+        // Alternate the first resource so one that keeps failing cannot starve the other.
+        foreach (var resource in PersonalSyncPolicy.Resources.OrderBy(r => r == lastPersonalDispatch ? 1 : 0)) {
             if (!PersonalEnabled(resource) || !personalAccepted.Contains(resource)) continue;
             if (resource == "hunt_bills" && huntCoverageAccepted) {
                 var coveragePayload = huntLocal.CoveragePayload(HuntBillRetentionPolicy.CharacterKey(activeRetainerCharacterContentId), now);
@@ -1994,7 +2025,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                     coverageCancellation = new CancellationTokenSource(); personalCancellation.Add(resource, coverageCancellation);
                 }
                 var coverageToken = coverageCancellation.Token; // Capture before OFF/logout can dispose its source.
-                personalInFlight = true;
+                personalInFlight = true; lastPersonalDispatch = resource;
                 _ = Task.Run(() => SendPersonalAsync(coveragePermit, current, coverageToken, coverage: true));
                 return;
             }
@@ -2028,7 +2059,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             if (!personalCancellation.TryGetValue(resource, out var featureCancellation)) {
                 featureCancellation = new CancellationTokenSource(); personalCancellation.Add(resource, featureCancellation);
             }
-            personalInFlight = true;
+            personalInFlight = true; lastPersonalDispatch = resource;
             var featureToken = featureCancellation.Token;
             _ = Task.Run(() => SendPersonalAsync(permit, prepared, featureToken));
             return;
@@ -2173,7 +2204,9 @@ public sealed partial class Plugin : IDalamudPlugin {
             }
             ClearTransientState(); DirectGameSnapshotCollector.ResetResultView();
         }
-        RequestConfigurationSave();
+        // Retired evidence must persist now. A hash/timestamp-only acknowledgement
+        // is freshness: losing it re-sends identical data, so it saves on the slow cadence.
+        if (retiredRecords > 0) RequestConfigurationSave(); else savePolicy.Refresh();
     }
 
     private HttpRequestMessage Request(string path, SyncRequestPermit permit, object body) {
@@ -2286,7 +2319,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         huntMapCancellation.Cancel(); huntMapCancellation.Dispose();
         marketSource.Dispose(); marketContributor.Dispose(); marketHttp.Dispose();
 #endif
-        if (framework.IsInFrameworkUpdateThread) FlushConfigurationSave();
+        if (framework.IsInFrameworkUpdateThread) FlushConfigurationSave(urgent: true);
         disposed = true; requestLifetime.Dispose(); ClearTransientState();
         clientState.Login -= OnLogin; clientState.Logout -= OnLogout;
         chatGui.ChatMessage -= OnChatMessage;

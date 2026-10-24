@@ -10,17 +10,38 @@ internal sealed record PublicHealth(string Connection, string Character, string 
     string Fates, string Market, DateTime? LastSync, string Channel, string Version, string GameVersion) {
     private static string SafeVersion(string v) => Regex.IsMatch(v,@"^\d{1,8}(?:\.\d{1,8}){2,4}$") ? v : "unavailable";
     private static string SafeStatus(string s) => s is "Connected" or "Not connected" or "Connecting" or "Authorization expired or revoked"
-        or "Account unavailable" or "Ready" or "Off on Gillions" or "Waiting for supported context" or "Temporarily unavailable" or "Gillions unavailable" or "Update required" ? s : "Temporarily unavailable";
+        or "Account unavailable" or "Ready" or "Off on Gillions" or "Waiting for supported context" or "Temporarily unavailable" or "Gillions unavailable" or "Update required"
+        or "Off" or "Not available on Gillions" or "Game version not supported yet" ? s : "Temporarily unavailable";
     internal string SupportSummary() => $"Gillions Game Sync {SafeVersion(Version)}\nChannel: {(Channel is "Testing" or "Public" ? Channel : "unavailable")}\nConnection: {SafeStatus(Connection)}\nGame: {SafeVersion(GameVersion)}\nHunts: {SafeStatus(Hunts)}\nParty Finder: {SafeStatus(PartyFinder)}\nFATEs: {SafeStatus(Fates)}\nMarket: {SafeStatus(Market)}\nLast successful sync: {LastSync?.ToString("O") ?? "Not yet"}";
     internal static string ConnectionState(bool paired, bool pairing, string code) => pairing ? "Connecting"
         : code is "DEVICE_INVALID" or "DEVICE_REVOKED" or "TOKEN_INVALID" ? "Authorization expired or revoked"
         : code is "UNSUPPORTED_CLIENT" or "VERSION_UNSUPPORTED" or "CLIENT_VERSION_UNSUPPORTED" ? "Update required"
         : code is "ACCOUNT_DISABLED" or "TRIAL_EXPIRED" ? "Account unavailable"
         : !paired ? "Not connected" : "Connected";
-    internal static string FateState(bool compatible, string? reason, bool? granted, bool? policyEnabled) =>
-        !compatible || reason == "FATE_SOURCE_UNSUPPORTED" ? "Update required"
+    // An unqualified local game/SDK is not a client update; a Site that has not
+    // admitted this source is not a local version mismatch.
+    internal const string UnsupportedGame = "Game version not supported yet";
+    internal static string FateState(bool compatible, bool bound, string? reason, bool? granted, bool? policyEnabled, bool authorized, bool contextReady) =>
+        !compatible ? UnsupportedGame
+        : !bound ? "Waiting for supported context"
+        : reason == "FATE_SCHEMA_UNSUPPORTED" ? "Update required"
+        : reason is "FATE_SOURCE_UNSUPPORTED" or "TESTING_PRODUCT_REQUIRED" ? "Not available on Gillions"
+        : reason == "ACCOUNT_UNAVAILABLE" ? "Account unavailable"
+        : reason is "DEVICE_INVALID" or "DEVICE_REVOKED" or "TOKEN_INVALID" ? "Authorization expired or revoked"
         : reason == "FATE_POLICY_REQUIRED" && policyEnabled == false ? "Off on Gillions"
-        : granted == true ? "Ready" : "Temporarily unavailable";
+        : granted == true && authorized ? (contextReady ? "Ready" : "Waiting for supported context") : "Temporarily unavailable";
+    // Market and Party Finder contribution. A decision to stay Off is never an error.
+    // decision: the Site permission state ("explicit", "legacy" or "invalid").
+    internal static string ContributionState(bool siteOrigin, bool loggedIn, bool leaseFresh, string decision, bool allowed,
+        bool accepted, bool stopped) =>
+        !siteOrigin ? "Not available on Gillions"
+        : !loggedIn ? "Waiting for supported context"
+        : !leaseFresh ? "Temporarily unavailable"
+        : decision == "invalid" ? "Not available on Gillions"
+        : !allowed ? (decision == "explicit" ? "Off on Gillions" : "Off")
+        : stopped || !accepted ? "Not available on Gillions" : "Ready";
+    internal static string HuntState(bool qualified, bool reading, bool fresh) =>
+        !qualified ? UnsupportedGame : !reading ? "Off" : fresh ? "Ready" : "Waiting for supported context";
 }
 
 internal static class PublicConnectionPresentation {

@@ -61,6 +61,10 @@ public static class SyncResponsePolicy {
         } catch (Exception error) when (error is JsonException or InvalidOperationException) { }
         if (code == "TRIAL_EXPIRED") throw new GillionsSyncRejectedException(code, "Your Gillions trial has ended.");
         if (code == "ACCOUNT_DISABLED") throw new GillionsSyncRejectedException(code, "This Gillions account is disabled.");
+        // Authorization and client-version refusals are not an unreachable Gillions.
+        if (code is "DEVICE_INVALID" or "DEVICE_REVOKED" or "TOKEN_INVALID" or "UNSUPPORTED_CLIENT" or "VERSION_UNSUPPORTED" or "CLIENT_VERSION_UNSUPPORTED"
+            && (int)response.StatusCode is >= 400 and < 500)
+            throw new GillionsSyncRejectedException(code, $"Gillions rejected the request (HTTP {(int)response.StatusCode}).");
         throw new InvalidOperationException($"Gillions rejected the request (HTTP {(int)response.StatusCode}).");
     }
 

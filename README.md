@@ -1,5 +1,13 @@
 # Gillions Game Sync
 
+## Testing 0.0.91 candidate
+
+Testing 0.0.91 adds accurate per-feature status (unsupported game, Off, Not
+available on Gillions, waiting, ready) and command, sync and retainer
+reliability fixes found by a whole-plugin regression audit. It also includes the
+native observation integrity work merged after 0.0.90. Native compatibility and
+consent are unchanged. See [Testing 0.0.91](docs/releases/testing-0.0.91.md).
+
 ## 7.57 hotfix compatibility candidate
 
 Testing0.0.90 (published) and unpublished Public1.0.31.6 qualify Hunt, submarine and travel

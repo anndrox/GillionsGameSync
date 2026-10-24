@@ -13,16 +13,17 @@ internal static class StableUpgradeTests {
         var storage=new PluginConfigurations(directory);
         var load=typeof(PluginConfigurations).GetMethod("LoadForType")!.MakeGenericMethod(type);
         bool octoberTesting=mode is "--october-testing-write" or "--october-testing-check";
-        bool testingUpgrade=octoberTesting || mode is "--testing-upgrade-write" or "--testing-upgrade-check";
+        bool hotfixTesting=mode is "--hotfix-testing-write" or "--hotfix-testing-check";
+        bool testingUpgrade=octoberTesting || hotfixTesting || mode is "--testing-upgrade-write" or "--testing-upgrade-check";
         string product=testingUpgrade?"GillionsGameSyncTest":"GillionsGameSync";
-        string predecessorVersion=octoberTesting?"0.0.88.0":testingUpgrade?"0.0.87.0":"1.0.31.2";
-        string candidateVersion=octoberTesting?"0.0.90.0":testingUpgrade?"0.0.88.0":mode=="--october-public-check"?"1.0.31.6":"1.0.31.3";
+        string predecessorVersion=hotfixTesting?"0.0.90.0":octoberTesting?"0.0.88.0":testingUpgrade?"0.0.87.0":"1.0.31.2";
+        string candidateVersion=hotfixTesting?"0.0.91.0":octoberTesting?"0.0.90.0":testingUpgrade?"0.0.88.0":mode=="--october-public-check"?"1.0.31.6":"1.0.31.3";
         string path=storage.GetConfigFile(product).FullName;
         int checks=0;
         void Check(bool ok,string message) { checks++; if(!ok)throw new Exception("Stable upgrade: "+message); }
         string Save(object value)=>(string)serialize.Invoke(null,[value])!;
         JObject Parse(string text) { using var reader=new JsonTextReader(new StringReader(text)){DateParseHandling=DateParseHandling.None};return JObject.Load(reader); }
-        if(mode is "--current-upgrade-write" or "--current-upgrade-check" or "--testing-upgrade-write" or "--testing-upgrade-check" or "--october-public-check" or "--october-testing-write" or "--october-testing-check") {
+        if(mode is "--current-upgrade-write" or "--current-upgrade-check" or "--testing-upgrade-write" or "--testing-upgrade-check" or "--october-public-check" or "--october-testing-write" or "--october-testing-check" or "--hotfix-testing-write" or "--hotfix-testing-check") {
             Check(assembly.GetName().Name==product,"same product required");
             if(mode.EndsWith("-write",StringComparison.Ordinal)) {
                 Check(assembly.GetName().Version!.ToString(4)==predecessorVersion,"exact published predecessor required");

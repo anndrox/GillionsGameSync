@@ -88,8 +88,8 @@ internal static class FatePackagedTests {
         Check(offGrant is not null,"Packaged real OFF fixture accepted");
         var offType=offGrant!.GetType();
         var fateStatus=assembly.GetType("GillionsGameSync.PublicHealth",true)!.GetMethod("FateState",flags)!;
-        Check((string)fateStatus.Invoke(null,[true,offType.GetProperty("Reason")!.GetValue(offGrant),false,
-            offType.GetProperty("PolicyEnabled")!.GetValue(offGrant)])! == "Off on Gillions","parsed real OFF fixture renders honest Site status");
+        Check((string)fateStatus.Invoke(null,[true,true,offType.GetProperty("Reason")!.GetValue(offGrant),false,
+            offType.GetProperty("PolicyEnabled")!.GetValue(offGrant),false,true])! == "Off on Gillions","parsed real OFF fixture renders honest Site status");
         Check(parse.Invoke(null,[wire.Replace("\"ok\":true","\"ok\":true,\"ok\":true"),"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now,"https://test.gillions.app"]) is null,"Packaged duplicate key denies admission.");
         Check(parse.Invoke(null,[wire,"synthetic","aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",source,now.AddSeconds(30),"https://test.gillions.app"]) is null,"Packaged expired grant denies admission.");
         foreach(var origin in new[]{"https://test.gillions.app","https://gillions.app","http://gillions.app","http://test.gillions.app",

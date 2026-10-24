@@ -9,13 +9,17 @@ public sealed class ObservationSavePolicy {
     // thread (measured ~19 ms median for a 1.5 MB config), so timestamp-only
     // refreshes persist rarely. Durable changes still save on the next tick.
     public static readonly TimeSpan FreshnessInterval = TimeSpan.FromMinutes(5);
-    private DateTime nextFreshnessSave;
+    private DateTime nextFreshnessSave, retryAfter;
     private bool durable;
     private bool freshness;
+    private int failures;
     public void RequestDurable() => durable = true;
     public void Refresh() => freshness = true;
-    public bool ShouldSave(DateTime now) => durable || freshness && now >= nextFreshnessSave;
-    public void Saved(DateTime now) { durable = false; freshness = false; nextFreshnessSave = now.Add(FreshnessInterval); }
+    public bool ShouldSave(DateTime now, bool ignoreBackoff = false) => (ignoreBackoff || now >= retryAfter) && (durable || freshness && now >= nextFreshnessSave);
+    public void Saved(DateTime now) { durable = false; freshness = false; failures = 0; retryAfter = DateTime.MinValue; nextFreshnessSave = now.Add(FreshnessInterval); }
+    // A failed write keeps its pending changes but is not re-serialized every
+    // frame. Returns true for the first failure of a run, so it is logged once.
+    public bool Failed(DateTime now) { retryAfter = now.AddSeconds(Math.Min(60, 5 << Math.Min(failures, 4))); return failures++ == 0; }
 }
 
 public static class TransientEvidencePolicy {

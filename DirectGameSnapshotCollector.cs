@@ -211,6 +211,8 @@ internal static class RetainerVentureNativeCollector {
             var retainers = RetainerManager.Instance();
             var active = retainers == null ? null : retainers->GetActiveRetainer();
             if (inventory == null || active == null || active->RetainerId == 0) return null;
+            // Retainer gear stays resident after a switch; attribute it only to a stably active retainer.
+            if (NativeInventoryCollector.StableActiveRetainerId(observedAtUtc) != active->RetainerId.ToString()) return null;
             var container = inventory->GetInventoryContainer(InventoryType.RetainerEquippedItems);
             if (container == null || !container->IsLoaded || container->Items == null || container->Size < 0) return null;
             var equipped = new List<RetainerVentureGearItem>();
@@ -460,7 +462,7 @@ internal static class NativeInventoryCollector {
 
     // The active retainer's id once it has been active for the stability
     // window; otherwise null. Framework thread only (reads RetainerManager).
-    private static unsafe string? StableActiveRetainerId(DateTime now) {
+    internal static unsafe string? StableActiveRetainerId(DateTime now) {
         var retainerManager = RetainerManager.Instance();
         var activeRetainer = retainerManager == null ? null : retainerManager->GetActiveRetainer();
         var id = activeRetainer == null || activeRetainer->RetainerId == 0 ? null : activeRetainer->RetainerId.ToString();
@@ -499,6 +501,10 @@ internal static class NativeInventoryCollector {
         var retainerManager = RetainerManager.Instance();
         var activeRetainer = retainerManager == null ? null : retainerManager->GetActiveRetainer();
         if (manager == null || activeRetainer == null || activeRetainer->RetainerId == 0) return null;
+        // Like player gil: an unloaded retainer balance reads 0, which is not a balance.
+        // The balance also stays resident after a switch, so it belongs only to a stably active retainer.
+        if (!Loaded(manager->GetInventoryContainer(InventoryType.RetainerGil))
+            || StableActiveRetainerId(DateTime.UtcNow) != activeRetainer->RetainerId.ToString()) return null;
         return new RetainerBalanceRead(activeRetainer->RetainerId.ToString(), activeRetainer->NameString ?? "", activeRetainer->Town.ToString(), manager->GetRetainerGil());
     }
 
@@ -711,9 +717,8 @@ internal static class NativeInventoryCollector {
         result.Add(ReadCoverageSource(manager, "crystals", null, now, InventoryType.Crystals));
         result.Add(ReadCoverageSource(manager, "currency_inventory", null, now, InventoryType.Currency));
 
-        var retainerManager = RetainerManager.Instance();
-        var activeRetainer = retainerManager == null ? null : retainerManager->GetActiveRetainer();
-        var activeRetainerId = activeRetainer == null || activeRetainer->RetainerId == 0 ? null : activeRetainer->RetainerId.ToString();
+        // Retainer pages stay resident after a switch; only a stably active retainer owns them.
+        var activeRetainerId = StableActiveRetainerId(now);
         var retainerContainerNames = new[] { "RetainerPage1", "RetainerPage2", "RetainerPage3", "RetainerPage4", "RetainerPage5", "RetainerPage6", "RetainerPage7", "RetainerCrystals" };
         var retainerTypes = retainerContainerNames.Where(name => Enum.TryParse<InventoryType>(name, out _)).Select(name => Enum.Parse<InventoryType>(name)).ToArray();
         foreach (var retainer in retainers.OrderBy(entry => entry.RetainerId, StringComparer.Ordinal)) {

@@ -1,6 +1,39 @@
 # Changelog
 
-## Unreleased — native observation integrity
+## 0.0.91 (Testing) — regression audit and accurate status
+
+Includes the native observation integrity changes below.
+
+- Status rows say what is actually wrong. They distinguish an unsupported
+  game version, Off, Off on Gillions, Not available on Gillions (the Site has
+  not admitted or acknowledged the feature), waiting for data, temporarily
+  unavailable and ready. Party Finder no longer always shows Ready. Market no
+  longer reports every non-ready case as temporarily unavailable. A Site
+  refusal of the FATE source no longer says "Update required".
+- Only a request to Gillions can mark Gillions unavailable. Local collection,
+  validation and pairing-input failures don't, and authorization or client
+  version refusals are shown as such.
+- The item-link poll advertises Party Finder native requests only when PF
+  links are allowed, so the Site's stricter PF admission cannot refuse item links.
+- A Stable presence response without explicit product acceptance keeps its
+  permission lease; only Retainer uploads stay off. (Source only; reaches
+  Stable users in a future Stable release.)
+- Acknowledged uploads no longer force a full configuration save every time.
+  A failed save is retried with a backoff instead of every frame. A repeating
+  background fault is logged once a minute.
+- A Gil flush during a loading screen retries after 2 seconds instead of every
+  frame. A failed paired-client hydration is retried.
+- Retainer gear and inventory coverage are attributed only to a stably active
+  retainer. Retainer gil is ignored until its container is loaded.
+- Private Hunt and submarine uploads alternate, so one failing resource cannot
+  starve the other. FATE discovery no longer repeats every 10 seconds while you
+  are outside a supported area.
+- Beastmaster diagnostics (Testing only) stop native reads on runtimes they were
+  never qualified on.
+- Consent, permissions, payload shapes, endpoints and the native compatibility
+  of Hunt, Submarine, Travel and FATE are unchanged.
+
+## Native observation integrity (merged after 0.0.90)
 
 - Never send unavailable native data as an empty or zero result. Inventory,
   currencies and character are withheld until their native sources are loaded,

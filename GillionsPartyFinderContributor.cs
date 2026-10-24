@@ -67,6 +67,8 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
         enabledState = enabled(); source.ListingReceived += OnListing;
     }
     internal string Status { get { lock (gate) return status; } }
+    // Site denial or a stopped endpoint, for status only.
+    internal bool Stopped { get { lock (gate) return endpointStopped || session is not null && blockedAuthorization == session.AuthorizationKey; } }
     internal int PendingCount { get { lock (gate) return pending.Count; } }
     internal Task WhenIdleAsync() { lock (gate) return active; }
 
