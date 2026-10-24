@@ -1,5 +1,11 @@
 # Gillions Game Sync
 
+## Testing 0.0.94 candidate
+
+Testing 0.0.94 groups inventory uploads during heavy gathering or crafting: at
+most one per 10 seconds, and no change waits longer than 10 seconds. See
+[Testing 0.0.94](docs/releases/testing-0.0.94.md).
+
 ## Testing 0.0.93 (published)
 
 Testing 0.0.93 ([release](https://github.com/anndrox/GillionsGameSync-Testing/releases/tag/v0.0.93-testing)) uploads Retainer data only when it changes (or venture results are

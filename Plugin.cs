@@ -143,7 +143,7 @@ public sealed partial class Plugin : IDalamudPlugin {
     private DateTime nextRetainerListingCaptureUtc = DateTime.MinValue;
     private DateTime nextGilLedgerPollUtc = DateTime.MinValue;
     private DateTime nextGilLedgerUploadUtc = DateTime.MaxValue;
-    private DateTime nextInventorySyncUtc = DateTime.MaxValue;
+    private readonly InventoryUploadSchedule inventoryUploads = new();
     private DateTime nextGilLedgerFlushUtc = DateTime.MinValue;
 #if !GILLIONS_TEST_BUILD && !GILLIONS_PUBLIC_BUILD
     private DateTime nextItemLinkPollUtc = DateTime.MinValue;
@@ -583,7 +583,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         }
         if (now >= nextRetainerListingCaptureUtc) {
             nextRetainerListingCaptureUtc = now.AddSeconds(RetainerCaptureIntervalSeconds);
-            if (DirectGameSnapshotCollector.CaptureLoadedRetainerListings()) nextInventorySyncUtc = now.AddMilliseconds(250);
+            if (DirectGameSnapshotCollector.CaptureLoadedRetainerListings()) inventoryUploads.Changed(now, TimeSpan.FromMilliseconds(250));
         }
         if (syncInFlight) return;
         // A due ordinary resource keeps its cadence even during repeated Retainer
@@ -593,8 +593,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             _ = SyncAutomaticallyAsync([NextAutomaticScope()]);
             return;
         }
-        if (now >= nextInventorySyncUtc) {
-            nextInventorySyncUtc = DateTime.MaxValue;
+        if (inventoryUploads.TryDispatch(now)) {
             _ = SyncAutomaticallyAsync(["inventory"]);
             return;
         }
@@ -625,7 +624,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         gilLedgerDirty = true;
         nextGilLedgerFlushUtc = DateTime.UtcNow.AddMilliseconds(750);
         if (configuration.AutomaticSync && !string.IsNullOrWhiteSpace(configuration.DeviceToken))
-            nextInventorySyncUtc = DateTime.UtcNow.AddMilliseconds(InventoryChangeDebounceMilliseconds);
+            inventoryUploads.Changed(DateTime.UtcNow, TimeSpan.FromMilliseconds(InventoryChangeDebounceMilliseconds));
     }
 
     private async Task PollItemLinkRequestsAsync() {
@@ -1434,6 +1433,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 // A sync that sent nothing proves nothing about an earlier refusal.
                 if (submitted > 0 || publicConnectionFailure is not (SiteRefusalPolicy.CharacterNotLinked or SiteRefusalPolicy.Rejected)) ClearConnectionFailure(presence: false);
                 var notReady = WithheldResources(withheld);
+                if (background && notReady.Contains("inventory", StringComparer.Ordinal)) inventoryUploads.Requeue(DateTime.UtcNow, TimeSpan.FromSeconds(2));
                 if (mode == SyncRequestMode.Hydration && notReady.Contains(PairedClientHydrationState.CharacterResource, StringComparer.Ordinal))
                     pairedClientHydration.RetryCharacterSync(DateTime.UtcNow.AddSeconds(5));
                 if (notReady.Length > 0) RecordDiagnostic($"Not ready, not uploaded (Site keeps prior data): {string.Join("; ", withheld.Distinct(StringComparer.Ordinal))}.");
@@ -1450,6 +1450,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 // A loading screen refuses every frame; retry a Gil flush after a short wait instead.
                 if (background && activeOwnedState?.PendingGilLedgerEvents.Count > 0 && nextGilLedgerUploadUtc == DateTime.MaxValue)
                     nextGilLedgerUploadUtc = DateTime.UtcNow.AddSeconds(2);
+                if (background && scopes?.Contains("inventory") == true) inventoryUploads.Requeue(DateTime.UtcNow, TimeSpan.FromSeconds(2));
             });
         } catch (Exception error) {
             // Record the original failure before framework recovery can fail or
@@ -1473,6 +1474,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                     // A Retainer retry always schedules that resource explicitly.
                     if (activeOwnedState?.RetainerState.PendingResultEvents.Count > 0 || scopes?.Contains(RetainerClientPolicy.ResourceType) == true)
                         nextRetainerUploadUtc = DateTime.UtcNow.AddSeconds(AutomaticFailureRetrySeconds);
+                    if (scopes?.Contains("inventory") == true) inventoryUploads.Requeue(DateTime.UtcNow, TimeSpan.FromSeconds(AutomaticFailureRetrySeconds));
                 }
                 // The connection state names a background refusal; only an account stop replaces the action message.
                 if (!background || error is GillionsSyncRejectedException blockedAccount && IsAccountAccessBlocked(blockedAccount.Code)) settingsMessage = OperationFailureMessage(error);
@@ -1578,7 +1580,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         lock (diagnosticsLock) diagnostics.Clear();
         uiState = PluginUiSnapshot.Empty;
         uiRefreshPolicy.Reset();
-        gilLedgerDirty = false; nextInventorySyncUtc = DateTime.MaxValue; nextGilLedgerUploadUtc = DateTime.MaxValue;
+        gilLedgerDirty = false; inventoryUploads.Reset(); nextGilLedgerUploadUtc = DateTime.MaxValue;
     }
 
     private void OnLogin() { logoutPending = false; huntProgress.Invalidate(endTerritorySession: true); ResetSessionContext(); }

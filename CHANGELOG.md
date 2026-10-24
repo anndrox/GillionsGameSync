@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.94 (Testing) — inventory burst coalescing
+
+- Inventory uploads during heavy gathering or crafting are grouped. Game Sync
+  sends at most one inventory upload per 10 seconds and holds a change for at
+  most about 10 seconds (plus any upload already in progress). The website stays
+  within about 10 seconds of the game. An upload refused by a loading screen or
+  unloaded inventory is retried after 2 s, and a failed one after 10 s.
+- Before, each settled change (a median of 6.6 s apart during heavy activity)
+  was a full upload of about 41 KB. Replaying the owner's measured upload times
+  on TEST, the 10 s window gives about 41% fewer inventory uploads during
+  activity, and no change when idle.
+- An isolated change still uploads after the usual 1.5 s settle. Sync now is
+  unchanged.
+
 ## 0.0.93 (Testing) — quieter Retainer uploads
 
 - Retainer data is uploaded when it actually changes, or when venture results
