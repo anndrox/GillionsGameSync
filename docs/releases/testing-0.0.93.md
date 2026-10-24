@@ -1,7 +1,17 @@
-# Testing 0.0.93 — quieter Retainer uploads
+# Testing 0.0.93 — quieter Retainer uploads (published)
 
-Status: **release candidate.** Its publication state is recorded separately once
-the Testing release and feed are verified.
+Status: **published** as [`v0.0.93-testing`](https://github.com/anndrox/GillionsGameSync-Testing/releases/tag/v0.0.93-testing),
+from source `032544a132aa2bc20fa3cc1f0fab17bb3e3d40ab` (main CI run 40126674446 passed).
+
+| Item | Value |
+|---|---|
+| ZIP | sha256 `693b29555e1698c72ee128578eaeaf3e529c66ffe0e283da81b5f416aca019e8` (two builds byte-identical) |
+| DLL | `GillionsGameSyncTest.dll` 0.0.93.0, sha256 `92706175a76ed3686393a3bab63beecb5efa76d7b8c22ede013c4aba6c940f14` |
+| Feed | canonical feed sha256 `7ac76fd4e6c90969678aa645a49f99ff052b0831bf885f78462b1340838c7448`, distribution commit `276b802` |
+| Upgrade | real-serializer upgrade from the published 0.0.92.0 DLL passed on this exact DLL |
+
+The public assets and the live feed were verified anonymously. Stable (1.0.31.2)
+and the earlier Testing releases are unchanged.
 
 ## Why
 
