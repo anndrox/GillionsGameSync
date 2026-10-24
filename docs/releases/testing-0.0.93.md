@@ -24,8 +24,10 @@ automatic cadence re-sent it.
 | Plugin restart or character change | One refresh |
 
 - **Content hash:** the client compares a content hash of the payload with only the
-  observation-time fields removed (`lastObservedAtUtc`, `observedAtUtc`).
-  `lastChangedAtUtc` moves only with a value change, so it stays in the hash.
+  evidence-time fields removed (`lastObservedAtUtc`, `observedAtUtc`,
+  `lastChangedAtUtc`). Loaded inventory containers restamp `lastChangedAtUtc` on
+  every read, and a real change always also changes a value, status or count. The
+  5-minute refresh carries current times.
 - **Payload unchanged:** the payload shape itself is unchanged.
 - **Persistence:** the content hash is stored alongside the existing per-character
   payload hashes, and the last upload time is kept in memory.

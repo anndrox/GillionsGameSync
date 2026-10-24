@@ -39,8 +39,12 @@ public static class RetainerClientPolicy {
 public static class RetainerUploadPolicy {
     public static readonly TimeSpan FreshnessInterval = TimeSpan.FromMinutes(5);
     public const string SemanticHashKey = RetainerClientPolicy.ResourceType + ":semantic";
-    // Observation times only; "lastChangedAtUtc" moves only when a value changes.
-    private static readonly HashSet<string> TimeOnly = new(StringComparer.Ordinal) { "lastObservedAtUtc", "observedAtUtc" };
+    // Evidence times only. Some evidence restamps "lastChangedAtUtc" on every read
+    // (loaded inventory containers, an unreadable venture), and a real change always
+    // also changes a value, status or count, so all three times are excluded; the
+    // five-minute refresh carries current times. Arrays are compared order-free:
+    // every element carries its own identity (slot, container, context, event id).
+    private static readonly HashSet<string> TimeOnly = new(StringComparer.Ordinal) { "lastObservedAtUtc", "observedAtUtc", "lastChangedAtUtc" };
 
     public static string SemanticHash(JsonElement payload) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Canonical(payload))));

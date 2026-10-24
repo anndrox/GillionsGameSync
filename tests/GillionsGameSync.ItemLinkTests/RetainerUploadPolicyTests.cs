@@ -22,15 +22,31 @@ internal static class RetainerUploadPolicyTests {
         RetainerVentureSnapshotPolicy.MergeRoster(state, Roster(t0.AddSeconds(30)), t0.AddSeconds(30));
         Check(Raw(state) != raw0, "fixture really refreshes observation times (the old 30-second upload cause)");
         Check(Semantic(state) == semantic0, "an identical roster read is not a content change");
-        RetainerVentureSnapshotPolicy.MergeRoster(state, Roster(t0.AddSeconds(60), level: 51), t0.AddSeconds(60));
-        Check(Semantic(state) != semantic0, "a level change is a content change");
+        // The real 30-second path also re-reads inventory coverage, which restamps
+        // loaded containers' lastChangedAtUtc on every read.
+        RetainerInventorySourceRead[] Coverage(DateTime at, int used = 10) => [
+            new("character_inventory", null, at, [new("Inventory1", true, used, 35), new("Inventory2", true, 0, 35)]),
+            new("retainer_inventory", "100", at, [new("RetainerPage1", false, 0, 0)])];
+        RetainerVentureSnapshotPolicy.MergeInventorySources(state, Coverage(t0));
+        var withCoverage = Semantic(state);
+        for (var read = 1; read <= 3; read++) {
+            var at = t0.AddSeconds(30 * read);
+            RetainerVentureSnapshotPolicy.MergeInventorySources(state, Coverage(at));
+            RetainerVentureSnapshotPolicy.MergeRoster(state, Roster(at), at);
+        }
+        Check(Semantic(state) == withCoverage, "repeated identical coverage and roster reads are not a content change");
+        RetainerVentureSnapshotPolicy.MergeInventorySources(state, Coverage(t0.AddSeconds(150), used: 11));
+        Check(Semantic(state) != withCoverage, "a used-slot change is a content change");
+        var beforeLevel = Semantic(state);
+        RetainerVentureSnapshotPolicy.MergeRoster(state, Roster(t0.AddSeconds(180), level: 51), t0.AddSeconds(180));
+        Check(Semantic(state) != beforeLevel, "a level change is a content change");
 
         using (var a = JsonDocument.Parse("{\"x\":1,\"lastObservedAtUtc\":\"2026-01-01T00:00:00Z\",\"inner\":[{\"observedAtUtc\":\"a\",\"v\":2}]}"))
         using (var b = JsonDocument.Parse("{\"inner\":[{\"v\":2,\"observedAtUtc\":\"b\"}],\"lastObservedAtUtc\":\"2026-02-02T00:00:00Z\",\"x\":1}"))
         using (var c = JsonDocument.Parse("{\"x\":1,\"lastChangedAtUtc\":\"2026-01-01T00:00:00Z\",\"inner\":[{\"v\":2}]}"))
         using (var d = JsonDocument.Parse("{\"x\":1,\"lastChangedAtUtc\":\"2026-03-03T00:00:00Z\",\"inner\":[{\"v\":2}]}")) {
             Check(RetainerUploadPolicy.SemanticHash(a.RootElement) == RetainerUploadPolicy.SemanticHash(b.RootElement), "only observation times and ordering differ");
-            Check(RetainerUploadPolicy.SemanticHash(c.RootElement) != RetainerUploadPolicy.SemanticHash(d.RootElement), "lastChangedAtUtc moves only with a value, so it stays semantic");
+            Check(RetainerUploadPolicy.SemanticHash(c.RootElement) == RetainerUploadPolicy.SemanticHash(d.RootElement), "lastChangedAtUtc alone is an evidence time, not a content change");
         }
 
         var h = "A"; var now = t0.AddMinutes(10);
