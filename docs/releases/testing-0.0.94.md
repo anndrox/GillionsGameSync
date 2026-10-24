@@ -1,7 +1,17 @@
-# Testing 0.0.94 — inventory burst coalescing
+# Testing 0.0.94 — inventory burst coalescing (published)
 
-Status: **release candidate.** Its publication state is recorded separately once
-the Testing release and feed are verified.
+Status: **published** as [`v0.0.94-testing`](https://github.com/anndrox/GillionsGameSync-Testing/releases/tag/v0.0.94-testing),
+from source `f1866ecefbdc56b87f2aca29b567b9c95996a57b` (main CI run 40131087581 passed).
+
+| Item | Value |
+|---|---|
+| ZIP | sha256 `35ca31926f542d4e29c2a67d3643801033b043b39e1d2f534ef5905aac9134da` (two builds byte-identical) |
+| DLL | `GillionsGameSyncTest.dll` 0.0.94.0, sha256 `be1ae689544c69427f779d5bdad3a10faa7933440128ded8bd2893f67c7eb6bb` |
+| Feed | canonical feed sha256 `348f36f54cdec35e23c1b0f8d2c33f9a3d02f51de141eef6908cc6611457554f`, distribution commit `e594d4f` |
+| Upgrade | real-serializer upgrade from the published 0.0.93.0 DLL passed on this exact DLL |
+
+The public assets and the live feed were verified anonymously. Stable (1.0.31.2)
+and the earlier Testing releases are unchanged.
 
 ## Why
 
