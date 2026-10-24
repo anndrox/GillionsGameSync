@@ -1,8 +1,8 @@
 # Gillions Game Sync
 
-## Testing 0.0.93 candidate
+## Testing 0.0.93 (published)
 
-Testing 0.0.93 uploads Retainer data only when it changes (or venture results are
+Testing 0.0.93 ([release](https://github.com/anndrox/GillionsGameSync-Testing/releases/tag/v0.0.93-testing)) uploads Retainer data only when it changes (or venture results are
 pending), plus a 5-minute freshness refresh, instead of every 30 seconds. See
 [Testing 0.0.93](docs/releases/testing-0.0.93.md).
 
