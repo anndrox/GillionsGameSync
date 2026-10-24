@@ -132,6 +132,8 @@ public sealed partial class Plugin : IDalamudPlugin {
     private DateTime nextRetainerUploadUtc = DateTime.MinValue;
     private DateTime nextTransientMaintenanceUtc = DateTime.MinValue;
     private DateTime nextObservationFaultLogUtc = DateTime.MinValue;
+    // In memory per session: a restart or character change refreshes Retainer freshness once.
+    private DateTime retainerUploadedAtUtc = DateTime.MinValue;
     private string lastObservationFault = "";
     private string settingsMessage = "";
     // A paired background sync must never interrupt login with its settings
@@ -1362,6 +1364,8 @@ public sealed partial class Plugin : IDalamudPlugin {
             foreach (var snapshot in preparedSnapshots) {
                 if (!force && snapshot.SentResultFingerprints.Count == 0 && captured.PayloadHashes.TryGetValue(snapshot.ResourceType, out var previousHash)
                     && previousHash == snapshot.PayloadHash) continue;
+                if (snapshot.SemanticHash is { } semantic && !RetainerUploadPolicy.ShouldUpload(force, snapshot.SentResultFingerprints.Count, semantic,
+                    captured.PayloadHashes.GetValueOrDefault(RetainerUploadPolicy.SemanticHashKey), retainerUploadedAtUtc, DateTime.UtcNow)) continue;
                 var nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
                 failureResource = snapshot.ResourceType; failureHttpStatus = null;
                 failureStage = "snapshot_request";
@@ -1392,6 +1396,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                         }
                     }
                     state.LastPayloadHashes[snapshot.ResourceType] = snapshot.PayloadHash;
+                    if (snapshot.SemanticHash is { } accepted) { state.LastPayloadHashes[RetainerUploadPolicy.SemanticHashKey] = accepted; retainerUploadedAtUtc = DateTime.UtcNow; }
                     if (snapshot.InventoryComponentHashes is not null) state.LastInventoryComponentHashes = snapshot.InventoryComponentHashes;
                     state.LastSyncUtc = DateTime.UtcNow;
                     AfterAcknowledgedDrain(retired);
@@ -1580,7 +1585,7 @@ public sealed partial class Plugin : IDalamudPlugin {
     private void OnLogout(int type, int code) { logoutPending = true; huntProgress.Invalidate(endTerritorySession: true); ResetSessionContext(); }
     private void ResetSessionContext() {
         if (disposed) return;
-        requestLifetime.Invalidate(); ClearTransientState(); ClearRetainerServerAcceptance(); ClearCharacterFailure();
+        requestLifetime.Invalidate(); ClearTransientState(); ClearRetainerServerAcceptance(); retainerUploadedAtUtc = DateTime.MinValue; ClearCharacterFailure();
         permissionAuthority.Bind("", ""); permissionTransitions.Clear(); permissionFreshFrom.Clear();
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         nativeVersionReported = false;
@@ -2258,7 +2263,8 @@ public sealed partial class Plugin : IDalamudPlugin {
                 ? document.RootElement.GetProperty("resultEvents").EnumerateArray().ToDictionary(entry => entry.GetProperty("eventId").GetString()!, entry => entry.GetProperty("payloadFingerprint").GetString()!, StringComparer.Ordinal)
                 : new Dictionary<string, string>(StringComparer.Ordinal),
             snapshot.ResourceType == "glamour_plates" && document.RootElement.TryGetProperty("plates", out var plates)
-                && plates.ValueKind == JsonValueKind.Array && plates.GetArrayLength() == 0);
+                && plates.ValueKind == JsonValueKind.Array && plates.GetArrayLength() == 0,
+            snapshot.ResourceType == RetainerClientPolicy.ResourceType ? RetainerUploadPolicy.SemanticHash(document.RootElement) : null);
     }
 
     private static Dictionary<string, string> GetInventoryComponentHashes(JsonElement root) {
@@ -2352,7 +2358,8 @@ internal sealed record PreparedSnapshot(
     string InventoryDelta,
     double PreparationMilliseconds,
     IReadOnlyDictionary<string, string> SentResultFingerprints,
-    bool AllowEmptySnapshotReceipt);
+    bool AllowEmptySnapshotReceipt,
+    string? SemanticHash = null);
 
 // A sync that never began (already running, not ready); not a connection failure.
 internal sealed class SyncNotStartedException(string message) : OperationCanceledException(message);

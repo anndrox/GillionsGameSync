@@ -16,8 +16,8 @@ internal static class StableUpgradeTests {
         bool hotfixTesting=mode is "--hotfix-testing-write" or "--hotfix-testing-check";
         bool testingUpgrade=octoberTesting || hotfixTesting || mode is "--testing-upgrade-write" or "--testing-upgrade-check";
         string product=testingUpgrade?"GillionsGameSyncTest":"GillionsGameSync";
-        string predecessorVersion=hotfixTesting?"0.0.91.0":octoberTesting?"0.0.88.0":testingUpgrade?"0.0.87.0":"1.0.31.2";
-        string candidateVersion=hotfixTesting?"0.0.92.0":octoberTesting?"0.0.90.0":testingUpgrade?"0.0.88.0":mode=="--october-public-check"?"1.0.31.6":"1.0.31.3";
+        string predecessorVersion=hotfixTesting?"0.0.92.0":octoberTesting?"0.0.88.0":testingUpgrade?"0.0.87.0":"1.0.31.2";
+        string candidateVersion=hotfixTesting?"0.0.93.0":octoberTesting?"0.0.90.0":testingUpgrade?"0.0.88.0":mode=="--october-public-check"?"1.0.31.6":"1.0.31.3";
         string path=storage.GetConfigFile(product).FullName;
         int checks=0;
         void Check(bool ok,string message) { checks++; if(!ok)throw new Exception("Stable upgrade: "+message); }

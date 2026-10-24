@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.93 (Testing) — quieter Retainer uploads
+
+- Retainer data is uploaded when it actually changes, or when venture results
+  are pending. Otherwise it is sent only as a freshness refresh every 5 minutes.
+  Before, every 30-second roster read refreshed observation times, so the whole
+  record (about 40 KB) was re-sent and stored about 120 times an hour with no
+  change. Now an unchanged hour sends 12.
+- Sync now still uploads immediately. A restart or character change refreshes
+  once.
+- Site Engineering agreed the 5-minute interval: Gillions has no 30-second
+  dependency, and Connected/Offline comes from presence. No Site change is needed.
+
 ## 0.0.92 (Testing) — Gillions refusals named, character notices
 
 - A refusal from Gillions is never shown as "Gillions unavailable". The
