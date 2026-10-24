@@ -1,8 +1,8 @@
 # Gillions Game Sync
 
-## Testing 0.0.92 candidate
+## Testing 0.0.92 (published)
 
-Testing 0.0.92 names each Gillions refusal (character not linked, paired to a
+Testing 0.0.92 ([release](https://github.com/anndrox/GillionsGameSync-Testing/releases/tag/v0.0.92-testing)) names each Gillions refusal (character not linked, paired to a
 different character, reconnect required, refused) instead of "Gillions
 unavailable". It adds a one-time in-game notice for character problems and stops
 Reconnect → Finish from stacking windows. See
