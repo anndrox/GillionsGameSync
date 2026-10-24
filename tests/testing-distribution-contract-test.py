@@ -16,6 +16,11 @@ hunt=(r/'HuntBillLocalView.cs').read_text(encoding='utf-8').replace('    interna
 assert hunt.replace('NativeCompatibility.Supports(NativeFamily.Hunt, ','PersonalObservationCompatibility.Supports(')==subprocess.check_output(['git','show',public+':HuntBillLocalView.cs'],cwd=r).decode().replace('\r\n','\n')
 windows=(r/'PublicGameSyncUi.cs').read_text(encoding='utf-8')
 normalized=windows.replace('        string idSuffix=testing ? "Test" : "";\n','').replace('+idSuffix','')
+# Owner-reported duplicate windows after Reconnect -> Finish (2026-10-24): only FinishPairing may differ.
+normalized=normalized.replace('    // A reconnect started from Settings returns there; only first-run onboarding\n'
+    '    // opens the main window, so finishing never stacks a second Gillions window.\n'
+    '    internal void FinishPairing() { pairing.IsOpen=false; if(!settings.IsOpen) main.IsOpen=true; }',
+    '    internal void FinishPairing() { pairing.IsOpen=false; main.IsOpen=true; }')
 assert normalized==subprocess.check_output(['git','show',public+':PublicGameSyncUi.cs'],cwd=r).decode().replace('\r\n','\n')
 ui=(r/'PluginPublicUi.cs').read_text(encoding='utf-8')
 for phrase in ['Reconnect Game Sync','You already have a saved pairing.','shorter windows scroll']:

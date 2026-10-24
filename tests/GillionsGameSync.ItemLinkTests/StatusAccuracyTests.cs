@@ -67,6 +67,50 @@ internal static class StatusAccuracyTests {
         }
 
         // A failed save keeps its changes and backs off instead of re-serializing every frame.
+        // Site refusals are classified, never shown as an unreachable Gillions, and
+        // the Site's text only classifies: it never reaches the exception message.
+        const string notLinkedText = "This in-game character is not linked to your Gillions account. Add the character in Preferences before syncing it.";
+        const string mismatchText = "The observed character does not match this paired Gillions character.";
+        Check(SiteRefusalPolicy.Classify("INVALID_GAME_SYNC_REQUEST", notLinkedText) == SiteRefusalPolicy.CharacterNotLinked, "deployed not-linked text");
+        Check(SiteRefusalPolicy.Classify("CHARACTER_NOT_LINKED", "") == SiteRefusalPolicy.CharacterNotLinked
+            && SiteRefusalPolicy.Classify("character_not_found", "") == SiteRefusalPolicy.CharacterNotLinked, "not-linked codes");
+        Check(SiteRefusalPolicy.Classify("character_mismatch", mismatchText) == SiteRefusalPolicy.CharacterMismatch, "paired-character mismatch");
+        Check(SiteRefusalPolicy.Classify("invalid_retainer_request", "Retainer presence client identity does not match the authenticated product.") == SiteRefusalPolicy.ProductMismatch
+            && SiteRefusalPolicy.Classify("CLIENT_PRODUCT_MISMATCH", "") == SiteRefusalPolicy.ProductMismatch, "product mismatch text and code");
+        foreach (var odd in new[] { "", "invalid_retainer_request", "BAD CODE", "X<script>", new string('A', 80) })
+            Check(SiteRefusalPolicy.Classify(odd, "anything") == SiteRefusalPolicy.Rejected, "unrecognized code is a generic refusal: " + odd);
+        Check(SiteRefusalPolicy.IsRefusal(400) && SiteRefusalPolicy.IsRefusal(403) && SiteRefusalPolicy.IsRefusal(404)
+            && !SiteRefusalPolicy.IsRefusal(408) && !SiteRefusalPolicy.IsRefusal(429) && !SiteRefusalPolicy.IsRefusal(500) && !SiteRefusalPolicy.IsRefusal(503),
+            "timeouts, rate limits and server errors stay retryable");
+        string Body(string code, string error) => System.Text.Json.JsonSerializer.Serialize(new { ok = false, code, error });
+        foreach (var (status, body, expected) in new[] {
+            (HttpStatusCode.BadRequest, Body("INVALID_GAME_SYNC_REQUEST", notLinkedText), SiteRefusalPolicy.CharacterNotLinked),
+            (HttpStatusCode.Forbidden, Body("character_mismatch", mismatchText), SiteRefusalPolicy.CharacterMismatch),
+            (HttpStatusCode.BadRequest, Body("invalid_retainer_request", "SYNTHETIC_SECRET"), SiteRefusalPolicy.Rejected),
+            (HttpStatusCode.BadRequest, "not json", SiteRefusalPolicy.Rejected) }) {
+            using var response = new HttpResponseMessage(status) { Content = new StringContent(body) };
+            try { await SyncResponsePolicy.EnsureSuccessfulAsync(response); throw new Exception("Expected rejection."); }
+            catch (GillionsSyncRejectedException error) {
+                Check(error.Code == expected && !error.Message.Contains("linked") && !error.Message.Contains("SYNTHETIC_SECRET") && !error.Message.Contains("observed"), "typed refusal " + expected);
+                var diagnostic = SyncFailureDiagnostic.Describe(error, "snapshot_status", "inventory", (int)status);
+                Check(diagnostic.Contains("code=" + expected) && !diagnostic.Contains("SYNTHETIC_SECRET") && !diagnostic.Contains("linked"), "diagnostic logs the code, never the Site text");
+            }
+        }
+        foreach (var status in new[] { HttpStatusCode.RequestTimeout, HttpStatusCode.TooManyRequests, HttpStatusCode.BadGateway }) {
+            using var response = new HttpResponseMessage(status) { Content = new StringContent(Body("character_mismatch", mismatchText)) };
+            try { await SyncResponsePolicy.EnsureSuccessfulAsync(response); throw new Exception("Expected rejection."); }
+            catch (InvalidOperationException error) { Check(error is not GillionsSyncRejectedException, "retryable status stays untyped: " + (int)status); }
+        }
+        Check(PublicHealth.ConnectionState(true, false, SiteRefusalPolicy.CharacterNotLinked) == PublicHealth.CharacterNotLinked
+            && PublicHealth.ConnectionState(true, false, SiteRefusalPolicy.CharacterMismatch) == PublicHealth.OtherCharacter
+            && PublicHealth.ConnectionState(true, false, SiteRefusalPolicy.ProductMismatch) == PublicHealth.ReconnectRequired
+            && PublicHealth.ConnectionState(true, false, SiteRefusalPolicy.Rejected) == PublicHealth.Refused, "each refusal has its own connection state");
+        Check(PublicHealth.ConnectionState(false, false, SiteRefusalPolicy.Rejected) == "Not connected"
+            && PublicHealth.ConnectionState(true, true, SiteRefusalPolicy.CharacterMismatch) == "Connecting", "unpaired and pairing still win");
+        foreach (var label in new[] { PublicHealth.CharacterNotLinked, PublicHealth.OtherCharacter, PublicHealth.ReconnectRequired, PublicHealth.Refused })
+            Check(new PublicHealth(label, "c", "Ready", "Ready", "Ready", "Ready", null, "Testing", "0.0.92.0", "2026.10.16.0000.0000").SupportSummary().Contains("Connection: " + label),
+                "support summary keeps " + label);
+
         var now = new DateTime(2026, 10, 24, 12, 0, 0, DateTimeKind.Utc);
         var save = new ObservationSavePolicy();
         save.RequestDurable();

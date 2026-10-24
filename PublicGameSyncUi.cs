@@ -34,7 +34,9 @@ internal sealed class PublicGameSyncUi : IDisposable {
     internal void ShowMain()=>main.IsOpen=true;
     internal void ShowSettings()=>settings.IsOpen=true;
     internal void ShowPairing()=>pairing.IsOpen=true;
-    internal void FinishPairing() { pairing.IsOpen=false; main.IsOpen=true; }
+    // A reconnect started from Settings returns there; only first-run onboarding
+    // opens the main window, so finishing never stacks a second Gillions window.
+    internal void FinishPairing() { pairing.IsOpen=false; if(!settings.IsOpen) main.IsOpen=true; }
     internal void Draw() {
         hunts.Flags = locked() ? hunts.Flags | ImGuiWindowFlags.NoMove : hunts.Flags & ~ImGuiWindowFlags.NoMove;
         bool requestedOpen=huntWindow.Prepare(progress.Visible,progress.InteractionRevision);

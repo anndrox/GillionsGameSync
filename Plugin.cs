@@ -426,7 +426,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 throw new InvalidOperationException("Invalid presence response.");
             await CommitAsync(permit, _ => {
                 retainerUploadServerSupported = uploadSupported; presenceFailureCount = 0;
-                publicConnectionFailure = "";
+                ClearConnectionFailure(presence: true);
                 ApplyPermissions(responseJson, permit, response, Stopwatch.GetElapsedTime(permissionRequestStarted));
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
                 marketAcceptedGeneration = NativeProduct.TransportOrigin(permit.Origin) && MarketContributor.Compatible(responseJson) ? permit.Session!.Generation : "";
@@ -1425,7 +1425,8 @@ public sealed partial class Plugin : IDalamudPlugin {
                 if (submitted > 0 && !string.IsNullOrEmpty(configuration.SyncBlockedCode)) {
                     configuration.SyncBlockedCode = ""; configuration.SyncBlockedMessage = ""; RequestConfigurationSave();
                 }
-                publicConnectionFailure = "";
+                // Only an upload that was actually accepted proves the character is linked.
+                if (submitted > 0 || publicConnectionFailure != SiteRefusalPolicy.CharacterNotLinked) ClearConnectionFailure(presence: false);
                 var notReady = WithheldResources(withheld);
                 if (mode == SyncRequestMode.Hydration && notReady.Contains(PairedClientHydrationState.CharacterResource, StringComparer.Ordinal))
                     pairedClientHydration.RetryCharacterSync(DateTime.UtcNow.AddSeconds(5));

@@ -18,9 +18,29 @@ public sealed partial class Plugin {
         publicConnectionFailure = error is GillionsSyncRejectedException r ? r.Code switch {
             "DEVICE_INVALID" or "DEVICE_REVOKED" or "TOKEN_INVALID" => "DEVICE_INVALID",
             "UNSUPPORTED_CLIENT" or "VERSION_UNSUPPORTED" or "CLIENT_VERSION_UNSUPPORTED" => "VERSION_UNSUPPORTED",
-            "ACCOUNT_DISABLED" or "TRIAL_EXPIRED" => r.Code,
-            _ => "UNAVAILABLE"
+            "ACCOUNT_DISABLED" or "TRIAL_EXPIRED" or SiteRefusalPolicy.CharacterNotLinked or SiteRefusalPolicy.ProductMismatch
+                or SiteRefusalPolicy.CharacterMismatch => r.Code,
+            _ => SiteRefusalPolicy.Rejected
         } : "UNAVAILABLE";
+        if (publicConnectionFailure is SiteRefusalPolicy.CharacterNotLinked or SiteRefusalPolicy.CharacterMismatch) NotifyCharacter(publicConnectionFailure);
+    }
+    // A sync proves reachability and the character link, but not the device's
+    // paired character or product, which only presence checks; and the reverse.
+    private void ClearConnectionFailure(bool presence) {
+        if (presence ? publicConnectionFailure != SiteRefusalPolicy.CharacterNotLinked
+            : publicConnectionFailure is not (SiteRefusalPolicy.CharacterMismatch or SiteRefusalPolicy.ProductMismatch)) publicConnectionFailure = "";
+    }
+    private string characterNoticeShown = "";
+    // Once per character and cause per session: the status row alone is easy to miss.
+    private void NotifyCharacter(string cause) {
+        var key = activeRetainerCharacterContentId + ":" + cause;
+        if (characterNoticeShown == key) return;
+        characterNoticeShown = key;
+        chatGui.Print(cause == SiteRefusalPolicy.CharacterMismatch
+            ? "This character isn't the one this device was paired with, so Gillions features are unavailable. Pair again while playing this character."
+            : (IsTesting ? "This character is not linked to your Gillions TEST account, so it can't sync."
+                : "This character is not linked to your Gillions account, so it can't sync.")
+              + " Add it on the Gillions website in Preferences (for example from the Lodestone), then use Sync now.", "Gillions");
     }
     private volatile PublicHealth publicHealth = new("Not connected","Character unavailable","Waiting for supported context",
         "Waiting for supported context","Waiting for supported context","Waiting for supported context",null,"Public","","unavailable");
@@ -157,6 +177,18 @@ public sealed partial class Plugin {
         } else if(h.Connection=="Update required") Link("Update Game Sync",IsTesting ? "https://github.com/anndrox/GillionsGameSync-Testing/releases" : "https://github.com/anndrox/GillionsGameSync/releases");
         else if(h.Connection=="Gillions unavailable") Label("Gillions is temporarily unreachable. Local history is preserved; Game Sync will retry safely.");
         else if(h.Connection=="Account unavailable") Label("Check your Gillions account access on the website.");
+        else if(h.Connection==PublicHealth.CharacterNotLinked) Label((IsTesting ? "This character is not linked to your Gillions TEST account." : "This character is not linked to your Gillions account.")
+            +" Add it on the website in Preferences (for example from the Lodestone), then use Sync now. Nothing is uploaded for it until then.");
+        else if(h.Connection==PublicHealth.OtherCharacter) {
+            Label("This character isn't the one this device was paired with. Pair again while playing this character to use Hunts, Party Finder, FATEs and Market here.");
+            if(ImGui.Button("Reconnect")) { pairingRepair=true; publicUi.ShowPairing(); }
+        }
+        else if(h.Connection==PublicHealth.ReconnectRequired) {
+            Label(IsTesting ? "Gillions TEST paired this device for a different Game Sync product. Create a new pairing code for Game Sync Testing and reconnect."
+                : "Gillions paired this device for a different Game Sync product. Create a new pairing code and reconnect.");
+            if(ImGui.Button("Reconnect")) { pairingRepair=true; publicUi.ShowPairing(); }
+        }
+        else if(h.Connection==PublicHealth.Refused) Label("Gillions refused this device's request. Local history is preserved. Check the device and character on the website.");
         ImGui.Separator();
         bool sharedUnavailable=h.Connection is "Not connected" or "Gillions unavailable" or "Authorization expired or revoked" or "Account unavailable" or "Update required"
             && h.Hunts=="Gillions unavailable" && h.PartyFinder=="Gillions unavailable"

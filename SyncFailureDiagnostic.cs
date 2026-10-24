@@ -29,6 +29,8 @@ internal static class SyncFailureDiagnostic {
         for (var depth = 0; error is not null && depth < 3; depth++, error = error.InnerException!) {
             text.Append("; exception=").Append(SafeLabel(error.GetType().FullName ?? "unknown"))
                 .Append("; message=").Append(SafeMessage(error));
+            // A classified Site refusal code is a bounded identifier, never the Site's text.
+            if (error is GillionsSyncRejectedException rejection) text.Append("; code=").Append(SafeLabel(rejection.Code));
             foreach (var frame in (new StackTrace(error, false).GetFrames() ?? []).Take(12)) {
                 var method = frame.GetMethod();
                 text.Append("\n at ").Append(SafeLabel(method?.DeclaringType?.FullName ?? "unknown"))
@@ -40,7 +42,7 @@ internal static class SyncFailureDiagnostic {
     }
     private static string SafeMessage(Exception error) {
         // Do not invoke a third-party exception's virtual Message getter.
-        if (error.GetType() != typeof(InvalidOperationException)) return "[unrecognized message withheld; method stack retained]";
+        if (error.GetType() != typeof(InvalidOperationException) && error.GetType() != typeof(GillionsSyncRejectedException)) return "[unrecognized message withheld; method stack retained]";
         if (KnownMessages.Contains(error.Message, StringComparer.Ordinal)) return error.Message;
         if (Regex.IsMatch(error.Message,
             @"^Gillions rejected the request \(HTTP [1-5][0-9]{2}\)\.$", RegexOptions.CultureInvariant)) return error.Message;
