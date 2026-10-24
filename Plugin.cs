@@ -426,7 +426,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 throw new InvalidOperationException("Invalid presence response.");
             await CommitAsync(permit, _ => {
                 retainerUploadServerSupported = uploadSupported; presenceFailureCount = 0;
-                publicConnectionFailure = "";
+                ClearConnectionFailure(presence: true);
                 ApplyPermissions(responseJson, permit, response, Stopwatch.GetElapsedTime(permissionRequestStarted));
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
                 marketAcceptedGeneration = NativeProduct.TransportOrigin(permit.Origin) && MarketContributor.Compatible(responseJson) ? permit.Session!.Generation : "";
@@ -1425,7 +1425,9 @@ public sealed partial class Plugin : IDalamudPlugin {
                 if (submitted > 0 && !string.IsNullOrEmpty(configuration.SyncBlockedCode)) {
                     configuration.SyncBlockedCode = ""; configuration.SyncBlockedMessage = ""; RequestConfigurationSave();
                 }
-                publicConnectionFailure = "";
+                // Only an upload that was actually accepted proves the character is linked.
+                // A sync that sent nothing proves nothing about an earlier refusal.
+                if (submitted > 0 || publicConnectionFailure is not (SiteRefusalPolicy.CharacterNotLinked or SiteRefusalPolicy.Rejected)) ClearConnectionFailure(presence: false);
                 var notReady = WithheldResources(withheld);
                 if (mode == SyncRequestMode.Hydration && notReady.Contains(PairedClientHydrationState.CharacterResource, StringComparer.Ordinal))
                     pairedClientHydration.RetryCharacterSync(DateTime.UtcNow.AddSeconds(5));
@@ -1467,7 +1469,8 @@ public sealed partial class Plugin : IDalamudPlugin {
                     if (activeOwnedState?.RetainerState.PendingResultEvents.Count > 0 || scopes?.Contains(RetainerClientPolicy.ResourceType) == true)
                         nextRetainerUploadUtc = DateTime.UtcNow.AddSeconds(AutomaticFailureRetrySeconds);
                 }
-                if (!background || error is GillionsSyncRejectedException) settingsMessage = OperationFailureMessage(error);
+                // The connection state names a background refusal; only an account stop replaces the action message.
+                if (!background || error is GillionsSyncRejectedException blockedAccount && IsAccountAccessBlocked(blockedAccount.Code)) settingsMessage = OperationFailureMessage(error);
                 RecordDiagnostic($"Sync did not complete ({error.GetType().Name}); pending records were preserved.");
             });
         } finally {
@@ -1577,7 +1580,7 @@ public sealed partial class Plugin : IDalamudPlugin {
     private void OnLogout(int type, int code) { logoutPending = true; huntProgress.Invalidate(endTerritorySession: true); ResetSessionContext(); }
     private void ResetSessionContext() {
         if (disposed) return;
-        requestLifetime.Invalidate(); ClearTransientState(); ClearRetainerServerAcceptance();
+        requestLifetime.Invalidate(); ClearTransientState(); ClearRetainerServerAcceptance(); ClearCharacterFailure();
         permissionAuthority.Bind("", ""); permissionTransitions.Clear(); permissionFreshFrom.Clear();
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         nativeVersionReported = false;

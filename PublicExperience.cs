@@ -11,13 +11,21 @@ internal sealed record PublicHealth(string Connection, string Character, string 
     private static string SafeVersion(string v) => Regex.IsMatch(v,@"^\d{1,8}(?:\.\d{1,8}){2,4}$") ? v : "unavailable";
     private static string SafeStatus(string s) => s is "Connected" or "Not connected" or "Connecting" or "Authorization expired or revoked"
         or "Account unavailable" or "Ready" or "Off on Gillions" or "Waiting for supported context" or "Temporarily unavailable" or "Gillions unavailable" or "Update required"
-        or "Off" or "Not available on Gillions" or "Game version not supported yet" ? s : "Temporarily unavailable";
+        or "Off" or "Not available on Gillions" or "Game version not supported yet" or CharacterNotLinked or OtherCharacter or ReconnectRequired or Refused ? s : "Temporarily unavailable";
+    internal const string CharacterNotLinked = "Character not linked on Gillions";
+    internal const string OtherCharacter = "Paired to a different character";
+    internal const string ReconnectRequired = "Reconnect required";
+    internal const string Refused = "Refused by Gillions";
     internal string SupportSummary() => $"Gillions Game Sync {SafeVersion(Version)}\nChannel: {(Channel is "Testing" or "Public" ? Channel : "unavailable")}\nConnection: {SafeStatus(Connection)}\nGame: {SafeVersion(GameVersion)}\nHunts: {SafeStatus(Hunts)}\nParty Finder: {SafeStatus(PartyFinder)}\nFATEs: {SafeStatus(Fates)}\nMarket: {SafeStatus(Market)}\nLast successful sync: {LastSync?.ToString("O") ?? "Not yet"}";
     internal static string ConnectionState(bool paired, bool pairing, string code) => pairing ? "Connecting"
         : code is "DEVICE_INVALID" or "DEVICE_REVOKED" or "TOKEN_INVALID" ? "Authorization expired or revoked"
         : code is "UNSUPPORTED_CLIENT" or "VERSION_UNSUPPORTED" or "CLIENT_VERSION_UNSUPPORTED" ? "Update required"
         : code is "ACCOUNT_DISABLED" or "TRIAL_EXPIRED" ? "Account unavailable"
-        : !paired ? "Not connected" : "Connected";
+        : !paired ? "Not connected"
+        : code == SiteRefusalPolicy.CharacterNotLinked ? CharacterNotLinked
+        : code == SiteRefusalPolicy.CharacterMismatch ? OtherCharacter
+        : code == SiteRefusalPolicy.ProductMismatch ? ReconnectRequired
+        : code == SiteRefusalPolicy.Rejected ? Refused : "Connected";
     // An unqualified local game/SDK is not a client update; a Site that has not
     // admitted this source is not a local version mismatch.
     internal const string UnsupportedGame = "Game version not supported yet";

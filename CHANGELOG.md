@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.0.92 (Testing) — Gillions refusals named, character notices
+
+- A refusal from Gillions is never shown as "Gillions unavailable". The
+  connection now says:
+  - **Character not linked on Gillions** — the character you're playing isn't
+    on your Gillions account;
+  - **Paired to a different character** — the device was paired while another
+    character was active;
+  - **Reconnect required** — the device was paired for a different Game Sync
+    product;
+  - **Refused by Gillions** — any other refusal.
+
+  "Gillions unavailable" now means only that Gillions couldn't be reached, was
+  rate limiting, or had a server error.
+- A one-time in-game chat notice explains how to fix the first two: add the
+  character in Gillions Preferences (for example from the Lodestone), or pair
+  again while playing that character.
+- A successful upload no longer hides a refused presence check, and the
+  reverse. The refusal code (never the Site's text) is kept in local diagnostics.
+- Finishing a reconnect started from Settings returns to Settings, instead of
+  opening a second Gillions window.
+
 ## 0.0.91 (Testing) — regression audit and accurate status
 
 Includes the native observation integrity changes below.

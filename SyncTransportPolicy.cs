@@ -53,17 +53,23 @@ public static class SyncResponsePolicy {
     public static async Task EnsureSuccessfulAsync(HttpResponseMessage response, CancellationToken cancellation = default) {
         if (response.IsSuccessStatusCode) return;
         var code = "";
+        var detail = "";
         try {
             using var document = JsonDocument.Parse(await SyncResponsePolicy.ReadAsync(response.Content, cancellation));
             if (document.RootElement.ValueKind == JsonValueKind.Object
                 && document.RootElement.TryGetProperty("code", out var value) && value.ValueKind == JsonValueKind.String)
                 code = value.GetString() ?? "";
+            if (document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("error", out var text) && text.ValueKind == JsonValueKind.String)
+                detail = text.GetString() ?? "";
         } catch (Exception error) when (error is JsonException or InvalidOperationException) { }
+        // The Site's text only classifies a refusal; it is never displayed or logged.
+        code = SiteRefusalPolicy.Classify(code, detail);
         if (code == "TRIAL_EXPIRED") throw new GillionsSyncRejectedException(code, "Your Gillions trial has ended.");
         if (code == "ACCOUNT_DISABLED") throw new GillionsSyncRejectedException(code, "This Gillions account is disabled.");
-        // Authorization and client-version refusals are not an unreachable Gillions.
-        if (code is "DEVICE_INVALID" or "DEVICE_REVOKED" or "TOKEN_INVALID" or "UNSUPPORTED_CLIENT" or "VERSION_UNSUPPORTED" or "CLIENT_VERSION_UNSUPPORTED"
-            && (int)response.StatusCode is >= 400 and < 500)
+        // A refusal is not an unreachable Gillions. Only a timeout, rate limit or
+        // server error stays untyped (temporarily unavailable, retried).
+        if (SiteRefusalPolicy.IsRefusal((int)response.StatusCode))
             throw new GillionsSyncRejectedException(code, $"Gillions rejected the request (HTTP {(int)response.StatusCode}).");
         throw new InvalidOperationException($"Gillions rejected the request (HTTP {(int)response.StatusCode}).");
     }
@@ -120,6 +126,27 @@ public static class GilLedgerPolicy {
         pending.RemoveAll(sale => ids.Contains(sale.SaleId));
         return exact.ToList();
     }
+}
+
+public static class SiteRefusalPolicy {
+    public const string CharacterNotLinked = "CHARACTER_NOT_LINKED";
+    public const string ProductMismatch = "CLIENT_PRODUCT_MISMATCH";
+    public const string CharacterMismatch = "CHARACTER_MISMATCH";
+    public const string Rejected = "REJECTED";
+    // Exact strings of the Sites deployed before these codes existed (Site
+    // game-sync.mjs resolveSnapshotCharacter, retainer-ventures.mjs presence).
+    private const string CharacterNotLinkedText = "This in-game character is not linked to your Gillions account.";
+    private const string ProductMismatchText = "Retainer presence client identity does not match the authenticated product.";
+    private static readonly Regex Code = new("^[A-Z][A-Z0-9_]{0,63}$", RegexOptions.CultureInvariant);
+    // 409 is a per-resource state conflict (e.g. Retainer upload not enabled),
+    // retried rather than reported as a refused device.
+    public static bool IsRefusal(int status) => status is >= 400 and < 500 and not 408 and not 409 and not 429;
+    public static string Classify(string code, string detail) =>
+        code is CharacterNotLinked or "character_not_found" || detail.StartsWith(CharacterNotLinkedText, StringComparison.Ordinal) ? CharacterNotLinked
+        // Presence (and Retainer uploads) are bound to the character the device was paired with.
+        : code is "character_mismatch" or CharacterMismatch ? CharacterMismatch
+        : code == ProductMismatch || detail == ProductMismatchText ? ProductMismatch
+        : Code.IsMatch(code) ? code : Rejected;
 }
 
 public sealed class GillionsSyncRejectedException : InvalidOperationException {
