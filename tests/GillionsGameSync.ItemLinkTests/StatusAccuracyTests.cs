@@ -80,8 +80,8 @@ internal static class StatusAccuracyTests {
         foreach (var odd in new[] { "", "invalid_retainer_request", "BAD CODE", "X<script>", new string('A', 80) })
             Check(SiteRefusalPolicy.Classify(odd, "anything") == SiteRefusalPolicy.Rejected, "unrecognized code is a generic refusal: " + odd);
         Check(SiteRefusalPolicy.IsRefusal(400) && SiteRefusalPolicy.IsRefusal(403) && SiteRefusalPolicy.IsRefusal(404)
-            && !SiteRefusalPolicy.IsRefusal(408) && !SiteRefusalPolicy.IsRefusal(429) && !SiteRefusalPolicy.IsRefusal(500) && !SiteRefusalPolicy.IsRefusal(503),
-            "timeouts, rate limits and server errors stay retryable");
+            && !SiteRefusalPolicy.IsRefusal(408) && !SiteRefusalPolicy.IsRefusal(409) && !SiteRefusalPolicy.IsRefusal(429) && !SiteRefusalPolicy.IsRefusal(500) && !SiteRefusalPolicy.IsRefusal(503),
+            "timeouts, per-resource conflicts, rate limits and server errors stay retryable");
         string Body(string code, string error) => System.Text.Json.JsonSerializer.Serialize(new { ok = false, code, error });
         foreach (var (status, body, expected) in new[] {
             (HttpStatusCode.BadRequest, Body("INVALID_GAME_SYNC_REQUEST", notLinkedText), SiteRefusalPolicy.CharacterNotLinked),

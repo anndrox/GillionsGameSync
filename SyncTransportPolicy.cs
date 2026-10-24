@@ -138,10 +138,12 @@ public static class SiteRefusalPolicy {
     private const string CharacterNotLinkedText = "This in-game character is not linked to your Gillions account.";
     private const string ProductMismatchText = "Retainer presence client identity does not match the authenticated product.";
     private static readonly Regex Code = new("^[A-Z][A-Z0-9_]{0,63}$", RegexOptions.CultureInvariant);
-    public static bool IsRefusal(int status) => status is >= 400 and < 500 and not 408 and not 429;
+    // 409 is a per-resource state conflict (e.g. Retainer upload not enabled),
+    // retried rather than reported as a refused device.
+    public static bool IsRefusal(int status) => status is >= 400 and < 500 and not 408 and not 409 and not 429;
     public static string Classify(string code, string detail) =>
         code is CharacterNotLinked or "character_not_found" || detail.StartsWith(CharacterNotLinkedText, StringComparison.Ordinal) ? CharacterNotLinked
-        // Presence is bound to the character the device was paired with.
+        // Presence (and Retainer uploads) are bound to the character the device was paired with.
         : code is "character_mismatch" or CharacterMismatch ? CharacterMismatch
         : code == ProductMismatch || detail == ProductMismatchText ? ProductMismatch
         : Code.IsMatch(code) ? code : Rejected;

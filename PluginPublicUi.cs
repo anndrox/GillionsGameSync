@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Plugin.Services;
@@ -15,14 +16,22 @@ public sealed partial class Plugin {
     private string publicConnectionFailure = "";
     private bool supportCopyAcknowledged;
     private void ObserveConnectionFailure(Exception error) {
-        publicConnectionFailure = error is GillionsSyncRejectedException r ? r.Code switch {
+        var observed = error is GillionsSyncRejectedException r ? r.Code switch {
             "DEVICE_INVALID" or "DEVICE_REVOKED" or "TOKEN_INVALID" => "DEVICE_INVALID",
             "UNSUPPORTED_CLIENT" or "VERSION_UNSUPPORTED" or "CLIENT_VERSION_UNSUPPORTED" => "VERSION_UNSUPPORTED",
             "ACCOUNT_DISABLED" or "TRIAL_EXPIRED" or SiteRefusalPolicy.CharacterNotLinked or SiteRefusalPolicy.ProductMismatch
                 or SiteRefusalPolicy.CharacterMismatch => r.Code,
             _ => SiteRefusalPolicy.Rejected
         } : "UNAVAILABLE";
-        if (publicConnectionFailure is SiteRefusalPolicy.CharacterNotLinked or SiteRefusalPolicy.CharacterMismatch) NotifyCharacter(publicConnectionFailure);
+        // An unlinked character can't be fixed by pairing again, so for the same
+        // character "not linked" wins over the presence check's "paired to another".
+        if (observed == SiteRefusalPolicy.CharacterMismatch && publicConnectionFailure == SiteRefusalPolicy.CharacterNotLinked) return;
+        publicConnectionFailure = observed;
+        if (observed is SiteRefusalPolicy.CharacterNotLinked or SiteRefusalPolicy.CharacterMismatch) NotifyCharacter(observed);
+    }
+    // Character refusals belong to the character that caused them.
+    private void ClearCharacterFailure() {
+        if (publicConnectionFailure is SiteRefusalPolicy.CharacterNotLinked or SiteRefusalPolicy.CharacterMismatch) publicConnectionFailure = "";
     }
     // A sync proves reachability and the character link, but not the device's
     // paired character or product, which only presence checks; and the reverse.
@@ -30,12 +39,10 @@ public sealed partial class Plugin {
         if (presence ? publicConnectionFailure != SiteRefusalPolicy.CharacterNotLinked
             : publicConnectionFailure is not (SiteRefusalPolicy.CharacterMismatch or SiteRefusalPolicy.ProductMismatch)) publicConnectionFailure = "";
     }
-    private string characterNoticeShown = "";
+    private readonly HashSet<string> characterNoticesShown = new(StringComparer.Ordinal);
     // Once per character and cause per session: the status row alone is easy to miss.
     private void NotifyCharacter(string cause) {
-        var key = activeRetainerCharacterContentId + ":" + cause;
-        if (characterNoticeShown == key) return;
-        characterNoticeShown = key;
+        if (!characterNoticesShown.Add(activeRetainerCharacterContentId + ":" + cause)) return;
         chatGui.Print(cause == SiteRefusalPolicy.CharacterMismatch
             ? "This character isn't the one this device was paired with, so Gillions features are unavailable. Pair again while playing this character."
             : (IsTesting ? "This character is not linked to your Gillions TEST account, so it can't sync."

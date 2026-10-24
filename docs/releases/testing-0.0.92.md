@@ -24,13 +24,15 @@ Neither was an outage, and the old label hid the fix from the player.
 | character not linked (`CHARACTER_NOT_LINKED`, `character_not_found`, or the deployed exact message) | Character not linked on Gillions | Once per character and session: add it in Preferences, then Sync now |
 | `character_mismatch` | Paired to a different character (with Reconnect) | Once per character and session: pair again while playing it |
 | product identity mismatch (`CLIENT_PRODUCT_MISMATCH` or the deployed exact message) | Reconnect required (with Reconnect) | — |
-| any other 4xx except 408/429 | Refused by Gillions | — |
-| no response, 408, 429, 5xx | Gillions unavailable (retried) | — |
+| any other 4xx except 408/409/429 | Refused by Gillions | — |
+| no response, 408, 409 (a single resource's state conflict), 429, 5xx | Gillions unavailable (retried) | — |
 
 - Site text is used only to classify a refusal. It is never displayed or logged;
   local diagnostics record only the bounded refusal code.
 - A successful upload no longer clears a presence-only refusal, and a successful
-  presence no longer clears "character not linked".
+  presence no longer clears "character not linked". Character refusals are
+  cleared on a character change or login, and "not linked" wins over "paired to
+  a different character" for the same character, because re-pairing cannot fix it.
 - Hydration is not retried after a refusal, because it would repeat.
 - **Windows:** finishing a reconnect started from Settings returns to Settings. Only
   first-run onboarding opens the main window, so Reconnect → Finish no longer
