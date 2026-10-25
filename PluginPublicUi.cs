@@ -43,11 +43,13 @@ public sealed partial class Plugin {
     // Once per character and cause per session: the status row alone is easy to miss.
     private void NotifyCharacter(string cause) {
         if (!characterNoticesShown.Add(activeRetainerCharacterContentId + ":" + cause)) return;
+        // Name the character (local chat only) so the player knows which one to link.
+        var named = activeOwnedState is { CharacterName.Length: > 0 } c ? $"{c.CharacterName} ({c.CharacterWorld})" : "This character";
         chatGui.Print(cause == SiteRefusalPolicy.CharacterMismatch
-            ? "This character isn't the one this device was paired with, so Gillions features are unavailable. Pair again while playing this character."
-            : (IsTesting ? "This character is not linked to your Gillions TEST account, so it can't sync."
-                : "This character is not linked to your Gillions account, so it can't sync.")
-              + " Add it on the Gillions website in Preferences (for example from the Lodestone), then use Sync now.", "Gillions");
+            ? $"{named} isn't the character this device was paired with, so Gillions features are unavailable. Pair again while playing this character."
+            : (IsTesting ? $"{named} is not linked to your Gillions TEST account, so it can't sync."
+                : $"{named} is not linked to your Gillions account, so it can't sync.")
+              + " Link this character on Gillions (Preferences, for example from the Lodestone) or play a linked one. Game Sync retries every few minutes, or use Sync now.", "Gillions");
     }
     private volatile PublicHealth publicHealth = new("Not connected","Character unavailable","Waiting for supported context",
         "Waiting for supported context","Waiting for supported context","Waiting for supported context",null,"Public","","unavailable");

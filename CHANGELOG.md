@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased: refused-character back-off
+
+- When Gillions refuses uploads because the character you are playing is not
+  linked to your account, Game Sync now waits 5 minutes before uploading again
+  instead of retrying inventory every 10 seconds (observed on Stable 1.0.31.6:
+  141 refused uploads in about 17 minutes; now at most one every 5 minutes).
+  Switching character or logging in again retries straight away; after you
+  link the character on Gillions, the next attempt (within 5 minutes, or
+  Sync now) succeeds. Nothing is lost: changes keep being observed locally and
+  upload once the character is linked.
+- The one-time chat notice now names the character and says to link it on
+  Gillions or play a linked one.
+
 ## Release engineering (no release)
 
 - Clean Stable builds are byte-deterministic: the SDK's SourceLink no longer
