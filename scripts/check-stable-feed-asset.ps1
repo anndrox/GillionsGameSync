@@ -17,8 +17,8 @@ foreach ($field in @('DownloadLinkInstall', 'DownloadLinkUpdate', 'DownloadLinkT
 }
 $checksumPath = Join-Path $root "data/releases/v$version.sha256"
 if (-not (Test-Path -LiteralPath $checksumPath)) { throw "The recorded checksum data/releases/v$version.sha256 is missing." }
-$recorded = ([IO.File]::ReadAllText($checksumPath).Split(' ', [StringSplitOptions]::RemoveEmptyEntries)[0]).ToLowerInvariant()
-if ($recorded -notmatch '^[0-9a-f]{64}$') { throw "The recorded checksum for v$version is malformed." }
+$recorded = (@([IO.File]::ReadAllText($checksumPath).Trim() -split '\s+')[0]).ToLowerInvariant()
+if ($recorded -notmatch '\A[0-9a-f]{64}\z') { throw "The recorded checksum for v$version is malformed." }
 $temp = Join-Path ([IO.Path]::GetTempPath()) ("gillions-feed-asset-" + [Guid]::NewGuid().ToString('N') + '.zip')
 try {
   try { Invoke-WebRequest -UseBasicParsing -Uri $asset -OutFile $temp -MaximumRetryCount 3 -RetryIntervalSec 5 }
