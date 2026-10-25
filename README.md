@@ -1,5 +1,11 @@
 # Gillions Game Sync
 
+## Stable 1.0.31.6 candidate
+
+Stable 1.0.31.6 brings everything proven in Testing 0.0.90 to 0.0.94 to the
+Stable plugin. Updating needs no re-pairing. It is published once Gillions
+Production accepts it. See [Stable 1.0.31.6](docs/releases/v1.0.31.6.md).
+
 ## Testing 0.0.94 (published)
 
 Testing 0.0.94 ([release](https://github.com/anndrox/GillionsGameSync-Testing/releases/tag/v0.0.94-testing)) groups inventory uploads during heavy gathering or crafting: at

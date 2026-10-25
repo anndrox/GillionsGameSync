@@ -39,6 +39,17 @@ assert (r/'PartyFinderContributionCore.cs').read_text().find('AllowAutoRedirect 
 pack=(r/'scripts/package.ps1').read_text()
 assert "if ($Channel -eq 'testing') { $allowedRepositories += '/anndrox/GillionsGameSync-Testing' }" in pack
 assert "$PublicBaseUrl -cne 'https://test.gillions.app'" in pack
-for name in ['data/GillionsGameSync.json','data/GillionsGameSyncTesting.json']:
-    assert (r/name).read_bytes().replace(b'\r\n',b'\n')==subprocess.check_output(['git','show',public+':'+name],cwd=r).replace(b'\r\n',b'\n')
-print('Testing distribution source PASS: accepted UI unchanged; only inspected Hunt source qualification differs; pairing/permit/build/redirect fences; Stable and historical Testing feeds unchanged.')
+# The historical Testing feed stays frozen. The Stable feed advances only with an
+# owner-authorized Stable release: it must stay a Stable-only entry pointing at its
+# own immutable GitHub release asset with a recorded checksum.
+name='data/GillionsGameSyncTesting.json'
+assert (r/name).read_bytes().replace(b'\r\n',b'\n')==subprocess.check_output(['git','show',public+':'+name],cwd=r).replace(b'\r\n',b'\n')
+import json
+stable=json.loads((r/'data/GillionsGameSync.json').read_text(encoding='utf-8'))
+assert len(stable)==1 and stable[0]['InternalName']=='GillionsGameSync' and stable[0]['RepoUrl']=='https://github.com/anndrox/GillionsGameSync'
+version=stable[0]['AssemblyVersion']
+asset=f'https://github.com/anndrox/GillionsGameSync/releases/download/v{version}/GillionsGameSync-{version}.zip'
+assert all(stable[0][field]==asset for field in ['DownloadLink','DownloadLinkInstall','DownloadLinkUpdate','DownloadLinkTesting'])
+assert 'TestingAssemblyVersion' not in stable[0] and 'TestingDalamudApiLevel' not in stable[0]
+assert (r/f'data/releases/v{version}.sha256').read_text().strip().endswith(f'GillionsGameSync-{version}.zip')
+print('Testing distribution source PASS: accepted UI unchanged; only inspected Hunt source qualification differs; pairing/permit/build/redirect fences; historical Testing feed unchanged; Stable feed is a Stable-only immutable release entry.')
