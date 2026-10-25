@@ -38,8 +38,8 @@ owns this file. Site reads it so that its own pages can show a notice such as
   version in the current release lines that understands all eight permission
   keys:
   - Stable: 1.0.31.2.
-  - Testing: 0.0.88, the oldest release in the current Testing distribution
-    repository.
+  - Testing: 0.0.87 (`v0.0.87-testing`, published 2026-10-07), the first
+    published Testing release with all eight keys. 0.0.86 predates them.
 - Known older-version defect: before Testing 0.0.91 and Stable 1.0.31.6, turning
   on Party Finder links could also block item links. The floor stays at 1.0.31.2
   because item links still work there with Party Finder links off.
@@ -54,5 +54,7 @@ updates the file, through review and CI, whenever:
 
 `tests/site-scope-minimums-contract-test.py` (run by `scripts/verify.ps1`) checks
 the shape and the scope keys. It requires every game-build scope to be `null`
-unless its native family is qualified for `gameVersion`. It also requires every
+exactly when its native family is not qualified for `gameVersion`, and the
+Testing values to belong to the Testing project version and the Stable values to
+the Stable one. It also requires every
 version to be no newer than the current project versions.

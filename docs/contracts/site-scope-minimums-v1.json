@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "gameVersion": "2026.10.16.0000.0000",
   "scopes": {
-    "itemLinks": { "stable": "1.0.31.2", "testing": "0.0.88.0" },
-    "partyFinderLinks": { "stable": "1.0.31.2", "testing": "0.0.88.0" },
-    "automaticHuntMaps": { "stable": "1.0.31.2", "testing": "0.0.88.0" },
+    "itemLinks": { "stable": "1.0.31.2", "testing": "0.0.87.0" },
+    "partyFinderLinks": { "stable": "1.0.31.2", "testing": "0.0.87.0" },
+    "automaticHuntMaps": { "stable": "1.0.31.2", "testing": "0.0.87.0" },
     "personalHunts": { "stable": "1.0.31.6", "testing": "0.0.90.0" },
     "personalSubmarines": { "stable": "1.0.31.6", "testing": "0.0.90.0" },
     "huntRoutingLocation": { "stable": "1.0.31.6", "testing": "0.0.90.0" },
-    "marketContribution": { "stable": "1.0.31.2", "testing": "0.0.88.0" },
-    "partyFinderContribution": { "stable": "1.0.31.2", "testing": "0.0.88.0" },
+    "marketContribution": { "stable": "1.0.31.2", "testing": "0.0.87.0" },
+    "partyFinderContribution": { "stable": "1.0.31.2", "testing": "0.0.87.0" },
     "fate": { "stable": "1.0.31.6", "testing": "0.0.90.0" }
   }
 }
