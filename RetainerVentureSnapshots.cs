@@ -485,7 +485,7 @@ public static class RetainerPresencePolicy {
             RetainerCapabilities.Client, new(false, false, false, null, null, null, null, [], false, null, null, [], []), [],
             localPreferences, GameVersionPattern.IsMatch(gameVersion ?? "") ? gameVersion : null);
     private static readonly System.Text.RegularExpressions.Regex GameVersionPattern =
-        new(@"\A\d{4}\.\d{2}\.\d{2}\.\d{4}\.\d{4}\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        new(@"\A[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]{4}\.[0-9]{4}\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     public const int NormalIntervalSeconds = 30;
     public const int OnlineWindowSeconds = 90;

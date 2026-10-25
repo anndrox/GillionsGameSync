@@ -472,17 +472,25 @@ public sealed partial class Plugin : IDalamudPlugin {
         }
     }
 
-    // The local values PermissionEnabled applies under a Site "legacy" decision.
-    private PresenceLocalPreferences? LocalPreferences() =>
+    // The local values PermissionEnabled applies under a Site "legacy" decision. A
+    // key that was explicit earlier in this binding no longer falls back (Allows),
+    // so it reports false rather than a local value the plugin is not applying.
+    private PresenceLocalPreferences? LocalPreferences() {
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
-        new(configuration.ContributeObservedMarketData, configuration.EnableGillionsPartyFinderContributions,
-            configuration.SyncPersonalHunts && configuration.HuntBills.LocalRetentionEnabled,
-            configuration.SyncPersonalSubmarines && configuration.SubmarineVoyages.LocalRetentionEnabled,
-            configuration.ShareHuntRoutingLocation, configuration.EnableItemLinkRequests,
-            configuration.EnableItemLinkRequests && configuration.EnablePartyFinderLinkRequests, configuration.AutomaticallyShowHuntMap);
+        bool Local(string key, bool historical) => historical && !permissionAuthority.ExplicitSeen(key);
+        return new(
+            MarketContribution: Local("marketContribution", configuration.ContributeObservedMarketData),
+            PartyFinderContribution: Local("partyFinderContribution", configuration.EnableGillionsPartyFinderContributions),
+            PersonalHunts: Local("personalHunts", configuration.SyncPersonalHunts && configuration.HuntBills.LocalRetentionEnabled),
+            PersonalSubmarines: Local("personalSubmarines", configuration.SyncPersonalSubmarines && configuration.SubmarineVoyages.LocalRetentionEnabled),
+            HuntRoutingLocation: Local("huntRoutingLocation", configuration.ShareHuntRoutingLocation),
+            ItemLinks: Local("itemLinks", configuration.EnableItemLinkRequests),
+            PartyFinderLinks: Local("partyFinderLinks", configuration.EnableItemLinkRequests && configuration.EnablePartyFinderLinkRequests),
+            AutomaticHuntMaps: Local("automaticHuntMaps", configuration.AutomaticallyShowHuntMap));
 #else
-        null;
+        return null;
 #endif
+    }
 
     private void ClearRetainerServerAcceptance() {
         retainerUploadServerSupported = false;
