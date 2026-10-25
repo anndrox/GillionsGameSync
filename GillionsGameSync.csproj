@@ -30,6 +30,12 @@
     <!-- Keep useful file/line diagnostics without embedding the developer's
          local workspace path in distributed assemblies. -->
     <PathMap>$(MSBuildProjectDirectory)=/_/GillionsGameSync</PathMap>
+    <!-- The SDK's built-in SourceLink embeds the git commit and the local
+         checkout path in the embedded PDB, so identical code built from the
+         reviewed branch and from its merge commit differed byte for byte (and
+         leaked the workspace path). The release record pins the commit instead. -->
+    <EnableSourceLink>false</EnableSourceLink>
+    <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="assets/GillionsGameSync-icon-v4.png" LogicalName="GillionsGameSync.Branding.png" />

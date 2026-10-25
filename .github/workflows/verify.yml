@@ -44,6 +44,11 @@ jobs:
         shell: pwsh
         run: ./scripts/verify.ps1
 
+      - name: Check the Stable feed points at its published asset
+        shell: pwsh
+        # Blocks merging a Stable feed change before its GitHub Release asset exists.
+        run: ./scripts/check-stable-feed-asset.ps1
+
       - name: Recheck recorded native layouts of earlier qualified runtimes
         shell: pwsh
         run: |
