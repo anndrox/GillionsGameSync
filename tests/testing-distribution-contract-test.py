@@ -39,6 +39,29 @@ assert (r/'PartyFinderContributionCore.cs').read_text().find('AllowAutoRedirect 
 pack=(r/'scripts/package.ps1').read_text()
 assert "if ($Channel -eq 'testing') { $allowedRepositories += '/anndrox/GillionsGameSync-Testing' }" in pack
 assert "$PublicBaseUrl -cne 'https://test.gillions.app'" in pack
-for name in ['data/GillionsGameSync.json','data/GillionsGameSyncTesting.json']:
-    assert (r/name).read_bytes().replace(b'\r\n',b'\n')==subprocess.check_output(['git','show',public+':'+name],cwd=r).replace(b'\r\n',b'\n')
-print('Testing distribution source PASS: accepted UI unchanged; only inspected Hunt source qualification differs; pairing/permit/build/redirect fences; Stable and historical Testing feeds unchanged.')
+# The historical Testing feed stays frozen. The Stable feed advances only with an
+# owner-authorized Stable release: it must stay a Stable-only entry pointing at its
+# own immutable GitHub release asset with a recorded checksum.
+name='data/GillionsGameSyncTesting.json'
+assert (r/name).read_bytes().replace(b'\r\n',b'\n')==subprocess.check_output(['git','show',public+':'+name],cwd=r).replace(b'\r\n',b'\n')
+import json
+stable=json.loads((r/'data/GillionsGameSync.json').read_text(encoding='utf-8'))
+assert len(stable)==1 and stable[0]['InternalName']=='GillionsGameSync' and stable[0]['RepoUrl']=='https://github.com/anndrox/GillionsGameSync'
+version=stable[0]['AssemblyVersion']
+import re
+project=(r/'GillionsGameSync.csproj').read_text(encoding='utf-8')
+assert re.search(r'<Version>(\d+\.\d+\.\d+\.\d+)</Version>',project).group(1)==version,'Stable feed version must equal the Public project version'
+asset=f'https://github.com/anndrox/GillionsGameSync/releases/download/v{version}/GillionsGameSync-{version}.zip'
+assert all(stable[0][field]==asset for field in ['DownloadLink','DownloadLinkInstall','DownloadLinkUpdate','DownloadLinkTesting'])
+# Same key set and fixed identity values as the published 1.0.31.2 Stable entry (bbbafcc).
+assert sorted(stable[0])==['AcceptsFeedback','ApplicableVersion','AssemblyVersion','Author','CanUnloadAsync','DalamudApiLevel','Description',
+    'DownloadCount','DownloadLink','DownloadLinkInstall','DownloadLinkTesting','DownloadLinkUpdate','IconUrl','InternalName','LastUpdate',
+    'LoadPriority','LoadRequiredState','LoadSync','Name','Punchline','RepoUrl','Tags']
+assert {k:stable[0][k] for k in ['Author','Name','Description','Punchline','IconUrl','DalamudApiLevel','Tags','ApplicableVersion']}=={
+    'Author':'Gillions','Name':'Gillions Game Sync',
+    'Description':'Opt-in character synchronization for Gillions with read-only Retainer observations. Never automates gameplay or sends Square Enix credentials.',
+    'Punchline':'Opt-in account sync for your Gillions profile.',
+    'IconUrl':'https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png',
+    'DalamudApiLevel':15,'Tags':['inventory','collection','utility'],'ApplicableVersion':'any'}
+assert re.fullmatch(r'[0-9a-f]{64}  '+re.escape(f'GillionsGameSync-{version}.zip'),(r/f'data/releases/v{version}.sha256').read_text().strip())
+print('Testing distribution source PASS: accepted UI unchanged; only inspected Hunt source qualification differs; pairing/permit/build/redirect fences; historical Testing feed unchanged; Stable feed is a Stable-only immutable release entry.')

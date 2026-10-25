@@ -10,6 +10,22 @@
   retries straight away. A brief presence failure does not. Timeouts and
   redirects keep the usual short retry.
 - Travel stays off unless separately consented on Gillions. Nothing else changes.
+## Stable 1.0.31.6 — current game build, data protection and clear status
+
+Carries everything proven in Testing 0.0.90 to 0.0.94 to the Stable product
+(GillionsGameSync, https://gillions.app):
+- 2026.10.16 compatibility, so Hunts no longer show "Update required";
+- PR #11 data protection;
+- accurate status and named Gillions refusals;
+- reliability fixes;
+- quieter Retainer uploads;
+- grouped inventory uploads.
+
+Updating from 1.0.31.2 keeps the pairing, settings and consent: no re-pairing and
+no permission prompt. This was checked with the real serializer.
+
+Published only after Gillions Production admits 1.0.31.6. See
+[docs/releases/v1.0.31.6.md](docs/releases/v1.0.31.6.md).
 
 ## 0.0.94 (Testing) — inventory burst coalescing
 
