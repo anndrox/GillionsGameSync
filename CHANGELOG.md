@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased: settings and game build in the check-in
+
+- The regular check-in to Gillions now includes the game build and the
+  plugin's own on/off value for each of its eight Gillions-controlled settings.
+  The website can then show "On (from plugin)" for a setting you never chose on
+  the website, and clear game-build notices automatically.
+- Gillions never treats these values as your website choice or consent, and no
+  setting or default changes. Nothing extra is read from the game.
+
 ## 0.0.96 (Testing): refused-character back-off
 
 - When Gillions refuses uploads because the character you are playing is not

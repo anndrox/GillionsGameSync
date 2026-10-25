@@ -29,6 +29,7 @@ internal sealed class PermissionAuthority {
     }
     internal void Invalidate() { valid = false; expiresClock = 0; }
     internal bool Fresh(long clock) => valid && clock < expiresClock;
+    internal bool ExplicitSeen(string key) => explicitSeen.Contains(key);
     internal bool Explicit(string key, long clock) => Fresh(clock) && decisions.TryGetValue(key, out var p) && p.State == "explicit";
     internal bool Allows(string key, bool historical, long clock) => Fresh(clock) && decisions.TryGetValue(key, out var p)
         && (p.State == "explicit" ? p.Enabled == true : p.State == "legacy" && !explicitSeen.Contains(key) && historical);

@@ -33,6 +33,20 @@ public sealed record AutoRetainerPresenceDocument(
     [property: JsonPropertyName("supportedCompletionActions")] string[] SupportedCompletionActions,
     [property: JsonPropertyName("capabilities")] string[] Capabilities);
 
+// The plugin's own switch value for each Site permission key, as it applies while
+// the member has never chosen on the website (Site "legacy"). Site displays these
+// only in that state; they are never a website decision, consent or grant.
+// Owner-approved 2026-10-25. Nothing here is read from the game.
+public sealed record PresenceLocalPreferences(
+    [property: JsonPropertyName("marketContribution")] bool MarketContribution,
+    [property: JsonPropertyName("partyFinderContribution")] bool PartyFinderContribution,
+    [property: JsonPropertyName("personalHunts")] bool PersonalHunts,
+    [property: JsonPropertyName("personalSubmarines")] bool PersonalSubmarines,
+    [property: JsonPropertyName("huntRoutingLocation")] bool HuntRoutingLocation,
+    [property: JsonPropertyName("itemLinks")] bool ItemLinks,
+    [property: JsonPropertyName("partyFinderLinks")] bool PartyFinderLinks,
+    [property: JsonPropertyName("automaticHuntMaps")] bool AutomaticHuntMaps);
+
 public sealed record RetainerPresenceDocument(
     [property: JsonPropertyName("schemaVersion")] int SchemaVersion,
     [property: JsonPropertyName("character")] RetainerPresenceCharacter Character,
@@ -43,7 +57,10 @@ public sealed record RetainerPresenceDocument(
     [property: JsonPropertyName("contractVersion")] int ContractVersion,
     [property: JsonPropertyName("capabilities")] string[] Capabilities,
     [property: JsonPropertyName("autoRetainer")] AutoRetainerPresenceDocument AutoRetainer,
-    [property: JsonPropertyName("appliedPlans")] object[] AppliedPlans);
+    [property: JsonPropertyName("appliedPlans")] object[] AppliedPlans,
+    // Optional, ignored by Sites that predate them (Site PR #137); omitted when unknown.
+    [property: JsonPropertyName("localPreferences"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] PresenceLocalPreferences? LocalPreferences = null,
+    [property: JsonPropertyName("gameVersion"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? GameVersion = null);
 
 public static class RetainerPresenceResponsePolicy {
     public static bool TryParse(

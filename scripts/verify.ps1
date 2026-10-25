@@ -29,6 +29,8 @@ python (Join-Path $root 'tests/character-refusal-contract-test.py')
 if ($LASTEXITCODE -ne 0) { throw 'Character refusal back-off wiring failed.' }
 python (Join-Path $root 'tests/site-scope-minimums-contract-test.py')
 if ($LASTEXITCODE -ne 0) { throw 'Site scope minimums table failed.' }
+python (Join-Path $root 'tests/presence-local-preferences-contract-test.py')
+if ($LASTEXITCODE -ne 0) { throw 'Presence local preferences failed.' }
 
 dotnet run --project (Join-Path $root 'tests/GillionsGameSync.HuntMapTests/GillionsGameSync.HuntMapTests.csproj') -c Release
 if ($LASTEXITCODE -ne 0) { throw 'Hunt map contract/lifecycle/race fixtures failed.' }
