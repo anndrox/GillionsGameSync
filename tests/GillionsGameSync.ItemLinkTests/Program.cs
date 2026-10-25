@@ -287,6 +287,31 @@ foreach (var client in new[] { RetainerClientPolicy.Stable, RetainerClientPolicy
         && wire.RootElement.GetProperty("appliedPlans").GetArrayLength() == 0,
         "native presence must preserve the inert v1 envelope without planner claims");
 }
+// Owner-approved local switch values and game version: exactly the eight Site
+// permission keys, plain booleans, omitted entirely when not supplied, and no new capability.
+{
+    var plain = JsonSerializer.Serialize(RetainerPresencePolicy.CreateNative(new("111", "Fixture", "Test"), ventureNow, RetainerClientPolicy.Stable, "0.0.0"));
+    Assert(!plain.Contains("localPreferences", StringComparison.Ordinal) && !plain.Contains("gameVersion", StringComparison.Ordinal),
+        "presence without local preferences keeps the exact earlier wire shape");
+    var local = new PresenceLocalPreferences(true, false, false, true, false, true, false, true);
+    using var full = JsonDocument.Parse(JsonSerializer.Serialize(RetainerPresencePolicy.CreateNative(new("111", "Fixture", "Test"), ventureNow,
+        RetainerClientPolicy.Stable, "0.0.0", local, "2026.10.16.0000.0000")));
+    var prefs = full.RootElement.GetProperty("localPreferences");
+    var names = prefs.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal).ToArray();
+    Assert(names.SequenceEqual(PermissionAuthority.Keys.Order(StringComparer.Ordinal)), "local preferences name exactly the Site permission keys");
+    Assert(prefs.EnumerateObject().All(p => p.Value.ValueKind is JsonValueKind.True or JsonValueKind.False), "local preferences are plain booleans");
+    Assert(prefs.GetProperty("marketContribution").GetBoolean() && !prefs.GetProperty("partyFinderContribution").GetBoolean()
+        && prefs.GetProperty("personalSubmarines").GetBoolean() && !prefs.GetProperty("huntRoutingLocation").GetBoolean()
+        && prefs.GetProperty("itemLinks").GetBoolean() && !prefs.GetProperty("partyFinderLinks").GetBoolean()
+        && prefs.GetProperty("automaticHuntMaps").GetBoolean() && !prefs.GetProperty("personalHunts").GetBoolean(), "each value lands on its own key");
+    Assert(full.RootElement.GetProperty("gameVersion").GetString() == "2026.10.16.0000.0000", "the exact game build is reported");
+    Assert(full.RootElement.GetProperty("capabilities").EnumerateArray().Select(c => c.GetString()).SequenceEqual(RetainerCapabilities.Client),
+        "no new capability is advertised (Site rejects unknown capabilities)");
+    foreach (var bad in new[] { "unavailable", "", "2026.10.16", "2026.10.16.0000.0000\n", "2026.10.16.0000.0000 x" }) {
+        var json = JsonSerializer.Serialize(RetainerPresencePolicy.CreateNative(new("111", "Fixture", "Test"), ventureNow, RetainerClientPolicy.Stable, "0.0.0", local, bad));
+        Assert(!json.Contains("gameVersion", StringComparison.Ordinal), "a malformed game version is omitted: " + bad);
+    }
+}
 Assert(RetainerPresenceResponsePolicy.TryParse(stablePresenceResponse.Replace("\"planner\":\"supported\"", "\"planner\":\"server_disabled\""),
     RetainerClientPolicy.Stable, out var retiredUpload) && retiredUpload, "retired planner must not disable ordinary Retainer uploads");
 Assert(!RetainerPresenceResponsePolicy.TryParse("{}", RetainerClientPolicy.Stable, out var malformedUpload) && !malformedUpload,

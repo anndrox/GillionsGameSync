@@ -472,6 +472,18 @@ public sealed partial class Plugin : IDalamudPlugin {
         }
     }
 
+    // The local values PermissionEnabled applies under a Site "legacy" decision.
+    private PresenceLocalPreferences? LocalPreferences() =>
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
+        new(configuration.ContributeObservedMarketData, configuration.EnableGillionsPartyFinderContributions,
+            configuration.SyncPersonalHunts && configuration.HuntBills.LocalRetentionEnabled,
+            configuration.SyncPersonalSubmarines && configuration.SubmarineVoyages.LocalRetentionEnabled,
+            configuration.ShareHuntRoutingLocation, configuration.EnableItemLinkRequests,
+            configuration.EnableItemLinkRequests && configuration.EnablePartyFinderLinkRequests, configuration.AutomaticallyShowHuntMap);
+#else
+        null;
+#endif
+
     private void ClearRetainerServerAcceptance() {
         retainerUploadServerSupported = false;
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
@@ -483,7 +495,9 @@ public sealed partial class Plugin : IDalamudPlugin {
     private void SendCurrentRetainerPresence(ulong contentId, DateTime now, SyncRequestMode mode = SyncRequestMode.Automatic) {
         if (!HasPairedSession || presenceInFlight) return;
         var permit = CapturePermit(mode);
-        var presence = RetainerPresencePolicy.CreateNative(new(contentId.ToString(), CurrentState.CharacterName, CurrentState.CharacterWorld), now, RetainerClient, PluginVersion);
+        var presence = RetainerPresencePolicy.CreateNative(new(contentId.ToString(), CurrentState.CharacterName, CurrentState.CharacterWorld), now, RetainerClient, PluginVersion,
+            SitePermissionOrigin ? LocalPreferences() : null,
+            SitePermissionOrigin && dataManager.GameData.Repositories.TryGetValue("ffxiv", out var game) ? game.Version : null);
         ClearRetainerServerAcceptance(); presenceInFlight = true;
         _ = SendRetainerPresenceAsync(permit, presence);
     }

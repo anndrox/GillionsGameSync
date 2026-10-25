@@ -480,9 +480,12 @@ public static class RetainerAcknowledgementPolicy {
 
 public static class RetainerPresencePolicy {
     public static RetainerPresenceDocument CreateNative(RetainerPresenceCharacter character, DateTime now,
-        RetainerClientProfile client, string version) => new(1, character, now,
+        RetainerClientProfile client, string version, PresenceLocalPreferences? localPreferences = null, string? gameVersion = null) => new(1, character, now,
             client.ProductName, client.Channel, version, RetainerClientPolicy.ContractVersion,
-            RetainerCapabilities.Client, new(false, false, false, null, null, null, null, [], false, null, null, [], []), []);
+            RetainerCapabilities.Client, new(false, false, false, null, null, null, null, [], false, null, null, [], []), [],
+            localPreferences, GameVersionPattern.IsMatch(gameVersion ?? "") ? gameVersion : null);
+    private static readonly System.Text.RegularExpressions.Regex GameVersionPattern =
+        new(@"\A\d{4}\.\d{2}\.\d{2}\.\d{4}\.\d{4}\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     public const int NormalIntervalSeconds = 30;
     public const int OnlineWindowSeconds = 90;
