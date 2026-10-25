@@ -48,8 +48,20 @@ import json
 stable=json.loads((r/'data/GillionsGameSync.json').read_text(encoding='utf-8'))
 assert len(stable)==1 and stable[0]['InternalName']=='GillionsGameSync' and stable[0]['RepoUrl']=='https://github.com/anndrox/GillionsGameSync'
 version=stable[0]['AssemblyVersion']
+import re
+project=(r/'GillionsGameSync.csproj').read_text(encoding='utf-8')
+assert re.search(r'<Version>(\d+\.\d+\.\d+\.\d+)</Version>',project).group(1)==version,'Stable feed version must equal the Public project version'
 asset=f'https://github.com/anndrox/GillionsGameSync/releases/download/v{version}/GillionsGameSync-{version}.zip'
 assert all(stable[0][field]==asset for field in ['DownloadLink','DownloadLinkInstall','DownloadLinkUpdate','DownloadLinkTesting'])
-assert 'TestingAssemblyVersion' not in stable[0] and 'TestingDalamudApiLevel' not in stable[0]
-assert (r/f'data/releases/v{version}.sha256').read_text().strip().endswith(f'GillionsGameSync-{version}.zip')
+# Same key set and fixed identity values as the published 1.0.31.2 Stable entry (bbbafcc).
+assert sorted(stable[0])==['AcceptsFeedback','ApplicableVersion','AssemblyVersion','Author','CanUnloadAsync','DalamudApiLevel','Description',
+    'DownloadCount','DownloadLink','DownloadLinkInstall','DownloadLinkTesting','DownloadLinkUpdate','IconUrl','InternalName','LastUpdate',
+    'LoadPriority','LoadRequiredState','LoadSync','Name','Punchline','RepoUrl','Tags']
+assert {k:stable[0][k] for k in ['Author','Name','Description','Punchline','IconUrl','DalamudApiLevel','Tags','ApplicableVersion']}=={
+    'Author':'Gillions','Name':'Gillions Game Sync',
+    'Description':'Opt-in character synchronization for Gillions with read-only Retainer observations. Never automates gameplay or sends Square Enix credentials.',
+    'Punchline':'Opt-in account sync for your Gillions profile.',
+    'IconUrl':'https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png',
+    'DalamudApiLevel':15,'Tags':['inventory','collection','utility'],'ApplicableVersion':'any'}
+assert re.fullmatch(r'[0-9a-f]{64}  '+re.escape(f'GillionsGameSync-{version}.zip'),(r/f'data/releases/v{version}.sha256').read_text().strip())
 print('Testing distribution source PASS: accepted UI unchanged; only inspected Hunt source qualification differs; pairing/permit/build/redirect fences; historical Testing feed unchanged; Stable feed is a Stable-only immutable release entry.')
