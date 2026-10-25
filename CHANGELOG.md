@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased: refused-character back-off
+## 0.0.96 (Testing): refused-character back-off
 
 - When Gillions refuses uploads because the character you are playing is not
   linked to your account, Game Sync now waits 5 minutes before uploading again
