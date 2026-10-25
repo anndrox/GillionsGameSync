@@ -1,14 +1,13 @@
 # Gillions Game Sync
 
-## Testing 0.0.95 candidate
+## Testing 0.0.95 (published)
 
-Testing 0.0.95 waits 5 minutes after a refused travel upload instead of retrying
+Testing 0.0.95 ([release](https://github.com/anndrox/GillionsGameSync-Testing/releases/tag/v0.0.95-testing)) waits 5 minutes after a refused travel upload instead of retrying
 every 15 seconds. See [Testing 0.0.95](docs/releases/testing-0.0.95.md).
-## Stable 1.0.31.6 candidate
+## Stable 1.0.31.6 (published)
 
-Stable 1.0.31.6 brings everything proven in Testing 0.0.90 to 0.0.94 to the
-Stable plugin. Updating needs no re-pairing. It is published once Gillions
-Production accepts it. See [Stable 1.0.31.6](docs/releases/v1.0.31.6.md).
+Stable 1.0.31.6 ([release](https://github.com/anndrox/GillionsGameSync/releases/tag/v1.0.31.6)) brings everything proven in Testing 0.0.90 to 0.0.94 to the
+Stable plugin. Updating needs no re-pairing. See [Stable 1.0.31.6](docs/releases/v1.0.31.6.md).
 
 ## Testing 0.0.94 (published)
 

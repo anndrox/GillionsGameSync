@@ -5,7 +5,7 @@ from source `032544a132aa2bc20fa3cc1f0fab17bb3e3d40ab` (main CI run 40126674446 
 
 | Item | Value |
 |---|---|
-| ZIP | sha256 `693b29555e1698c72ee128578eaeaf3e529c66ffe0e283da81b5f416aca019e8` (two builds byte-identical) |
+| ZIP | sha256 `693b29555e1698c72ee128578eaeaf3e529c66ffe0e283da81b5f416aca019e8` (two package runs gave the same ZIP; the second run reused the compiled DLL, so this shows packaging determinism, not a clean recompile) |
 | DLL | `GillionsGameSyncTest.dll` 0.0.93.0, sha256 `92706175a76ed3686393a3bab63beecb5efa76d7b8c22ede013c4aba6c940f14` |
 | Feed | canonical feed sha256 `7ac76fd4e6c90969678aa645a49f99ff052b0831bf885f78462b1340838c7448`, distribution commit `276b802` |
 | Upgrade | real-serializer upgrade from the published 0.0.92.0 DLL passed on this exact DLL |
