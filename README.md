@@ -1,8 +1,8 @@
 # Gillions Game Sync
 
-## Testing 0.0.96 candidate
+## Testing 0.0.96 (published)
 
-Testing 0.0.96 waits 5 minutes after a "character not linked" refusal instead of
+Testing 0.0.96 ([release](https://github.com/anndrox/GillionsGameSync-Testing/releases/tag/v0.0.96-testing)) waits 5 minutes after a "character not linked" refusal instead of
 retrying inventory every 10 seconds, and its one-time chat notice names the
 character. See [Testing 0.0.96](docs/releases/testing-0.0.96.md).
 
