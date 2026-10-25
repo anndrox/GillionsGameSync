@@ -54,6 +54,20 @@ public sealed class InventoryUploadSchedule {
     public void Reset() { Due = DateTime.MaxValue; pendingSince = DateTime.MaxValue; lastDispatch = DateTime.MinValue; }
 }
 
+// A refused travel upload (an unadmitted native build, a missing grant) would
+// otherwise be retried on every 15 s presence acknowledgement. Wait five
+// minutes; a session or permission change clears the wait.
+public sealed class TravelRefusalBackoff {
+    public static readonly TimeSpan Delay = TimeSpan.FromMinutes(5);
+    private DateTime until = DateTime.MinValue;
+    public void Refused(DateTime now) => until = now.Add(Delay);
+    public bool Waiting(DateTime now) {
+        if (until > now.Add(Delay)) until = now; // a wall clock moved backwards never extends the wait
+        return now < until;
+    }
+    public void Reset() => until = DateTime.MinValue;
+}
+
 public static class TransientEvidencePolicy {
     public const int MaximumEntries = 256;
     public static void Prune<T>(List<T> entries, DateTime now, TimeSpan horizon, Func<T, DateTime> observed) {

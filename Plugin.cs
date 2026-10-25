@@ -70,6 +70,7 @@ public sealed partial class Plugin : IDalamudPlugin {
     private readonly TravelContextLocalView travelLocal;
     private readonly TravelSyncState travelSync = new();
     private bool travelAccepted, travelInFlight;
+    private readonly TravelRefusalBackoff travelRefusals = new();
     private string travelBinding = "";
     private volatile string travelStatus = "Travel sync OFF; no location uploads.";
     private readonly ICondition marketConditions;
@@ -1594,7 +1595,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #endif
         huntProgress.Invalidate(); huntLocal?.ClearProgress();
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
-        travelAccepted = false; travelBinding = ""; ClearTravelPending(); travelLocal?.ClearSession();
+        travelAccepted = false; travelBinding = ""; ClearTravelPending(); travelLocal?.ClearSession(); travelRefusals?.Reset();
         fateLocal?.ClearAuthorization(); // account/session changes discard any diagnostic unsent epoch
         ClearHuntMapRequests();
         huntFocus.Clear(); nextHuntFocusPresenceUtc = DateTime.MinValue;
@@ -1933,6 +1934,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         if (HasPairedSession && activeOwnedState is not null && NativeProduct.TransportOrigin(configuration.ActiveSession!.Origin)
             && !presenceInFlight && now >= nextRetainerPresenceUtc)
             SendCurrentRetainerPresence(activeRetainerCharacterContentId,now,SyncRequestMode.Personal);
+        if (travelRefusals.Waiting(now)) { travelStatus = "Travel refused by Gillions; retrying in a few minutes. No location sent."; return; }
         if (!admitted) { travelStatus = "Travel waiting for a current supported character, HTTPS TEST pairing and its separate travel grant/capability. No location sent."; return; }
         if (!due || travelInFlight) return;
         var prepared = travelSync.Prepare(binding,travelLocal.Current(activeRetainerCharacterContentId,now),now);
@@ -1971,7 +1973,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 if (!prepared.Fresh(DateTime.UtcNow)) { ClearTravelPending(); travelStatus="Travel observation expired; volatile preparation cleared."; return; }
                 travelSync.Complete(prepared,receipt,status,retryAfter,DateTime.UtcNow);
                 if (receipt) { travelStatus = "Travel context accepted by TEST; freshness remains observation-based (45s)."; RecordDiagnostic("Travel context accepted by TEST."); }
-                else if (TravelSyncPolicy.Terminal(status)) { travelAccepted=false; ClearTravelPending(); travelStatus=$"Travel stopped: HTTP {status}; waiting for compatible TEST acknowledgement. No insecure fallback."; }
+                else if (TravelSyncPolicy.Terminal(status)) { travelAccepted=false; ClearTravelPending(); travelRefusals.Refused(DateTime.UtcNow); travelStatus=$"Travel stopped: HTTP {status}; waiting for compatible TEST acknowledgement. No insecure fallback."; }
                 else travelStatus = "Travel HTTPS receipt unavailable; bounded retry of the same volatile nonce/body before expiry.";
             });
         } catch (Exception) {

@@ -1,5 +1,10 @@
 # Gillions Game Sync
 
+## Testing 0.0.95 candidate
+
+Testing 0.0.95 waits 5 minutes after a refused travel upload instead of retrying
+every 15 seconds. See [Testing 0.0.95](docs/releases/testing-0.0.95.md).
+
 ## Testing 0.0.94 (published)
 
 Testing 0.0.94 ([release](https://github.com/anndrox/GillionsGameSync-Testing/releases/tag/v0.0.94-testing)) groups inventory uploads during heavy gathering or crafting: at

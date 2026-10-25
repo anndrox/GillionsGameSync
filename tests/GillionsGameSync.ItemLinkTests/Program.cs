@@ -10,6 +10,7 @@ CollectibleReadinessTests.Run();
 NativeObservationPolicyTests.Run();
 RetainerUploadPolicyTests.Run();
 InventoryUploadScheduleTests.Run();
+TravelRefusalBackoffTests.Run();
 
 static void Assert(bool condition, string message) {
     if (!condition) throw new InvalidOperationException(message);

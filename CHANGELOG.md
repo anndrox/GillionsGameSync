@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.95 (Testing) — travel refusal back-off
+
+- A travel upload refused by Gillions (for example a game build Gillions has not
+  admitted yet) now waits 5 minutes before trying again, instead of retrying at
+  every 15-second presence check. That is at most 12 refused attempts an hour
+  instead of 240.
+- A character change, login or travel permission change retries straight away.
+- Travel stays off unless separately consented on Gillions. Nothing else changes.
+
 ## 0.0.94 (Testing) — inventory burst coalescing
 
 - Inventory uploads during heavy gathering or crafting are grouped. Game Sync
