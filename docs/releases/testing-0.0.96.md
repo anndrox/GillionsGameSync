@@ -1,8 +1,18 @@
-# Testing 0.0.96: character-not-linked back-off and clearer notice (candidate)
+# Testing 0.0.96: character-not-linked back-off and clearer notice (published)
 
-Status: **candidate, not published.** Publication waits for the owner's explicit
-authorization in the Game Sync chat. The release identities are recorded here
-once it is published and verified.
+Status: **published** as [`v0.0.96-testing`](https://github.com/anndrox/GillionsGameSync-Testing/releases/tag/v0.0.96-testing),
+from source `2828741544134a3dee407a49b23316bb9036c36a` (main CI run 40231164640 passed).
+Owner authorization, given in the Game Sync chat on 2026-10-25: "publish Testing
+0.0.96 (character-not-linked back-off and named chat notice) to the Testing
+channel through the same verified procedure."
+
+| Item | Value |
+|---|---|
+| ZIP | sha256 `08c61f23ca3b032b8314c6554761b6a2a81f99f6e33a160fb760808f85f23664` (two clean builds in separate checkouts, byte-identical) |
+| DLL | `GillionsGameSyncTest.dll` 0.0.96.0, sha256 `6dd426b135a5788d118322b842acf9923b5ff0fc264522b2283b987aa68ba79e` |
+| Feed | canonical feed sha256 `a040851ceb1d4a9541ef3035c2f236a5d2f532af1e9fadea0a8d1b82683deb88`, distribution commit `1b94bd0fdfa8d5807bb6725523da69321abd7235` |
+| Order | release assets verified anonymously before the feed commit |
+| Upgrade | real-serializer upgrade from the published 0.0.95.0 DLL passed on this exact DLL |
 
 ## Why
 
