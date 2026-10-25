@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.95 (Testing) — travel refusal back-off
+
+- A travel upload refused by Gillions (for example a game build Gillions has not
+  admitted yet) now waits 5 minutes before trying again, instead of retrying at
+  every 15-second presence check. That is at most 12 refused attempts an hour
+  instead of 240.
+- A character change, login, or a real change of the travel decision on Gillions
+  retries straight away. A brief presence failure does not. Timeouts and
+  redirects keep the usual short retry.
+- Travel stays off unless separately consented on Gillions. Nothing else changes.
 ## Stable 1.0.31.6 — current game build, data protection and clear status
 
 Carries everything proven in Testing 0.0.90 to 0.0.94 to the Stable product

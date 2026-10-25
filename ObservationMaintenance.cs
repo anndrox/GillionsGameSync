@@ -54,6 +54,25 @@ public sealed class InventoryUploadSchedule {
     public void Reset() { Due = DateTime.MaxValue; pendingSince = DateTime.MaxValue; lastDispatch = DateTime.MinValue; }
 }
 
+// A refused travel upload (an unadmitted native build, a missing grant) would
+// otherwise be retried on every 15 s presence acknowledgement. Wait five
+// minutes; a session change, or a real change of the travel decision, clears
+// the wait. A lease lapse (failed presence) is not a decision change.
+public sealed class TravelRefusalBackoff {
+    public static readonly TimeSpan Delay = TimeSpan.FromMinutes(5);
+    private DateTime until = DateTime.MinValue;
+    private string? decision;
+    // Timeouts and redirects are transient, not refusals.
+    public static bool Counts(int status) => status is not (307 or 308 or 408 or 425);
+    public void Refused(DateTime now, string? knownDecision) { until = now.Add(Delay); decision = knownDecision; }
+    public void DecisionChanged(string? knownDecision) { if (knownDecision is not null && knownDecision != decision) Reset(); }
+    public bool Waiting(DateTime now) {
+        if (until > now.Add(Delay)) until = now; // a wall clock moved backwards never extends the wait
+        return now < until;
+    }
+    public void Reset() { until = DateTime.MinValue; decision = null; }
+}
+
 public static class TransientEvidencePolicy {
     public const int MaximumEntries = 256;
     public static void Prune<T>(List<T> entries, DateTime now, TimeSpan horizon, Func<T, DateTime> observed) {
