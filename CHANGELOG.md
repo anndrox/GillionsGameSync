@@ -1,5 +1,15 @@
 # Changelog
 
+## Release engineering (no release)
+
+- Clean Stable builds are byte-deterministic: the SDK's SourceLink no longer
+  embeds the git commit and local checkout path in the PDB, so the same code
+  built from a release branch, its merge commit or a folder copy gives the same
+  DLL. This also removes the local workspace path from distributed assemblies.
+- The Stable asset is published from the reviewed release-PR head before the
+  feed change merges, and CI (`scripts/check-stable-feed-asset.ps1`) fails any
+  commit whose Stable feed points at an unpublished or mismatched asset.
+
 ## 0.0.95 (Testing) — travel refusal back-off
 
 - A travel upload refused by Gillions (for example a game build Gillions has not

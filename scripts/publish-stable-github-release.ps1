@@ -20,8 +20,11 @@ if ((& git -C $root status --porcelain)) { throw 'The release worktree must be c
 & git -C $root fetch upstream --tags
 if ($LASTEXITCODE -ne 0) { throw 'Could not refresh the canonical GitHub remote.' }
 $head = (& git -C $root rev-parse HEAD).Trim()
-$canonicalContains = @(& git -C $root branch -r --contains $head) -match '^\s*upstream/main$'
-if (-not $canonicalContains) { throw 'The exact release source and manifest commit must be integrated into upstream/main first.' }
+# Publish from the reviewed release-PR head BEFORE merging it, so the feed on
+# main never advertises an asset that does not exist yet. The head must already
+# be on the canonical remote (a pushed PR branch, or main itself).
+$canonicalContains = @(& git -C $root branch -r --contains $head) -match '^\s*upstream/'
+if (-not $canonicalContains) { throw 'The exact release source and manifest commit must be pushed to the canonical remote first.' }
 
 $manifest = @([IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json -AsHashtable)[0]
 if ($manifest.AssemblyVersion -cne $assemblyVersion) { throw 'Canonical manifest version does not match the requested release.' }
@@ -74,6 +77,7 @@ else {
   }
 }
 
-& (Join-Path $PSScriptRoot 'verify-public-stable-release.ps1') -Version $Version
+# Verify the release against the feed exactly as it will appear after the merge.
+& (Join-Path $PSScriptRoot 'verify-public-stable-release.ps1') -Version $Version -ManifestUrl "https://raw.githubusercontent.com/anndrox/GillionsGameSync/$head/data/GillionsGameSync.json"
 if ($LASTEXITCODE -ne 0) { throw 'Public GitHub release verification failed.' }
-Write-Output "GitHub stable release $tag is published and verified."
+Write-Output "GitHub stable release $tag is published and verified. Merge the reviewed release PR now; then confirm main with verify-public-stable-release.ps1 -Version $Version."
