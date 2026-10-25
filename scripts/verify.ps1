@@ -25,6 +25,8 @@ python (Join-Path $root 'tests/public-candidate-contract-test.py')
 if ($LASTEXITCODE -ne 0) { throw 'Public candidate frozen-UI/product/diagnostic release boundaries failed.' }
 python (Join-Path $root 'tests/testing-distribution-contract-test.py')
 if ($LASTEXITCODE -ne 0) { throw 'Testing distribution/isolation/source correspondence failed.' }
+python (Join-Path $root 'tests/character-refusal-contract-test.py')
+if ($LASTEXITCODE -ne 0) { throw 'Character refusal back-off wiring failed.' }
 
 dotnet run --project (Join-Path $root 'tests/GillionsGameSync.HuntMapTests/GillionsGameSync.HuntMapTests.csproj') -c Release
 if ($LASTEXITCODE -ne 0) { throw 'Hunt map contract/lifecycle/race fixtures failed.' }

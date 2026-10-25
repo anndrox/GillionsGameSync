@@ -429,7 +429,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             if (!RetainerPresenceResponsePolicy.TryParse(responseJson, RetainerClient, out var uploadSupported))
                 throw new InvalidOperationException("Invalid presence response.");
             await CommitAsync(permit, _ => {
-                retainerUploadServerSupported = uploadSupported; presenceFailureCount = 0; characterRefusals.Reset();
+                retainerUploadServerSupported = uploadSupported; presenceFailureCount = 0;
                 ClearConnectionFailure(presence: true);
                 ApplyPermissions(responseJson, permit, response, Stopwatch.GetElapsedTime(permissionRequestStarted));
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD

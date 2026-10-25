@@ -21,7 +21,7 @@ internal static class CharacterRefusalBackoffTests {
         for (var s = 0; s < 3600; s += 10) { var now = t0.AddSeconds(s); if (!b.Waiting(now)) { attempts++; b.Refused(now); } }
         Check(attempts == 12, "an hour of refusals makes 12 attempts (" + attempts + ")");
         backoff.Refused(t0); backoff.Reset();
-        Check(!backoff.Waiting(t0.AddSeconds(1)), "a character change, login or accepted presence retries at once");
+        Check(!backoff.Waiting(t0.AddSeconds(1)), "a character change, login or accepted upload retries at once");
         var clock = new CharacterRefusalBackoff();
         clock.Refused(t0.AddHours(1));
         Check(!clock.Waiting(t0), "a wall clock moved backwards does not extend the wait");

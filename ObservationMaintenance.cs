@@ -76,8 +76,8 @@ public sealed class TravelRefusalBackoff {
 // An unlinked character refuses every ordinary upload until it is linked, so
 // the 10 s inventory retry and the 30 s resource rotation would repeat the
 // refusal about 8 times a minute. Wait five minutes; a character change, login
-// or an accepted presence/sync (which proves the link) clears the wait. Local
-// observation continues, and a manual Sync now always runs.
+// or an accepted upload (which proves the link) clears the wait. Presence proves
+// only the paired character, so it never does. Local observation continues.
 public sealed class CharacterRefusalBackoff {
     public static readonly TimeSpan Delay = TimeSpan.FromMinutes(5);
     private DateTime until = DateTime.MinValue;
