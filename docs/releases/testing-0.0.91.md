@@ -6,7 +6,7 @@ in the Testing distribution repository, from source
 
 | Item | Value |
 |---|---|
-| ZIP | `GillionsGameSyncTesting-0.0.91.zip`, sha256 `8a5fefc7320982fe7a5322b8d44c8d86e86d6ff85764e6082b4cbe31e35748de` (two builds byte-identical) |
+| ZIP | `GillionsGameSyncTesting-0.0.91.zip`, sha256 `8a5fefc7320982fe7a5322b8d44c8d86e86d6ff85764e6082b4cbe31e35748de` (two package runs gave the same ZIP; the second run reused the compiled DLL, so this shows packaging determinism, not a clean recompile) |
 | DLL | `GillionsGameSyncTest.dll` 0.0.91.0, sha256 `72ca1bdad63440919cc96a80e878e48b3a6ac76be12f4bd71bcd7fb06a57e38c` |
 | Feed | canonical `https://raw.githubusercontent.com/anndrox/GillionsGameSync-Testing/main/data/GillionsGameSyncTesting.json`, sha256 `f8b601de9aaf6bf17baa515cd3a6a4df6c4deb5f6fba81491c40ea3ec3046903`, distribution commit `8d50ab1` |
 | Upgrade | real-serializer upgrade from the published 0.0.90.0 DLL passed on this exact DLL |
