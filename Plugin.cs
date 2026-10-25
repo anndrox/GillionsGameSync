@@ -145,6 +145,7 @@ public sealed partial class Plugin : IDalamudPlugin {
     private DateTime nextGilLedgerPollUtc = DateTime.MinValue;
     private DateTime nextGilLedgerUploadUtc = DateTime.MaxValue;
     private readonly InventoryUploadSchedule inventoryUploads = new();
+    private readonly CharacterRefusalBackoff characterRefusals = new();
     private DateTime nextGilLedgerFlushUtc = DateTime.MinValue;
 #if !GILLIONS_TEST_BUILD && !GILLIONS_PUBLIC_BUILD
     private DateTime nextItemLinkPollUtc = DateTime.MinValue;
@@ -428,7 +429,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             if (!RetainerPresenceResponsePolicy.TryParse(responseJson, RetainerClient, out var uploadSupported))
                 throw new InvalidOperationException("Invalid presence response.");
             await CommitAsync(permit, _ => {
-                retainerUploadServerSupported = uploadSupported; presenceFailureCount = 0;
+                retainerUploadServerSupported = uploadSupported; presenceFailureCount = 0; characterRefusals.Reset();
                 ClearConnectionFailure(presence: true);
                 ApplyPermissions(responseJson, permit, response, Stopwatch.GetElapsedTime(permissionRequestStarted));
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
@@ -586,7 +587,8 @@ public sealed partial class Plugin : IDalamudPlugin {
             nextRetainerListingCaptureUtc = now.AddSeconds(RetainerCaptureIntervalSeconds);
             if (DirectGameSnapshotCollector.CaptureLoadedRetainerListings()) inventoryUploads.Changed(now, TimeSpan.FromMilliseconds(250));
         }
-        if (syncInFlight) return;
+        // Captures above keep running; queued uploads go out once the wait ends.
+        if (syncInFlight || characterRefusals.Waiting(now)) return;
         // A due ordinary resource keeps its cadence even during repeated Retainer
         // changes. Every sync also drains its captured owner's queued Gil events.
         if (now >= nextAutomaticSyncUtc) {
@@ -1427,6 +1429,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             }
             failureStage = "final_commit";
             await CommitAsync(captured.Permit, _ => {
+                if (submitted > 0) characterRefusals.Reset();
                 if (submitted > 0 && !string.IsNullOrEmpty(configuration.SyncBlockedCode)) {
                     configuration.SyncBlockedCode = ""; configuration.SyncBlockedMessage = ""; RequestConfigurationSave();
                 }
@@ -1463,6 +1466,8 @@ public sealed partial class Plugin : IDalamudPlugin {
                 // Only a request that reached, or failed to reach, Gillions is a
                 // connection state; local collection/validation failures are not.
                 if (SyncFailureDiagnostic.IsTransportStage(failureStage)) ObserveConnectionFailure(error);
+                if (error is GillionsSyncRejectedException characterRefusal && CharacterRefusalBackoff.Counts(characterRefusal.Code))
+                    characterRefusals.Refused(DateTime.UtcNow);
                 // Retry hydration only after an unreachable Gillions; a refusal or a
                 // local failure would repeat on every attempt.
                 if (mode == SyncRequestMode.Hydration && SyncFailureDiagnostic.IsTransportStage(failureStage) && error is not GillionsSyncRejectedException)
@@ -1604,7 +1609,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         huntCoverageSync.Clear(); huntLocal?.ClearCoverage();
 #endif
         activeOwnedState = null; activeRetainerCharacterContentId = 0; activeGeneration = "";
-        nextRetainerPresenceUtc = DateTime.MinValue; nextRetainerUploadUtc = DateTime.MinValue;
+        nextRetainerPresenceUtc = DateTime.MinValue; nextRetainerUploadUtc = DateTime.MinValue; characterRefusals?.Reset();
     }
 
     private void RefreshSessionContext() {

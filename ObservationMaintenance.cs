@@ -73,6 +73,25 @@ public sealed class TravelRefusalBackoff {
     public void Reset() { until = DateTime.MinValue; decision = null; }
 }
 
+// An unlinked character refuses every ordinary upload until it is linked, so
+// the 10 s inventory retry and the 30 s resource rotation would repeat the
+// refusal about 8 times a minute. Wait five minutes; a character change, login
+// or an accepted presence/sync (which proves the link) clears the wait. Local
+// observation continues, and a manual Sync now always runs.
+public sealed class CharacterRefusalBackoff {
+    public static readonly TimeSpan Delay = TimeSpan.FromMinutes(5);
+    private DateTime until = DateTime.MinValue;
+    // Only "not linked" blocks every resource; "paired to another character"
+    // concerns presence and Retainer uploads, not the ordinary snapshots.
+    public static bool Counts(string code) => code == SiteRefusalPolicy.CharacterNotLinked;
+    public void Refused(DateTime now) => until = now.Add(Delay);
+    public bool Waiting(DateTime now) {
+        if (until > now.Add(Delay)) until = now; // a wall clock moved backwards never extends the wait
+        return now < until;
+    }
+    public void Reset() => until = DateTime.MinValue;
+}
+
 public static class TransientEvidencePolicy {
     public const int MaximumEntries = 256;
     public static void Prune<T>(List<T> entries, DateTime now, TimeSpan horizon, Func<T, DateTime> observed) {

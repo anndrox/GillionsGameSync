@@ -11,6 +11,7 @@ NativeObservationPolicyTests.Run();
 RetainerUploadPolicyTests.Run();
 InventoryUploadScheduleTests.Run();
 TravelRefusalBackoffTests.Run();
+CharacterRefusalBackoffTests.Run();
 
 static void Assert(bool condition, string message) {
     if (!condition) throw new InvalidOperationException(message);
