@@ -19,7 +19,10 @@ PR #25 (`CharacterRefusalBackoff` in `ObservationMaintenance.cs`, wired in
 `Plugin.cs`):
 - After a `CHARACTER_NOT_LINKED` refusal, background ordinary uploads wait
   **5 minutes**. That covers inventory, the resource rotation, Retainer uploads
-  and the Gil flush. An hour of refusals now makes at most 12 attempts.
+  and the Gil flush. An hour of refusals now makes at most 12 attempts. A
+  refusal of any sync, including Sync now, starts the wait for the background
+  uploads. Hunt, submarine, travel and Market uploads have their own schedules
+  and are not part of this gate.
 - **Clears the wait:** a character change, logging in or out, or an accepted
   upload.
 - **Does not clear it:** an accepted presence, which proves only the paired
@@ -31,8 +34,9 @@ PR #25 (`CharacterRefusalBackoff` in `ObservationMaintenance.cs`, wired in
   "paired to a different character", which concerns presence and Retainer
   uploads.
 
-The one-time chat notice (local chat only) now names the character and says to
-link this character on Gillions or play a linked one.
+The one-time chat notice (local chat only) now names the character and world,
+falling back to "This character" before the character is known. It says to link
+this character on Gillions or play a linked one.
 
 ## Unchanged
 
