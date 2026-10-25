@@ -17,14 +17,17 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'GitHub CLI is 
 & gh auth status | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'GitHub CLI authentication is unavailable.' }
 if ((& git -C $root status --porcelain)) { throw 'The release worktree must be clean.' }
-& git -C $root fetch upstream --tags
+& git -C $root fetch upstream --tags --prune
 if ($LASTEXITCODE -ne 0) { throw 'Could not refresh the canonical GitHub remote.' }
 $head = (& git -C $root rev-parse HEAD).Trim()
 # Publish from the reviewed release-PR head BEFORE merging it, so the feed on
-# main never advertises an asset that does not exist yet. The head must already
-# be on the canonical remote (a pushed PR branch, or main itself).
-$canonicalContains = @(& git -C $root branch -r --contains $head) -match '^\s*upstream/'
-if (-not $canonicalContains) { throw 'The exact release source and manifest commit must be pushed to the canonical remote first.' }
+# main never advertises an asset that does not exist yet. The head must be the
+# exact tip of an open PR into main (or already on main, for an existing release).
+$onMain = @(& git -C $root branch -r --contains $head) -match '^\s*upstream/main$'
+$openPrJson = & gh pr list --repo anndrox/GillionsGameSync --state open --base main --json number,headRefOid
+if ($LASTEXITCODE -ne 0) { throw 'Could not list open release PRs.' }
+$openPr = @(($openPrJson | ConvertFrom-Json) | Where-Object { $_.headRefOid -ceq $head })
+if (-not $onMain -and $openPr.Count -ne 1) { throw 'The exact release source and manifest commit must be the head of one open PR into main (or on upstream/main).' }
 
 $manifest = @([IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json -AsHashtable)[0]
 if ($manifest.AssemblyVersion -cne $assemblyVersion) { throw 'Canonical manifest version does not match the requested release.' }
