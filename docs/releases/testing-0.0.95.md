@@ -22,8 +22,10 @@ scheduler in `Plugin.cs`:
 - After a refused (terminal) travel upload, Game Sync waits **5 minutes** before
   the next travel attempt.
 - An hour of refusals now makes 12 attempts instead of 240.
-- A character change, login or travel permission change clears the wait, so a
-  fix on Gillions takes effect at once.
+- A character change, login, or a real change of the travel decision on Gillions
+  clears the wait, so a fix takes effect at once. A brief presence failure does
+  not clear it.
+- Timeouts and redirects (408, 425, 307, 308) keep the usual short retry.
 - A wall clock moving backwards never extends the wait.
 
 Unchanged:

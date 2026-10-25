@@ -6,7 +6,9 @@
   admitted yet) now waits 5 minutes before trying again, instead of retrying at
   every 15-second presence check. That is at most 12 refused attempts an hour
   instead of 240.
-- A character change, login or travel permission change retries straight away.
+- A character change, login, or a real change of the travel decision on Gillions
+  retries straight away. A brief presence failure does not. Timeouts and
+  redirects keep the usual short retry.
 - Travel stays off unless separately consented on Gillions. Nothing else changes.
 
 ## 0.0.94 (Testing) — inventory burst coalescing

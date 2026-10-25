@@ -1973,7 +1973,9 @@ public sealed partial class Plugin : IDalamudPlugin {
                 if (!prepared.Fresh(DateTime.UtcNow)) { ClearTravelPending(); travelStatus="Travel observation expired; volatile preparation cleared."; return; }
                 travelSync.Complete(prepared,receipt,status,retryAfter,DateTime.UtcNow);
                 if (receipt) { travelStatus = "Travel context accepted by TEST; freshness remains observation-based (45s)."; RecordDiagnostic("Travel context accepted by TEST."); }
-                else if (TravelSyncPolicy.Terminal(status)) { travelAccepted=false; ClearTravelPending(); travelRefusals.Refused(DateTime.UtcNow); travelStatus=$"Travel stopped: HTTP {status}; waiting for compatible TEST acknowledgement. No insecure fallback."; }
+                else if (TravelSyncPolicy.Terminal(status)) { travelAccepted=false; ClearTravelPending();
+                    if (TravelRefusalBackoff.Counts(status)) travelRefusals.Refused(DateTime.UtcNow, permissionAuthority.KnownIdentity("huntRoutingLocation"));
+                    travelStatus=$"Travel stopped: HTTP {status}; waiting for compatible TEST acknowledgement. No insecure fallback."; }
                 else travelStatus = "Travel HTTPS receipt unavailable; bounded retry of the same volatile nonce/body before expiry.";
             });
         } catch (Exception) {

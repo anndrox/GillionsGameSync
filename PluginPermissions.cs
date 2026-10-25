@@ -100,7 +100,7 @@ public sealed partial class Plugin {
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
             if (key == "marketContribution") { marketContributor.SetEnabled(false); marketContributor.RefreshSession(null); }
             if (key == "partyFinderContribution") partyFinderContributor.SetEnabled(false);
-            if (key == "huntRoutingLocation") { ClearTravelPending(); travelLocal.ClearSession(); travelRefusals.Reset(); }
+            if (key == "huntRoutingLocation") { ClearTravelPending(); travelLocal.ClearSession(); travelRefusals.DecisionChanged(permissionAuthority.KnownIdentity(key)); }
             if (key is "personalHunts" or "personalSubmarines") {
                 var resource = key == "personalHunts" ? "hunt_bills" : "submarine_personal";
                 if (personalCancellation.Remove(resource, out var previous)) { previous.Cancel(); previous.Dispose(); }
