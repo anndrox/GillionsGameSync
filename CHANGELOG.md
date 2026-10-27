@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.97 (Testing candidate, not published): settings and game build in the check-in
+## 0.0.97 (Testing): settings and game build in the check-in
 
 - The regular check-in to Gillions now includes the game build and the
   plugin's own on/off value for each of its eight Gillions-controlled settings.
