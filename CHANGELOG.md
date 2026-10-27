@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased: settings and game build in the check-in
+## 0.0.97 (Testing candidate, not published): settings and game build in the check-in
 
 - The regular check-in to Gillions now includes the game build and the
   plugin's own on/off value for each of its eight Gillions-controlled settings.
@@ -8,6 +8,9 @@
   the website, and clear game-build notices automatically.
 - Gillions never treats these values as your website choice or consent, and no
   setting or default changes. Nothing extra is read from the game.
+- Updating needs no re-pairing or new permission and adds no new data category
+  beyond those settings. No new capability is advertised. Testing keeps its
+  existing TEST-only origin. See [Testing 0.0.97](docs/releases/testing-0.0.97.md).
 
 ## 0.0.96 (Testing): refused-character back-off
 
