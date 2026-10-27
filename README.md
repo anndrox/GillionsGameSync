@@ -1,10 +1,10 @@
 # Gillions Game Sync
 
-## Testing 0.0.97 (candidate, not published)
+## Testing 0.0.97 (published)
 
-The regular check-in includes the game version and the plugin's eight local
+Testing 0.0.97 ([release](https://github.com/anndrox/GillionsGameSync-Testing/releases/tag/v0.0.97-testing)) includes the game version and the plugin's eight local
 settings so Gillions can show them. Updating needs no re-pairing or new
-permission and adds no new data category beyond those settings. This candidate
+permission and adds no new data category beyond those settings. This release
 uses the existing TEST-only Testing channel. See
 [Testing 0.0.97](docs/releases/testing-0.0.97.md).
 
