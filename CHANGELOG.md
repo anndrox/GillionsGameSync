@@ -1,7 +1,8 @@
 # Changelog
 
-## 1.0.31.7 (Stable candidate, not published)
+## 1.0.31.7 (Stable, published 2026-10-28)
 
+- [Published Stable release](https://github.com/anndrox/GillionsGameSync/releases/tag/v1.0.31.7); the immutable asset was verified before the main feed advanced.
 - Character-not-linked ordinary uploads wait five minutes after a refusal;
   the local notice names the character. Includes the PR 25 correction that
   an accepted presence does not clear the wait.
