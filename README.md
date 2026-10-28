@@ -1,12 +1,12 @@
 # Gillions Game Sync
 
-## Stable 1.0.31.7 (prepared, not published)
+## Stable 1.0.31.7 (published)
 
-The prepared Stable candidate carries the two refusal back-offs already proven
+Stable 1.0.31.7 ([release](https://github.com/anndrox/GillionsGameSync/releases/tag/v1.0.31.7)) carries the two refusal back-offs already proven
 in Testing, plus the regular check-in's game version and eight local settings.
-Inventory batching already shipped in Stable 1.0.31.6. Publication waits for
-independent review, Site admission and the owner's go. See
-[Stable 1.0.31.7](docs/releases/v1.0.31.7.md).
+Inventory batching already shipped in Stable 1.0.31.6. Updating requires no
+re-pairing and changes no setting or consent default. The existing Stable repository URL is
+unchanged. See [Stable 1.0.31.7](docs/releases/v1.0.31.7.md).
 
 ## Testing 0.0.97 (published)
 
