@@ -1,5 +1,13 @@
 # Gillions Game Sync
 
+## Stable 1.0.31.7 (prepared, not published)
+
+The prepared Stable candidate carries the two refusal back-offs already proven
+in Testing, plus the regular check-in's game version and eight local settings.
+Inventory batching already shipped in Stable 1.0.31.6. Publication waits for
+independent review, Site admission and the owner's go. See
+[Stable 1.0.31.7](docs/releases/v1.0.31.7.md).
+
 ## Testing 0.0.97 (published)
 
 Testing 0.0.97 ([release](https://github.com/anndrox/GillionsGameSync-Testing/releases/tag/v0.0.97-testing)) includes the game version and the plugin's eight local
