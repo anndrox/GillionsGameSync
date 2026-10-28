@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.31.7 (Stable candidate, not published)
+
+- Character-not-linked ordinary uploads wait five minutes after a refusal;
+  the local notice names the character. Includes the PR 25 correction that
+  an accepted presence does not clear the wait.
+- Refused travel uploads wait five minutes, with the PR 22 decision-change gate.
+- The regular check-in includes the game version and eight local settings
+  from PR 29, without a new capability, permission or consent default.
+- Includes PR 24 release tooling and PR 28 contract data. Inventory batching
+  already shipped in Stable 1.0.31.6. See [release notes](docs/releases/v1.0.31.7.md).
+
 ## 0.0.97 (Testing): settings and game build in the check-in
 
 - The regular check-in to Gillions now includes the game build and the
