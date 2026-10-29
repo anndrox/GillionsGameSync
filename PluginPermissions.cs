@@ -54,8 +54,8 @@ public sealed partial class Plugin {
         return ContributionDenialPolicy.Record(enrollment, current, captured, knownAuthority, existingStop);
     }
 #endif
-    private void ApplyPermissions(string json, SyncRequestPermit permit, HttpResponseMessage response, TimeSpan roundTrip) {
-        if (!NativeProduct.TransportOrigin(permit.Origin)) return;
+    private bool ApplyPermissions(string json, SyncRequestPermit permit, HttpResponseMessage response, TimeSpan roundTrip) {
+        if (!NativeProduct.TransportOrigin(permit.Origin)) return false;
         // Observe expired old authority before a same-decision renewal can hide
         // its loss in the regular 250ms maintenance gap. This is command/queue
         // maintenance only; it performs no additional gameplay reads.
@@ -64,16 +64,17 @@ public sealed partial class Plugin {
         // Only the exact authenticated, non-redirected origin supplies issuer time.
         var now = DateTime.UtcNow;
         if (response.RequestMessage?.RequestUri?.GetLeftPart(UriPartial.Authority) != permit.Origin
-            || roundTrip < TimeSpan.Zero || roundTrip > TimeSpan.FromSeconds(30)) { permissionAuthority.Invalidate(); return; }
+            || roundTrip < TimeSpan.Zero || roundTrip > TimeSpan.FromSeconds(30)) { permissionAuthority.Invalidate(); return false; }
         if (response.Headers.Date is { } date) {
-            if ((date.UtcDateTime - now).Duration() > TimeSpan.FromSeconds(30)) { permissionAuthority.Invalidate(); return; }
+            if ((date.UtcDateTime - now).Duration() > TimeSpan.FromSeconds(30)) { permissionAuthority.Invalidate(); return false; }
             now = date.UtcDateTime.AddSeconds(1).Add(roundTrip);
         }
-        permissionAuthority.Apply(json, now, Environment.TickCount64);
+        var accepted = permissionAuthority.Apply(json, now, Environment.TickCount64);
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         nativeVersionReported = true;
 #endif
         ReconcilePermissions(force: true);
+        return accepted;
     }
     private void ReconcilePermissions(bool force = false) {
         var now = DateTime.UtcNow;

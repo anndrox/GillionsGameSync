@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Boundary stubs intentionally retain unused fields from the actual caller. -->
+    <NoWarn>$(NoWarn);CS0649;CS0414</NoWarn>
+    <DefineConstants>GILLIONS_PERSONAL_STATE_TESTS;GILLIONS_PUBLIC_BUILD</DefineConstants>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../HuntBills.cs" Link="HuntBills.cs" />
+    <Compile Include="../../HuntBillItemCoverage.cs" Link="HuntBillItemCoverage.cs" />
+    <Compile Include="../../PersonalObservationPolicy.cs" Link="PersonalObservationPolicy.cs" />
+    <Compile Include="../../NativeCompatibility.cs" Link="NativeCompatibility.cs" />
+    <Compile Include="../../PersonalSync.cs" Link="PersonalSync.cs" />
+    <Compile Include="../../NativeProduct.cs" Link="NativeProduct.cs" />
+    <Compile Include="../../PermissionAuthority.cs" Link="PermissionAuthority.cs" />
+    <Compile Include="../../PluginPermissions.cs" Link="PluginPermissions.cs" />
+    <Compile Include="obj/generated/*.cs" />
+  </ItemGroup>
+</Project>
