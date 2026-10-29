@@ -22,12 +22,12 @@ isolation. They do not establish native gameplay or an actual Site receipt.
 
 ## Later release and Site work
 
-The selected unused Stable successor is **GillionsGameSync / 1.0.31.8**. This
-source PR leaves project versions, feeds and published artifacts unchanged, as
-with other source-only fixes. Apply that version in a separately authorized
-isolated release branch through [the standard release procedure](releasing.md),
-with release notes, manifest/checksum, deterministic package and upgrade review.
-Never replace the published 1.0.31.7 source/tag/asset under its old identity.
+The prepared Stable candidate is **GillionsGameSync / 1.0.31.8**; see its
+[release notes](releases/v1.0.31.8.md). The project and branch-local candidate feed
+use that version. Public main/feed remain 1.0.31.7 until independent release
+review, compatible Site deployment and the authorized asset-before-feed release
+procedure in [releasing.md](releasing.md). Never replace 1.0.31.7's immutable
+source/tag/asset. Preparation establishes no installed update.
 
 The intended Hunt tuple remains game/reference `2026.10.16.0000.0000`, Dalamud
 API 15 / `15.0.3.9`, ClientStructs `7.57.0.9414`, Lumina `7.7.0` / Excel `7.5.1`.

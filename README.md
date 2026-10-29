@@ -1,5 +1,13 @@
 # Gillions Game Sync
 
+## Stable 1.0.31.8 (prepared, not published)
+
+The candidate adds automatic recovery when Gillions accepts changed Hunt support
+after refusing the same observations. Existing permission and source checks
+remain; no restart, re-pairing or extra setup is required. Published Stable and
+the public feed remain 1.0.31.7 until review and compatible Site admission are
+complete. See [candidate notes](docs/releases/v1.0.31.8.md).
+
 ## Stable 1.0.31.7 (published)
 
 Stable 1.0.31.7 ([release](https://github.com/anndrox/GillionsGameSync/releases/tag/v1.0.31.7)) carries the two refusal back-offs already proven
