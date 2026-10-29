@@ -4,8 +4,8 @@ $project = Get-Content -LiteralPath (Join-Path $root 'GillionsGameSync.csproj') 
 $plugin = Get-Content -LiteralPath (Join-Path $root 'Plugin.cs') -Raw
 $policy = Get-Content -LiteralPath (Join-Path $root 'RetainerClientPolicy.cs') -Raw
 
-if ($project -notmatch '<Version>1\.0\.31\.7</Version>') {
-    throw 'The unpublished consolidated public candidate version is not 1.0.31.7.'
+if ($project -notmatch '<Version>1\.0\.31\.8</Version>') {
+    throw 'The unpublished consolidated public candidate version is not 1.0.31.8.'
 }
 if ($project -notmatch '<PathMap>\$\(MSBuildProjectDirectory\)=/_/GillionsGameSync</PathMap>') {
     throw 'Release diagnostics no longer sanitize the local source root.'

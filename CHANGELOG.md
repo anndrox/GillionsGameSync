@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased: automatic Hunt support recovery
+## 1.0.31.8 (Stable candidate, not published)
 
 - After a terminal Hunt HTTP 400, a changed, accepted Gillions support contract
   can permit one fresh preparation for the same current sample. Unchanged input
