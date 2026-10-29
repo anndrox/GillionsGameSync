@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.Json;
@@ -107,10 +108,56 @@ internal sealed class HuntBillItemSync {
     private DateTime preparedUtc;
     private DateTime observedUtc;
     private long epoch;
-    internal void Clear() { pending = null; }
+    private JsonElement? support;
+    private string? preparedSupport;
+    private bool supportRecoveryUsed, supportRecoveryAllowed;
+    internal void Clear() { pending = null; support = null; preparedSupport = null; supportRecoveryUsed = supportRecoveryAllowed = false; }
+    // Called only from the current authenticated presence commit, after existing
+    // permission/origin gates. Retain public support metadata only, never the reply.
+    internal void ObserveSupport(string? json, string origin) {
+        support = null;
+        if (json is null || !PersonalSyncPolicy.HuntCoverageCompatible(json, origin)) return;
+        try {
+            using var doc = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 16 });
+            var value = doc.RootElement.GetProperty("personalObservations").GetProperty("resources")
+                .EnumerateArray().Single(e => e.GetProperty("resourceType").GetString() == "hunt_bills").GetProperty("support");
+            bool Shape(JsonElement e, params string[] keys) => e.ValueKind == JsonValueKind.Object
+                && e.EnumerateObject().Select(p => p.Name).Order().SequenceEqual(keys.Order());
+            if (!Shape(value,"revision","nativeBuilds","referenceBuilds")) return;
+            var revision = value.GetProperty("revision").GetString();
+            if (revision is not { Length: > 15 and <= 128 } || !revision.StartsWith("hunt-reference:",StringComparison.Ordinal)
+                || !revision.All(c => char.IsAsciiLetterOrDigit(c) || c is ':' or '-' or '_')) return;
+            var native = value.GetProperty("nativeBuilds").EnumerateArray().ToArray();
+            var refs = value.GetProperty("referenceBuilds").EnumerateArray().Select(e => e.GetString()).ToArray();
+            if (native.Length is < 1 or > 16 || refs.Length is < 1 or > 16
+                || native.Any(b => !Shape(b,"gameVersion","sdkVersion")
+                    || !PersonalObservationCompatibility.Metadata(b.GetProperty("gameVersion").GetString())
+                    || !PersonalObservationCompatibility.Metadata(b.GetProperty("sdkVersion").GetString()))
+                || refs.Any(r => !PersonalObservationCompatibility.Metadata(r)) || refs.Distinct().Count() != refs.Length
+                || native.Select(b => b.GetProperty("gameVersion").GetString()+":"+b.GetProperty("sdkVersion").GetString()).Distinct().Count() != native.Length) return;
+            support = value.Clone();
+        } catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException) { }
+    }
+    private string? SupportedIdentity(string payload) {
+        if (support is not { } value) return null;
+        try {
+            using var doc = JsonDocument.Parse(payload);
+            var root = doc.RootElement; var coverage = root.GetProperty("billItemCoverage");
+            var game = coverage.GetProperty("gameVersion").GetString(); var sdk = coverage.GetProperty("sdkVersion").GetString();
+            var native = value.GetProperty("nativeBuilds").EnumerateArray().ToArray();
+            var refs = value.GetProperty("referenceBuilds").EnumerateArray().Select(e => e.GetString()).ToArray();
+            if (!native.Any(b => b.GetProperty("gameVersion").GetString() == game && b.GetProperty("sdkVersion").GetString() == sdk)
+                || !refs.Contains(game) || root.GetProperty("bills").EnumerateArray().Any(b => !refs.Contains(b.GetProperty("gameVersion").GetString()))) return null;
+            return PersonalSyncPolicy.Hash(value.GetProperty("revision").GetString()+"\n"
+                +string.Join("\n",native.Select(b => b.GetProperty("gameVersion").GetString()+":"+b.GetProperty("sdkVersion").GetString()).Order())
+                +"\n"+string.Join("\n",refs.Order()));
+        } catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException) { return null; }
+    }
     // Classification of a terminal response survives expiry/delayed framework
     // commit. It stops only this exact RAM preparation, never another session.
-    internal void Block(PersonalPreparedSnapshot p) { if (ReferenceEquals(pending, p)) p.Blocked = true; }
+    internal void Block(PersonalPreparedSnapshot p, int status = 400) {
+        if (ReferenceEquals(pending, p)) { p.Blocked = true; supportRecoveryAllowed = status == 400; }
+    }
     // This is a dispatch deadline, not a new observation cadence. Measure from
     // the actual assertion time, not preparation/ACK; retries never renew it.
     // Both clocks must agree, so a wall-clock jump cannot invent a renewal.
@@ -124,18 +171,26 @@ internal sealed class HuntBillItemSync {
         if (!PersonalObservationCompatibility.Key(owner) || !PersonalSyncPolicy.HuntCoveragePayloadValid(payload)) return null;
         using var doc = JsonDocument.Parse(payload);
         var candidateObservedUtc = doc.RootElement.GetProperty("billItemCoverage").GetProperty("observedAtUtc").GetDateTime();
-        if (pending is { Blocked: true } && epoch == currentEpoch && pending.OwnerKey == owner
-            && HuntBillItemCoverage.SameStates(pending.Payload, payload)) return pending;
+        var sameInput = pending is not null && epoch == currentEpoch && pending.OwnerKey == owner
+            && HuntBillItemCoverage.SameStates(pending.Payload, payload);
+        if (!sameInput) { pending = null; supportRecoveryUsed = false; }
+        var supported = SupportedIdentity(payload);
+        if (pending is { Blocked: true }) {
+            // One recovery per unchanged semantic input/session, even if contracts
+            // alternate. Missing support, clocks and renewals cannot grant a retry.
+            if (!supportRecoveryAllowed || supportRecoveryUsed || supported is null || supported == preparedSupport) return pending;
+            pending = null; supportRecoveryUsed = true;
+        }
         if (pending is { Acknowledged: true } && epoch == currentEpoch && pending.OwnerKey == owner
             && candidateObservedUtc <= observedUtc && HuntBillItemCoverage.SameStates(pending.Payload, payload)) return pending;
         if (pending is not null && (epoch != currentEpoch || pending.OwnerKey != owner || !Fresh(now, monotonic)
-            || !HuntBillItemCoverage.SameStates(pending.Payload, payload))) Clear();
-        if (RefreshDue(now, monotonic, candidateObservedUtc)) Clear();
+            || !HuntBillItemCoverage.SameStates(pending.Payload, payload))) pending = null;
+        if (RefreshDue(now, monotonic, candidateObservedUtc)) pending = null;
         if (pending is null) {
             pending = new(owner, "hunt_bills", Guid.NewGuid().ToString("N"), payload, PersonalSyncPolicy.Hash(payload));
             preparedUtc = now; preparedMonotonic = monotonic;
             observedUtc = candidateObservedUtc;
-            epoch = currentEpoch;
+            epoch = currentEpoch; preparedSupport = supported;
         }
         return pending;
     }

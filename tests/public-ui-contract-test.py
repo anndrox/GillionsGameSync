@@ -46,7 +46,7 @@ assert 'huntLocal.ProgressRequested = configuration.ShowHuntProgress' in plugin
 assert 'CoveragePayload(string key, DateTime now) => policy.RetentionEnabled' in hunt
 assert plugin.count('fateLocal.Tick(now)')==1 and plugin.count('TickFateSender(now)')==1
 permission=(root/'PluginPermissions.cs').read_text()
-apply=permission.split('private void ApplyPermissions(',1)[1].split('private void ReconcilePermissions(',1)[0]
+apply=permission.split('private bool ApplyPermissions(',1)[1].split('private void ReconcilePermissions(',1)[0]
 assert apply.index('ReconcilePermissions(force: true)') < apply.index('permissionAuthority.Apply(')
 assert apply.count('ReconcilePermissions(force: true)') == 2
 assert 'PersonalSyncPolicy.Withdraw(configuration.PersonalSync, owner, resource)' in permission

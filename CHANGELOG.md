@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased: automatic Hunt support recovery
+
+- After a terminal Hunt HTTP 400, a changed, accepted Gillions support contract
+  can permit one fresh preparation for the same current sample. Unchanged input
+  remains stopped after a second rejection. An ignored older permission reply
+  preserves the newer permission lease and its support.
+- Existing permission, character, freshness and native-source checks still apply.
+  No new setup or data collection is introduced. This is a source change only;
+  [successor release and admission work](docs/hunt-support-recovery.md) remains.
+
 ## 1.0.31.7 (Stable, published 2026-10-28)
 
 - [Published Stable release](https://github.com/anndrox/GillionsGameSync/releases/tag/v1.0.31.7); the immutable asset was verified before the main feed advanced.

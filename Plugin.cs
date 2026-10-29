@@ -431,11 +431,14 @@ public sealed partial class Plugin : IDalamudPlugin {
             await CommitAsync(permit, _ => {
                 retainerUploadServerSupported = uploadSupported; presenceFailureCount = 0;
                 ClearConnectionFailure(presence: true);
-                ApplyPermissions(responseJson, permit, response, Stopwatch.GetElapsedTime(permissionRequestStarted));
+                var permissionsAccepted = ApplyPermissions(responseJson, permit, response, Stopwatch.GetElapsedTime(permissionRequestStarted));
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
                 marketAcceptedGeneration = NativeProduct.TransportOrigin(permit.Origin) && MarketContributor.Compatible(responseJson) ? permit.Session!.Generation : "";
                 personalAccepted.Clear();
                 huntCoverageAccepted = NativeProduct.TransportOrigin(permit.Origin) && PersonalSyncPolicy.HuntCoverageCompatible(responseJson, permit.Origin);
+                // Ignored older authority preserves the newer lease and its support.
+                if (permissionsAccepted) huntCoverageSync.ObserveSupport(huntCoverageAccepted && PersonalEnabled("hunt_bills")
+                    && response.RequestMessage?.RequestUri?.GetLeftPart(UriPartial.Authority) == permit.Origin ? responseJson : null, permit.Origin);
                 if (NativeProduct.TransportOrigin(permit.Origin)) foreach (var resource in PersonalSyncPolicy.Resources)
                     if (PersonalSyncPolicy.Compatible(responseJson, resource, permit.Origin)) personalAccepted.Add(resource);
                 if (huntCoverageAccepted) personalAccepted.Add("hunt_bills");
@@ -2154,7 +2157,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                     RecordDiagnostic($"Hunt coverage timing: observation→dispatch={observationAgeAtDispatchMs:F2}ms; preparation→dispatch={preparationAgeAtDispatchMs:F2}ms; worker→dispatch={System.Diagnostics.Stopwatch.GetElapsedTime(queuedAt, dispatchedAt).TotalMilliseconds:F2}ms; dispatch→headers={System.Diagnostics.Stopwatch.GetElapsedTime(dispatchedAt, headersAt).TotalMilliseconds:F2}ms; headers→receipt={System.Diagnostics.Stopwatch.GetElapsedTime(headersAt, receiptAt).TotalMilliseconds:F2}ms; receipt→framework={System.Diagnostics.Stopwatch.GetElapsedTime(receiptAt, committedAt).TotalMilliseconds:F2}ms; response={disposition}; refresh observation deadline={HuntBillItemSync.RefreshAfterSeconds}s. Numeric local timings only; no identity/payload logged.");
                 }
                 if (coverage && disposition == PersonalResponseDisposition.Blocked) {
-                    huntCoverageSync.Block(prepared);
+                    huntCoverageSync.Block(prepared, (int)response.StatusCode);
                     personalStatus = $"Hunt v2: HTTP {(int)response.StatusCode}; unchanged terminal input stopped in RAM. Historical progress and ordinary sync unchanged.";
                     return;
                 }

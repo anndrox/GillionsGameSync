@@ -1,0 +1,90 @@
+{
+  "billTypeId": 18,
+  "orderId": 268,
+  "items": [
+    2001361,
+    2001700,
+    2001701,
+    2001702,
+    2001362,
+    2001703,
+    2002113,
+    2002114,
+    2002115,
+    2002116,
+    2002628,
+    2002629,
+    2002630,
+    2002631,
+    2003090,
+    2003091,
+    2003092,
+    2003093,
+    2003509,
+    2003510,
+    2003511,
+    2003512
+  ],
+  "targets": [
+    {
+      "targetIndex": 0,
+      "targetId": 684,
+      "npcNameId": 13079,
+      "mapId": 857,
+      "placeNameId": 4545,
+      "fateId": 0,
+      "requiredKills": 2,
+      "observedKills": 0,
+      "targetType": 0,
+      "rank": 1
+    },
+    {
+      "targetIndex": 1,
+      "targetId": 694,
+      "npcNameId": 13089,
+      "mapId": 857,
+      "placeNameId": 4545,
+      "fateId": 0,
+      "requiredKills": 1,
+      "observedKills": 0,
+      "targetType": 0,
+      "rank": 1
+    },
+    {
+      "targetIndex": 2,
+      "targetId": 724,
+      "npcNameId": 12951,
+      "mapId": 858,
+      "placeNameId": 4581,
+      "fateId": 0,
+      "requiredKills": 1,
+      "observedKills": 0,
+      "targetType": 0,
+      "rank": 2
+    },
+    {
+      "targetIndex": 3,
+      "targetId": 704,
+      "npcNameId": 12943,
+      "mapId": 858,
+      "placeNameId": 4606,
+      "fateId": 0,
+      "requiredKills": 3,
+      "observedKills": 0,
+      "targetType": 0,
+      "rank": 2
+    },
+    {
+      "targetIndex": 4,
+      "targetId": 714,
+      "npcNameId": 12937,
+      "mapId": 858,
+      "placeNameId": 4577,
+      "fateId": 0,
+      "requiredKills": 1,
+      "observedKills": 0,
+      "targetType": 0,
+      "rank": 1
+    }
+  ]
+}
