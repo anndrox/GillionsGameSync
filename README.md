@@ -1,12 +1,13 @@
 # Gillions Game Sync
 
-## Stable 1.0.31.8 (prepared, not published)
+## Stable 1.0.31.8 (published)
 
-The candidate adds automatic recovery when Gillions accepts changed Hunt support
+Stable 1.0.31.8 ([release](https://github.com/anndrox/GillionsGameSync/releases/tag/v1.0.31.8)) adds automatic recovery when Gillions accepts changed Hunt support
 after refusing the same observations. Existing permission and source checks
-remain; no restart, re-pairing or extra setup is required. Published Stable and
-the public feed remain 1.0.31.7 until review and compatible Site admission are
-complete. See [candidate notes](docs/releases/v1.0.31.8.md).
+remain; no restart, re-pairing or extra setup is required. The existing Stable
+feed now offers 1.0.31.8. Update through Dalamud's plugin installer and confirm
+that version. Installed-device Hunt/FATE syncing remains unverified pending the
+owner's ordinary update and play. See [release notes](docs/releases/v1.0.31.8.md).
 
 ## Stable 1.0.31.7 (published)
 

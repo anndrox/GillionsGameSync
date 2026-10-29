@@ -1,14 +1,15 @@
 # Changelog
 
-## 1.0.31.8 (Stable candidate, not published)
+## 1.0.31.8 (Stable, published 2026-10-29)
 
 - After a terminal Hunt HTTP 400, a changed, accepted Gillions support contract
   can permit one fresh preparation for the same current sample. Unchanged input
   remains stopped after a second rejection. An ignored older permission reply
   preserves the newer permission lease and its support.
 - Existing permission, character, freshness and native-source checks still apply.
-  No new setup or data collection is introduced. This is a source change only;
-  [successor release and admission work](docs/hunt-support-recovery.md) remains.
+  No new setup or data collection is introduced. The immutable asset and main
+  feed are verified as 1.0.31.8 after compatible Site admission; installed-device
+  Hunt/FATE syncing remains unverified. See the [publication record](docs/releases/v1.0.31.8.md).
 
 ## 1.0.31.7 (Stable, published 2026-10-28)
 
