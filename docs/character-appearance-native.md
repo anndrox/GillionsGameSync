@@ -63,4 +63,3 @@ The files below were read from public developer sources at the exact revisions i
 ## Acceptance still required
 
 Owner's later read-only physical check: loaded versus empty equipped slots, ordinary customization, base item versus applied glamour, each dye, both ring entries in recorded order, transition/logout/GPose/transformation withholding, opt-out and reconnect removal. No release is authorized here. After any unmatched game/SDK patch, appearance remains paused until requalified.
-
