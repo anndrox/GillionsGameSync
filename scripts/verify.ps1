@@ -12,6 +12,8 @@ dotnet run --project $tests -c Release
 if ($LASTEXITCODE -ne 0) { throw 'Focused fixture executable failed.' }
 
 $partyFinderTests = Join-Path $root 'tests/GillionsGameSync.PartyFinderTests/GillionsGameSync.PartyFinderTests.csproj'
+dotnet run --project (Join-Path $root 'tests/GillionsGameSync.AppearanceTests/GillionsGameSync.AppearanceTests.csproj') -c Release -- --fixture (Join-Path $root 'artifacts/verification/appearance/character-appearance-v1.json')
+if ($LASTEXITCODE -ne 0) { throw 'Appearance contract, consent and queue fixtures failed.' }
 dotnet run --project $partyFinderTests -c Release
 if ($LASTEXITCODE -ne 0) { throw 'Party Finder contribution behavior fixture failed.' }
 

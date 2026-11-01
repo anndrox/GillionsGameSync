@@ -315,6 +315,9 @@ public sealed partial class Plugin : IDalamudPlugin {
             gameGui, marketConditions, addonLifecycle, configuration.DashboardFacts, () => { RequestConfigurationSave(); FlushConfigurationSave(); });
 #endif
         travelLocal = new TravelContextLocalView(pluginInterface,clientState,objects,travelPlayerState,dataManager,gameGui,marketConditions);
+#if GILLIONS_TEST_BUILD
+        appearanceCollector=new(clientState,objects,travelPlayerState,dataManager,marketConditions);
+#endif
         fateLocal = new FateLocalView(pluginInterface,commands,clientState,travelPlayerState,dataManager,marketConditions,fateTable,framework);
         fateLocal.Invalidated += InvalidateFateSender;
         travelLocal.Invalidated += ClearTravelPending;
@@ -407,6 +410,9 @@ public sealed partial class Plugin : IDalamudPlugin {
                 request.Headers.Add("X-Gillions-Personal-Contract", PersonalSyncPolicy.Contract);
                 request.Headers.Add("X-Gillions-Personal-Capability", TravelSyncPolicy.Capability);
                 request.Headers.Add(PersonalSyncPolicy.HuntCoverageHeader, PersonalSyncPolicy.HuntCoverageCapability);
+#if GILLIONS_TEST_BUILD
+                request.Headers.Add("X-Gillions-Appearance-Capability",AppearancePolicy.Capability);
+#endif
             }
 #endif
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
@@ -444,6 +450,9 @@ public sealed partial class Plugin : IDalamudPlugin {
                 if (huntCoverageAccepted) personalAccepted.Add("hunt_bills");
                 travelAccepted = NativeProduct.TransportOrigin(permit.Origin) && TravelSyncPolicy.Compatible(responseJson, permit.Origin);
                 if (!travelAccepted) ClearTravelPending();
+#if GILLIONS_TEST_BUILD
+                ApplyAppearance(responseJson,permit);
+#endif
                 if (requestFocus && focusClock is not null) huntFocus.Apply(responseJson, focusClock.UtcNow, HuntFocusEligible() && personalAccepted.Contains("hunt_bills"), DateTime.UtcNow);
                 else huntFocus.Clear();
 #endif
@@ -549,6 +558,9 @@ public sealed partial class Plugin : IDalamudPlugin {
         TickFateSender(now); // Independent managed transport: no extra game reads, commands or ordinary-sync gates.
         travelLocal.Tick(now); // Independent default-OFF, latest-only RAM, bounded 15-second read.
         TickTravelSync(now); // Also clears invalid/expired pending state while unpaired.
+#if GILLIONS_TEST_BUILD
+        TickAppearance(now);
+#endif
         if (now >= nextMarketMaintenanceUtc) {
             nextMarketMaintenanceUtc = now.AddMilliseconds(250);
             marketContributor.RefreshSession(CaptureMarketSession());
@@ -1566,6 +1578,9 @@ public sealed partial class Plugin : IDalamudPlugin {
     private void DrawSettings() {
         if (disposed) return;
         publicUi.Draw();
+#if GILLIONS_TEST_BUILD
+        DrawAppearanceSettings();
+#endif
         settingsVisible = publicUi.Visible;
     }
 
@@ -1620,6 +1635,9 @@ public sealed partial class Plugin : IDalamudPlugin {
         if (disposed) return;
         requestLifetime.Invalidate(); ClearTransientState(); ClearRetainerServerAcceptance(); retainerUploadedAtUtc = DateTime.MinValue; ClearCharacterFailure();
         permissionAuthority.Bind("", ""); permissionTransitions.Clear(); permissionFreshFrom.Clear();
+#if GILLIONS_TEST_BUILD
+        ResetAppearance();
+#endif
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         nativeVersionReported = false;
 #endif
@@ -2366,6 +2384,9 @@ public sealed partial class Plugin : IDalamudPlugin {
 #endif
         if (framework.IsInFrameworkUpdateThread) FlushConfigurationSave(urgent: true);
         disposed = true; requestLifetime.Dispose(); ClearTransientState();
+#if GILLIONS_TEST_BUILD
+        appearanceCancellation.Cancel();appearanceCancellation.Dispose();appearanceQueue.Clear();
+#endif
         clientState.Login -= OnLogin; clientState.Logout -= OnLogout;
         chatGui.ChatMessage -= OnChatMessage;
         chatGui.LogMessage -= OnLogMessage;
@@ -2405,6 +2426,7 @@ internal sealed record CapturedSnapshotBatch(string CharacterName, string Charac
 
 [Newtonsoft.Json.JsonConverter(typeof(LegacyPlanConfigurationConverter))]
 public sealed class PluginConfiguration : IPluginConfiguration {
+    public Dictionary<string,AppearanceChoice> CharacterAppearanceChoices { get; set; } = new();
     public bool ShowHuntProgress { get; set; }
     public bool LockHuntProgressPosition { get; set; }
     public bool OnboardingCompleted { get; set; }

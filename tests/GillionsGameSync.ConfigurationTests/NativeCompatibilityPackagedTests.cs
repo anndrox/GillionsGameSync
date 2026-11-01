@@ -15,6 +15,13 @@ internal static class NativeCompatibilityPackagedTests {
     // metadata tokens differ between unrelated builds), so qualification also
     // requires the byte-identical source comparison in docs/native-compatibility.md.
     private static readonly (string Family, (string Type, string[] Members)[] Uses)[] Families = [
+        ("Appearance", [
+            ("FFXIV.Client.Game.InventoryManager", ["Instance", "GetInventoryContainer"]),
+            ("FFXIV.Client.Game.InventoryContainer", ["Items", "Size", "Type", "IsLoaded"]),
+            ("FFXIV.Client.Game.InventoryItem", ["Container", "Slot", "IsSymbolic", "ItemId", "GlamourId", "Stains"]),
+            ("FFXIV.Client.Game.InventoryType", ["EquippedItems"]),
+            ("FFXIV.Client.Game.Character.CustomizeData", ["Data"]),
+        ]),
         ("Hunt", [
             ("FFXIV.Client.Game.UI.MobHunt", ["Instance", "ObtainedFlags", "CurrentKills", "GetKillCount", "GetObtainedHuntOrderRowId", "GetAvailableHuntOrderRowId"]),
             ("FFXIV.Client.Game.InventoryManager", ["Instance", "GetInventoryContainer"]),
@@ -59,6 +66,8 @@ internal static class NativeCompatibilityPackagedTests {
     private const string HuntLayout = "2312d897d65b4177", SubmarineLayout = "8c4e37e328c571a9",
         TravelLayout = "22c25911f7cc88bf", FateLayout = "6923c1e09b662322";
     private static readonly Dictionary<(string Family, string ClientStructs), string> Expected = new() {
+        // Hotfix measured locally; identical pinned source at earlier tuples, rechecked on CI archives.
+        [("Appearance", "7.56.2.9136")] = "bced42a9a7d80871", [("Appearance", "7.57.0.9378")] = "bced42a9a7d80871", [("Appearance", "7.57.0.9414")] = "bced42a9a7d80871",
         [("Hunt", "7.56.2.9136")] = HuntLayout, [("Hunt", "7.57.0.9378")] = HuntLayout, [("Hunt", "7.57.0.9414")] = HuntLayout,
         [("Submarine", "7.56.2.9136")] = SubmarineLayout, [("Submarine", "7.57.0.9414")] = SubmarineLayout,
         [("Travel", "7.56.2.9136")] = TravelLayout, [("Travel", "7.57.0.9414")] = TravelLayout,

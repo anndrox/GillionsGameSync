@@ -128,6 +128,17 @@ Assert(!(bool)configurationType.GetProperty("ShowHuntProgress")!.GetValue(public
     && (!testingProduct || !(bool)configurationType.GetProperty("ContributeObservedMarketData")!.GetValue(publicRestart)!),
     "Hunt Progress OFF changed old credentials, ordinary sync, website commands or contribution choices.");
 Console.WriteLine($"Actual public preferences default/upgrade/restart/OFF isolation PASS: {product}.");
+var appearanceChoices=configurationType.GetProperty("CharacterAppearanceChoices")!;
+foreach(var appearanceConfiguration in new[]{Activator.CreateInstance(configurationType)!,JsonConvert.DeserializeObject("{\"AutomaticSync\":true,\"ShareHuntRoutingLocation\":true}",configurationType)!})
+    Assert(((System.Collections.IDictionary)appearanceChoices.GetValue(appearanceConfiguration)!).Count==0,"Appearance must be off for new and upgraded configurations.");
+var appearanceMetadata=JsonConvert.DeserializeObject("{\"CharacterAppearanceChoices\":{\"fixture-session:123\":{\"Enabled\":false,\"Pending\":true,\"Nonce\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"ExpectedGeneration\":null,\"CharacterId\":9}}}",configurationType)!;
+configurationType.GetMethod("Save")!.Invoke(appearanceMetadata,[savedViaPlugin]);
+var appearanceRestart=load.Invoke(configurations,[product])!;
+var appearanceJson=JObject.FromObject(appearanceRestart)["CharacterAppearanceChoices"]!;
+Assert(appearanceJson["fixture-session:123"]!["Pending"]!.Value<bool>()&&!appearanceJson["fixture-session:123"]!["Enabled"]!.Value<bool>(),"Offline opt-out control survives restart.");
+Assert(!appearanceJson.ToString().Contains("customization",StringComparison.OrdinalIgnoreCase)&&!appearanceJson.ToString().Contains("equipment",StringComparison.OrdinalIgnoreCase),"No appearance bytes persisted.");
+Assert((pluginAssembly.GetType("GillionsGameSync.CharacterAppearanceCollector") is not null)==testingProduct,"Appearance reader exists only in Testing.");
+Console.WriteLine($"Actual appearance default/upgrade/control restart/no-payload/channel isolation PASS: 5; {product}.");
 HuntWindowPackagedTests.Run(pluginAssembly, testingProduct);
 var marketSetting = configurationType.GetProperty("ContributeObservedMarketData");
 var personalHuntSetting = configurationType.GetProperty("SyncPersonalHunts");
