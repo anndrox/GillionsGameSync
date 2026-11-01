@@ -1,5 +1,11 @@
 # Native compatibility
 
+Appearance is an unreleased Testing-only family. Its exact accessor comparison,
+slot basis, packaged layout fingerprint and pending physical acceptance are in
+[Appearance native qualification](character-appearance-native.md). Stable does
+not include the appearance collector or setting. Source qualification does not
+authorize release or replace the owner's later read-only physical check.
+
 `NativeCompatibility.cs` is the one place that decides on which exact client
 runtimes the patch-sensitive collector families (Hunt, Submarine, Travel, FATE and
 Dashboard) may read native game state. Each family lists the exact runtimes it was

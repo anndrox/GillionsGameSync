@@ -13,7 +13,7 @@ internal sealed record NativeBuild(string GameBuild, string DalamudVersion, stri
 // and the patch-day procedure: docs/native-compatibility.md). Anything unlisted
 // fails closed before any native read; qualifying one family never admits
 // another. Site authority and player consent remain separate, later gates.
-internal enum NativeFamily { Hunt, Submarine, Travel, Fate, Dashboard, Beastmaster }
+internal enum NativeFamily { Hunt, Submarine, Travel, Fate, Dashboard, Beastmaster, Appearance }
 
 internal static class NativeCompatibility {
     internal static readonly NativeBuild September = new("2026.09.15.0000.0000", "15.0.3.6",
@@ -25,7 +25,7 @@ internal static class NativeCompatibility {
         "30509c3b4fd00edd9a3d65b7bbf16433d84be03b", "7.57.0.9414", "dd57986b8287e7c6ed9c27198f8c76cb04a81dfe", "7.7.0", "7.5.1");
 
     internal static NativeBuild[] Qualified(NativeFamily family) => family switch {
-        NativeFamily.Hunt or NativeFamily.Fate => [September, October, OctoberHotfix],
+        NativeFamily.Hunt or NativeFamily.Fate or NativeFamily.Appearance => [September, October, OctoberHotfix],
         NativeFamily.Submarine or NativeFamily.Travel => [September, OctoberHotfix],
         // Beastmaster (Testing diagnostics) shipped on September and was never requalified.
         NativeFamily.Dashboard or NativeFamily.Beastmaster => [September],
