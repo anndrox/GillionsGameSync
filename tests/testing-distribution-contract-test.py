@@ -13,7 +13,10 @@ experience=(r/'PublicExperience.cs').read_bytes().replace(b'\r\n',b'\n').decode(
 accepted=subprocess.check_output(['git','show',public+':PublicExperience.cs'],cwd=r).replace(b'\r\n',b'\n').decode('utf-8')
 assert outside_status(experience)==outside_status(accepted)
 hunt=(r/'HuntBillLocalView.cs').read_text(encoding='utf-8').replace('    internal bool Reading => ReadEnabled;\n','')
-assert hunt.replace('NativeCompatibility.Supports(NativeFamily.Hunt, ','PersonalObservationCompatibility.Supports(')==subprocess.check_output(['git','show',public+':HuntBillLocalView.cs'],cwd=r).decode().replace('\r\n','\n')
+accepted_hunt=subprocess.check_output(['git','show',public+':HuntBillLocalView.cs'],cwd=r).decode().replace('\r\n','\n')
+for old_status in ['Private TEST sync is controlled separately in the main window.', 'Private TEST sync status is in the main window.']:
+    accepted_hunt=accepted_hunt.replace(old_status,'Private sync requires separate permission.')
+assert hunt.replace('NativeCompatibility.Supports(NativeFamily.Hunt, ','PersonalObservationCompatibility.Supports(')==accepted_hunt
 windows=(r/'PublicGameSyncUi.cs').read_text(encoding='utf-8')
 normalized=windows.replace('        string idSuffix=testing ? "Test" : "";\n','').replace('+idSuffix','')
 # Owner-reported duplicate windows after Reconnect -> Finish (2026-10-24): only FinishPairing may differ.
@@ -64,4 +67,4 @@ assert {k:stable[0][k] for k in ['Author','Name','Description','Punchline','Icon
     'IconUrl':'https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png',
     'DalamudApiLevel':15,'Tags':['inventory','collection','utility'],'ApplicableVersion':'any'}
 assert re.fullmatch(r'[0-9a-f]{64}  '+re.escape(f'GillionsGameSync-{version}.zip'),(r/f'data/releases/v{version}.sha256').read_text().strip())
-print('Testing distribution source PASS: accepted UI unchanged; only inspected Hunt source qualification differs; pairing/permit/build/redirect fences; historical Testing feed unchanged; Stable feed is a Stable-only immutable release entry.')
+print('Testing distribution source PASS: accepted UI and Hunt boundaries; approved Hunt qualification and status copy; pairing/permit/build/redirect fences; historical Testing feed unchanged; Stable feed is a Stable-only immutable release entry.')
