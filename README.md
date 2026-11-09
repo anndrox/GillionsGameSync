@@ -1,10 +1,10 @@
 # Gillions Game Sync
 
-## Stable 1.0.31.9 (prepared)
+## Stable 1.0.31.9 (published)
 
 Hunt check-ins, hunt maps and routing location pause while you are in a duty and resume when you leave. Status text no longer says TEST on Stable.
 
-See the [candidate notes](docs/releases/v1.0.31.9.md).
+See the [GitHub Release](https://github.com/anndrox/GillionsGameSync/releases/tag/v1.0.31.9) and [release record](docs/releases/v1.0.31.9.md).
 
 ## Stable 1.0.31.8 (prepared, not published)
 
