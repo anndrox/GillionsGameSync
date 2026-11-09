@@ -2067,7 +2067,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         if (personalCancellation.Remove(resource, out var previous)) { previous.Cancel(); previous.Dispose(); }
         if (resource == "hunt_bills") huntCoverageSync.Clear();
         nextPersonalUtc = DateTime.MinValue; nextRetainerPresenceUtc = DateTime.MinValue;
-        personalStatus = enabled ? "Awaiting compatible TEST permission and positive current-character observations."
+        personalStatus = enabled ? "Awaiting compatible Gillions permission and positive current-character observations."
             : "Private resource sync OFF; retained/pending state preserved. Ordinary sync unchanged.";
         RequestConfigurationSave();
     }
@@ -2086,7 +2086,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             PersonalEnabled("hunt_bills") || PersonalEnabled("submarine_personal"))) return;
         nextPersonalUtc = now.AddSeconds(5);
         if (!NativeProduct.TransportOrigin(configuration.ActiveSession!.Origin)) {
-            personalStatus = "Private sync requires pairing at https://test.gillions.app; no personal data sent. Ordinary sync unchanged."; return;
+            personalStatus = "Private sync requires compatible Gillions HTTPS pairing. No personal data sent. Ordinary sync unchanged."; return;
         }
         // Presence remains useful with ordinary automatic sync OFF, but never
         // grants missing server pairing permissions or changes the paired origin.
@@ -2206,8 +2206,8 @@ public sealed partial class Plugin : IDalamudPlugin {
                     prepared.Acknowledged = true; personalFailures = 0; personalRetryUtc = DateTime.MinValue;
                     nextPersonalUtc = DateTime.MinValue; // Drain a newer semantic successor immediately after this receipt.
                     personalStatus = coverage ? "Hunt v2 receipt accepted: bounded item absence/presence facts only. Historical progress unchanged; exact order/cycle unsupported."
-                        : $"{prepared.Resource}: TEST receipt accepted. Positive retained observations only; current ownership/reset/completion claims remain limited.";
-                    RecordDiagnostic($"Uploaded private {prepared.Resource} to shared TEST: HTTP {(int)response.StatusCode}; valid receipt. No live correctness claim.");
+                        : $"{prepared.Resource}: Receipt accepted by Gillions. Positive retained observations only; current ownership/reset/completion claims remain limited.";
+                    RecordDiagnostic($"Uploaded private {prepared.Resource} to Gillions: HTTP {(int)response.StatusCode}; valid receipt. No live correctness claim.");
                 } else if (disposition == PersonalResponseDisposition.Blocked) {
                     prepared.Blocked = true;
                     personalStatus = $"{prepared.Resource}: HTTP {(int)response.StatusCode}; private snapshot stopped/preserved. Ordinary sync unchanged.";

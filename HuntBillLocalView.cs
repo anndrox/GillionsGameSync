@@ -64,7 +64,7 @@ internal sealed class HuntBillLocalView : IDisposable {
     private sealed record View(bool Enabled, string Status, string[] Rows, double Milliseconds,
         int Attempts = 0, DateTime? LastAttemptUtc = null, string CoverageStatus = "Hunt item coverage UNAVAILABLE.",
         DateTime? CoverageObservedAtUtc = null, string[]? CoverageRows = null);
-    private volatile View view = new(false, "Hunt retention off. Private TEST sync is controlled separately in the main window.", [], 0);
+    private volatile View view = new(false, "Hunt retention off. Private sync requires separate permission.", [], 0);
 
     internal HuntBillLocalView(IDalamudPluginInterface ui, ICommandManager commands, IFramework framework,
         IClientState client, IDataManager data, ICondition conditions, IChatGui chat, HuntBillRetention store, System.Action persist) {
@@ -290,7 +290,7 @@ internal sealed class HuntBillLocalView : IDisposable {
             LastDiagnostic = $"Hunt supported raw/accessor counter/gate state {(fingerprint != rawFingerprint ? "changed" : "unchanged")}; retained semantics {(policy.LastSemanticChange ? "changed" : "unchanged")}; semantic revision={SemanticRevision}; admitted bills={observations.Count}; rejected/unavailable={partial}. Missing state is UNKNOWN.\n{lastProgressDiagnostic}\n" + string.Join('\n', details.Take(176));
             rawFingerprint = fingerprint;
             var status = observations.Count == 0 ? $"No corroborated bills observed; {partial} partial/unmatched. NOT proof of no bills. Prior state preserved."
-                : $"Observed {observations.Count} positive bill cache snapshots; {partial} partial/unmatched. Admission uses current Key Item corroboration or a bounded same-session final-counter transition. Bill windows not required. Current order/cache ownership/reset unverified. Private TEST sync status is in the main window.";
+                : $"Observed {observations.Count} positive bill cache snapshots; {partial} partial/unmatched. Admission uses current Key Item corroboration or a bounded same-session final-counter transition. Bill windows not required. Current order/cache ownership/reset unverified. Private sync requires separate permission.";
             if (store.CapacityReached) status += " Retention capacity reached: new character observations paused; existing history preserved.";
             Publish(status, characterKey, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         } catch (Exception) { itemCoverage.Clear(); Publish("Hunt read/save failed; history preserved. New data may be memory-only. No live correctness claim."); }

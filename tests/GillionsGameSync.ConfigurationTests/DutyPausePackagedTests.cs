@@ -140,15 +140,20 @@ internal static class DutyPausePackagedTests {
             using var stream = File.OpenRead(assembly.Location);
             using var pe = new PEReader(stream);
             var metadata = pe.GetMetadataReader();
-            var status = new List<string>();
+            var literals = new List<string>();
             for (var handle = metadata.GetNextHandle(default(UserStringHandle)); !handle.IsNil; handle = metadata.GetNextHandle(handle)) {
-                var value = metadata.GetUserString(handle);
-                if (value.StartsWith("Travel ", StringComparison.Ordinal) || value.Contains("travel grant", StringComparison.Ordinal)
-                    || value.StartsWith("; waiting for compatible ", StringComparison.Ordinal)) status.Add(value);
+                literals.Add(metadata.GetUserString(handle));
             }
-            Check(status.Any(text => text.Contains("accepted by Gillions")) && status.Any(text => text.Contains("HTTPS pairing"))
-                && status.Any(text => text.Contains("compatible Gillions acknowledgement")), "compiled public travel status strings present");
-            Check(status.All(text => !text.Contains("TEST", StringComparison.Ordinal)), "compiled public travel status strings contain no TEST");
+            Check(literals.Any(text => text.StartsWith("Travel context accepted by Gillions", StringComparison.Ordinal))
+                && literals.Any(text => text.Contains("HTTPS pairing and its separate travel grant", StringComparison.Ordinal))
+                && literals.Any(text => text.Contains("compatible Gillions acknowledgement", StringComparison.Ordinal)), "compiled public travel status strings present");
+            Check(literals.Any(text => text.StartsWith("Awaiting compatible Gillions permission", StringComparison.Ordinal))
+                && literals.Any(text => text.StartsWith("Private sync requires compatible Gillions HTTPS pairing", StringComparison.Ordinal))
+                && literals.Any(text => text.StartsWith(": Receipt accepted by Gillions", StringComparison.Ordinal)), "compiled public personal status strings present");
+            // The protocol refusal code and the shared window title's Testing badge are never public status text.
+            var unexpected = literals.Where(text => text.Contains("TEST", StringComparison.Ordinal)
+                && text is not ("TESTING_PRODUCT_REQUIRED" or " [TESTING]")).ToArray();
+            Check(unexpected.Length == 0, "compiled public status strings contain no TEST. Unexpected strings: " + string.Join(" | ", unexpected));
         }
         Console.WriteLine($"Packaged duty pause PASS: {checks} checks ({assembly.GetName().Name}).");
     }
