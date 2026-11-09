@@ -1971,6 +1971,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             || marketConditions[ConditionFlag.BoundByDuty95];
         if (paused == inDuty) return;
         inDuty = paused;
+        if (paused) ClearTravelPending();
         travelLocal.SetDutyPaused(paused);
         if (!paused) return;
         huntFocus.Clear();

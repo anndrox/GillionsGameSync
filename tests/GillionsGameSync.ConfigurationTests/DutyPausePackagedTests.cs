@@ -77,6 +77,8 @@ internal static class DutyPausePackagedTests {
         Set("travelSync", travelSync);
         Set("travelAccepted", true);
         Set("travelBinding", "binding");
+        Set("travelRefusals", Activator.CreateInstance(TypeOf("TravelRefusalBackoff"))!);
+        Set("nextRetainerPresenceUtc", DateTime.MaxValue);
 
         // Supply a supported game version without opening local game files or reading native state.
         var gameData = (GameData)RuntimeHelpers.GetUninitializedObject(typeof(GameData));
@@ -93,8 +95,7 @@ internal static class DutyPausePackagedTests {
         travelType.GetField("player", Instance)!.SetValue(travel, Service<IPlayerState>((method, _) =>
             method.Name == "get_ContentId" ? contentId : method.Name == "get_IsLoaded"));
         travelType.GetField("data", Instance)!.SetValue(travel, new UnavailableCollectibleData(gameData));
-        travelType.GetEvent("Invalidated", Instance)!.GetAddMethod(true)!.Invoke(travel,
-            [pluginType.GetMethod("ClearTravelPending", Instance)!.CreateDelegate<Action>(plugin)]);
+        // Leave the view's invalidation event unwired to exercise the duty-entry clear directly.
         Call(travel, "SetEnabled", true);
         Set("travelLocal", travel);
 
@@ -102,8 +103,11 @@ internal static class DutyPausePackagedTests {
         var observation = Activator.CreateInstance(observationType,
             [100u, 200u, 10.1, 20.2, now, "2026.10.16.0000.0000", "7.57.0.9414", "1.0.0", "UNAVAILABLE", Array.CreateInstance(TypeOf("TravelDestination"), 0)])!;
         var flags = new[] { ConditionFlag.BoundByDuty, ConditionFlag.BoundByDuty56, ConditionFlag.BoundByDuty95 };
+        var pendingProperty = travelSync.GetType().GetProperty("Pending", Instance)!;
+        var travelInFlight = pluginType.GetField("travelInFlight", Instance)!;
         Check(Gate("HuntFocusEligible") && Property("HuntReceivingEnabled") && Gate("TravelAdmitted"), "admission before duty");
         foreach (var flag in flags) {
+            Check((bool)Call(travelState, "Observe", contentId, observation, now)!, "fresh location available before duty");
             var pending = Call(travelSync, "Prepare", "binding", observation, now)!;
             var pendingLifetime = (CancellationTokenSource)pending.GetType().GetProperty("Lifetime", Instance)!.GetValue(pending)!;
             var travelCancellation = pendingLifetime.Token;
@@ -114,7 +118,7 @@ internal static class DutyPausePackagedTests {
             Check(reads.SequenceEqual(flags.Take(Array.IndexOf(flags, flag) + 1)), $"one sampled check for {flag}");
             Check(!Gate("HuntFocusEligible") && !Property("HuntReceivingEnabled") && !Gate("TravelAdmitted"), $"admission paused for {flag}");
             Check(mapCancellation.IsCancellationRequested, "in-flight Hunt map cancelled");
-            Check(travelCancellation.IsCancellationRequested && travelSync.GetType().GetProperty("Pending", Instance)!.GetValue(travelSync) is null,
+            Check(travelCancellation.IsCancellationRequested && pendingProperty.GetValue(travelSync) is null,
                 "pending travel cleared and cancelled");
             Call(plugin, "TickTravelSync", now);
             Check((string)pluginType.GetField("travelStatus", Instance)!.GetValue(plugin)! == "Paused while in a duty.", "paused travel status");
@@ -125,6 +129,10 @@ internal static class DutyPausePackagedTests {
             activeFlag = null;
             Call(plugin, "UpdateDutyPause");
             Check(Gate("HuntFocusEligible") && Property("HuntReceivingEnabled") && Gate("TravelAdmitted"), $"admission resumes after {flag}");
+            // The observation would still be fresh after this short duty. A resumed tick must not prepare or dispatch it.
+            Call(plugin, "TickTravelSync", now.AddSeconds(1));
+            Check(pendingProperty.GetValue(travelSync) is null && !(bool)travelInFlight.GetValue(plugin)!,
+                "pre-duty location never dispatches on resume");
         }
         ((CancellationTokenSource)pluginType.GetField("huntMapCancellation", Instance)!.GetValue(plugin)!).Dispose();
 
