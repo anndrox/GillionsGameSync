@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.31.9 (Stable candidate)
+
+Hunt check-ins, hunt maps and routing location pause while you are in a duty and resume when you leave. Status text no longer says TEST on Stable.
+
+See the [release notes](docs/releases/v1.0.31.9.md).
+
 ## 1.0.31.8 (Stable candidate, not published)
 
 - After a terminal Hunt HTTP 400, a changed, accepted Gillions support contract
