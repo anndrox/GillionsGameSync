@@ -30,7 +30,7 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
     // Build metadata is a compatibility guard, not the dispatch authority.
     internal static readonly Uri Endpoint = new(ApprovedTestingOrigin + ContributionPath);
     internal static Uri SessionEndpoint(string origin) {
-        if (!NativeProduct.TransportOrigin(origin)) throw new InvalidOperationException("Party Finder Testing requires the approved secure TEST pairing.");
+        if (!NativeProduct.TransportOrigin(origin)) throw new InvalidOperationException("Party Finder contribution requires compatible Gillions HTTPS pairing.");
         return new Uri(origin + ContributionPath);
     }
     internal const int MaximumBodyBytes = 262144;
@@ -50,7 +50,7 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
     private DateTime due = DateTime.MaxValue;
     private string? blockedAuthorization;
     private bool endpointStopped;
-    private string status = "Off. Manage this Testing device's public Party Finder contribution on Gillions.";
+    private string status = "Off. Manage this device's public Party Finder contribution on Gillions.";
     private bool enabledState;
     private bool disposed;
     private bool inFlight;
@@ -95,7 +95,7 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
             // Refresh the persistent authorization flag even without a runtime-key change.
             if (session is not null && current?.Key == session.Key) session = current;
             if (session?.AuthorizationBlocked == true) blockedAuthorization = session.AuthorizationKey;
-            if (enabledState && session is null) status = "Waiting for a logged-in, paired Testing client on the approved secure TEST origin.";
+            if (enabledState && session is null) status = "Waiting for a logged-in character and compatible Gillions HTTPS pairing.";
             if (session is not null && blockedAuthorization == session.AuthorizationKey)
                 status = "Authorization stopped. Check the account and save an explicit contribution decision on Gillions; no re-pairing required for permission changes.";
             if (endpointStopped) status = "Party Finder endpoint unavailable or redirected; contribution stopped for this load. Site must correct deployment before reload.";

@@ -149,12 +149,18 @@ public sealed partial class Plugin {
         }
         ImGui.SetCursorScreenPos(start); ImGui.Dummy(band);
     }
-    private static void DrawFeatureHealth(PublicHealth health,bool quietGlobal=false) {
+    private void DrawFeatureHealth(PublicHealth health,bool quietGlobal=false) {
         // Fixed label column, wrapping value column: no consent controls.
         if(!ImGui.BeginTable("FeatureHealth",2,ImGuiTableFlags.SizingFixedFit)) return;
         ImGui.TableSetupColumn("Feature",ImGuiTableColumnFlags.WidthFixed,105*ImGui.GetFontSize()/17f);
         ImGui.TableSetupColumn("Health",ImGuiTableColumnFlags.WidthStretch);
-        DrawFeatureRow("Hunts",quietGlobal ? "Unavailable" : health.Hunts);
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
+        if (inDuty) {
+            DrawFeatureRow("Hunts",DutyPauseStatus);
+            DrawFeatureRow("Routing location",DutyPauseStatus);
+        } else
+#endif
+            DrawFeatureRow("Hunts",quietGlobal ? "Unavailable" : health.Hunts);
         DrawFeatureRow("Party Finder",quietGlobal ? "Unavailable" : health.PartyFinder);
         DrawFeatureRow("FATEs",quietGlobal ? "Unavailable" : health.Fates);
         DrawFeatureRow("Market",quietGlobal ? "Unavailable" : health.Market);

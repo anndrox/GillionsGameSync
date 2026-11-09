@@ -28,13 +28,14 @@ internal sealed class TravelContextLocalView : IDisposable {
     private readonly TravelContextState state = new();
     internal event System.Action? Invalidated;
     // Cheap lifecycle admission; no position/cache reads or JSON per frame.
-    internal bool Available(ulong character) => !disposed && state.Enabled && client.IsLoggedIn && player.IsLoaded
+    internal bool Available(ulong character) => !disposed && !dutyPaused && state.Enabled && client.IsLoggedIn && player.IsLoaded
         && character != 0 && player.ContentId == character && !client.IsPvP && !client.IsGPosing
         && !conditions[ConditionFlag.BetweenAreas] && !conditions[ConditionFlag.BetweenAreas51]
         && NativeCompatibility.Supports(NativeFamily.Travel, GameVersion(), nativeVersion);
     internal TravelObservation? Current(ulong character, DateTime now) => Available(character) ? state.Current(character,now) : null;
     internal void ClearSession() { state.Clear(); Reset(); }
     private bool disposed;
+    private volatile bool dutyPaused;
 #if GILLIONS_TEST_BUILD
     private bool visible;
 #endif
@@ -59,8 +60,12 @@ internal sealed class TravelContextLocalView : IDisposable {
         if (state.Enabled == enabled) return;
         state.SetEnabled(enabled);
         Invalidated?.Invoke();
-        view = new(enabled ? "Awaiting current session; transport requires the independent shared TEST grant."
+        view = new(enabled ? "Awaiting current session; transport requires the independent travel grant."
             : "Location consent OFF; volatile location cleared. No uploads.", [], 0, 0);
+    }
+    internal void SetDutyPaused(bool paused) {
+        dutyPaused = paused;
+        if (paused) ClearSession();
     }
     private void Reset() { state.Invalidate(); Invalidated?.Invoke(); view = new(state.Enabled
         ? "Session/map changed: no current travel observation. No upload."
@@ -105,6 +110,7 @@ internal sealed class TravelContextLocalView : IDisposable {
         return result.ToArray();
     }
     internal void Tick(DateTime now) {
+        if (dutyPaused) return;
         if (view.ObservedAtUtc is { } observed && now >= observed.AddSeconds(TravelPolicy.TtlSeconds)) Unavailable("Current travel observation expired; volatile facts cleared.");
         if (view.ObservedAtUtc is not null && !Available(player.ContentId)) Unavailable("Current player/build unavailable; volatile facts cleared.");
         if (disposed || !state.Begin(now)) return; // no position/native reads each frame
@@ -139,7 +145,7 @@ internal sealed class TravelContextLocalView : IDisposable {
                 if (label.Length>80) label=label[..80];
                 rows.Add($"{label} (Aetheryte {d.AetheryteId}): list quote {d.ObservedListGil} Gil; Home {d.Home}; Free {d.Free}; Favored {d.Favored}");
             }
-            view = new("Private current context observed locally. HTTPS TEST transport is separately gated by the paired travel grant.",rows.ToArray(),
+            view = new("Private current context observed locally. HTTPS transport requires the paired travel grant.",rows.ToArray(),
                 Stopwatch.GetElapsedTime(start).TotalMilliseconds,GC.GetAllocatedBytesForCurrentThread()-allocated,now);
         } catch (Exception) { Unavailable("Travel source unavailable; no current context. Unrelated sync preserved."); }
     }
@@ -147,12 +153,12 @@ internal sealed class TravelContextLocalView : IDisposable {
 #if GILLIONS_TEST_BUILD
     private void Draw() {
         if (!visible || disposed) return;
-        if (ImGui.Begin("Hunt routing context — private local test",ref visible)) {
+        if (ImGui.Begin("Hunt routing context (private local test)",ref visible)) {
             var current=view;
             ImGui.TextWrapped("Separate OFF-by-default location permission. Current map-space position rounded to 0.1; RAM only, no movement history. Read at most once/15 seconds. Upload only to HTTPS shared TEST with its independent travel grant. Naturally open Teleport to inspect cached quotes; never opened by Gillions.");
-            ImGui.TextWrapped(current.Status);
+            ImGui.TextWrapped(dutyPaused ? Plugin.DutyPauseStatus : current.Status);
             var age = current.ObservedAtUtc is { } observed ? (DateTime.UtcNow-observed).TotalSeconds : double.PositiveInfinity;
-            if (age is >= 0 and < TravelPolicy.TtlSeconds) {
+            if (!dutyPaused && age is >= 0 and < TravelPolicy.TtlSeconds) {
                 foreach (var row in current.Rows) ImGui.TextWrapped(row);
                 ImGui.TextWrapped($"Observation age: {age:F0}s.");
             } else ImGui.TextWrapped("Current context UNAVAILABLE/EXPIRED. No coordinates or prices implied.");
