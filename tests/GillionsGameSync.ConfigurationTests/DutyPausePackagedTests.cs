@@ -1,0 +1,153 @@
+using System.Reflection;
+using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
+using System.Reflection.PortableExecutable;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.ClientState.Objects.SubKinds;
+using Dalamud.Plugin.Services;
+using Lumina;
+using Lumina.Data;
+
+internal static class DutyPausePackagedTests {
+    private const BindingFlags Instance = BindingFlags.Instance | BindingFlags.NonPublic;
+    private const BindingFlags Static = BindingFlags.Static | BindingFlags.NonPublic;
+
+    internal static void Run(Assembly assembly) {
+        Type TypeOf(string name) => assembly.GetType("GillionsGameSync." + name, true)!;
+        var pluginType = TypeOf("Plugin");
+        var plugin = RuntimeHelpers.GetUninitializedObject(pluginType);
+        void Set(string name, object value) => pluginType.GetField(name, Instance)!.SetValue(plugin, value);
+        object? Call(object target, string name, params object?[] args) => target.GetType().GetMethod(name, Instance)!.Invoke(target, args);
+        bool Gate(string name) => (bool)Call(plugin, name)!;
+        bool Property(string name) => (bool)pluginType.GetProperty(name, Instance)!.GetValue(plugin)!;
+        int checks = 0;
+        void Check(bool pass, string reason) {
+            if (!pass) throw new Exception("Packaged duty pause: " + reason);
+            checks++;
+        }
+
+        var now = DateTime.UtcNow;
+        const string device = "00000000-0000-4000-8000-000000000001";
+        const string synthetic = "SYNTHETIC_DEVICE_CREDENTIAL_0000000000";
+        const ulong contentId = 100;
+        var config = Activator.CreateInstance(TypeOf("PluginConfiguration"))!;
+        var session = TypeOf("PairedSession").GetMethod("Create")!.Invoke(null, ["https://test.gillions.app", device, synthetic])!;
+        config.GetType().GetProperty("ActiveSession")!.SetValue(config, session);
+        config.GetType().GetProperty("DeviceId")!.SetValue(config, device);
+        config.GetType().GetProperty("DeviceToken")!.SetValue(config, synthetic);
+        config.GetType().GetProperty("PairingRequired")!.SetValue(config, false);
+        Set("configuration", config);
+        Set("activeOwnedState", Activator.CreateInstance(TypeOf("OwnedCharacterState"))!);
+        Set("activeRetainerCharacterContentId", contentId);
+
+        var authority = Activator.CreateInstance(TypeOf("PermissionAuthority"), true)!;
+        var keys = (string[])authority.GetType().GetField("Keys", Static)!.GetValue(null)!;
+        var permissions = keys.ToDictionary(key => key, key => new {
+            scope = key == "marketContribution" ? "account" : "device", state = "explicit", enabled = true,
+            generation = "00000000-0000-4000-8000-000000000002", decidedAt = now.AddSeconds(-1).ToString("O")
+        });
+        var presence = JsonSerializer.Serialize(new {
+            ok = true, permissionAuthority = new {
+                revision = 1, deviceBinding = new { deviceId = device, pairedAt = now.AddDays(-1).ToString("O"), characterId = contentId },
+                issuedAt = now.ToString("O"), expiresAt = now.AddSeconds(30).ToString("O"), permissions
+            }
+        });
+        Call(authority, "Bind", "synthetic-enrollment", device);
+        Check((bool)Call(authority, "Apply", presence, now, Environment.TickCount64, null)!, "synthetic permission lease");
+        Set("permissionAuthority", authority);
+
+        ConditionFlag? activeFlag = null;
+        var reads = new List<ConditionFlag>();
+        var conditions = Service<ICondition>((_, args) => {
+            var flag = (ConditionFlag)args![0]!;
+            reads.Add(flag);
+            return flag == activeFlag;
+        });
+        var localPlayer = RuntimeHelpers.GetUninitializedObject(typeof(IPlayerCharacter).Assembly
+            .GetType("Dalamud.Game.ClientState.Objects.SubKinds.PlayerCharacter", true)!);
+        var client = Service<IClientState>((method, _) => method.Name == "get_IsLoggedIn");
+        Set("marketConditions", conditions);
+        Set("clientState", client);
+        Set("objects", Service<IObjectTable>((_, _) => localPlayer));
+        Set("huntFocus", Activator.CreateInstance(TypeOf("HuntFocusState"), true)!);
+        Set("huntMapCancellation", new CancellationTokenSource());
+        var travelSync = Activator.CreateInstance(TypeOf("TravelSyncState"), true)!;
+        Set("travelSync", travelSync);
+        Set("travelAccepted", true);
+        Set("travelBinding", "binding");
+
+        // Supply a supported game version without opening local game files or reading native state.
+        var gameData = (GameData)RuntimeHelpers.GetUninitializedObject(typeof(GameData));
+        var repo = (Repository)RuntimeHelpers.GetUninitializedObject(typeof(Repository));
+        typeof(Repository).GetField("<Version>k__BackingField", Instance)!.SetValue(repo, "2026.10.16.0000.0000");
+        typeof(GameData).GetField("<Repositories>k__BackingField", Instance)!.SetValue(gameData, new Dictionary<string, Repository> { ["ffxiv"] = repo });
+        var travelType = TypeOf("TravelContextLocalView");
+        var travel = RuntimeHelpers.GetUninitializedObject(travelType);
+        var travelState = Activator.CreateInstance(TypeOf("TravelContextState"), true)!;
+        travelType.GetField("state", Instance)!.SetValue(travel, travelState);
+        travelType.GetField("nativeVersion", Instance)!.SetValue(travel, "7.57.0.9414");
+        travelType.GetField("client", Instance)!.SetValue(travel, client);
+        travelType.GetField("conditions", Instance)!.SetValue(travel, conditions);
+        travelType.GetField("player", Instance)!.SetValue(travel, Service<IPlayerState>((method, _) =>
+            method.Name == "get_ContentId" ? contentId : method.Name == "get_IsLoaded"));
+        travelType.GetField("data", Instance)!.SetValue(travel, new UnavailableCollectibleData(gameData));
+        travelType.GetEvent("Invalidated", Instance)!.GetAddMethod(true)!.Invoke(travel,
+            [pluginType.GetMethod("ClearTravelPending", Instance)!.CreateDelegate<Action>(plugin)]);
+        Call(travel, "SetEnabled", true);
+        Set("travelLocal", travel);
+
+        var observationType = TypeOf("TravelObservation");
+        var observation = Activator.CreateInstance(observationType,
+            [100u, 200u, 10.1, 20.2, now, "2026.10.16.0000.0000", "7.57.0.9414", "1.0.0", "UNAVAILABLE", Array.CreateInstance(TypeOf("TravelDestination"), 0)])!;
+        var flags = new[] { ConditionFlag.BoundByDuty, ConditionFlag.BoundByDuty56, ConditionFlag.BoundByDuty95 };
+        Check(Gate("HuntFocusEligible") && Property("HuntReceivingEnabled") && Gate("TravelAdmitted"), "admission before duty");
+        foreach (var flag in flags) {
+            var pending = Call(travelSync, "Prepare", "binding", observation, now)!;
+            var pendingLifetime = (CancellationTokenSource)pending.GetType().GetProperty("Lifetime", Instance)!.GetValue(pending)!;
+            var travelCancellation = pendingLifetime.Token;
+            var mapCancellation = ((CancellationTokenSource)pluginType.GetField("huntMapCancellation", Instance)!.GetValue(plugin)!).Token;
+            reads.Clear();
+            activeFlag = flag;
+            Call(plugin, "UpdateDutyPause");
+            Check(reads.SequenceEqual(flags.Take(Array.IndexOf(flags, flag) + 1)), $"one sampled check for {flag}");
+            Check(!Gate("HuntFocusEligible") && !Property("HuntReceivingEnabled") && !Gate("TravelAdmitted"), $"admission paused for {flag}");
+            Check(mapCancellation.IsCancellationRequested, "in-flight Hunt map cancelled");
+            Check(travelCancellation.IsCancellationRequested && travelSync.GetType().GetProperty("Pending", Instance)!.GetValue(travelSync) is null,
+                "pending travel cleared and cancelled");
+            Call(plugin, "TickTravelSync", now);
+            Check((string)pluginType.GetField("travelStatus", Instance)!.GetValue(plugin)! == "Paused while in a duty.", "paused travel status");
+            Check(Property("HasPairedSession") && Property("WebsiteLinksEnabled") && Property("PartyFinderLinksEnabled")
+                && Property("PartyFinderContributionEnabled") && Property("MarketEnabled") && Property("TravelEnabled")
+                && (bool)Call(plugin, "PersonalEnabled", "hunt_bills")! && (bool)Call(plugin, "PersonalEnabled", "submarine_personal")!,
+                "ordinary presence, item links, Party Finder, market and personal sync permissions unchanged");
+            activeFlag = null;
+            Call(plugin, "UpdateDutyPause");
+            Check(Gate("HuntFocusEligible") && Property("HuntReceivingEnabled") && Gate("TravelAdmitted"), $"admission resumes after {flag}");
+        }
+        ((CancellationTokenSource)pluginType.GetField("huntMapCancellation", Instance)!.GetValue(plugin)!).Dispose();
+
+        if (assembly.GetName().Name == "GillionsGameSync") {
+            using var stream = File.OpenRead(assembly.Location);
+            using var pe = new PEReader(stream);
+            var metadata = pe.GetMetadataReader();
+            var status = new List<string>();
+            for (var handle = metadata.GetNextHandle(default(UserStringHandle)); !handle.IsNil; handle = metadata.GetNextHandle(handle)) {
+                var value = metadata.GetUserString(handle);
+                if (value.StartsWith("Travel ", StringComparison.Ordinal) || value.Contains("travel grant", StringComparison.Ordinal)
+                    || value.StartsWith("; waiting for compatible ", StringComparison.Ordinal)) status.Add(value);
+            }
+            Check(status.Any(text => text.Contains("accepted by Gillions")) && status.Any(text => text.Contains("HTTPS pairing"))
+                && status.Any(text => text.Contains("compatible Gillions acknowledgement")), "compiled public travel status strings present");
+            Check(status.All(text => !text.Contains("TEST", StringComparison.Ordinal)), "compiled public travel status strings contain no TEST");
+        }
+        Console.WriteLine($"Packaged duty pause PASS: {checks} checks ({assembly.GetName().Name}).");
+    }
+
+    private static T Service<T>(Func<MethodInfo, object?[]?, object?> handler) where T : class {
+        var service = DispatchProxy.Create<T, CollectibleServiceProxy>();
+        ((CollectibleServiceProxy)(object)service).Handler = handler;
+        return service;
+    }
+}

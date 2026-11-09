@@ -85,10 +85,10 @@ internal static class CollectibleReadinessPackagedTests {
 
 // DispatchProxy cannot emit IDataManager's self-constrained generic sheet
 // signatures correctly. Implement the real SDK interface, failing any unused API.
-internal sealed class UnavailableCollectibleData : IDataManager {
+internal sealed class UnavailableCollectibleData(Lumina.GameData? gameData = null) : IDataManager {
     public int Calls { get; private set; }
     public Dalamud.Game.ClientLanguage Language => throw new NotSupportedException();
-    public Lumina.GameData GameData => throw new NotSupportedException();
+    public Lumina.GameData GameData => gameData ?? throw new NotSupportedException();
     public Lumina.Excel.ExcelModule Excel => throw new NotSupportedException();
     public bool HasModifiedGameDataFiles => throw new NotSupportedException();
     public Lumina.Excel.ExcelSheet<T> GetExcelSheet<T>(Dalamud.Game.ClientLanguage? language = null, string? name = null)

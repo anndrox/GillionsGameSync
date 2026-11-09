@@ -12,6 +12,7 @@ public sealed partial class Plugin {
     private bool SitePermissionOrigin => NativeProduct.TransportOrigin(configuration.ActiveSession?.Origin);
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
     private bool nativeVersionReported;
+    private volatile bool inDuty = false;
 #endif
     private DateTime nextPermissionMaintenanceUtc;
     private bool PermissionEnabled(string key, bool historical) => !SitePermissionOrigin ? historical
@@ -32,7 +33,7 @@ public sealed partial class Plugin {
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
     // Site already classifies/filters automatic vs explicit commands and validates
     // focus at poll/consume. The unchanged wire shape has no invented mode field.
-    private bool HuntReceivingEnabled => SitePermissionOrigin && HasPairedSession && activeOwnedState is not null
+    private bool HuntReceivingEnabled => !inDuty && SitePermissionOrigin && HasPairedSession && activeOwnedState is not null
         && permissionAuthority.HuntReceiving(configuration.AutomaticallyShowHuntMap, Environment.TickCount64);
     private bool MarketEnabled => NativeProduct.TransportOrigin(configuration.ActiveSession?.Origin)
         && PermissionEnabled("marketContribution", configuration.ContributeObservedMarketData);

@@ -426,7 +426,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             await EnsureSuccessfulResponse(response, responseCancellation);
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
             WebsiteResponseClock? focusClock = null;
-            if (requestFocus) {
+            if (requestFocus && request.Headers.Contains(HuntFocusState.Header)) {
                 try { focusClock = CommandResponseClock(response, permit, focusHeaderRoundTrip); }
                 catch (Exception e) when (e is InvalidOperationException or FormatException or ArgumentOutOfRangeException) { /* Focus fails closed; ordinary presence remains independent. */ }
             }
@@ -538,6 +538,9 @@ public sealed partial class Plugin : IDalamudPlugin {
 
     private void UpdateOwnedState() {
         var now = DateTime.UtcNow;
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
+        UpdateDutyPause();
+#endif
         RefreshSessionContext(); MaintainTransientState(now);
         ReconcilePermissions();
         partyFinderContributor.Tick(now);
@@ -819,9 +822,12 @@ public sealed partial class Plugin : IDalamudPlugin {
         && !marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas]
         && !marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas51];
     private void ClearHuntMapRequests() {
-        huntMapCancellation.Cancel(); huntMapCancellation.Dispose(); huntMapCancellation = new();
+        CancelHuntMapPoll();
         huntMapNegotiation.Reset();
         huntMapProcessor = new(); huntMapStatus = "No active Hunt map request; local observations preserved.";
+    }
+    private void CancelHuntMapPoll() {
+        huntMapCancellation.Cancel(); huntMapCancellation.Dispose(); huntMapCancellation = new();
     }
     private async Task PollHuntMapRequestAsync() {
         SyncRequestPermit? permit = null;
@@ -889,7 +895,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             });
         } catch (Exception error) {
             if (!disposed && permit is not null) await framework.RunOnFrameworkThread(() => {
-                if (PermitIsCurrent(permit)) {
+                if (!inDuty && !commandCancellation.IsCancellationRequested && PermitIsCurrent(permit)) {
                     huntMapStatus = "Hunt map request interrupted; no retry of a consumed action.";
                     huntMapPoll.Backoff(DateTime.UtcNow, TimeSpan.FromSeconds(30));
                     RecordDiagnostic($"Hunt command poll: interrupted ({error.GetType().Name}); eligible now={HuntMapPermitted(permit, huntMapCancellation.Token)}; command cancelled={commandCancellation.IsCancellationRequested}; focus={(HuntFocusActive(DateTime.UtcNow) ? "active" : "background")}; {timing.PollSummary()}; retry 30 seconds. No replay of an attempted request.");
@@ -1932,6 +1938,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             Task<HttpResponseMessage>? pending = null;
             await framework.RunOnFrameworkThread(() => {
                 RequirePermit(permit); cancellation.ThrowIfCancellationRequested();
+                if (inDuty) request.Headers.Remove(HuntFocusState.Header);
                 pending = personalHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation);
             });
             return await pending!;
@@ -1957,7 +1964,20 @@ public sealed partial class Plugin : IDalamudPlugin {
         return await pending!;
     }
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
-    private bool HuntFocusEligible() => PersonalEnabled("hunt_bills") && HasPairedSession && activeOwnedState is not null
+    internal const string DutyPauseStatus = "Paused while in a duty.";
+    private void UpdateDutyPause() {
+        var paused = marketConditions[ConditionFlag.BoundByDuty]
+            || marketConditions[ConditionFlag.BoundByDuty56]
+            || marketConditions[ConditionFlag.BoundByDuty95];
+        if (paused == inDuty) return;
+        inDuty = paused;
+        travelLocal.SetDutyPaused(paused);
+        if (!paused) return;
+        huntFocus.Clear();
+        huntFocusActiveDiagnostic = false;
+        CancelHuntMapPoll();
+    }
+    private bool HuntFocusEligible() => !inDuty && PersonalEnabled("hunt_bills") && HasPairedSession && activeOwnedState is not null
         && NativeProduct.TransportOrigin(configuration.ActiveSession?.Origin) && clientState.IsLoggedIn && objects.LocalPlayer is not null;
     private bool HuntFocusActive(DateTime now) => huntFocus.Active(now, HuntFocusEligible() && personalAccepted.Contains("hunt_bills"));
     private void TickHuntFocus(DateTime now) {
@@ -1971,10 +1991,11 @@ public sealed partial class Plugin : IDalamudPlugin {
     }
     private void ClearTravelPending() => travelSync.Clear();
     private string TravelBinding(SyncRequestPermit permit) => $"{permit.Session!.Generation}:{permit.Epoch}:{permit.ContentId}";
-    private bool TravelAdmitted() => TravelSyncPolicy.Admit(true, travelLocal.Available(activeRetainerCharacterContentId),
+    private bool TravelAdmitted() => !inDuty && TravelSyncPolicy.Admit(true, travelLocal.Available(activeRetainerCharacterContentId),
         TravelEnabled, HasPairedSession && activeOwnedState is not null,
         configuration.ActiveSession?.Origin ?? "", travelAccepted);
     private void TickTravelSync(DateTime now) {
+        if (inDuty) { travelStatus = DutyPauseStatus; return; }
         var admitted = TravelAdmitted();
         var binding = travelBinding;
         var due = travelSync.Maintain(binding,admitted,now);
@@ -1983,7 +2004,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             && !presenceInFlight && now >= nextRetainerPresenceUtc)
             SendCurrentRetainerPresence(activeRetainerCharacterContentId,now,SyncRequestMode.Personal);
         if (travelRefusals.Waiting(now)) { travelStatus = "Travel refused by Gillions; retrying in a few minutes. No location sent."; return; }
-        if (!admitted) { travelStatus = "Travel waiting for a current supported character, HTTPS TEST pairing and its separate travel grant/capability. No location sent."; return; }
+        if (!admitted) { travelStatus = "Travel waiting for a current supported character, HTTPS pairing and its separate travel grant/capability. No location sent."; return; }
         if (!due || travelInFlight) return;
         var prepared = travelSync.Prepare(binding,travelLocal.Current(activeRetainerCharacterContentId,now),now);
         if (prepared is null) return;
@@ -2020,10 +2041,10 @@ public sealed partial class Plugin : IDalamudPlugin {
                     || !ReferenceEquals(travelSync.Pending,prepared)) return;
                 if (!prepared.Fresh(DateTime.UtcNow)) { ClearTravelPending(); travelStatus="Travel observation expired; volatile preparation cleared."; return; }
                 travelSync.Complete(prepared,receipt,status,retryAfter,DateTime.UtcNow);
-                if (receipt) { travelStatus = "Travel context accepted by TEST; freshness remains observation-based (45s)."; RecordDiagnostic("Travel context accepted by TEST."); }
+                if (receipt) { travelStatus = "Travel context accepted by Gillions; freshness remains observation-based (45s)."; RecordDiagnostic("Travel context accepted by Gillions."); }
                 else if (TravelSyncPolicy.Terminal(status)) { travelAccepted=false; ClearTravelPending();
                     if (TravelRefusalBackoff.Counts(status)) travelRefusals.Refused(DateTime.UtcNow, permissionAuthority.KnownIdentity("huntRoutingLocation"));
-                    travelStatus=$"Travel stopped: HTTP {status}; waiting for compatible TEST acknowledgement. No insecure fallback."; }
+                    travelStatus=$"Travel stopped: HTTP {status}; waiting for compatible Gillions acknowledgement. No insecure fallback."; }
                 else travelStatus = "Travel HTTPS receipt unavailable; bounded retry of the same volatile nonce/body before expiry.";
             });
         } catch (Exception) {

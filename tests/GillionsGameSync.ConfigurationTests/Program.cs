@@ -47,6 +47,7 @@ OriginPackagedTests.Run(pluginAssembly);
 var nativeCapabilities = pluginAssembly.GetType("GillionsGameSync.FateLocalView") is not null;
 FatePackagedTests.Run(pluginAssembly,testingProduct,fixturePath);
 PermissionPackagedTests.Run(pluginAssembly);
+DutyPausePackagedTests.Run(pluginAssembly);
 HuntV2PackagedTests.Run(pluginAssembly, nativeCapabilities, args.Length == 4 ? args[3] : null);
 HuntBillItemPackagedTests.Run(pluginAssembly, nativeCapabilities);
 var intakeOptIn = configurationType.GetProperty("EnableGillionsPartyFinderContributions")!;
