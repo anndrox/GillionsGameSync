@@ -190,6 +190,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Testing 0.0.101 adds Hunt target awareness and tracked FATE alerts.",
         "Testing 0.0.101.1 recovers background observation and shows appearance upload status.",
         "Testing 0.0.101 shares your full look when a hat or weapon is hidden.",
         "Testing 0.0.100 reads appearance dyes from the rendered gear.",
@@ -321,6 +322,10 @@ public sealed partial class Plugin : IDalamudPlugin {
         appearanceCollector = new CharacterAppearanceCollector(clientState, objects, travelPlayerState, dataManager, marketConditions);
 #endif
         fateLocal = new FateLocalView(pluginInterface,commands,clientState,travelPlayerState,dataManager,marketConditions,fateTable,framework);
+#if GILLIONS_TEST_BUILD
+        huntFateTable = fateTable;
+        huntPlayerState = travelPlayerState;
+#endif
         fateLocal.Invalidated += InvalidateFateSender;
         travelLocal.Invalidated += ClearTravelPending;
         travelLocal.SetEnabled(configuration.ShareHuntRoutingLocation);
@@ -417,6 +422,9 @@ public sealed partial class Plugin : IDalamudPlugin {
             var permissionRequestStarted = Stopwatch.GetTimestamp();
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
             var requestFocus = NativeProduct.TransportOrigin(permit.Origin) && HuntFocusEligible();
+#if GILLIONS_TEST_BUILD
+            uint awarenessPresenceWorld = 0;
+#endif
             if (requestFocus) request.Headers.Add(HuntFocusState.Header, HuntFocusState.Contract);
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation);
             deadline.CancelAfter(TimeSpan.FromSeconds(25));
@@ -429,7 +437,10 @@ public sealed partial class Plugin : IDalamudPlugin {
                 request.Headers.Add("X-Gillions-Personal-Capability", TravelSyncPolicy.Capability);
                 request.Headers.Add(PersonalSyncPolicy.HuntCoverageHeader, PersonalSyncPolicy.HuntCoverageCapability);
 #if GILLIONS_TEST_BUILD
+                awarenessPresenceWorld = AwarenessWorld();
                 request.Headers.Add("X-Gillions-Appearance-Capability",AppearancePolicy.Capability);
+                request.Headers.Add(HuntDeferHeader, "hunt_defer_v1");
+                request.Headers.Add(TrackedFatesHeader, "tracked_fates_v1");
 #endif
             }
 #endif
@@ -471,6 +482,10 @@ public sealed partial class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
                 if (permissionsAccepted) ApplySharingStatus(responseJson, permit);
                 else if (!permissionAuthority.Fresh(Environment.TickCount64)) PauseAppearance();
+                if (permissionsAccepted && request.Headers.Contains(TrackedFatesHeader)
+                    && response.RequestMessage?.RequestUri?.GetLeftPart(UriPartial.Authority) == permit.Origin)
+                    ApplyHuntAwareness(responseJson, awarenessPresenceWorld);
+                else if (!permissionAuthority.Fresh(Environment.TickCount64)) SuspendHuntAwareness();
 #endif
                 if (requestFocus && focusClock is not null) huntFocus.Apply(responseJson, focusClock.UtcNow, HuntFocusEligible() && personalAccepted.Contains("hunt_bills"), DateTime.UtcNow);
                 else huntFocus.Clear();
@@ -491,6 +506,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 ClearRetainerServerAcceptance(); presenceFailureCount++;
 #if GILLIONS_TEST_BUILD
                 PauseAppearance();
+                SuspendHuntAwareness();
 #endif
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
                 travelAccepted = false; ClearTravelPending();
@@ -601,6 +617,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         Observe("travel upload", now, static (plugin, at) => plugin.TickTravelSync(at));
 #if GILLIONS_TEST_BUILD
         Observe("character appearance", now, static (plugin, at) => plugin.TickAppearance(at));
+        Observe("Hunt awareness", now, static (plugin, _) => plugin.TickHuntAwareness());
 #endif
         if (now >= nextMarketMaintenanceUtc) {
             nextMarketMaintenanceUtc = now.AddMilliseconds(250);
@@ -925,6 +942,9 @@ public sealed partial class Plugin : IDalamudPlugin {
     }
     private void CancelHuntMapPoll() {
         huntMapCancellation.Cancel(); huntMapCancellation.Dispose(); huntMapCancellation = new();
+#if GILLIONS_TEST_BUILD
+        ForgetAwareHunt();
+#endif
     }
     private async Task PollHuntMapRequestAsync() {
         SyncRequestPermit? permit = null;
@@ -944,13 +964,23 @@ public sealed partial class Plugin : IDalamudPlugin {
             commandCancellation = context.Token;
             using var linked = HuntMapTransport.Deadline(permit.Cancellation, context.Token);
             var cancellation = linked.Token;
-            using var request = Request("/api/game-sync/item-links/poll", permit, new { capability = context.Capability });
+            HuntDeferAction? action = null;
+#if GILLIONS_TEST_BUILD
+            if (context.Capability == HuntMapPolicy.CapabilityV2) action = await framework.RunOnFrameworkThread(() => PlanHuntDefer());
+#endif
+            using var request = Request("/api/game-sync/item-links/poll", permit, action?.Body() ?? new { capability = context.Capability });
             var headersStarted = System.Diagnostics.Stopwatch.GetTimestamp();
-            using var response = await SendHuntMapAsync(request, permit, cancellation, timing);
+            using var response = await SendHuntMapAsync(request, permit, cancellation, timing, action: action);
             var headerRoundTrip = System.Diagnostics.Stopwatch.GetElapsedTime(headersStarted);
             if (response.StatusCode != HttpStatusCode.OK) {
                 await framework.RunOnFrameworkThread(() => {
                     if (!HuntMapPermitted(permit, cancellation)) return;
+#if GILLIONS_TEST_BUILD
+                    if (action is not null) {
+                        if (response.StatusCode == HttpStatusCode.Conflict && ReferenceEquals(action.Command, huntDefer.Current)) ForgetAwareHunt();
+                        return;
+                    }
+#endif
                     if (context.Capability == HuntMapPolicy.CapabilityV2 && response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.NotFound or HttpStatusCode.NotImplemented)
                         huntMapNegotiation.Unsupported(DateTime.UtcNow);
                     huntMapStatus = "Hunt map unavailable or permission denied; no map opened.";
@@ -961,16 +991,27 @@ public sealed partial class Plugin : IDalamudPlugin {
             }
             var commandClock = CommandResponseClock(response, permit, headerRoundTrip);
             var json = await HuntMapTransport.ReadAsync(response.Content, cancellation);
-            if (!HuntMapPolicy.TryPoll(json, commandClock.UtcNow, context.Capability, out var parsed)) {
+            DateTime? deferredUntil = null;
+            var valid = action is null ? HuntMapPolicy.TryPoll(json, commandClock.UtcNow, context.Capability, out var parsed)
+                : HuntMapPolicy.TryDeferPoll(json, commandClock.UtcNow, action, out parsed, out deferredUntil);
+            if (!valid) {
                 await framework.RunOnFrameworkThread(() => {
                     if (!HuntMapPermitted(permit, cancellation)) return;
-                    if (context.Capability == HuntMapPolicy.CapabilityV2 && huntMapNegotiation.LegacyEmpty(json, commandClock.UtcNow)) {
+                    if (action is null && context.Capability == HuntMapPolicy.CapabilityV2 && huntMapNegotiation.LegacyEmpty(json, commandClock.UtcNow)) {
                         huntMapNegotiation.Unsupported(DateTime.UtcNow);
                         huntMapStatus = "Site V1-only response; next normal poll uses unchanged V1. No V2 claim interpreted.";
                     } else { huntMapStatus = "Unsupported/malformed Hunt response; no command consumed or presented."; huntMapPoll.Backoff(DateTime.UtcNow, TimeSpan.FromSeconds(30)); RecordDiagnostic($"Hunt command poll: malformed response; {timing.PollSummary()}; retry 30 seconds. No map."); }
                 });
                 return;
             }
+#if GILLIONS_TEST_BUILD
+            await framework.RunOnFrameworkThread(() => {
+                if (!HuntMapPermitted(permit, cancellation)) return;
+                if (action is not null) huntDefer.Acknowledge(action, deferredUntil is { } until ? DateTime.UtcNow.Add(until - commandClock.UtcNow) : null);
+                if (action is not null || parsed is not null) ForgetAwareHunt();
+            });
+            if (action is not null && parsed is null) return;
+#endif
             if (parsed is not null) timing.Claimed();
             var result = await context.Processor.ProcessAsync(parsed, () => commandClock.UtcNow,
                 () => framework.RunOnFrameworkThread(() => HuntMapPermitted(permit, cancellation)),
@@ -980,11 +1021,21 @@ public sealed partial class Plugin : IDalamudPlugin {
                     // Supported public API, human-readable map XY. No native
                     // offsets, callbacks, teleport, movement or targeting.
                     timing.MapStarted();
-                    var opened = huntMapGui.OpenMapWithMapLink(new MapLinkPayload(r.TerritoryId, r.MapId, r.MapX, r.MapY));
+#if GILLIONS_TEST_BUILD
+                    var exact = BeginAwareHunt(r, commandClock);
+                    var opened = exact is not null ? OpenExactHuntFlag(r, exact) :
+#else
+                    var opened =
+#endif
+                        huntMapGui.OpenMapWithMapLink(new MapLinkPayload(r.TerritoryId, r.MapId, r.MapX, r.MapY));
                     timing.MapFinished();
                     RecordDiagnostic($"Hunt command timing: command {r.RequestId[..8]}; focus={(HuntFocusActive(DateTime.UtcNow) ? "active" : "background")}; {timing.Describe()}. Consume precedes presentation; no browser/queue timing inferred.");
                     RecordDiagnostic($"Hunt map: new one-time Site request consumed; target ID {r.TargetId}, candidate {r.CandidateId}, revision {r.Revision[..12]}; presentation={(opened ? "shown" : "unavailable")}. No Native target inference.");
+#if GILLIONS_TEST_BUILD
+                    if (exact is null && opened) chatGui.Print(r.Guidance, "Gillions");
+#else
                     if (opened) chatGui.Print(r.Guidance, "Gillions");
+#endif
                     return opened;
                 }));
             await framework.RunOnFrameworkThread(() => {
@@ -1003,10 +1054,19 @@ public sealed partial class Plugin : IDalamudPlugin {
             if (ownsPoll && !disposed) await framework.RunOnFrameworkThread(() => { if (!disposed) huntMapPollInFlight = false; });
         }
     }
-    private async Task<HttpResponseMessage> SendHuntMapAsync(HttpRequestMessage request, SyncRequestPermit permit, CancellationToken cancellation, WebsiteCommandTrace? timing = null, bool consume = false) {
+    private async Task<HttpResponseMessage> SendHuntMapAsync(HttpRequestMessage request, SyncRequestPermit permit, CancellationToken cancellation,
+        WebsiteCommandTrace? timing = null, bool consume = false, HuntDeferAction? action = null) {
         Task<HttpResponseMessage>? pending = null;
         await framework.RunOnFrameworkThread(() => {
             if (!HuntMapPermitted(permit, cancellation)) throw new OperationCanceledException();
+#if GILLIONS_TEST_BUILD
+            if (action is not null) {
+                var current = PlanHuntDefer(recheckObjectTable: true);
+                if (current is null || !ReferenceEquals(current.Command, action.Command) || current.Reason != action.Reason)
+                    throw new OperationCanceledException();
+                huntDefer.Sent(action, DateTime.UtcNow);
+            }
+#endif
             if (consume) timing?.ConsumeDispatched(); else timing?.PollDispatched();
             pending = personalHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation);
         });
@@ -1103,6 +1163,9 @@ public sealed partial class Plugin : IDalamudPlugin {
     }
 
     private void OnChatMessage(IHandleableChatMessage message) {
+#if GILLIONS_TEST_BUILD
+        ReadSonarChat(message);
+#endif
         if (!CanCaptureLedgerEvidence() || message.LogKind is not (XivChatType.SystemMessage or XivChatType.RetainerSale)) return;
         // Some itemized vendor messages do not arrive with usable LogMessage
         // integer parameters. Keep only the structured sale facts needed to
@@ -1822,6 +1885,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         backgroundObservation.Run("appearance reset", (Plugin: this, ContentId: nextContentId, SamePairing: samePairing), now,
             static (state, _) => state.Plugin.ResetAppearance(state.ContentId, state.SamePairing));
+        Observe("Hunt awareness reset", now, static (plugin, _) => plugin.ResetHuntAwareness());
 #endif
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         nativeVersionReported = false;
@@ -2774,6 +2838,12 @@ public sealed partial class PluginConfiguration : IPluginConfiguration {
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
     public bool EnablePartyFinderLinkRequests { get; set; }
     public bool AutomaticallyShowHuntMap { get; set; }
+#endif
+#if GILLIONS_TEST_BUILD
+    public bool TrackedFateAlerts { get; set; } = true;
+    public bool TrackedFateAlertSound { get; set; } = true;
+    public int TrackedFateChatTab { get; set; }
+    public bool UseSonarChatMessages { get; set; }
 #endif
     public bool EnablePartyFinderContributions { get; set; } = false;
     public bool EnableGillionsPartyFinderContributions { get; set; } = false;

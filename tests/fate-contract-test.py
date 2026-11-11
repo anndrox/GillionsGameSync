@@ -37,7 +37,8 @@ assert '&& fateLocal.ContextReady && FatePolicy.Compatible(source)' not in plugi
 assert 'measuring=true' not in native.split('internal FateLocalView',1)[1].split('private string GameVersion',1)[0]
 assert 'fateLocal.Tick(now)' in plugin and 'fateLocal.Dispose()' in plugin and 'plugin.fateLocal.ClearAuthorization()' in plugin
 config = plugin.split('public sealed partial class PluginConfiguration',1)[1]
-assert not re.search(r'public .*Fate(Observation|Prepared|Admission)|public bool .*Fate',config)
+assert not re.search(r'public .*Fate(Observation|Prepared|Admission)',config)
+assert set(re.findall(r'public bool (\w*Fate\w*)',config)) == {'TrackedFateAlerts', 'TrackedFateAlertSound'}
 assert not re.search(r'SendAsync|new HttpClient',native)
 assert not re.search(r'new FateAdmission|FateTransportPolicy.Request',native)
 sender = (root / 'FateSenderState.cs').read_text(encoding='utf-8')
@@ -60,4 +61,4 @@ assert not re.search(r'WriteAll|SavePluginConfig|File\.|IPlayerState|IObjectTabl
 assert 'body=(byte[])bytes.Clone()' in model and 'internal byte[] CopyBody()' in model
 assert 'timedOccurrences.Count < 128' in model and 'costs.Count == 240' in model
 assert not re.search(r'WriteAll|SavePluginConfig|File\.',model+transport)
-print('FATE source boundaries PASS: typed public API; independent bounded reads; lifecycle invalidation; RAM-only sender; exact Site policy; no Stable/config expansion.')
+print('FATE source boundaries PASS: typed public API; independent bounded reads; lifecycle invalidation; RAM-only sender; exact Site policy; no Stable or sender setting expansion.')

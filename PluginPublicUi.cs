@@ -268,6 +268,10 @@ public sealed partial class Plugin {
             if(ImGui.Checkbox("Lock position",ref locked)) QueueUiAction(()=> { configuration.LockHuntProgressPosition=locked; RequestConfigurationSave(); });
             Label("A local, display-only count panel for your current area. Closing it suppresses auto-show until you change territory.");
             if(show && ImGui.Button("Open Hunt Progress")) QueueUiAction(()=>huntProgress.Open());
+#if GILLIONS_TEST_BUILD
+            ImGui.Separator();
+            DrawHuntAwarenessSettings();
+#endif
             ImGui.EndTabItem();
         }
 #if GILLIONS_TEST_BUILD
@@ -311,6 +315,7 @@ public sealed partial class Plugin {
                 Label("Diagnostics stay local. Private exports contain gameplay details: do not share configuration or credentials.");
                 if(ImGui.Button("FATE diagnostics")) fateLocal.Show();
                 if(ImGui.Button("Hunt diagnostics")) huntLocal.Show();
+                Label($"Sonar lines ignored: {ignoredSonarLines}");
                 if(ImGui.Button("Submarine diagnostics")) submarineLocal.Show();
                 if(ImGui.Button("Daily / weekly facts diagnostics")) dashboardLocal.Show();
                 if(ImGui.Button("Beastmaster diagnostics")) beastmasterLocal.Show();
