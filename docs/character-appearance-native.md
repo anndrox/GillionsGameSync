@@ -6,37 +6,77 @@ November evidence is in [the patch qualification](native-compatibility.md#novemb
 
 ## Slot basis
 
-Owner Amendment 1 authorizes the pinned RaptureGearsetModule.GearsetItemIndex as the index basis. Full mapping: mainHand 0, offHand 1, head 2, body 3, hands 4, legs 6, feet 7, ears 8, neck 9, wrists 10, ring1 11, ring2 12. Index 5 and index 13 are not read. Ring labels have no side meaning. Physical check pending; the owner will check the mapping read-only later.
+The inventory indices follow the pinned `RaptureGearsetModule.GearsetItemIndex`.
+Dye offsets are relative to the slot's rendered `Human` or `Weapon` object.
+Wire keys retain their existing order and names.
+
+| Wire slot | EquippedItems index | Rendered slot | Stain0 | Stain1 |
+| --- | ---: | --- | --- | --- |
+| mainHand | 0 | Main-hand weapon | `0xA26` | `0xA27` |
+| offHand | 1 | Off-hand weapon | `0xA26` | `0xA27` |
+| head | 2 | Head | `0xA43` | `0xA44` |
+| body | 3 | Top | `0xA4B` | `0xA4C` |
+| hands | 4 | Arms | `0xA53` | `0xA54` |
+| legs | 6 | Legs | `0xA5B` | `0xA5C` |
+| feet | 7 | Feet | `0xA63` | `0xA64` |
+| ears | 8 | Ear | `0xA6B` | `0xA6C` |
+| neck | 9 | Neck | `0xA73` | `0xA74` |
+| wrists | 10 | Wrist | `0xA7B` | `0xA7C` |
+| ring1 | 11 | RFinger | `0xA83` | `0xA84` |
+| ring2 | 12 | LFinger | `0xA8B` | `0xA8C` |
 
 ## Exact collector reads
 
-Testing 0.0.99 reads appearance on the framework thread while the current
-character has a fresh Gillions grant and the runtime passes the exact Appearance
-qualification. It copies the 26 customization bytes from the local player and
-uses the 12 equipped inventory entries for the underlying item IDs. It uses the
-local character's DrawData for the visible equipment and both dye IDs.
+Testing 0.0.100 reads the local player's rendered gear on the framework
+thread while the current character has a fresh Gillions grant and the runtime
+passes the exact Appearance qualification. EquippedItems provides the
+underlying item and candidate glamour IDs. The Item sheet matches the rendered
+model to one of those IDs.
 
-DrawData's weapon list has main hand then off hand. Its armour list has head,
-body, hands, legs, feet, ears, neck, wrists, and the two rings in the same order
-as the equipped inventory slots above. The read uses `Character.DrawData`,
-`DrawDataContainer.WeaponData`, `EquipmentModelIds` and the models' two stain
-fields. The plugin matches the drawn model to the base or glamour item in the
-Item sheet. It withholds the look if the source cannot identify an equipped
-slot's drawn model. The payload retains the existing base item and glamour item
-fields. Glamour plates, visibility, visor and facewear stay outside this read.
+Testing 0.0.99 used `Character.DrawData.EquipmentModelIds` and
+`WeaponData[].ModelId`. These cached model IDs can match the rendered model
+while their stain bytes are zero. On ClientStructs `7.57.0.9480`, the rendered
+source is:
 
-The four admitted ClientStructs pins contain the same `Character.cs` blob
-(`ac98b868c441befea17a85320cae4bb579e7bba3`) and the same
-`DrawDataContainer.cs` blob (`73b40e2651c0b8a93e709cad3532438f57b303d0`).
-The official archives for Dalamud 15.0.3.6, 15.0.3.7, 15.0.3.9 and 15.0.4.0
-all report `bb864beff9836bfb` for the expanded Appearance layout.
-The runtime list is the same as Testing 0.0.98.0.
+- **Armour and accessories.** `GameObject.DrawObject` at `+0x100` points to
+  the human model. `Human.EquipmentModels` starts at `+0xA40`. Each entry is
+  eight bytes, with model ID and variant in the first three bytes and
+  `EquipmentModelId.Stain0` and `Stain1` at entry offsets `+0x03` and
+  `+0x04`. The named order is head, body, hands, legs, feet, ears, neck,
+  wrists, right ring and left ring. The equipped inventory map skips the belt
+  and soul stone. [Human](https://github.com/aers/FFXIVClientStructs/blob/80cb4a7b7e11a6702e2eb8839afd301a918c638e/FFXIVClientStructs/FFXIV/Client/Graphics/Scene/Human.cs),
+  [DrawData and equipment slot definitions](https://github.com/aers/FFXIVClientStructs/blob/80cb4a7b7e11a6702e2eb8839afd301a918c638e/FFXIVClientStructs/FFXIV/Client/Game/Character/DrawDataContainer.cs).
+- **Weapons.** `Character.DrawData` is at `+0x6F8`. Its weapon entries
+  start at `+0x10`, with a stride of `0x70`. Use each named hand's
+  `DrawData.DrawObject` pointer at entry offset `+0x18`. The rendered
+  `Weapon` holds the model set, secondary ID and variant at `+0xA20`,
+  `+0xA22` and `+0xA24`, and the two stains at `+0xA26` and
+  `+0xA27`. [Weapon](https://github.com/aers/FFXIVClientStructs/blob/80cb4a7b7e11a6702e2eb8839afd301a918c638e/FFXIVClientStructs/FFXIV/Client/Graphics/Scene/Weapon.cs).
+
+Glamourer uses `model.GetArmor` and `model.GetWeapons(actor)` on the
+rendered human. Both projects pin Penumbra.GameData, whose `Model` helpers
+read `Human.Head` as the start of the armour array and read stains directly
+from the rendered weapons. The plugin uses the SDK's typed members and checks
+both the draw object and model type before reading. If an equipped slot has no
+matching rendered model, including a hidden model that has been removed from the
+draw object, the plugin withholds the complete look. Empty inventory slots
+require no rendered object. [Glamourer state reader](https://github.com/Ottermandias/Glamourer/blob/e165910345b17b99d9aa35990005b5e0f73ae65b/Glamourer/State/StateManager.cs),
+[Glamourer's GameData pin](https://github.com/Ottermandias/Penumbra.GameData/blob/f463b5e670b14a66e5c9b7a74a31079ab0bba11b/Interop/Model.cs),
+[Penumbra's GameData pin](https://github.com/Ottermandias/Penumbra.GameData/blob/78aa11737434e8531f8b4b8c0248b7981afdcc0f/Interop/Model.cs).
+
+The four admitted ClientStructs pins share the same Character, GameObject,
+DrawObject, DrawDataContainer and gearset slot definitions. Source comparisons
+for Human, Weapon, Object and CharacterBase found constructor and animation
+additions and an unrelated object type rename. The members read here and the
+type query slots match. The official Dalamud 15.0.3.6, 15.0.3.7, 15.0.3.9
+and 15.0.4.0 archives all report Appearance fingerprint `7d312d4f31472b10`.
+The runtime list is unchanged.
 
 Lifecycle reads: IClientState.IsLoggedIn, IsGPosing; IPlayerState.IsLoaded, ContentId (existing session identity, never added to appearance payload); ICondition indexer for BetweenAreas, BetweenAreas51, LoggingOut, Transformed, RolePlaying, Disguised. Identity/availability are rechecked after copying and before dispatch. IDataManager.GameData.Repositories["ffxiv"].Version and managed assembly versions/revisions establish the runtime. All unknown tuples stop before appearance reads.
 
 ## Pinned source comparison
 
-The files below were read from public developer sources at the exact revisions in NativeCompatibility.cs. Each corresponding file has the same Git blob identity across the three runtime pins; generated fixed-array behavior is also covered by the pinned generator fixture. The DrawData and Character blob identities above also match the November pin.
+The files below were read from public developer sources at the exact revisions in NativeCompatibility.cs. Each corresponding file has the same Git blob identity across the three runtime pins; generated fixed-array behavior is also covered by the pinned generator fixture. The DrawData and Character definitions also match the November pin.
 
 | Revision | Source | Git blob |
 | --- | --- | --- |

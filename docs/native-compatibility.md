@@ -44,7 +44,7 @@ Every listed fingerprint matches its baseline with no missing member.
 | Submarine | 15.0.3.9 | `8c4e37e328c571a9` | Yes. Housing/workshop, exploration agents and PlayerState sources are byte-identical. |
 | Dashboard | 15.0.3.6 | `72e3d331203627af` | **No.** AtkUnitBase replaces two unrelated parameter names/comments. The measured members match, but the September source diff is neither byte-identical nor additive-only. |
 | Beastmaster | 15.0.3.6 | `7984e5ebc96f48c5` | Yes. XBMManager is byte-identical, including loading states and the ownership query. PlayerState adds only an unused method. Changes to bestiary addons and agents are outside this reader. |
-| Appearance | 15.0.3.9 | `bb864beff9836bfb` (Testing 0.0.99) | Yes. The added DrawData members match every previously qualified runtime. |
+| Appearance | 15.0.3.9 | `7d312d4f31472b10` (Testing 0.0.100) | Yes. The rendered equipment members and type queries match every previously qualified runtime. |
 
 The [Dalamud source comparison](https://github.com/goatcorp/Dalamud/compare/30509c3b4fd00edd9a3d65b7bbf16433d84be03b...12e318c1936e449e5883faa61214eb2ced478349)
 has no changes to the FATE and appearance wrappers used here. No layout change
