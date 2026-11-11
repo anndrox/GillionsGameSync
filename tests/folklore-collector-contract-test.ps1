@@ -12,7 +12,7 @@ if ($collector -notmatch 'SheetRowCache<GatheringSubCategory>') {
 if ($collector -notmatch 'IsFolkloreBookUnlocked\(\(uint\)row\.RowId\)') {
     throw 'Folklore ownership must use PlayerState.IsFolkloreBookUnlocked.'
 }
-if ($collector -notmatch 'Select\(row => \(long\)row\.Item\.RowId\)') {
+if ($collector -notmatch 'row => row\.Item\.RowId\)') {
     throw 'Folklore payload IDs must be stable tome Item row IDs.'
 }
 if ($collector -notmatch '\.Distinct\(\)\s*\.Order\(\)') {

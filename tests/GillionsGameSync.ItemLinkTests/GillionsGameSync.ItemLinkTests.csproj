@@ -30,4 +30,8 @@
     <Compile Include="..\..\PermissionAuthority.cs" Link="PermissionAuthority.cs" />
   </ItemGroup>
   <ItemGroup><Compile Include="../../NativeProduct.cs" Link="NativeProduct.cs" /></ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../OrderedConfigurationWriter.cs" Link="OrderedConfigurationWriter.cs" />
+    <Compile Include="../../NativeRowBudget.cs" Link="NativeRowBudget.cs" />
+  </ItemGroup>
 </Project>

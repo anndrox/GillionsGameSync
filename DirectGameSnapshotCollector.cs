@@ -32,15 +32,6 @@ public static class DirectGameSnapshotCollector {
     internal static RetainerContext? FindLoadedRetainerItem(uint itemId) => NativeInventoryCollector.FindLoadedRetainerItem(itemId);
     internal static RetainerBalanceRead? ReadActiveRetainerGil() => NativeInventoryCollector.ReadActiveRetainerGil();
 
-    internal static unsafe bool IsRetainerVentureWindowActive() {
-        try {
-            var agent = AgentRetainerTask.Instance();
-            return agent != null && agent->IsAgentActive();
-        } catch {
-            return false;
-        }
-    }
-
     internal static bool CaptureRetainerVentureResultObservation(RetainerVentureLocalState state, out string resultProbeStatus) {
         var now = DateTime.UtcNow;
         // The game can clear the active retainer's completion timestamp while
@@ -50,8 +41,9 @@ public static class DirectGameSnapshotCollector {
     }
 
     internal static RetainerVentureResultEvent? ReadChangedRetainerResult(RetainerVentureLocalState state, DateTime now, out string resultProbeStatus) {
-        var read = RetainerVentureNativeCollector.ReadVisibleResult(now, state, out resultProbeStatus);
-        return ResultView.Changed(state.CharacterContentId, read) ? RetainerVentureSnapshotPolicy.CreateResultEvent(state, read) : null;
+        var read = RetainerVentureNativeCollector.ReadVisibleResult(now, state, ResultView, out resultProbeStatus);
+        if (read is null && resultProbeStatus != "unchanged") ResultView.Clear();
+        return RetainerVentureSnapshotPolicy.CreateResultEvent(state, read);
     }
 
     internal static bool CaptureRetainerVentureRosterAndGear(RetainerVentureLocalState state) {
@@ -67,8 +59,8 @@ public static class DirectGameSnapshotCollector {
     // Resources whose native source is not ready are withheld (named in
     // `withheld`), never sent as an empty or zero result: the Site replaces
     // these resources wholesale, so an empty upload would delete valid data.
-    public static IEnumerable<GameSnapshot> Collect(IDalamudPluginInterface pluginInterface, IClientState clientState, IObjectTable objects, IDataManager dataManager, IUnlockState unlockState, IReadOnlyDictionary<string, long>? retainerGilBalances, RetainerVentureLocalState? retainerVentureState, IEnumerable<string> scopes,
-        IDictionary<string, InventoryContainerObservation>? inventoryContainers = null, ICollection<string>? withheld = null) {
+    internal static IEnumerable<GameSnapshot> Collect(IDalamudPluginInterface pluginInterface, IClientState clientState, IObjectTable objects, IDataManager dataManager, IUnlockState unlockState, IReadOnlyDictionary<string, long>? retainerGilBalances, RetainerVentureLocalState? retainerVentureState, IEnumerable<string> scopes,
+        IDictionary<string, InventoryContainerObservation>? inventoryContainers, ICollection<string>? withheld, NativeRowBudget budget) {
         var selected = new HashSet<string>(scopes ?? [], StringComparer.Ordinal);
         var identity = new { name = objects.LocalPlayer?.Name.TextValue ?? "", world = objects.LocalPlayer?.HomeWorld.Value.Name.ToString() ?? "" };
         if (identity.name.Length == 0 || identity.world.Length == 0) {
@@ -78,7 +70,7 @@ public static class DirectGameSnapshotCollector {
             yield break;
         }
         if (selected.Contains("inventory")) {
-            var inventory = NativeInventoryCollector.ReadAllContainers(dataManager, inventoryContainers ?? new Dictionary<string, InventoryContainerObservation>(StringComparer.Ordinal));
+            var inventory = NativeInventoryCollector.ReadAllContainers(dataManager, inventoryContainers ?? new Dictionary<string, InventoryContainerObservation>(StringComparer.Ordinal), budget);
             if (inventory is null) withheld?.Add("inventory:" + NativeAvailability.NotLoaded);
             else {
                 var retainerGil = (retainerGilBalances ?? new Dictionary<string, long>()).Where(entry => !string.IsNullOrWhiteSpace(entry.Key) && entry.Value >= 0).Select(entry => new { retainerId = entry.Key, gil = entry.Value }).ToArray();
@@ -95,17 +87,17 @@ public static class DirectGameSnapshotCollector {
             else yield return new GameSnapshot("currencies", new { character = identity, items = currencies });
         }
         if (selected.Contains("achievements")) {
-            var achievements = AchievementCollector.ReadUnlockedIds(dataManager, unlockState);
+            var achievements = AchievementCollector.ReadUnlockedIds(dataManager, unlockState, budget);
             if (achievements.Loaded) yield return new GameSnapshot("achievements", new { character = identity, ids = achievements.Ids, complete = true });
         }
         if (selected.Contains("character")) {
             // The Site replaces jobs, gear, recipes and fish wholesale.
-            var progress = CharacterProgressCollector.Read(dataManager, unlockState);
+            var progress = CharacterProgressCollector.Read(dataManager, unlockState, budget);
             if (progress is null) withheld?.Add("character:" + NativeAvailability.NotLoaded);
             else yield return new GameSnapshot("character", new { character = identity, currentJobId = progress.CurrentJobId, jobs = progress.Jobs, equippedItems = progress.EquippedItems, craftingRecipeIds = progress.CraftingRecipeIds, gatheringLogIds = progress.GatheringLogIds });
         }
         if (selected.Contains("quest_journal")) {
-            var quests = QuestJournalCollector.Read(dataManager, unlockState);
+            var quests = QuestJournalCollector.Read(dataManager, unlockState, budget);
             if (quests != null) yield return new GameSnapshot("quest_journal", new {
                 character = identity,
                 schemaVersion = 1,
@@ -159,10 +151,10 @@ public static class DirectGameSnapshotCollector {
         if (selected.Contains("collectibles")) {
             var collectibles = CollectibleSnapshotPolicy.Capture(() => CollectibleCollector.ReadCharacter(clientState), () => new {
             character = identity, complete = true,
-            cards = CollectibleCollector.ReadCards(dataManager, unlockState), minions = CollectibleCollector.ReadMinions(dataManager, unlockState), mounts = CollectibleCollector.ReadMounts(dataManager, unlockState), bardings = CollectibleCollector.ReadBardings(dataManager, unlockState), emotes = CollectibleCollector.ReadEmotes(dataManager, unlockState),
-            orchestrions = CollectibleCollector.ReadOrchestrions(dataManager, unlockState), fashions = CollectibleCollector.ReadFashions(dataManager, unlockState), blueMageSpells = CollectibleCollector.ReadBlueMageSpells(dataManager, unlockState), sightseeingLogIds = CollectibleCollector.ReadSightseeingLog(dataManager, unlockState), aetherCurrentIds = CollectibleCollector.ReadAetherCurrents(dataManager, unlockState),
-            portraitBackgrounds = CollectibleCollector.ReadPortraitBackgrounds(dataManager, unlockState), portraitConditions = CollectibleCollector.ReadPortraitConditions(dataManager, unlockState), portraitDecorations = CollectibleCollector.ReadPortraitDecorations(dataManager, unlockState), portraitFacials = CollectibleCollector.ReadPortraitFacials(dataManager, unlockState), portraitFrames = CollectibleCollector.ReadPortraitFrames(dataManager, unlockState), portraitPoses = CollectibleCollector.ReadPortraitPoses(dataManager, unlockState),
-            masterRecipeBookIds = CollectibleCollector.ReadMasterRecipeBooks(dataManager, unlockState), folkloreBookIds = CollectibleCollector.ReadFolkloreBookIds(dataManager)
+            cards = CollectibleCollector.ReadCards(dataManager, unlockState, budget), minions = CollectibleCollector.ReadMinions(dataManager, unlockState, budget), mounts = CollectibleCollector.ReadMounts(dataManager, unlockState, budget), bardings = CollectibleCollector.ReadBardings(dataManager, unlockState, budget), emotes = CollectibleCollector.ReadEmotes(dataManager, unlockState, budget),
+            orchestrions = CollectibleCollector.ReadOrchestrions(dataManager, unlockState, budget), fashions = CollectibleCollector.ReadFashions(dataManager, unlockState, budget), blueMageSpells = CollectibleCollector.ReadBlueMageSpells(dataManager, unlockState, budget), sightseeingLogIds = CollectibleCollector.ReadSightseeingLog(dataManager, unlockState, budget), aetherCurrentIds = CollectibleCollector.ReadAetherCurrents(dataManager, unlockState, budget),
+            portraitBackgrounds = CollectibleCollector.ReadPortraitBackgrounds(dataManager, unlockState, budget), portraitConditions = CollectibleCollector.ReadPortraitConditions(dataManager, unlockState, budget), portraitDecorations = CollectibleCollector.ReadPortraitDecorations(dataManager, unlockState, budget), portraitFacials = CollectibleCollector.ReadPortraitFacials(dataManager, unlockState, budget), portraitFrames = CollectibleCollector.ReadPortraitFrames(dataManager, unlockState, budget), portraitPoses = CollectibleCollector.ReadPortraitPoses(dataManager, unlockState, budget),
+            masterRecipeBookIds = CollectibleCollector.ReadMasterRecipeBooks(dataManager, unlockState, budget), folkloreBookIds = CollectibleCollector.ReadFolkloreBookIds(dataManager, budget)
             });
             if (collectibles is not null) yield return new GameSnapshot("collectibles", collectibles);
         }
@@ -228,7 +220,7 @@ internal static class RetainerVentureNativeCollector {
         }
     }
 
-    public static unsafe RetainerVentureResultRead? ReadVisibleResult(DateTime observedAtUtc, RetainerVentureLocalState state, out string probeStatus) {
+    public static unsafe RetainerVentureResultRead? ReadVisibleResult(DateTime observedAtUtc, RetainerVentureLocalState state, RetainerResultViewCache view, out string probeStatus) {
         try {
             var agent = AgentRetainerTask.Instance();
             if (agent == null || !agent->IsAgentActive()) {
@@ -261,19 +253,23 @@ internal static class RetainerVentureNativeCollector {
                 probeStatus = "completed_view_missing_completion_evidence";
                 return null;
             }
-            var items = new List<RetainerVentureResultItem>(2);
-            for (var index = 0; index < 2; index++) {
-                var itemId = agent->RetainerData.RewardItemIds[index];
-                var quantity = agent->RetainerData.RewardItemCount[index];
-                if (itemId > 0 && quantity > 0) items.Add(new RetainerVentureResultItem(itemId, quantity));
-            }
-            if (items.Count == 0) {
+            var values = new RetainerResultValues(retainerId, ventureId, completionUnix, agent->RetainerData.RewardXP,
+                agent->RetainerData.RewardItemIds[0], agent->RetainerData.RewardItemCount[0],
+                agent->RetainerData.RewardItemIds[1], agent->RetainerData.RewardItemCount[1]);
+            if (!values.HasRewards) {
                 probeStatus = "completed_view_missing_reward_items";
                 return null;
             }
+            if (!view.Changed(state.CharacterContentId, values)) {
+                probeStatus = "unchanged";
+                return null;
+            }
+            var items = new List<RetainerVentureResultItem>(2);
+            if (values.FirstId > 0 && values.FirstQuantity > 0) items.Add(new(values.FirstId, values.FirstQuantity));
+            if (values.SecondId > 0 && values.SecondQuantity > 0) items.Add(new(values.SecondId, values.SecondQuantity));
             probeStatus = nativeCompletionUnix == completionUnix ? "captured_native_completion" : "captured_prior_completion";
             return new RetainerVentureResultRead(retainerId, ventureId, completionUnix,
-                observedAtUtc, agent->RetainerData.RewardXP, items.ToArray());
+                observedAtUtc, values.Experience, items.ToArray());
         } catch {
             probeStatus = "read_error";
             return null;
@@ -366,30 +362,19 @@ internal static class QuestJournalCollector {
     private static IDataManager? catalogSource;
     private static Quest[]? eligibleCatalog;
 
-    public static unsafe QuestJournalRead? Read(IDataManager dataManager, IUnlockState unlockState) {
+    public static unsafe QuestJournalRead? Read(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) {
         try {
             var manager = QuestManager.Instance();
             if (manager == null) return null;
             var rows = GetEligibleCatalog(dataManager);
             if (rows == null || rows.Length == 0) return null;
-            var eligible = rows.Length;
-            var verified = 0;
-            var excludedByIdRange = 0;
-            var completed = new List<long>();
-            foreach (var row in rows) {
-                verified++;
-                // IUnlockState's Quest overload uses Dalamud's QuestManager-backed
-                // completion mapping. Do not cast the Lumina RowId to ushort: modern
-                // quest IDs such as 66295 are mapped to the native completion bit
-                // index by the service.
-                if (unlockState.IsQuestCompleted(row)) completed.Add(row.RowId);
-            }
-            completed.Sort();
-            var ids = completed.ToArray();
+            // The maintained service maps Lumina quest IDs to completion bits.
+            var ids = budget.Ids(rows, unlockState.IsQuestCompleted, row => row.RowId);
+            Array.Sort(ids);
             var hashInput = string.Join(",", ids);
             var contentHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(hashInput)))[..16];
-            return new QuestJournalRead(eligible, verified, excludedByIdRange, ids, contentHash);
-        } catch {
+            return new QuestJournalRead(rows.Length, rows.Length, 0, ids, contentHash);
+        } catch (Exception error) when (error is not NativeScanPendingException and not NativeScanChangedException) {
             // Never turn a missing/invalid native or catalog state into an empty
             // completion set. The caller omits the resource instead.
             return null;
@@ -452,11 +437,18 @@ internal static class NativeInventoryCollector {
     private static readonly Dictionary<string, RetainerListingRead> RetainerListingCache = new(StringComparer.Ordinal);
     private static readonly Dictionary<uint, (RetainerContext Context, DateTime ObservedAtUtc)> RecentRetainerItems = new();
     private static readonly RetainerContextStability ActiveRetainer = new();
+    private static DateTime nextRetainerContextProbe;
+    private static DateTime nextBagCapture;
+    private static RetainerBagRead? lastBags;
+    internal static void InvalidateRetainerBags() => nextBagCapture = DateTime.MinValue;
     internal static void ClearTransientState() {
         lock (RetainerListingCacheLock) { RecentRetainerItems.Clear(); RetainerListingCache.Clear(); ActiveRetainer.Clear(); }
+        lastBags = null;
+        nextRetainerContextProbe = nextBagCapture = DateTime.MinValue;
     }
     internal static void MaintainTransientState(DateTime now) {
-        lock (RetainerListingCacheLock) TransientEvidencePolicy.Prune(RecentRetainerItems, now, TimeSpan.FromSeconds(10), entry => entry.ObservedAtUtc);
+        if (now < nextRetainerContextProbe) return;
+        nextRetainerContextProbe = now.AddMilliseconds(250);
         StableActiveRetainerId(now);
     }
 
@@ -537,26 +529,6 @@ internal static class NativeInventoryCollector {
         return null;
     }
 
-    private static unsafe void CacheLoadedRetainerItems(InventoryManager* manager) {
-        var retainerManager = RetainerManager.Instance();
-        var activeRetainer = retainerManager == null ? null : retainerManager->GetActiveRetainer();
-        if (activeRetainer == null || activeRetainer->RetainerId == 0) return;
-        var context = new RetainerContext(activeRetainer->RetainerId.ToString(), activeRetainer->NameString ?? "");
-        foreach (var name in new[] { "RetainerPage1", "RetainerPage2", "RetainerPage3", "RetainerPage4", "RetainerPage5", "RetainerPage6", "RetainerPage7", "RetainerCrystals" }) {
-            if (!Enum.TryParse<InventoryType>(name, out var containerType)) continue;
-            var container = manager->GetInventoryContainer(containerType);
-            if (container == null || !container->IsLoaded || container->Items == null || container->Size <= 0) continue;
-            for (var index = 0; index < container->Size; index++) {
-                var item = container->Items[index];
-                if (item.ItemId == 0 || item.Quantity <= 0 || item.IsSymbolic) continue;
-                lock (RetainerListingCacheLock) {
-                    RecentRetainerItems[item.ItemId] = (context, DateTime.UtcNow);
-                    TransientEvidencePolicy.Prune(RecentRetainerItems, DateTime.UtcNow, TimeSpan.FromSeconds(10), entry => entry.ObservedAtUtc);
-                }
-            }
-        }
-    }
-
     public static bool CaptureLoadedRetainerListings() {
         unsafe {
             // Do not walk retained inventory containers while normal gameplay
@@ -566,7 +538,7 @@ internal static class NativeInventoryCollector {
             if (StableActiveRetainerId(DateTime.UtcNow) is null) return false;
             var manager = InventoryManager.Instance();
             if (manager == null) return false;
-            CacheLoadedRetainerItems(manager);
+            ReadLoadedRetainerBags(manager);
             var read = ReadActiveRetainerListings(manager);
             if (!read.Observed || read.RetainerIds.Length != 1) return false;
             lock (RetainerListingCacheLock) {
@@ -583,23 +555,24 @@ internal static class NativeInventoryCollector {
     // Null when the player inventory is not a usable read (see
     // InventoryObservationPolicy). Unopened saddlebags are carried from their
     // last loaded contents for this owned character, never reported as empty.
-    public static unsafe InventoryRead? ReadAllContainers(IDataManager dataManager, IDictionary<string, InventoryContainerObservation> carried) {
+    public static unsafe InventoryRead? ReadAllContainers(IDataManager dataManager, IDictionary<string, InventoryContainerObservation> carried, NativeRowBudget budget) {
         var manager = InventoryManager.Instance();
         if (manager == null) return null;
         var reads = new List<ContainerRead>(PlayerContainers.Length);
         foreach (var containerType in PlayerContainers) {
             var container = manager->GetInventoryContainer(containerType);
             var location = containerType.ToString();
-            if (!Loaded(container)) { reads.Add(new(location, false, [])); continue; }
-            var rows = new List<InventoryRow>();
-            for (var index = 0; index < container->Size; index++) {
+            var loaded = Loaded(container);
+            budget.RequireShape(location, loaded ? container->Size : -1);
+            if (!loaded) { reads.Add(new(location, false, [])); continue; }
+            var rows = budget.Read<InventoryRow>(location + ":rows", container->Size, index => {
                 var item = container->Items[index];
-                if (item.ItemId == 0 || item.Quantity <= 0 || item.IsSymbolic) continue;
+                if (item.ItemId == 0 || item.Quantity <= 0 || item.IsSymbolic) return (false, null!);
                 var highQuality = (item.Flags & InventoryItem.ItemFlags.HighQuality) != 0;
-                rows.Add(new(item.ItemId, highQuality ? 0 : item.Quantity, highQuality ? item.Quantity : 0,
+                return (true, new(item.ItemId, highQuality ? 0 : item.Quantity, highQuality ? item.Quantity : 0,
                     containerType == InventoryType.EquippedItems ? item.Quantity : 0, location, InventoryObservationPolicy.NativeSource));
-            }
-            reads.Add(new(location, true, rows.ToArray()));
+            });
+            reads.Add(new(location, true, rows));
         }
         var assembled = InventoryObservationPolicy.Assemble(reads, carried, DateTime.UtcNow);
         if (assembled is null) return null;
@@ -633,9 +606,12 @@ internal static class NativeInventoryCollector {
     // stay resident after leaving a bell or switching retainers, so they are
     // attributed only to the stably active retainer.
     private static unsafe RetainerBagRead ReadLoadedRetainerBags(InventoryManager* manager) {
-        var retainerId = StableActiveRetainerId(DateTime.UtcNow);
-        if (retainerId is null) return new RetainerBagRead([], false, []);
+        var now = DateTime.UtcNow;
+        var retainerId = StableActiveRetainerId(now);
+        if (retainerId is null) { lastBags = null; return new RetainerBagRead([], false, []); }
+        if (now < nextBagCapture && lastBags?.RetainerIds.FirstOrDefault() == retainerId) return lastBags;
         var result = new List<object>();
+        var itemIds = new HashSet<uint>();
         var observed = false;
         foreach (var name in new[] { "RetainerPage1", "RetainerPage2", "RetainerPage3", "RetainerPage4", "RetainerPage5", "RetainerPage6", "RetainerPage7", "RetainerCrystals" }) {
             if (!Enum.TryParse<InventoryType>(name, out var containerType)) continue;
@@ -646,10 +622,20 @@ internal static class NativeInventoryCollector {
                 var item = container->Items[index];
                 if (item.ItemId == 0 || item.Quantity <= 0 || item.IsSymbolic) continue;
                 var highQuality = (item.Flags & InventoryItem.ItemFlags.HighQuality) != 0;
+                itemIds.Add(item.ItemId);
                 result.Add(new { retainerId, itemId = item.ItemId, quantity = highQuality ? 0 : item.Quantity, hqQuantity = highQuality ? item.Quantity : 0, location = containerType.ToString(), slot = index, source = "native_loaded_retainer_state" });
             }
         }
-        return new RetainerBagRead(result.ToArray(), observed, observed ? [retainerId] : []);
+        var retainerManager = RetainerManager.Instance();
+        var active = retainerManager == null ? null : retainerManager->GetActiveRetainer();
+        if (active == null || active->RetainerId.ToString() != retainerId) return new([], false, []);
+        var context = new RetainerContext(retainerId, active->NameString ?? "");
+        lock (RetainerListingCacheLock) {
+            foreach (var itemId in itemIds) RecentRetainerItems[itemId] = (context, now);
+            TransientEvidencePolicy.Prune(RecentRetainerItems, now, TimeSpan.FromSeconds(10), entry => entry.ObservedAtUtc);
+        }
+        nextBagCapture = now.AddSeconds(1);
+        return lastBags = new(result.ToArray(), observed, observed ? [retainerId] : []);
     }
 
     // RetainerMarket is the native container backing the active retainer's
@@ -797,12 +783,12 @@ internal static class ArmoireCollector {
 internal sealed record ArmoireRead(bool Observed, object[] Items);
 
 internal static class AchievementCollector {
-    public static AchievementRead ReadUnlockedIds(IDataManager dataManager, IUnlockState unlockState) {
+    public static AchievementRead ReadUnlockedIds(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) {
         if (!unlockState.IsAchievementListLoaded) return new AchievementRead(false, []);
         try {
             var rows = SheetRowCache<Lumina.Excel.Sheets.Achievement>.Get(dataManager);
-            return rows.Length == 0 ? new AchievementRead(false, []) : new AchievementRead(true, rows.Where(unlockState.IsAchievementComplete).Select(row => (long)row.RowId).ToArray());
-        } catch { return new AchievementRead(false, []); }
+            return rows.Length == 0 ? new AchievementRead(false, []) : new AchievementRead(true, budget.Ids(rows, unlockState.IsAchievementComplete, row => row.RowId));
+        } catch (Exception error) when (error is not NativeScanPendingException and not NativeScanChangedException) { return new AchievementRead(false, []); }
     }
 }
 internal sealed record AchievementRead(bool Loaded, long[] Ids);
@@ -810,17 +796,18 @@ internal sealed record AchievementRead(bool Loaded, long[] Ids);
 internal static class CharacterProgressCollector {
     // Null unless the player state, equipped container and every catalog are
     // loaded: the Site replaces jobs, gear, recipes and fish wholesale.
-    public static unsafe CharacterProgressRead? Read(IDataManager dataManager, IUnlockState unlockState) {
+    public static unsafe CharacterProgressRead? Read(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) {
         var player = PlayerState.Instance();
         if (player == null || !player->IsLoaded) return null;
         var classJobs = SheetRowCache<ClassJob>.Get(dataManager);
         var recipes = SheetRowCache<Recipe>.Get(dataManager);
         var fish = SheetRowCache<FishParameter>.Get(dataManager);
+        if (classJobs.Length == 0 || recipes.Length == 0 || fish.Length == 0) return null;
+        var crafting = budget.Ids(recipes, unlockState.IsRecipeUnlocked, row => row.RowId);
+        var gathering = budget.Ids(fish, row => row.IsInLog && player->IsFishCaught((uint)row.RowId), row => row.RowId);
         var equipped = NativeInventoryCollector.ReadEquippedItems();
-        if (classJobs.Length == 0 || recipes.Length == 0 || fish.Length == 0 || equipped is null) return null;
+        if (equipped is null) return null;
         var jobs = classJobs.Select(row => new { id = (int)row.RowId, name = row.Name.ToString(), abbreviation = row.Abbreviation.ToString(), level = (int)player->GetClassJobLevel((int)row.RowId, false) }).Where(row => row.level > 0).Cast<object>().ToArray();
-        var crafting = recipes.Where(unlockState.IsRecipeUnlocked).Select(row => (long)row.RowId).ToArray();
-        var gathering = fish.Where(row => row.IsInLog && player->IsFishCaught((uint)row.RowId)).Select(row => (long)row.RowId).ToArray();
         return new CharacterProgressRead((uint)player->CurrentClassJobId, jobs, equipped, crafting, gathering);
     }
 }
@@ -833,52 +820,51 @@ internal static class CollectibleCollector {
         return player != null && player->IsLoaded ? player->ContentId : 0;
     }
 
-    public static long[] ReadCards(IDataManager dataManager, IUnlockState unlockState) {
-        return Read<TripleTriadCard>(dataManager, unlockState.IsTripleTriadCardUnlocked);
+    public static long[] ReadCards(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) {
+        return Read<TripleTriadCard>(dataManager, unlockState.IsTripleTriadCardUnlocked, budget);
     }
-    public static long[] ReadMinions(IDataManager dataManager, IUnlockState unlockState) {
-        return Read<Companion>(dataManager, unlockState.IsCompanionUnlocked);
+    public static long[] ReadMinions(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) {
+        return Read<Companion>(dataManager, unlockState.IsCompanionUnlocked, budget);
     }
-    public static long[] ReadMounts(IDataManager dataManager, IUnlockState unlockState) {
-        return Read<Mount>(dataManager, unlockState.IsMountUnlocked);
+    public static long[] ReadMounts(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) {
+        return Read<Mount>(dataManager, unlockState.IsMountUnlocked, budget);
     }
     // BuddyEquip is the authoritative game-data sheet for the player's chocobo
     // companion equipment. IUnlockState reads its client-owned unlock state;
     // this deliberately does not infer bardings from mounts or item ownership.
-    public static long[] ReadBardings(IDataManager dataManager, IUnlockState unlockState) => Read<BuddyEquip>(dataManager, unlockState.IsBuddyEquipUnlocked);
-    public static long[] ReadEmotes(IDataManager dataManager, IUnlockState unlockState) {
-        return Read<Emote>(dataManager, unlockState.IsEmoteUnlocked);
+    public static long[] ReadBardings(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<BuddyEquip>(dataManager, unlockState.IsBuddyEquipUnlocked, budget);
+    public static long[] ReadEmotes(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) {
+        return Read<Emote>(dataManager, unlockState.IsEmoteUnlocked, budget);
     }
-    private static long[] Read<T>(IDataManager dataManager, Func<T,bool> unlocked) where T : struct, Lumina.Excel.IExcelRow<T> => SheetRowCache<T>.GetRequired(dataManager).Where(unlocked).Select(row => (long)row.RowId).ToArray();
-    public static long[] ReadOrchestrions(IDataManager dataManager, IUnlockState unlockState) => Read<Orchestrion>(dataManager, unlockState.IsOrchestrionUnlocked);
-    public static long[] ReadFashions(IDataManager dataManager, IUnlockState unlockState) => Read<Ornament>(dataManager, unlockState.IsOrnamentUnlocked);
-    public static long[] ReadBlueMageSpells(IDataManager dataManager, IUnlockState unlockState) => Read<AozAction>(dataManager, unlockState.IsAozActionUnlocked);
-    public static long[] ReadSightseeingLog(IDataManager dataManager, IUnlockState unlockState) => Read<Adventure>(dataManager, unlockState.IsAdventureComplete);
-    public static long[] ReadAetherCurrents(IDataManager dataManager, IUnlockState unlockState) => Read<AetherCurrent>(dataManager, unlockState.IsAetherCurrentUnlocked);
-    public static long[] ReadPortraitBackgrounds(IDataManager dataManager, IUnlockState unlockState) => Read<BannerBg>(dataManager, unlockState.IsBannerBgUnlocked);
-    public static unsafe long[] ReadPortraitConditions(IDataManager dataManager, IUnlockState unlockState) => Read<BannerCondition>(dataManager, row => {
+    private static long[] Read<T>(IDataManager dataManager, Func<T,bool> unlocked, NativeRowBudget budget) where T : struct, Lumina.Excel.IExcelRow<T> => budget.Ids(SheetRowCache<T>.GetRequired(dataManager), unlocked, row => row.RowId);
+    public static long[] ReadOrchestrions(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<Orchestrion>(dataManager, unlockState.IsOrchestrionUnlocked, budget);
+    public static long[] ReadFashions(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<Ornament>(dataManager, unlockState.IsOrnamentUnlocked, budget);
+    public static long[] ReadBlueMageSpells(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<AozAction>(dataManager, unlockState.IsAozActionUnlocked, budget);
+    public static long[] ReadSightseeingLog(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<Adventure>(dataManager, unlockState.IsAdventureComplete, budget);
+    public static long[] ReadAetherCurrents(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<AetherCurrent>(dataManager, unlockState.IsAetherCurrentUnlocked, budget);
+    public static long[] ReadPortraitBackgrounds(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<BannerBg>(dataManager, unlockState.IsBannerBgUnlocked, budget);
+    public static unsafe long[] ReadPortraitConditions(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<BannerCondition>(dataManager, row => {
         // IUnlockState returns false for an unavailable native EXD row, too.
         // Check its maintained source before interpreting false as not owned.
         if (ExdModule.GetBannerConditionByIndex(row.RowId) == null) throw new CollectibleSourceUnavailableException();
         return unlockState.IsBannerConditionUnlocked(row);
-    });
-    public static long[] ReadPortraitDecorations(IDataManager dataManager, IUnlockState unlockState) => Read<BannerDecoration>(dataManager, unlockState.IsBannerDecorationUnlocked);
-    public static long[] ReadPortraitFacials(IDataManager dataManager, IUnlockState unlockState) => Read<BannerFacial>(dataManager, unlockState.IsBannerFacialUnlocked);
-    public static long[] ReadPortraitFrames(IDataManager dataManager, IUnlockState unlockState) => Read<BannerFrame>(dataManager, unlockState.IsBannerFrameUnlocked);
-    public static long[] ReadPortraitPoses(IDataManager dataManager, IUnlockState unlockState) => Read<BannerTimeline>(dataManager, unlockState.IsBannerTimelineUnlocked);
-    public static long[] ReadMasterRecipeBooks(IDataManager dataManager, IUnlockState unlockState) => Read<SecretRecipeBook>(dataManager, unlockState.IsSecretRecipeBookUnlocked);
+    }, budget);
+    public static long[] ReadPortraitDecorations(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<BannerDecoration>(dataManager, unlockState.IsBannerDecorationUnlocked, budget);
+    public static long[] ReadPortraitFacials(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<BannerFacial>(dataManager, unlockState.IsBannerFacialUnlocked, budget);
+    public static long[] ReadPortraitFrames(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<BannerFrame>(dataManager, unlockState.IsBannerFrameUnlocked, budget);
+    public static long[] ReadPortraitPoses(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<BannerTimeline>(dataManager, unlockState.IsBannerTimelineUnlocked, budget);
+    public static long[] ReadMasterRecipeBooks(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<SecretRecipeBook>(dataManager, unlockState.IsSecretRecipeBookUnlocked, budget);
 
     // Folklore ownership is read from the authoritative unlock state keyed by
     // GatheringSubCategory, then transmitted as stable tome Item row IDs. A
     // single tome may unlock more than one subcategory, so canonical item IDs
     // are deduplicated before the complete Collectibles snapshot is sent.
-    public static unsafe long[] ReadFolkloreBookIds(IDataManager dataManager) {
+    public static unsafe long[] ReadFolkloreBookIds(IDataManager dataManager, NativeRowBudget budget) {
         var player = PlayerState.Instance();
         var books = SheetRowCache<GatheringSubCategory>.GetRequired(dataManager);
         if (player == null || !player->IsLoaded) throw new CollectibleSourceUnavailableException();
-        return books
-            .Where(row => row.RowId > 0 && row.Item.RowId > 0 && player->IsFolkloreBookUnlocked((uint)row.RowId))
-            .Select(row => (long)row.Item.RowId)
+        return budget.Ids(books, row => row.RowId > 0 && row.Item.RowId > 0 && player->IsFolkloreBookUnlocked((uint)row.RowId),
+                row => row.Item.RowId)
             .Distinct()
             .Order()
             .ToArray();

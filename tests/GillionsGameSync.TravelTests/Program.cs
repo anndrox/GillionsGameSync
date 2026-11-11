@@ -7,7 +7,12 @@ void Check(bool ok,string name) { checks++; if (!ok) throw new Exception(name); 
 var now = new DateTime(2026,10,3,18,0,0,DateTimeKind.Utc);
 TravelDestination Destination(uint id=2) => new(id,132,"OBSERVED_IN_PERSONAL_LIST","UNKNOWN",120,null,false,false,true);
 TravelObservation Row() => new(132,2,10.1,20.2,now,NativeCompatibility.September.GameBuild,
-    NativeCompatibility.September.ClientStructsVersion,"0.0.77.0","OBSERVED_PARTIAL",[Destination()]);
+    NativeCompatibility.September.ClientStructsVersion,"0.0.77.0","OBSERVED_PARTIAL",[Destination()]) { CurrentWorldId = 79 };
+using (var report = JsonDocument.Parse(JsonSerializer.Serialize(Row(), PersonalObservationCompatibility.Json)))
+    Check(report.RootElement.GetProperty("currentWorldId").GetInt32() == 79, "current world wire field");
+Check(!TravelPolicy.Valid(Row() with { CurrentWorldId = null })
+    && !TravelPolicy.Valid(Row() with { CurrentWorldId = 0 })
+    && !TravelPolicy.Valid(Row() with { CurrentWorldId = 65536 }), "world ID bounds");
 var state = new TravelContextState();
 Check(!state.Enabled && !state.Begin(now) && !state.Observe(1,Row(),now) && state.Current(1,now)==null,"default OFF");
 Check(!TravelSyncPolicy.Admit(true,true,false,true,TravelSyncPolicy.Origin,true),"transport OFF without distinct consent");
@@ -70,7 +75,7 @@ using(var doc=JsonDocument.Parse(json,new JsonDocumentOptions { MaxDepth=TravelP
     Check(doc.RootElement.GetProperty("uploadState").GetString()=="local-only-no-server-contract","export not activation");
 }
 foreach(var forbidden in new[] { "contentId","accountId","worldId","worldX","worldZ","workshopScope","recommendedTarget","bestAetheryte","deviceToken" })
-    Check(!json.Contains(forbidden,StringComparison.OrdinalIgnoreCase),"private/minimal fact shape");
+    Check(!json.Contains($"\"{forbidden}\"", StringComparison.OrdinalIgnoreCase), "private/minimal fact shape");
 for(int count=1;count<=256;count++) {
     var row=Row() with { Destinations=Enumerable.Range(1,count).Select(i=>Destination((uint)i)).ToArray() };
     int bytes=JsonSerializer.SerializeToUtf8Bytes(row,PersonalObservationCompatibility.Json).Length;

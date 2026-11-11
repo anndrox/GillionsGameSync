@@ -16,6 +16,8 @@ public sealed class AppearanceChoice {
     public string? ExpectedGeneration { get; set; }
     public long CharacterId { get; set; }
 }
+internal readonly record struct AppearanceDrawSlot(ulong Model, byte Stain0, byte Stain1);
+
 internal sealed class AppearanceSlot {
     public uint ItemId { get; init; }
     public uint GlamourItemId { get; init; }
@@ -38,12 +40,22 @@ internal sealed class AppearanceSnapshot {
 internal static class AppearancePolicy {
     internal const string Contract="character-appearance-v1", Resource="character_appearance", Capability="character_appearance_v1";
     internal const string Permission="server:game-sync:personal:character-appearance:v1", Layout="ffxiv-customize-26-v1";
-    internal const string Setting="Share my character appearance with Gillions";
-    internal const string Explanation="Shares this character's 26 appearance-setting bytes and the item ID, glamour item ID and both dye IDs for 12 equipped slots. Gillions stores only your latest look, privately, for your appearance page and a later 3D preview. It never changes the game. Turning this off removes the imported look when connected; use Remove imported appearance on Gillions for immediate removal while offline. Glamour Plates, visibility, visor and facewear are not included.";
     internal static readonly string[] Slots=["mainHand","offHand","head","body","hands","legs","feet","ears","neck","wrists","ring1","ring2"];
     // Amendment 1: GearsetItemIndex basis; physical check pending. No ring side claim.
     internal static readonly int[] Indices=[0,1,2,3,4,6,7,8,9,10,11,12];
     internal static readonly JsonSerializerOptions Json=new() { PropertyNamingPolicy=JsonNamingPolicy.CamelCase };
+    internal static AppearanceSlot? FromDrawSlot(uint itemId, uint glamourId, AppearanceDrawSlot draw,
+        bool matchesBase, bool matchesGlamour) {
+        if (itemId == 0) return glamourId == 0 ? new() : null;
+        if (!matchesBase && !matchesGlamour) return null;
+        return new() {
+            ItemId = itemId,
+            GlamourItemId = matchesGlamour ? glamourId : 0,
+            Stain0Id = draw.Stain0,
+            Stain1Id = draw.Stain1,
+        };
+    }
+
     internal static string Hash(AppearanceSnapshot p) {
         var lines=new List<string> { Layout,p.CustomizationHex };
         foreach(var key in Slots){var s=p.Equipment[key];lines.Add(string.Create(CultureInfo.InvariantCulture,$"{key}:{s.ItemId},{s.GlamourItemId},{s.Stain0Id},{s.Stain1Id}"));}
@@ -66,4 +78,25 @@ internal sealed class AppearanceQueue {
     internal void Clear(){Pending=null;accepted="";}
     internal void Observe(AppearanceSnapshot p){if(!AppearancePolicy.Valid(p))return;var hash=p.ContentHash;if(hash==accepted){Pending=null;return;}if(Pending?.Hash!=hash)Pending=new(p);}
     internal void Accepted(AppearancePreparation p){accepted=p.Hash;if(ReferenceEquals(Pending,p))Pending=null;}
+}
+
+internal sealed record AppearanceGrant(long CharacterId, string Generation) {
+    internal static AppearanceGrant? Read(JsonElement root) {
+        try {
+            if (!root.TryGetProperty("characterAppearance", out var descriptor)
+                || descriptor.GetProperty("contract").GetString() != AppearancePolicy.Contract
+                || descriptor.GetProperty("resourceType").GetString() != AppearancePolicy.Resource
+                || descriptor.GetProperty("capability").GetString() != AppearancePolicy.Capability
+                || descriptor.GetProperty("permission").GetString() != AppearancePolicy.Permission
+                || descriptor.GetProperty("maxPayloadBytes").GetInt32() != 16384
+                || descriptor.GetProperty("maxEnvelopeBytes").GetInt32() != 20480
+                || !descriptor.GetProperty("enabled").GetBoolean()) return null;
+            var character = descriptor.GetProperty("characterId").GetInt64();
+            var generation = descriptor.GetProperty("generation").GetString();
+            return character > 0 && Guid.TryParseExact(generation, "D", out var id) && id != Guid.Empty
+                ? new(character, generation!) : null;
+        } catch (Exception e) when (e is KeyNotFoundException or InvalidOperationException or FormatException or OverflowException) {
+            return null;
+        }
+    }
 }

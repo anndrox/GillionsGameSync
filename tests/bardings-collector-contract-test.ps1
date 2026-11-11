@@ -5,14 +5,14 @@ param(
 $ErrorActionPreference = "Stop"
 $source = Get-Content -LiteralPath $CollectorPath -Raw
 
-if ($source -notmatch "bardings\s*=\s*CollectibleCollector\.ReadBardings\(dataManager, unlockState\)") {
+if ($source -notmatch "bardings\s*=\s*CollectibleCollector\.ReadBardings\(dataManager, unlockState, budget\)") {
   throw "Collectibles payload must include the authoritative bardings array."
 }
 
 $method = [regex]::Match($source, "public static long\[\] ReadBardings[\s\S]*?(?=\r?\n\s*public static long\[\] ReadEmotes)")
 if (-not $method.Success) { throw "ReadBardings collector method was not found." }
 $implementation = $method.Value
-if ($implementation -notmatch "Read<BuddyEquip>\(dataManager, unlockState\.IsBuddyEquipUnlocked\)") {
+if ($implementation -notmatch "Read<BuddyEquip>\(dataManager, unlockState\.IsBuddyEquipUnlocked, budget\)") {
   throw "Bardings must use BuddyEquip with IUnlockState.IsBuddyEquipUnlocked."
 }
 if ($implementation -match "Mount|Item") { throw "Bardings must not be inferred from mounts or items." }

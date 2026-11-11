@@ -8,7 +8,7 @@ internal static class TravelTransportTests {
         var now=DateTime.UtcNow;
         TravelObservation Row(DateTime? at=null) => new(100,200,10.1,20.2,at??now,
             NativeCompatibility.September.GameBuild,NativeCompatibility.September.ClientStructsVersion,"0.0.77.0","OBSERVED_PARTIAL",
-            [new(1,100,"OBSERVED_IN_PERSONAL_LIST","UNKNOWN",100,null,null,null,null)]);
+            [new(1,100,"OBSERVED_IN_PERSONAL_LIST","UNKNOWN",100,null,null,null,null)]) { CurrentWorldId = 79 };
         var descriptor=new Dictionary<string,object> { ["resourceType"]="travel_context",["schemaVersion"]=1,
             ["collectorSchema"]="travel-context-v1",["transportContract"]="travel-context-v1",["capability"]="travel_context_v1",
             ["maxPayloadBytes"]=65536,["maxEnvelopeBytes"]=69632,["maxDepth"]=8,["maxDestinations"]=256,["ttlSeconds"]=45,

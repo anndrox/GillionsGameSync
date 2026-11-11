@@ -39,6 +39,9 @@ internal sealed class HuntBillLocalView : IDisposable {
     internal long CoverageEpoch => itemCoverage.Epoch;
     internal void ClearCoverage() => itemCoverage.Clear();
     internal Func<bool> SiteRetentionAuthorized { set => policy.SiteRetentionAuthorized = value; }
+    internal HuntBillItemSnapshot? CurrentCoverage(string key, DateTime now) => policy.RetentionEnabled
+        ? itemCoverage.Current(key, now, Stopwatch.GetTimestamp()) : null;
+    internal HuntBillObservation[] PrivateBills(string key, DateTime freshFrom) => policy.PrivateBills(key, freshFrom);
     internal DateTime? CoverageObservedAtUtc(string key, DateTime now) => policy.RetentionEnabled
         ? itemCoverage.Current(key, now, Stopwatch.GetTimestamp())?.ObservedAtUtc : null;
     internal string? CoveragePayload(string key, DateTime now) => policy.RetentionEnabled

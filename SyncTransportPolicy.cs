@@ -17,19 +17,22 @@ public static class SyncResponsePolicy {
     public const int MaximumBytes = 64 * 1024;
     public const int MaximumDepth = 16;
     public static readonly JsonSerializerOptions Options = new() { MaxDepth = MaximumDepth };
-    public static async Task<string> ReadAsync(HttpContent content, CancellationToken cancellation = default) {
+    public static Task<string> ReadAsync(HttpContent content, CancellationToken cancellation = default) =>
+        ReadBoundedAsync(content, MaximumBytes, cancellation);
+
+    internal static async Task<string> ReadBoundedAsync(HttpContent content, int maximumBytes, CancellationToken cancellation) {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         deadline.CancelAfter(TimeSpan.FromSeconds(30));
         cancellation = deadline.Token;
-        if (content.Headers.ContentLength > MaximumBytes) throw new InvalidOperationException("Gillions response exceeded the size limit.");
+        if (content.Headers.ContentLength > maximumBytes) throw new InvalidOperationException("Gillions response exceeded the size limit.");
         using var input = await content.ReadAsStreamAsync(cancellation);
         using var output = new MemoryStream();
         var buffer = new byte[4096];
         while (true) {
-            var count = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, MaximumBytes + 1 - output.Length)), cancellation);
+            var count = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, maximumBytes + 1 - output.Length)), cancellation);
             if (count == 0) break;
             output.Write(buffer, 0, count);
-            if (output.Length > MaximumBytes) throw new InvalidOperationException("Gillions response exceeded the size limit.");
+            if (output.Length > maximumBytes) throw new InvalidOperationException("Gillions response exceeded the size limit.");
         }
         var text = Encoding.UTF8.GetString(output.ToArray());
         using var document = JsonDocument.Parse(text, new JsonDocumentOptions { MaxDepth = MaximumDepth });
@@ -51,7 +54,10 @@ public static class SyncResponsePolicy {
         } catch (Exception error) when (error is JsonException or InvalidOperationException or FormatException) { return false; }
     }
     public static async Task EnsureSuccessfulAsync(HttpResponseMessage response, CancellationToken cancellation = default) {
-        if (response.IsSuccessStatusCode) return;
+        if (!response.IsSuccessStatusCode) throw await ReadFailureAsync(response, cancellation);
+    }
+
+    internal static async Task<GillionsHttpException> ReadFailureAsync(HttpResponseMessage response, CancellationToken cancellation) {
         var code = "";
         var detail = "";
         try {
@@ -62,16 +68,21 @@ public static class SyncResponsePolicy {
             if (document.RootElement.ValueKind == JsonValueKind.Object
                 && document.RootElement.TryGetProperty("error", out var text) && text.ValueKind == JsonValueKind.String)
                 detail = text.GetString() ?? "";
-        } catch (Exception error) when (error is JsonException or InvalidOperationException) { }
+        } catch (Exception error) when (error is JsonException or InvalidOperationException or HttpRequestException or IOException
+            || error is OperationCanceledException && !cancellation.IsCancellationRequested) { }
         // The Site's text only classifies a refusal; it is never displayed or logged.
         code = SiteRefusalPolicy.Classify(code, detail);
-        if (code == "TRIAL_EXPIRED") throw new GillionsSyncRejectedException(code, "Your Gillions trial has ended.");
-        if (code == "ACCOUNT_DISABLED") throw new GillionsSyncRejectedException(code, "This Gillions account is disabled.");
-        // A refusal is not an unreachable Gillions. Only a timeout, rate limit or
-        // server error stays untyped (temporarily unavailable, retried).
-        if (SiteRefusalPolicy.IsRefusal((int)response.StatusCode))
-            throw new GillionsSyncRejectedException(code, $"Gillions rejected the request (HTTP {(int)response.StatusCode}).");
-        throw new InvalidOperationException($"Gillions rejected the request (HTTP {(int)response.StatusCode}).");
+        var status = (int)response.StatusCode;
+        var retry = response.Headers.RetryAfter;
+        var retryAfter = retry?.Delta ?? retry?.Date - DateTimeOffset.UtcNow;
+        var message = code switch {
+            "TRIAL_EXPIRED" => "Your Gillions trial has ended.",
+            "ACCOUNT_DISABLED" => "This Gillions account is disabled.",
+            _ => $"Gillions rejected the request (HTTP {status}).",
+        };
+        if (SiteRefusalPolicy.IsRefusal(status))
+            return new GillionsSyncRejectedException(code, message, status, retryAfter);
+        return new GillionsHttpException(code, message, status, retryAfter);
     }
 
     private static bool PositiveId(JsonElement id) => id.ValueKind switch {
@@ -149,9 +160,45 @@ public static class SiteRefusalPolicy {
         : Code.IsMatch(code) ? code : Rejected;
 }
 
-public sealed class GillionsSyncRejectedException : InvalidOperationException {
-    public string Code { get; }
-    public GillionsSyncRejectedException(string code, string message) : base(message) => Code = code;
+public class GillionsHttpException(string code, string message, int status, TimeSpan? retryAfter) : InvalidOperationException(message) {
+    public string Code { get; } = code;
+    public int Status { get; } = status;
+    public TimeSpan? RetryAfter { get; } = retryAfter;
+}
+
+public sealed class GillionsSyncRejectedException(string code, string message, int status = 0, TimeSpan? retryAfter = null)
+    : GillionsHttpException(code, message, status, retryAfter);
+
+internal sealed class ResourceRetry {
+    private const long SlowProbe = 300_000;
+    private long until;
+    private object? refusedRevision;
+    private int failures;
+    private long serverUntil;
+    internal bool Ready(long now, object revision) => Remaining(now, revision) == TimeSpan.Zero;
+    internal TimeSpan Remaining(long now, object revision) {
+        var park = refusedRevision is not null && !Equals(revision, refusedRevision) ? 0 : until;
+        return TimeSpan.FromMilliseconds(Math.Max(0, Math.Max(serverUntil, park) - now));
+    }
+
+    internal void Failed(long now, object revision, Exception error) {
+        var serverDelay = (error as GillionsHttpException)?.RetryAfter?.TotalMilliseconds ?? 0;
+        serverUntil = now + (long)Math.Max(0, serverDelay);
+        if (error is GillionsHttpException { Status: >= 400 and < 500 and not 408 and not 429 }) {
+            refusedRevision = revision;
+            until = now + SlowProbe;
+            return;
+        }
+        refusedRevision = null;
+        var jittered = Math.Min(300_000, 5000L << Math.Min(failures++, 6)) * (1 + Random.Shared.NextDouble() / 4);
+        until = now + (long)jittered;
+    }
+
+    internal void Clear() {
+        until = serverUntil = 0;
+        refusedRevision = null;
+        failures = 0;
+    }
 }
 
 public static class SyncErrorPolicy {

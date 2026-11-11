@@ -13,13 +13,13 @@ function Assert-NotContains([string]$Text, [string]$Needle, [string]$Message) {
 }
 
 $syncStart = $pluginSource.IndexOf("private async Task SyncAsync(", [StringComparison]::Ordinal)
-$firstCapture = $pluginSource.IndexOf("CollectScopes(state, selectedScopes.Take(1).ToArray()", $syncStart, [StringComparison]::Ordinal)
 $laterCapture = $pluginSource.IndexOf("framework.RunOnTick(() => {", $syncStart, [StringComparison]::Ordinal)
 $laterCollect = $pluginSource.IndexOf("CollectScopes(CurrentState, [scope]", $syncStart, [StringComparison]::Ordinal)
 $workerIndex = $pluginSource.IndexOf("Task.Run(() => snapshots.Select(snapshot => PrepareSnapshot", $syncStart, [StringComparison]::Ordinal)
-if ($syncStart -lt 0 -or $firstCapture -lt 0 -or $laterCapture -lt 0 -or $laterCollect -lt $laterCapture -or $workerIndex -lt 0 -or $firstCapture -ge $workerIndex -or $laterCollect -ge $workerIndex) {
+if ($syncStart -lt 0 -or $laterCapture -lt 0 -or $laterCollect -lt $laterCapture -or $workerIndex -le $laterCollect) {
   throw "Native collection must finish before managed payload preparation moves off-thread."
 }
+Assert-Contains $pluginSource "budget.NextTick()" "Native row collection must yield across framework ticks."
 $helper = $pluginSource.Substring($pluginSource.IndexOf("private GameSnapshot[] CollectScopes(", [StringComparison]::Ordinal))
 Assert-Contains $helper.Substring(0, $helper.IndexOf("private static string[] WithheldResources", [StringComparison]::Ordinal)) "DirectGameSnapshotCollector.Collect(" "Scope collection must use the native collector only through the framework-thread helper."
 Assert-Contains $pluginSource "delayTicks: 1, cancellationToken: permit.Cancellation" "Later manual-sync scopes must each run on a following framework tick."
@@ -35,15 +35,15 @@ Assert-Contains $collectorSource "SheetRowCache<T>.GetRequired(dataManager)" "Co
 Assert-Contains $collectorSource "var catalog = GetCatalog(dataManager);" "Armoire catalog projection must be reused while live ownership is reread."
 Assert-Contains $pluginSource "uiRefreshPolicy.ShouldRefresh(settingsVisible, now)" "Settings publication must use the bounded visible-window cadence."
 
-$ventureResultCadenceIndex = $pluginSource.IndexOf("if (retainerWindowActive || now >= nextRetainerVentureResultCaptureUtc)", [StringComparison]::Ordinal)
+$ventureResultCadenceIndex = $pluginSource.IndexOf("if (now >= nextRetainerVentureResultCaptureUtc)", [StringComparison]::Ordinal)
 $ventureResultIndex = $pluginSource.IndexOf("CaptureRetainerResult", $ventureResultCadenceIndex, [StringComparison]::Ordinal)
 $ventureCadenceIndex = $pluginSource.IndexOf("if (now >= nextRetainerVentureRosterCaptureUtc)", [StringComparison]::Ordinal)
 $ventureRosterIndex = $pluginSource.IndexOf("CaptureRetainerVentureRosterAndGear", [StringComparison]::Ordinal)
 if (($ventureResultCadenceIndex -lt 0) -or ($ventureResultIndex -le $ventureResultCadenceIndex) -or ($ventureCadenceIndex -le $ventureResultIndex) -or ($ventureRosterIndex -le $ventureCadenceIndex)) {
   throw "Transient Venture result and roster evidence must retain their separate adaptive cadences."
 }
-Assert-Contains $pluginSource "DirectGameSnapshotCollector.IsRetainerVentureWindowActive()" "Fast cadence must follow native task-view activity."
-Assert-Contains $collectorSource "agent != null && agent->IsAgentActive()" "Native activity must be checked before transient-result capture."
+Assert-Contains $pluginSource "lastRetainerVentureResultProbeStatus is not" "Fast roster cadence must use the bounded task-view probe."
+Assert-Contains $collectorSource "agent == null || !agent->IsAgentActive()" "Native activity must be checked before transient-result capture."
 Assert-Contains $pluginSource "ActiveVentureRosterCaptureIntervalMilliseconds" "Active native task views must retain a bounded faster roster cadence."
 Assert-NotContains $pluginSource "InstalledPlugins" "Native observation must not discover third-party plugins."
 Assert-NotContains $pluginSource "GetIpcSubscriber" "Native observation must not invoke third-party IPC."

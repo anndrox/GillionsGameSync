@@ -97,16 +97,16 @@ var displayTarget = Bill().Targets[0];
 var displayBefore = JsonSerializer.Serialize(displayTarget);
 int nameReads = 0;
 var display = new HuntTargetPresentation(id => { nameReads++; return id == 100 ? "étoile 魔物" : null; });
-Check(display.TargetLine(displayTarget) == "  étoile 魔物 — 1/3 kills (target ID 1; NPC name ID 100)", "Localized target/counter/IDs missing.");
+Check(display.TargetLine(displayTarget) == "  Étoile 魔物: 1/3 kills (target ID 1; NPC name ID 100)", "Localized target/counter/IDs missing.");
 Check(display.TargetLine(displayTarget with { ObservedKills = 3 }).Contains("3/3 kills") && nameReads == 1, "Label cache froze counters or reread static catalog.");
 Check(displayBefore == JsonSerializer.Serialize(displayTarget), "Presentation changed retained target.");
 foreach (string? value in new string?[] { null, "", " \r\n\t ", "\0" }) {
     var missing = new HuntTargetPresentation(_ => value);
-    Check(missing.TargetLine(displayTarget).Contains("Target name unavailable — 1/3 kills (target ID 1; NPC name ID 100)"), "Missing name guessed or lost numeric fallback.");
+    Check(missing.TargetLine(displayTarget).Contains("Target name unavailable: 1/3 kills (target ID 1; NPC name ID 100)"), "Missing name guessed or lost numeric fallback.");
 }
 Check(new HuntTargetPresentation(_ => throw new InvalidOperationException()).TargetLine(displayTarget).Contains("Target name unavailable"), "Catalog failure broke presentation.");
-Check(new HuntTargetPresentation(_ => "\n test\t\0 ").TargetLine(displayTarget).StartsWith("  test —"), "Catalog control text escaped target row.");
-Check(new HuntTargetPresentation(_ => new string('x', 1000)).TargetLine(displayTarget).StartsWith("  " + new string('x', 160) + " —"), "Display label bound exceeded.");
+Check(new HuntTargetPresentation(_ => "\n test\t\0 ").TargetLine(displayTarget).StartsWith("  Test:"), "Catalog control text escaped target row.");
+Check(new HuntTargetPresentation(_ => new string('x', 1000)).TargetLine(displayTarget).StartsWith("  " + "X" + new string('x', 159) + ":"), "Display label bound exceeded.");
 int boundedReads = 0;
 var boundedNames = new HuntTargetPresentation(_ => { boundedReads++; return null; });
 for (uint id = 1; id <= HuntTargetPresentation.MaximumNames; id++) boundedNames.TargetLine(displayTarget with { NpcNameId = id });
@@ -324,4 +324,57 @@ if (args.Length == 2 && args[0] == "--fixture") {
 }
 PersonalSyncTests.Run(Check);
 HuntBillItemCoverageTests.Run(Check);
+var split = new HuntSplitUpload();
+var rev = new HuntUploadRevision(1, 1, 1);
+var history = new[] { Bill(), Bill(1) };
+var domains = Enumerable.Range(0, 22).Select(i => new HuntBillItemState((byte)i, (uint)(2001361 + i), "absent_confirmed")).ToArray();
+HuntBillItemSnapshot Sample(int seconds, HuntBillItemState[]? states = null) => new(Guid.NewGuid().ToString("N"), now.AddSeconds(seconds),
+    "2026.11.03.0000.0000", "0.0.99.0", "7.57.0.9480", states ?? domains);
+HuntSplitPreparation? Prepare(HuntUploadRevision revision, int seconds, HuntBillItemState[]? states = null) =>
+    split.Prepare(revision, Sample(seconds, states), now.AddSeconds(seconds), 1000 + seconds * 1000, () => history);
+int BillCount(HuntSplitPreparation preparation) {
+    using var json = JsonDocument.Parse(preparation.Body);
+    return json.RootElement.GetProperty("bills").GetArrayLength();
+}
+var initialSplit = Prepare(rev, 0)!;
+Check(BillCount(initialSplit) == 2 && initialSplit.Key == new HuntPreparationKey(rev, now), "initial history and immutable preparation key");
+Check(ReferenceEquals(initialSplit, Prepare(rev, 1)), "unchanged pending retries reuse the exact body and nonce");
+Check(!split.IsCurrent(initialSplit, rev with { PermissionEpoch = 2 }, Sample(1), now.AddSeconds(1)), "permission epoch fences the prepared body");
+split.Acknowledge(initialSplit, 1000);
+Check(Prepare(rev, 9) is null, "no coverage renewal before 10 seconds");
+var renewal = Prepare(rev, 10)!;
+Check(BillCount(renewal) == 0 && renewal.Nonce != initialSplit.Nonce && renewal.Key.ObservedAtUtc == now.AddSeconds(10),
+    "10-second compact renewal, fresh coverage time and nonce");
+using (var output = new MemoryStream()) {
+    using (var wire = new Utf8JsonWriter(output)) {
+        wire.WriteStartObject();
+        wire.WriteString("resourceType", "hunt_bills");
+        wire.WriteString("nonce", renewal.Nonce);
+        wire.WritePropertyName("payload");
+        wire.WriteRawValue(renewal.Body);
+        wire.WriteEndObject();
+    }
+    Check(output.Length == 2277, "actual compact UTF-8 wire body size");
+    Console.WriteLine($"Testing 0.0.99 compact Hunt request body: {output.Length} bytes, {output.Length * 6} bytes/min at 10-second cadence.");
+}
+split.Acknowledge(renewal, 11_000);
+history = [Bill(kills: 2), Bill(1) with { ObservedAtUtc = now.AddSeconds(11) }];
+rev = rev with { History = 2 };
+var changedBill = Prepare(rev, 11)!;
+Check(BillCount(changedBill) == 1 && changedBill.History.Length == 2, "changed bill sends immediately and timestamps alone do not qualify");
+split.Acknowledge(changedBill, 12_000);
+var beforeReconciliation = Prepare(rev, 599)!;
+Check(BillCount(beforeReconciliation) == 0, "stable renewals omit historical rows");
+split.Acknowledge(beforeReconciliation, 600_000);
+var reconciliation = Prepare(rev, 600)!;
+Check(BillCount(reconciliation) == 2 && reconciliation.Reconciles, "full reconciliation at ten minutes");
+split.Acknowledge(reconciliation, 601_000);
+var unavailable = domains.Select(domain => domain with { State = "unavailable" }).ToArray();
+var unavailableSample = Prepare(rev with { Coverage = 2 }, 601, unavailable)!;
+using (var json = JsonDocument.Parse(unavailableSample.Body))
+    Check(BillCount(unavailableSample) == 2 && json.RootElement.GetProperty("billItemCoverage").GetProperty("domains")
+        .EnumerateArray().All(row => row.GetProperty("state").GetString() == "unavailable"), "unavailable coverage uses real domain states with history");
+split.Clear();
+history = [];
+Check(Prepare(rev with { Coverage = 2 }, 602, unavailable) is null, "unavailable sample is never sent alone");
 Console.WriteLine($"Hunt/private-state/patch/retention/transport fixtures passed: {checks}; synthetic only, no live-game claim.");

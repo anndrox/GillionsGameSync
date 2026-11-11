@@ -117,7 +117,7 @@ internal static class AuditRegressionTests {
             save.Refresh();
             if (save.ShouldSave(instant)) { freshnessSaves++; save.Saved(instant); }
         }
-        Check(ObservationSavePolicy.FreshnessInterval >= TimeSpan.FromMinutes(5), "Freshness-only full-configuration saves stay rare on the framework thread.");
+        Check(ObservationSavePolicy.FreshnessInterval >= TimeSpan.FromMinutes(5), "Freshness-only checkpoints stay rare.");
         Check(freshnessSaves == 2 && state.RosterObservation.LastObservedAtUtc == Now.AddSeconds(window), "Freshness persists at most once per freshness interval while in-memory observation stays current.");
         save.RequestDurable(); save.RequestDurable();
         Check(save.ShouldSave(Now.AddSeconds(window)), "Durable changes do not wait for the freshness deadline.");
@@ -125,11 +125,11 @@ internal static class AuditRegressionTests {
         Check(RetainerVentureSnapshotPolicy.MarkRosterUnavailable(state, Now.AddSeconds(window + 1)), "A loss of availability is a semantic change.");
         Check(!RetainerVentureSnapshotPolicy.MarkRosterUnavailable(state, Now.AddSeconds(window + 2)), "Unavailable-to-unavailable is freshness only.");
         var view = new RetainerResultViewCache();
-        var read = new RetainerVentureResultRead("100", 1, 1788264000, Now, 0, [new(5, 1)]);
+        var read = new RetainerResultValues("100", 1, 1788264000, 0, 5, 1, 0, 0);
         Check(view.Changed("111", read), "A new native result view is captured.");
-        for (var frame = 1; frame <= 120; frame++) Check(!view.Changed("111", read with { ObservedAtUtc = Now.AddMilliseconds(frame * 16) }), "Repeated view frames do not construct or hash another event.");
-        Check(view.Changed("111", read with { AwardedExperience = 1 }), "A partial-to-complete result is captured immediately.");
-        view.Changed("111", null); Check(view.Changed("111", read), "Closing and reopening the view resets the transient tuple.");
+        for (var frame = 1; frame <= 120; frame++) Check(!view.Changed("111", read), "Repeated view frames do not construct or hash another event.");
+        Check(view.Changed("111", read with { Experience = 1 }), "A partial-to-complete result is captured immediately.");
+        view.Clear(); Check(view.Changed("111", read), "Closing and reopening the view resets the transient tuple.");
         Check(view.Changed("222", read), "Result-view memoization cannot cross characters.");
         var list = Enumerable.Range(0, 400).Select(i => Now.AddMilliseconds(i)).ToList();
         TransientEvidencePolicy.Prune(list, Now.AddSeconds(1), TimeSpan.FromSeconds(5), entry => entry);

@@ -33,7 +33,7 @@ public static class SyncOrigin {
     }
 }
 
-public sealed class OwnedCharacterState {
+public sealed partial class OwnedCharacterState {
     public string Generation { get; set; } = "";
     public string CharacterContentId { get; set; } = "";
     public string CharacterName { get; set; } = "";
@@ -69,6 +69,24 @@ public static class SyncOwnershipPolicy {
         if (state.Generation != session.Generation || state.CharacterContentId != character || state.RetainerState.CharacterContentId != character)
             throw new InvalidOperationException("Saved character ownership is invalid. Pair again to start a fresh connection.");
         return state;
+    }
+}
+
+// A published cache entry holds the exact inputs to the validated session.
+internal sealed class PairingValidationCache {
+    private sealed class Entry(PairedSession? session, bool required, string deviceId, string credential, bool valid) {
+        internal bool Matches(PairedSession? candidate, bool pairingRequired, string id, string value) =>
+            ReferenceEquals(session, candidate) && required == pairingRequired && deviceId == id && credential == value;
+        internal bool Valid => valid;
+    }
+
+    private Entry? last;
+    internal bool IsBound(PairedSession? session, bool required, string id, string credential, Func<string?, bool> allowedOrigin) {
+        var entry = Volatile.Read(ref last);
+        if (entry?.Matches(session, required, id, credential) == true) return entry.Valid;
+        var valid = SyncOwnershipPolicy.IsBoundSession(session, required, id, credential) && allowedOrigin(session?.Origin);
+        Volatile.Write(ref last, new Entry(session, required, id, credential, valid));
+        return valid;
     }
 }
 

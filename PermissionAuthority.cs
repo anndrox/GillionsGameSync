@@ -10,7 +10,9 @@ namespace GillionsGameSync;
 // Authenticated presence only. RAM custody: no credentials, config migration or
 // relationship between the Site external ID and the game's Content ID.
 internal sealed record PermissionEnrollment(Guid DeviceId, DateTime PairedAt, long CharacterId);
-internal sealed record PermissionDecision(string State, bool? Enabled, string? Generation, DateTime? DecidedAt);
+internal sealed record PermissionDecision(string State, bool? Enabled, string? Generation, DateTime? DecidedAt) {
+    internal string Identity { get; } = State == "explicit" ? "explicit:" + Generation + ":" + Enabled : State;
+}
 internal sealed class PermissionAuthority {
     internal const string Origin = "https://test.gillions.app";
     internal static readonly string[] Keys = ["marketContribution", "partyFinderContribution", "personalHunts",
@@ -34,11 +36,11 @@ internal sealed class PermissionAuthority {
     internal bool Allows(string key, bool historical, long clock) => Fresh(clock) && decisions.TryGetValue(key, out var p)
         && (p.State == "explicit" ? p.Enabled == true : p.State == "legacy" && !explicitSeen.Contains(key) && historical);
     internal string Identity(string key, long clock) => !Fresh(clock) || !decisions.TryGetValue(key, out var p) ? "unavailable"
-        : p.State == "explicit" ? "explicit:" + p.Generation + ":" + p.Enabled : p.State;
+        : p.Identity;
     // Denial custody is not authorization. Keep the last known decision identity
     // through lease expiry/invalidation so a received denial can survive reload.
     internal string? KnownIdentity(string key) => !decisions.TryGetValue(key, out var p) ? null
-        : p.State == "explicit" ? "explicit:" + p.Generation + ":" + p.Enabled : p.State == "legacy" ? "legacy" : null;
+        : p.State is "explicit" or "legacy" ? p.Identity : null;
     internal bool PartyFinderLinks(bool historicalItem, bool historicalPf, long clock) => Allows("partyFinderLinks", historicalItem && historicalPf, clock);
     internal bool HuntReceiving(bool historicalAutomatic, long clock) => Explicit("automaticHuntMaps", clock)
         || Allows("automaticHuntMaps", historicalAutomatic, clock);

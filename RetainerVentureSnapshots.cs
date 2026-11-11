@@ -420,7 +420,7 @@ public static class RetainerVentureSnapshotPolicy {
         catch (ArgumentOutOfRangeException) { return null; }
     }
 
-    private static RetainerVentureProfile CloneProfile(RetainerVentureProfile source) => new() {
+    internal static RetainerVentureProfile CloneProfile(RetainerVentureProfile source) => new() {
         RetainerId = source.RetainerId, ProfileObservation = source.ProfileObservation, Name = source.Name,
         ClassJobId = source.ClassJobId, Level = source.Level,
         Equipment = new() { Observation = source.Equipment.Observation, Items = source.Equipment.Items?.OrderBy(item => item.SlotIndex).ToList() },
