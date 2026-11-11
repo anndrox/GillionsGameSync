@@ -5,13 +5,13 @@
 - Qualifies Hunt, Travel, FATE, Submarine, Beastmaster and Appearance for the November game build and Dalamud 15.0.4.0. Dashboard stays paused on that runtime.
 - Patch-sensitive readers check the loaded runtime versions and revisions before reading. In-game confirmation and any Gillions Site admission are separate.
 
-See the [owner test checklist](docs/releases/testing-0.0.98.md).
+See the [owner test checklist](releases/testing-0.0.98.md).
 
 ## 1.0.31.9 (Stable candidate)
 
 Hunt check-ins, hunt maps and routing location pause while you are in a duty and resume when you leave. Status text no longer says TEST on Stable.
 
-See the [release notes](docs/releases/v1.0.31.9.md).
+See the [release notes](releases/v1.0.31.9.md).
 
 ## 1.0.31.8 (Stable candidate, not published)
 
@@ -21,7 +21,7 @@ See the [release notes](docs/releases/v1.0.31.9.md).
   preserves the newer permission lease and its support.
 - Existing permission, character, freshness and native-source checks still apply.
   No new setup or data collection is introduced. This is a source change only;
-  [successor release and admission work](docs/hunt-support-recovery.md) remains.
+  [successor release and admission work](hunt-support-recovery.md) remains.
 
 ## 1.0.31.7 (Stable, published 2026-10-28)
 
@@ -33,7 +33,7 @@ See the [release notes](docs/releases/v1.0.31.9.md).
 - The regular check-in includes the game version and eight local settings
   from PR 29, without a new capability, permission or consent default.
 - Includes PR 24 release tooling and PR 28 contract data. Inventory batching
-  already shipped in Stable 1.0.31.6. See [release notes](docs/releases/v1.0.31.7.md).
+  already shipped in Stable 1.0.31.6. See [release notes](releases/v1.0.31.7.md).
 
 ## 0.0.97 (Testing): settings and game build in the check-in
 
@@ -45,7 +45,7 @@ See the [release notes](docs/releases/v1.0.31.9.md).
   setting or default changes. Nothing extra is read from the game.
 - Updating needs no re-pairing or new permission and adds no new data category
   beyond those settings. No new capability is advertised. Testing keeps its
-  existing TEST-only origin. See [Testing 0.0.97](docs/releases/testing-0.0.97.md).
+  existing TEST-only origin. See [Testing 0.0.97](releases/testing-0.0.97.md).
 
 ## 0.0.96 (Testing): refused-character back-off
 
@@ -96,7 +96,7 @@ Updating from 1.0.31.2 keeps the pairing, settings and consent: no re-pairing an
 no permission prompt. This was checked with the real serializer.
 
 Published only after Gillions Production admits 1.0.31.6. See
-[docs/releases/v1.0.31.6.md](docs/releases/v1.0.31.6.md).
+[docs/releases/v1.0.31.6.md](releases/v1.0.31.6.md).
 
 ## 0.0.94 (Testing) — inventory burst coalescing
 
@@ -548,11 +548,11 @@ Includes the native observation integrity changes below.
 
 ## 0.0.63 - combined testing candidate
 
-- Add an opt-in, local-only Beastmaster ownership view to the existing testing plugin. Sampling defaults off; results are not persisted or uploaded. Stable behavior is unchanged. See [testing instructions](docs/beastmaster-local-test.md).
+- Add an opt-in, local-only Beastmaster ownership view to the existing testing plugin. Sampling defaults off; results are not persisted or uploaded. Stable behavior is unchanged. See [testing instructions](beastmaster-local-test.md).
 - Add the separate, off-by-default XIVPF Party Finder contribution path with direct loopback-only testing traffic, exact public-listing payloads, bounded batching/retries and redirect refusal.
 - Provide a GitHub-hosted testing repository JSON and immutable prerelease package for manual Dalamud installation without changing the existing Gillions testing feed.
 
-- Replaces the published `0.0.62` testing baseline with current Game Sync behavior, including one-time legacy re-pairing, preserved inactive history, bounded pending storage and retired AutoRetainer control. See [replacement notes](docs/releases/testing-0.0.63.md).
+- Replaces the published `0.0.62` testing baseline with current Game Sync behavior, including one-time legacy re-pairing, preserved inactive history, bounded pending storage and retired AutoRetainer control. See [replacement notes](releases/testing-0.0.63.md).
 
 ## 1.0.30 - 2026-09-08
 
