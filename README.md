@@ -17,7 +17,7 @@ Choose what to share in [Game Sync settings on gillions.app](https://gillions.ap
 - Submarine voyages
 - Observed market listings and recent sales
 - Character appearance (Testing only)
-- Public Party Finder listings (optional). Current builds send listings to Gillions. Older Stable builds sent them directly to [xivpf.com](https://xivpf.com), a third-party site.
+- **Party Finder (optional):** Party Finder listings you see in game, including other players' public listings, are sent to Gillions, which passes them on to xivpf.com.
 
 Location and character appearance sharing are off unless you turn them on. Testing also has a Beastmaster view that stays on your device and does not upload data.
 
