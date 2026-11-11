@@ -272,9 +272,12 @@ internal sealed class DashboardLocalView : IDisposable {
             Publish(!valid ? $"Source group {group} UNAVAILABLE/UNKNOWN/invalid; prior state preserved, not zero."
                 : $"Observed {observations.Length} bounded fact groups; cache ownership/reset response unverified. No automatic checklist completion or uploads.",
                 Stopwatch.GetElapsedTime(started).TotalMilliseconds);
-        } catch (Exception) { ResetEvidence();
+        } catch (Exception) {
+            ResetEvidence();
             if (group == 1) deliveryDiagnostics.Record(now, DashboardDeliveryReadStatus.ReadFailed);
-            Publish("Read/save failed; retained facts preserved, new data may be memory-only. No live correctness claim."); }
+            Publish("Read/save failed; retained facts preserved, new data may be memory-only. No live correctness claim.");
+            throw;
+        }
     }
     private void ResetEvidence() { activeKey = ""; observedThisSession.Clear(); deliveryDiagnostics.Reset(); }
     private void Publish(string status, double milliseconds = 0) {

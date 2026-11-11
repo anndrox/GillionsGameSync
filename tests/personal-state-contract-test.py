@@ -26,7 +26,7 @@ assert "InventoryType.KeyItems" in hunt and "!keyItems->IsLoaded" in hunt
 assert "keyItems->Size is < 1 or > 256" in hunt and "item.Quantity > 0" in hunt
 assert "presentItems.Contains(type.EventItem.RowId)" in hunt and "HuntObservationAdmission.CanUseBillCache" in hunt
 assert "huntLocal.Tick(now);" in plugin
-assert plugin.index("huntLocal.Tick(now);") < plugin.index("if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;")
+assert plugin.index("TickHuntObservation(now)") < plugin.index("if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;")
 assert "ObtainedFlags" in hunt and "GetObtainedHuntOrderRowId(index)" in hunt
 assert "CurrentKills[index].Counts" in hunt and "CatalogTargets" in hunt
 assert "hunt->GetKillCount(index, t.TargetIndex)" in hunt and "!c.Valid(catalog[n].RequiredKills)" in hunt

@@ -17,6 +17,14 @@ experience=experience.replace("None of your Hunt targets are in this zone.",
 assert outside_status(experience)==outside_status(accepted)
 hunt=(r/'HuntBillLocalView.cs').read_text(encoding='utf-8').replace('    internal bool Reading => ReadEnabled;\n','')
 hunt=hunt[:hunt.index('    internal HuntBillItemSnapshot? CurrentCoverage')] + hunt[hunt.index('    internal DateTime? CoverageObservedAtUtc'):]
+# The framework guard logs failed background reads after the existing cleanup.
+hunt_fault = '''        } catch (Exception) {
+            itemCoverage.Clear();
+            Publish("Hunt read/save failed; history preserved. New data may be memory-only. No live correctness claim.");
+            if (!force) throw;
+        }'''
+assert hunt.count(hunt_fault) == 1
+hunt = hunt.replace(hunt_fault, '        } catch (Exception) { itemCoverage.Clear(); Publish("Hunt read/save failed; history preserved. New data may be memory-only. No live correctness claim."); }')
 accepted_hunt=subprocess.check_output(['git','show',public+':HuntBillLocalView.cs'],cwd=r).decode().replace('\r\n','\n')
 for old_status in ['Private TEST sync is controlled separately in the main window.', 'Private TEST sync status is in the main window.']:
     accepted_hunt=accepted_hunt.replace(old_status,'Private sync requires separate permission.')

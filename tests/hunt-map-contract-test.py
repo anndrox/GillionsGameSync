@@ -6,8 +6,8 @@ m=(root/'HuntMapRequests.cs').read_text(encoding='utf-8')
 assert m.startswith('#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_HUNT_MAP_TESTS')
 assert 'public bool AutomaticallyShowHuntMap { get; set; }' in p
 loop=p.split('private void PollWebsiteRequests(DateTime now)',1)[1].split('private bool HuntMapPermitted',1)[0]
-assert '!huntMapPollInFlight && huntMapPoll.TryBegin(now, focused)' in loop
-assert '!itemLinkPollInFlight' in loop and 'websiteItemPoll.TryBegin(now, focused)' in loop
+assert '!huntMapPollInFlight && huntMapPoll.TryBegin(now, HuntFocusActive(now))' in loop
+assert '!itemLinkPollInFlight' in loop and 'websiteItemPoll.TryBegin(now, HuntFocusActive(now))' in loop
 assert 'await' not in loop # unrelated item/PF cannot serialize Hunt behind it
 assert 'PollHuntMapRequestAsync' in loop and 'PollItemLinkRequestsAsync' in loop
 assert 'WebsiteLinksEnabled && HasPairedSession' in loop
@@ -31,7 +31,7 @@ assert 'GetExcelSheet<Lumina.Excel.Sheets.Map>' in hunt and 'TerritoryType.RowId
 assert 'OpenMapWithMapLink(new MapLinkPayload(r.TerritoryId, r.MapId, r.MapX, r.MapY))' in hunt
 for forbidden in ['FireCallback','Teleport(', 'TeleportTo','TargetManager','SendAction','unsafe','TrustAll','ServerCertificateCustomValidationCallback']:
     assert forbidden not in hunt+m,forbidden
-assert 'ClearHuntMapRequests();' in p.split('private void ResetSessionContext()',1)[1].split('private void RefreshSessionContext()',1)[0]
+assert 'plugin.ClearHuntMapRequests()' in p.split('private void ResetSessionContext()',1)[1].split('private void RefreshSessionContext()',1)[0]
 assert 'observedHuntMapGuidance != configuration.AutomaticallyShowHuntMap' in p
 assert 'huntMapCancellation.Cancel(); huntMapCancellation.Dispose();' in p.split('public void Dispose()',1)[1]
 assert 'RequestConfigurationSave' not in hunt and 'claimToken' not in hunt.split('log.Debug',1)[1].split('private async Task',1)[0]
@@ -55,7 +55,7 @@ assert 'huntFocus.Clear(); nextHuntFocusPresenceUtc = DateTime.MinValue;' in p
 public_ui=(root/'PluginPublicUi.cs').read_text(encoding='utf-8')
 assert 'private void DrawHuntProgress()' in public_ui and 'Native' not in public_ui.split('private void DrawHuntProgress()',1)[1]
 assert 'huntFocusActiveDiagnostic = HuntFocusActive(now)' in p # Existing managed focus signal remains, not a public privacy mirror.
-assert 'HuntMapTransport.Deadline(permit.Cancellation, CancellationToken.None)' in p
+assert 'HuntMapTransport.Deadline(deadline.Token, CancellationToken.None)' in p
 assert 'SyncResponsePolicy.ReadBoundedAsync(response.Content, 131_072, responseCancellation)' in p
 print('Hunt V2/focus source/priority/independent permission/ephemeral privacy/compatibility boundaries PASS')
 

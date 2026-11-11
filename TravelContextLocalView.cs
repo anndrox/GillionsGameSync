@@ -157,7 +157,10 @@ internal sealed class TravelContextLocalView : IDisposable {
             }
             view = new("Private current context observed locally. HTTPS transport requires the paired travel grant.",rows.ToArray(),
                 Stopwatch.GetElapsedTime(start).TotalMilliseconds,GC.GetAllocatedBytesForCurrentThread()-allocated,now);
-        } catch (Exception) { Unavailable("Travel source unavailable; no current context. Unrelated sync preserved."); }
+        } catch (Exception) {
+            Unavailable("Travel source unavailable; no current context. Unrelated sync preserved.");
+            throw;
+        }
     }
     private void Unavailable(string message) { state.Invalidate(); Invalidated?.Invoke(); view = new(message,[],0,0); }
 #if GILLIONS_TEST_BUILD

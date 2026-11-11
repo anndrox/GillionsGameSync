@@ -14,8 +14,14 @@ using Lumina.Excel.Sheets;
 
 namespace GillionsGameSync;
 
+internal interface ICharacterAppearanceSource {
+    bool Available(ulong character);
+    (AppearanceSnapshot? Snapshot, string? Reason) Read(ulong character, DateTime now);
+}
+
 // Invoked exclusively by Plugin's framework update. No pointers/spans escape Read.
-internal sealed class CharacterAppearanceCollector(IClientState client,IObjectTable objects,IPlayerState player,IDataManager data,ICondition conditions) {
+internal sealed class CharacterAppearanceCollector(IClientState client,IObjectTable objects,IPlayerState player,IDataManager data,ICondition conditions)
+    : ICharacterAppearanceSource {
     private static readonly (string Key, EquippedSlot Inventory, EquipmentSlot Armour, WeaponSlot? Weapon)[] Slots = [
         ("mainHand", EquippedSlot.MainHand, default, WeaponSlot.MainHand),
         ("offHand", EquippedSlot.OffHand, default, WeaponSlot.OffHand),
@@ -34,12 +40,12 @@ internal sealed class CharacterAppearanceCollector(IClientState client,IObjectTa
     internal string GameVersion => data.GameData.Repositories.TryGetValue("ffxiv",out var r)?r.Version:"unavailable";
     internal string NativeVersion => typeof(InventoryManager).Assembly.GetName().Version?.ToString()??"unavailable";
     internal bool Qualified => NativeCompatibility.SupportsRuntime(NativeFamily.Appearance, GameVersion);
-    internal bool Available(ulong character) => Qualified && Ready(character);
+    public bool Available(ulong character) => Qualified && Ready(character);
 
     private bool Ready(ulong character) => character!=0&&client.IsLoggedIn&&player.IsLoaded&&player.ContentId==character&&!client.IsGPosing
         &&!conditions[ConditionFlag.BetweenAreas]&&!conditions[ConditionFlag.BetweenAreas51]&&!conditions[ConditionFlag.LoggingOut]
         &&!conditions[ConditionFlag.Transformed]&&!conditions[ConditionFlag.RolePlaying]&&!conditions[ConditionFlag.Disguised];
-    internal unsafe (AppearanceSnapshot? Snapshot, string? Reason) Read(ulong character, DateTime now) {
+    public unsafe (AppearanceSnapshot? Snapshot, string? Reason) Read(ulong character, DateTime now) {
         if (!Qualified) return (null, "This game layout is unsupported.");
         if (!Ready(character)) return (null, "Your character is not ready.");
         var local = objects.LocalPlayer;
@@ -54,6 +60,7 @@ internal sealed class CharacterAppearanceCollector(IClientState client,IObjectTa
             || container->Items == null || container->Size != 14) return (null, "Equipped items are not ready.");
 
         var items = data.GetExcelSheet<Item>();
+        if (items is null) return (null, "Item data is not ready.");
         var equipment = ReadEquipment((Character*)address, container->Items, id =>
             items.GetRowOrDefault(id) is { } row ? (row.ModelMain, row.ModelSub) : null);
         if (equipment is null) return (null, "The character model or equipped items could not be read.");

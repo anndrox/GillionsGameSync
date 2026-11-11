@@ -26,6 +26,10 @@ if (args.Length == 4 && args[3] == "--collectible-baseline") {
     CollectibleReadinessPackagedTests.ReproduceBaseline(pluginAssembly);
     return;
 }
+if (args.Length == 4 && args[3] == "--appearance-startup-baseline") {
+    AppearanceBackgroundPackagedTests.Run(pluginAssembly, baseline: true);
+    return;
+}
 if (args.Length == 4 && args[3] is "--upgrade-write" or "--upgrade-check" or "--rollback-check" or "--current-upgrade-write" or "--current-upgrade-check" or "--testing-upgrade-write" or "--testing-upgrade-check" or "--october-public-check" or "--october-testing-write" or "--october-testing-check" or "--hotfix-testing-write" or "--hotfix-testing-check") {
     StableUpgradeTests.Run(pluginAssembly, fixturePath, args[3]);
     return;
@@ -42,6 +46,7 @@ CollectibleReadinessPackagedTests.Run(pluginAssembly);
 PublicCandidatePackagedTests.Run(pluginAssembly);
 NativeCompatibilityPackagedTests.Run(pluginAssembly,libraryPath);
 if (testingProduct) AppearanceRenderPackagedTests.Run(pluginAssembly);
+if (testingProduct) AppearanceBackgroundPackagedTests.Run(pluginAssembly);
 ChannelIsolationPackagedTests.Run(pluginAssembly,fixturePath);
 DistributionManifestPackagedTests.Run(pluginAssembly);
 OriginPackagedTests.Run(pluginAssembly);

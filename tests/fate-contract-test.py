@@ -35,14 +35,14 @@ assert 'fateLocal.SetAuthorized(HasPairedSession' in plugin
 assert 'else if(fateLocal.ContextReady && fateSender.Take' in plugin
 assert '&& fateLocal.ContextReady && FatePolicy.Compatible(source)' not in plugin
 assert 'measuring=true' not in native.split('internal FateLocalView',1)[1].split('private string GameVersion',1)[0]
-assert 'fateLocal.Tick(now)' in plugin and 'fateLocal.Dispose()' in plugin and 'fateLocal?.ClearAuthorization()' in plugin
+assert 'fateLocal.Tick(now)' in plugin and 'fateLocal.Dispose()' in plugin and 'plugin.fateLocal.ClearAuthorization()' in plugin
 config = plugin.split('public sealed partial class PluginConfiguration',1)[1]
 assert not re.search(r'public .*Fate(Observation|Prepared|Admission)|public bool .*Fate',config)
 assert not re.search(r'SendAsync|new HttpClient',native)
 assert not re.search(r'new FateAdmission|FateTransportPolicy.Request',native)
 sender = (root / 'FateSenderState.cs').read_text(encoding='utf-8')
 discovery = (root / 'FateDiscovery.cs').read_text(encoding='utf-8')
-assert 'TickFateSender(now)' in plugin and 'fateSender.Dispose()' in plugin
+assert 'plugin.TickFateSender(at)' in plugin and 'fateSender.Dispose()' in plugin
 assert 'SyncRequestMode.Manual' in plugin.split('private void TickFateSender',1)[1].split('private MarketContributionSession',1)[0]
 assert 'personalHttp.SendAsync' in plugin.split('private async Task<HttpResponseMessage> DispatchFateAsync',1)[1].split('private async Task DiscoverFateAsync',1)[0]
 assert 'clock+10000' in sender and 'clock+5000' in sender

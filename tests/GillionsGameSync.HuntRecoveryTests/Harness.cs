@@ -49,6 +49,8 @@ public sealed partial class Plugin : IDisposable {
     private FixtureConfiguration configuration=new();
     private readonly SyncRequestLifetime lifetime=new();
     private readonly ImmediateFramework framework=new();
+    private readonly BackgroundObservation backgroundObservation=new((name, error)=>throw new Exception(name, error));
+    private bool Observe(string component, DateTime now, Action<Plugin, DateTime> tick) => backgroundObservation.Run(component, this, now, tick);
     private readonly Dictionary<string, ResourceRetry> privateRetries=new();
     private readonly Noop marketContributor=new(),partyFinderContributor=new(),travelLocal=new(),travelRetries=new(),huntFocus=new(),log=new();
     private bool PartyFinderContributionEnabled=>false;
