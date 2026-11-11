@@ -12,7 +12,7 @@ internal static partial class NativeCompatibility {
     private static readonly NativeBuild LoadedAssemblies = new("",
         VersionOf(typeof(IFramework).Assembly), RevisionOf(typeof(IFramework).Assembly),
         VersionOf(typeof(InventoryManager).Assembly), RevisionOf(typeof(InventoryManager).Assembly),
-        LibraryVersion(typeof(Lumina.GameData).Assembly), LibraryVersion(typeof(Lumina.Excel.ExcelModule).Assembly));
+        LibraryVersion(typeof(Lumina.GameData).Assembly), LibraryVersion(typeof(Lumina.Excel.Sheets.Fate).Assembly));
 
     internal static bool SupportsRuntime(NativeFamily family, string? game) =>
         game is not null && SupportsExact(family, LoadedAssemblies with { GameBuild = game });
