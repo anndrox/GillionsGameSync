@@ -4,9 +4,9 @@ Gillions Game Sync is a Dalamud plugin for FINAL FANTASY XIV. Pair your characte
 
 ## What it shares
 
-Sharing through Game Sync is optional. Pairing turns on core sync. Disconnect your device to stop core sync, or change the optional sharing choices in Game Sync settings on gillions.app. Some categories need a compatible game version or only update after you open the relevant window in game.
+Sharing through Game Sync is optional. You choose what to share in Game Sync settings on [gillions.app](https://gillions.app/gillions-sync), and you can turn sharing off at any time. Some categories need a compatible game version or only update after you open the relevant window in game.
 
-**On when you pair:**
+**On when you pair (you can turn these off):**
 
 - Inventory, gear and currencies
 - Retainers and ventures
@@ -15,9 +15,9 @@ Sharing through Game Sync is optional. Pairing turns on core sync. Disconnect yo
 - Gil ledger
 - Hunt progress
 - Submarine voyages
-- Observed market listings and recent sales
+- Market listings and recent sales you see
 
-Hunt progress, submarine voyages and market updates can be turned off in Game Sync settings.
+Hunt progress, submarine voyages and market updates each have their own switch in Game Sync settings. The rest stop when you disconnect your device.
 
 **Off until you turn them on:**
 
