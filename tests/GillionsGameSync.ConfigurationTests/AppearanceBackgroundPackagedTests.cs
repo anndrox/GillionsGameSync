@@ -14,7 +14,7 @@ internal static class AppearanceBackgroundPackagedTests {
         var configType = TypeOf("PluginConfiguration");
         var config = Activator.CreateInstance(configType)!;
         configType.GetProperty("AutomaticSync")!.SetValue(config, false);
-        var warnings = new List<(string Message, string? Component, Exception? Error)>();
+        var warnings = new List<(string Message, string[] Values)>();
         var login = new List<Delegate>();
         Delegate? update = null;
         var loggedIn = false;
@@ -77,8 +77,7 @@ internal static class AppearanceBackgroundPackagedTests {
                 }
                 if (type == typeof(IPluginLog) && method.Name == "Warning") {
                     warnings.Add((args!.OfType<string>().Single(),
-                        args!.OfType<object[]>().SelectMany(values => values).OfType<string>().SingleOrDefault(),
-                        args!.OfType<Exception>().SingleOrDefault()));
+                        args!.OfType<object[]>().SelectMany(values => values).OfType<string>().ToArray()));
                 }
                 return Default(method);
             });
@@ -91,7 +90,7 @@ internal static class AppearanceBackgroundPackagedTests {
             return;
         }
         if (baseline || update is null || warnings.Count != 0)
-            throw new Exception("Startup framework callback failed. " + string.Join("\n", warnings.Select(warning => warning.Error?.ToString() ?? warning.Message)));
+            throw new Exception("Startup framework callback failed. " + string.Join("\n", warnings.Select(warning => string.Join(" ", warning.Values))));
 
         object? Get(string field) => pluginType.GetField(field, instance)!.GetValue(plugin);
         void Set(string field, object? value) => pluginType.GetField(field, instance)!.SetValue(plugin, value);
@@ -162,8 +161,8 @@ internal static class AppearanceBackgroundPackagedTests {
         Set("appearanceNextRead", DateTime.MinValue);
         Frame();
         ExpectReceipt(1);
-        Require(samples == 1 && warnings.Count(w => w.Component == "duty state"
-            && w.Error is NullReferenceException { StackTrace.Length: > 0 }) == 1, "the first fault logged a stack at Warning");
+        Require(samples == 1 && warnings.Count(w => w.Values is ["duty state", "NullReferenceException", { Length: > 0 }]) == 1,
+            "the first fault logged a stack at Warning");
 
         LoginWithGrant();
         var firstFrame = Stopwatch.StartNew();
@@ -174,8 +173,8 @@ internal static class AppearanceBackgroundPackagedTests {
         Frame();
         ExpectReceipt(2);
         Require(firstFrame.Elapsed < TimeSpan.FromSeconds(5), "post-login upload within one sample interval after the first-frame exception");
-        Require(warnings.Select(w => w.Component).SequenceEqual(["duty state", "session context"])
-            && warnings.All(w => w.Error is NullReferenceException { StackTrace.Length: > 0 }),
+        Require(warnings.Select(w => w.Values.FirstOrDefault()).SequenceEqual(["duty state", "session context"])
+            && warnings.All(w => w.Values is [_, "NullReferenceException", { Length: > 0 }]),
             "repeated duty fault logs once and the session fault logs independently");
         Set("publicConnectionFailure", "CHARACTER_NOT_LINKED");
         Require((string)Call("AppearanceStatus", DateTime.UtcNow)! == "Verify this character on gillions.app.",

@@ -26,7 +26,8 @@ assert 'firstSlots[i]=s with { NativeConfirmedEmpty=true }' in native
 assert 'item->VirtualTable==itemVirtualTable' in native
 assert 'slots.Count(s => s.NativeConfirmedEmpty) <= 8' in model
 assert 'NativeConfirmedEmpty' not in model.split('var root = JsonNode.Parse',1)[1].split('internal sealed class HuntBillItemSync',1)[0]
-assert 'huntCoverageSync.Clear(); huntLocal?.ClearCoverage();' in plugin
+reset = plugin.split('private void ResetSessionContext()', 1)[1].split('private void RefreshSessionContext()', 1)[0]
+assert 'huntCoverageSync.Clear();' in reset and 'plugin.huntLocal.ClearCoverage()' in reset
 assert 'huntCoverageAccepted' in plugin and 'PersonalSyncPolicy.HuntCoverageCompatible' in plugin
 assert 'coverage && !CoveragePreparedCurrent(prepared, permit)' in plugin
 assert 'var coverageToken = coverageCancellation.Token;' in plugin

@@ -270,7 +270,8 @@ public sealed partial class Plugin : IDalamudPlugin {
         this.chatGui = chatGui;
         this.log = log;
         backgroundObservation = new((component, error) =>
-            log.Warning(error, "Gillions background observation failed in {Component}.", component));
+            log.Warning("Gillions background observation failed in {Component} ({ExceptionType}).\n{StackTrace}",
+                component, error.GetType().Name, error.StackTrace ?? ""));
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         this.marketConditions = marketConditions;
         playerState = travelPlayerState;

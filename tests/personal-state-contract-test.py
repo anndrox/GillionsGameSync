@@ -55,7 +55,7 @@ assert "session.Reset()" in hunt and "session.Bind(characterKey)" in hunt
 for event in ("client.TerritoryChanged", "conditions.ConditionChange"):
     assert event + " +=" in hunt and event + " -=" in hunt
 assert "if (value && flag is ConditionFlag.BetweenAreas or ConditionFlag.BetweenAreas51) ClearLiveBaseline()" in hunt
-assert "TickPersonalSync(now, prompt: huntChanged)" in plugin
+assert "state.Plugin.TickPersonalSync(at, prompt: state.HuntChanged)" in plugin
 manual = plugin.split("private async Task SyncAsync",1)[1].split("var snapshots = captured.Snapshots",1)[0]
 assert "PersonalEnabled(\"hunt_bills\")" in manual and "huntLocal.Tick(DateTime.UtcNow, force: true)" in manual
 assert "TickPersonalSync(DateTime.UtcNow, prompt: true)" in manual
