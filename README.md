@@ -4,7 +4,22 @@ Gillions Game Sync is a Dalamud plugin for FINAL FANTASY XIV. Pair your characte
 
 ## What it shares
 
-You choose each sharing category in [Game Sync settings on gillions.app](https://gillions.app/gillions-sync). Supported data includes inventory, gear and currencies; retainer items and ventures; glamour plates and dye colours; achievements, collectibles and quest progress; and Gil changes for the ledger. Some data is available only after you open the relevant window in game.
+Choose what to share in [Game Sync settings on gillions.app](https://gillions.app/gillions-sync). Some categories need a compatible game version or only update after you open the relevant window in game.
+
+- Inventory, gear and currencies
+- Retainers and ventures
+- Glamour plates and dye colours
+- Achievements, collectibles, quests and character progress, including reputation and Shared FATE progress
+- Gil ledger
+- Hunt progress
+- Live FATEs
+- Travel and location
+- Submarine voyages
+- Observed market listings and recent sales
+- Character appearance (Testing only)
+- Public Party Finder listings (optional). Current builds send listings to Gillions. Older Stable builds sent them directly to [xivpf.com](https://xivpf.com), a third-party site.
+
+Location and character appearance sharing are off unless you turn them on. Testing also has a Beastmaster view that stays on your device and does not upload data.
 
 ## Install
 
@@ -27,10 +42,6 @@ https://raw.githubusercontent.com/anndrox/GillionsGameSync-Testing/main/data/Gil
 ```
 
 <!-- Legacy Testing feed (frozen, kept here for the existing manifest contract): https://github.com/anndrox/GillionsGameSync/releases/download/v0.0.64-testing/GillionsGameSyncTesting.json -->
-
-## Screenshots
-
-Screenshots of the plugin window and sharing settings will go here.
 
 ## Support
 
