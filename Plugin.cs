@@ -190,6 +190,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Testing 0.0.101 shares your full look when a hat or weapon is hidden.",
         "Testing 0.0.100 reads appearance dyes from the rendered gear.",
         "Testing 0.0.99 moves sharing controls to Gillions and sends Hunt coverage separately from bill updates.",
         "Testing90 qualifies Hunt, submarine and travel reads and the FATE source for the 7.57 hotfix (Dalamud 15.0.3.9) from one per-collector compatibility table. FATE, Hunt coverage and travel uploads still need Gillions admission of the new patch.",
@@ -455,7 +456,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 if (!travelAccepted) ClearTravelPending();
 #if GILLIONS_TEST_BUILD
                 if (permissionsAccepted) ApplySharingStatus(responseJson, permit);
-                else if (!permissionAuthority.Fresh(Environment.TickCount64)) ResetAppearance();
+                else if (!permissionAuthority.Fresh(Environment.TickCount64)) PauseAppearance();
 #endif
                 if (requestFocus && focusClock is not null) huntFocus.Apply(responseJson, focusClock.UtcNow, HuntFocusEligible() && personalAccepted.Contains("hunt_bills"), DateTime.UtcNow);
                 else huntFocus.Clear();
@@ -474,7 +475,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 permissionAuthority.Invalidate(); ReconcilePermissions(force: true);
                 ClearRetainerServerAcceptance(); presenceFailureCount++;
 #if GILLIONS_TEST_BUILD
-                ResetAppearance();
+                PauseAppearance();
 #endif
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
                 travelAccepted = false; ClearTravelPending();
@@ -1744,12 +1745,14 @@ public sealed partial class Plugin : IDalamudPlugin {
 
     private void OnLogin() { frameworkTickContentId = null; logoutPending = false; huntProgress.Invalidate(endTerritorySession: true); ResetSessionContext(); }
     private void OnLogout(int type, int code) { frameworkTickContentId = null; logoutPending = true; huntProgress.Invalidate(endTerritorySession: true); ResetSessionContext(); }
-    private void ResetSessionContext() {
+    private void ResetSessionContext() => ResetSessionContext(0, samePairing: false);
+
+    private void ResetSessionContext(ulong nextContentId, bool samePairing) {
         if (disposed) return;
         requestLifetime.Invalidate(); ClearTransientState(); ClearRetainerServerAcceptance(); retainerUploadedAtUtc = DateTime.MinValue; ClearCharacterFailure();
         permissionAuthority.Bind("", ""); permissionTransitions.Clear(); permissionFreshFrom.Clear();
 #if GILLIONS_TEST_BUILD
-        ResetAppearance();
+        ResetAppearance(nextContentId, samePairing);
 #endif
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         nativeVersionReported = false;
@@ -1779,7 +1782,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         var generation = HasPairedSession ? configuration.ActiveSession!.Generation : "";
         if (contentId != activeRetainerCharacterContentId || generation != activeGeneration) {
             if (contentId != activeRetainerCharacterContentId) huntProgress.Invalidate(endTerritorySession: true);
-            ResetSessionContext();
+            ResetSessionContext(contentId, generation.Length != 0 && generation == activeGeneration);
             activeRetainerCharacterContentId = contentId; activeGeneration = generation;
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
             if (contentId != 0 && HasPairedSession) travelBinding = TravelBinding(requestLifetime.Capture(SyncRequestMode.Personal,

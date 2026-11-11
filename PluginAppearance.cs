@@ -1,6 +1,6 @@
 #if GILLIONS_TEST_BUILD
 using System;
-using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -16,22 +16,32 @@ public sealed partial class Plugin {
     private CancellationTokenSource appearanceCancellation=new();
     private ConsentStatus? consentStatus;
     private string? appearanceGrant;
-    private long appearanceCharacterId;
-    private bool appearanceFlight;
+    private (ulong ContentId, AppearanceGrant Grant)? appearanceReceiptScope;
+    private const int AppearanceSampleSeconds = 5;
+    private CancellationToken? appearanceFlight;
+    private string? appearanceReadFailure;
     private DateTime appearanceLease, appearanceNextRead, appearanceNextSend;
 
-    private void ClearAppearance() {
+    private void CancelAppearanceUpload() {
         appearanceCancellation.Cancel();
-        appearanceQueue.Clear();
+        appearanceQueue.DiscardPending();
     }
 
-    private void ResetAppearance() {
-        ClearAppearance();
+    private void PauseAppearance() {
+        CancelAppearanceUpload();
         consentStatus = null;
         appearanceGrant = null;
-        appearanceCharacterId = 0;
         appearanceLease = DateTime.MinValue;
+    }
+
+    private void ResetAppearance(ulong nextContentId, bool samePairing) {
+        PauseAppearance();
+        appearanceReadFailure = null;
         appearanceRetry.Clear();
+        // Player state can temporarily lose its content ID during a zone load.
+        if (samePairing && (nextContentId == 0 || nextContentId == appearanceReceiptScope?.ContentId)) return;
+        appearanceReceiptScope = null;
+        appearanceQueue.Clear();
     }
 
     private bool AppearanceAuthorized(DateTime now) => HasPairedSession && activeOwnedState is not null
@@ -42,16 +52,23 @@ public sealed partial class Plugin {
         var character = permissionAuthority.Enrollment?.CharacterId;
         var status = ConsentStatus.Read(doc.RootElement, permit.Origin);
         consentStatus = status?.CharacterId == character ? status : null;
-        var descriptor = AppearanceGrant.Read(doc.RootElement);
-        if (descriptor?.CharacterId != character || !permissionAuthority.Fresh(Environment.TickCount64)) descriptor = null;
-        var nextCharacterId = descriptor?.CharacterId ?? 0;
-        if (descriptor?.Generation != appearanceGrant || nextCharacterId != appearanceCharacterId) {
-            ClearAppearance();
+        var descriptor = AppearanceGrant.Read(doc.RootElement, out var disabledCharacterId);
+        var state = consentStatus?.Categories.FirstOrDefault(category => category.Key == "appearance")?.State;
+        var fresh = permissionAuthority.Fresh(Environment.TickCount64);
+        var off = fresh && character.HasValue && (state == "off" || disabledCharacterId == character);
+        if (off || descriptor?.CharacterId != character || !fresh)
+            descriptor = null;
+        (ulong ContentId, AppearanceGrant Grant)? nextScope = descriptor is null ? null : (permit.ContentId, descriptor);
+        if (off || (nextScope.HasValue && nextScope != appearanceReceiptScope)) {
+            CancelAppearanceUpload();
+            appearanceQueue.Clear();
+            appearanceReceiptScope = nextScope;
             appearanceRetry.Clear();
             appearanceNextRead = appearanceNextSend = DateTime.MinValue;
+        } else if (descriptor is null && appearanceGrant is not null) {
+            CancelAppearanceUpload();
         }
         appearanceGrant = descriptor?.Generation;
-        appearanceCharacterId = nextCharacterId;
         appearanceLease = DateTime.UtcNow.AddSeconds(25);
     }
 
@@ -68,27 +85,51 @@ public sealed partial class Plugin {
         Link("Change on gillions.app", status.SettingsUrl);
     }
 
+    private void WithholdAppearance(string reason) {
+        CancelAppearanceUpload();
+        if (reason == appearanceReadFailure) return;
+        appearanceReadFailure = reason;
+        RecordDiagnostic($"Appearance paused. {reason}");
+    }
+
+    private bool AppearanceSampleDue(DateTime now) {
+        if (now < appearanceNextRead) return false;
+        appearanceNextRead = now.AddSeconds(AppearanceSampleSeconds);
+        return true;
+    }
+
+    private AppearancePreparation? TakeAppearanceUpload(DateTime now) {
+        if (appearanceFlight is { IsCancellationRequested: false } || now < appearanceNextSend
+            || appearanceQueue.Pending is not { } pending || !appearanceRetry.Ready(Environment.TickCount64, pending.Hash)) return null;
+        appearanceNextSend = now.AddSeconds(AppearanceSampleSeconds);
+        return pending;
+    }
+
     private void TickAppearance(DateTime now) {
         if (!AppearanceAuthorized(now)) {
-            if (appearanceGrant is not null) { appearanceGrant = null; ClearAppearance(); }
+            if (appearanceGrant is not null) PauseAppearance();
             return;
         }
-        if (now >= appearanceNextRead) {
-            appearanceNextRead = now.AddSeconds(5);
+        if (AppearanceSampleDue(now)) {
             try {
-                var snapshot = appearanceCollector.Read(activeRetainerCharacterContentId, now);
-                if (snapshot is null) { ClearAppearance(); return; }
+                var (snapshot, reason) = appearanceCollector.Read(activeRetainerCharacterContentId, now);
+                if (snapshot is null) {
+                    WithholdAppearance(reason ?? "Character appearance could not be read.");
+                    return;
+                }
                 appearanceQueue.Observe(snapshot);
-            } catch (Exception) { ClearAppearance(); return; }
+                appearanceReadFailure = null;
+            } catch (Exception) {
+                WithholdAppearance("Character appearance could not be read.");
+                return;
+            }
         }
-        if (!appearanceFlight && appearanceQueue.Pending is { } p && now >= appearanceNextSend
-            && appearanceRetry.Ready(Environment.TickCount64, p.Hash)) {
-            appearanceFlight = true;
-            appearanceNextSend = now.AddSeconds(5);
+        if (TakeAppearanceUpload(now) is { } p) {
             if (appearanceCancellation.IsCancellationRequested) { appearanceCancellation.Dispose(); appearanceCancellation = new(); }
             var permit = CapturePermit(SyncRequestMode.Personal);
             var grant = appearanceGrant!;
             var cancellation = appearanceCancellation.Token;
+            appearanceFlight = cancellation;
             _ = Task.Run(() => SendAppearance(permit, p, grant, cancellation));
         }
     }
@@ -119,7 +160,11 @@ public sealed partial class Plugin {
                     appearanceRetry.Failed(Environment.TickCount64, p.Hash, error);
             });
         }
-        finally{if(!disposed)await framework.RunOnFrameworkThread(()=>appearanceFlight=false);}
+        finally {
+            if (!disposed) await framework.RunOnFrameworkThread(() => {
+                if (appearanceFlight == featureToken) appearanceFlight = null;
+            });
+        }
     }
 }
 #endif

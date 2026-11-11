@@ -1,6 +1,8 @@
 using System.Reflection;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Runtime.CompilerServices;
+using Dalamud.Plugin.Services;
 
 internal static class PermissionPackagedTests {
     internal static void Run(Assembly assembly) {
@@ -66,7 +68,6 @@ internal static class PermissionPackagedTests {
                 pluginType.GetField("appearanceRetry", flags)!.SetValue(plugin, retry);
                 pluginType.GetField("appearanceCancellation", flags)!.SetValue(plugin, cancellation);
                 pluginType.GetField("appearanceGrant", flags)!.SetValue(plugin, "00000000-0000-4000-8000-000000000002");
-                pluginType.GetField("appearanceCharacterId", flags)!.SetValue(plugin, 100L);
                 var permitType = assembly.GetType("GillionsGameSync.SyncRequestPermit", true)!;
                 var mode = Enum.Parse(assembly.GetType("GillionsGameSync.SyncRequestMode", true)!, "Personal");
                 var permit = Activator.CreateInstance(permitType, flags, null,
@@ -76,6 +77,8 @@ internal static class PermissionPackagedTests {
                 applySharingStatus.Invoke(plugin, [off.ToJsonString(), permit]);
                 Check(cancellation.IsCancellationRequested && pluginType.GetField("appearanceGrant", flags)!.GetValue(plugin) is null,
                     "actual presence commit cancels the in-flight appearance grant immediately on off");
+                Call("Apply", Fixture(true, true).ToJsonString(), issued, Environment.TickCount64, null);
+                TestAppearanceReenable(assembly, plugin, queue, applySharingStatus, permit, Check);
             }
             var record=pluginType.GetMethod("RecordContributionDenial",flags)!;
             var hash=assembly.GetType("GillionsGameSync.PersonalSyncPolicy",true)!.GetMethod("Hash",BindingFlags.NonPublic|BindingFlags.Static)!;
@@ -97,5 +100,119 @@ internal static class PermissionPackagedTests {
             }
         }
         Console.WriteLine($"Exact packaged permission authority PASS: {count} checks; synthetic, no game/HTTP invocation.");
+    }
+
+    private static void TestAppearanceReenable(Assembly assembly, object plugin, object queue,
+        MethodInfo applySharingStatus, object permit, Action<bool, string> check) {
+        const BindingFlags instance = BindingFlags.Instance | BindingFlags.NonPublic;
+        const string generation = "00000000-0000-4000-8000-000000000002";
+        const string newGeneration = "00000000-0000-4000-8000-000000000003";
+        var pluginType = plugin.GetType();
+        var queueType = queue.GetType();
+        var observe = queueType.GetMethod("Observe", instance)!;
+        var accepted = queueType.GetMethod("Accepted", instance)!;
+        var sampleDue = pluginType.GetMethod("AppearanceSampleDue", instance)!;
+        var take = pluginType.GetMethod("TakeAppearanceUpload", instance)!;
+        var withhold = pluginType.GetMethod("WithholdAppearance", instance)!;
+        var reset = pluginType.GetMethod("ResetAppearance", instance)!;
+        var grantField = pluginType.GetField("appearanceGrant", instance)!;
+        var cancellationField = pluginType.GetField("appearanceCancellation", instance)!;
+        using var initialSource = new CancellationTokenSource();
+        cancellationField.SetValue(plugin, initialSource);
+        var log = DispatchProxy.Create<IPluginLog, CollectibleServiceProxy>();
+        ((CollectibleServiceProxy)(object)log).Handler = (_, _) => null;
+        var diagnostics = new List<string>();
+        pluginType.GetField("log", instance)!.SetValue(plugin, log);
+        pluginType.GetField("diagnostics", instance)!.SetValue(plugin, diagnostics);
+        pluginType.GetField("diagnosticsLock", instance)!.SetValue(plugin, new object());
+
+        string[] categories = ["marketContribution", "partyFinderContribution", "fateContribution", "personalHunts",
+            "huntRoutingLocation", "automaticHuntMaps", "personalSubmarines", "itemLinks", "partyFinderLinks", "appearance"];
+        void Presence(string state, string grant) {
+            var body = JsonSerializer.Serialize(new {
+                consentStatus = new {
+                    version = 1, characterId = 100, issuedAt = "2026-11-11T18:00:00Z",
+                    settingsUrl = "https://test.gillions.app/gillions-sync",
+                    categories = categories.Select(key => new {
+                        key, label = key, state = key == "appearance" ? state : "not-set", changeOn = "site",
+                    }),
+                },
+                // Keep the descriptor's generation unchanged to test the
+                // explicit consent transition independently of generation rotation.
+                characterAppearance = new {
+                    contract = "character-appearance-v1", resourceType = "character_appearance",
+                    capability = "character_appearance_v1", permission = "server:game-sync:personal:character-appearance:v1",
+                    maxPayloadBytes = 16384, maxEnvelopeBytes = 20480, characterId = 100, enabled = true, generation = grant,
+                },
+            });
+            applySharingStatus.Invoke(plugin, [body, permit]);
+        }
+
+        var snapshotType = assembly.GetType("GillionsGameSync.AppearanceSnapshot", true)!;
+        var slots = (string[])assembly.GetType("GillionsGameSync.AppearancePolicy", true)!
+            .GetField("Slots", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+        var look = JsonSerializer.Deserialize(JsonSerializer.Serialize(new {
+            CustomizationHex = new string('0', 52),
+            ObservedAtUtc = "2026-11-11T18:00:00.000Z",
+            Equipment = slots.ToDictionary(key => key, _ => new { ItemId = 123u, Stain0Id = 4 }),
+        }), snapshotType)!;
+        object? Sample(DateTime at, bool ready = true) {
+            if (grantField.GetValue(plugin) is null) return null;
+            if ((bool)sampleDue.Invoke(plugin, [at])!) {
+                if (!ready) {
+                    withhold.Invoke(plugin, ["The character is not ready."]);
+                    return null;
+                }
+                observe.Invoke(queue, [look]);
+            }
+            return take.Invoke(plugin, [at]);
+        }
+        string Field(object upload, string name) => (string)upload.GetType().GetProperty(name, instance)!.GetValue(upload)!;
+
+        var now = DateTime.UtcNow;
+        Presence("on", generation);
+        var first = Sample(now) ?? throw new Exception("Initial look did not queue an upload");
+        accepted.Invoke(queue, [first]);
+        // Simulate an old upload whose cancellation continuation has not run.
+        using var tokenSource = new CancellationTokenSource();
+        cancellationField.SetValue(plugin, tokenSource);
+        pluginType.GetField("appearanceFlight", instance)!.SetValue(plugin, tokenSource.Token);
+        Presence("off", generation);
+        check(tokenSource.IsCancellationRequested && Sample(now.AddSeconds(1)) is null,
+            "explicit consent Off cancels uploads even if the same descriptor is present");
+
+        var resumedAt = now.AddSeconds(2);
+        Presence("on", generation);
+        var resumed = Sample(resumedAt) ?? throw new Exception("Unchanged look did not queue on the first sample after On");
+        check(Field(resumed, "Hash") == Field(first, "Hash") && Field(resumed, "Nonce") != Field(first, "Nonce"),
+            "Off to On uploads the unchanged look with a new nonce on the next sample");
+        accepted.Invoke(queue, [resumed]);
+        int uploads = 1;
+        for (int seconds = 1; seconds <= 5; seconds++) {
+            Presence("on", generation);
+            if (Sample(resumedAt.AddSeconds(seconds)) is not null) uploads++;
+        }
+        check(uploads == 1, "exactly one upload in the first sample interval after re-enable");
+
+        Presence("on", newGeneration);
+        var renewed = Sample(resumedAt.AddSeconds(6)) ?? throw new Exception("New grant generation did not queue an unchanged look");
+        check(Field(renewed, "Hash") == Field(resumed, "Hash") && Field(renewed, "Nonce") != Field(resumed, "Nonce"),
+            "grant generation change uploads the unchanged look without a reconnect");
+        accepted.Invoke(queue, [renewed]);
+        check(Sample(resumedAt.AddSeconds(11)) is null, "fresh grant resumes normal hash deduplication");
+
+        var loadingAt = resumedAt.AddSeconds(16);
+        check(Sample(loadingAt, ready: false) is null
+            && diagnostics.Single().EndsWith("Appearance paused. The character is not ready.", StringComparison.Ordinal),
+            "a not-ready actor withholds the sample and records a plain diagnostic");
+        check(Sample(loadingAt.AddSeconds(5)) is null, "unchanged look after transient not ready produces no upload");
+
+        // Exercise the same appearance reset used when PlayerState reports zero
+        // during a zone transition and the previous character then returns.
+        reset.Invoke(plugin, [0UL, true]);
+        check(Sample(loadingAt.AddSeconds(6)) is null, "no upload while the character is unavailable");
+        reset.Invoke(plugin, [123UL, true]);
+        Presence("on", newGeneration);
+        check(Sample(loadingAt.AddSeconds(10)) is null, "zone change with an unchanged look produces no upload");
     }
 }
