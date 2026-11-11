@@ -90,7 +90,7 @@ on the release channel within hours of the hotfix.
    AtkUnitBase, FateManager and FateContext (the struct Dalamud's `IFateTable`
    wraps; also unchanged since September). Among the C# sources, the maintainers'
    "7.57 hotfix1" signature pass changed only `PacketDispatcher`.
-2. **September â†’ current changes for Submarine and Travel.** All of them are
+2. **September → current changes for Submarine and Travel.** All of them are
    additive or cosmetic:
    - `HousingManager.RequestWardInfo` and `PlayerState.GetCurrentClassJobContentMaxLevel` were added;
    - `AgentTeleport.ContextMenuAetheryteIndex` was documented at `0x58` (the plugin reads `0x5C`/`0x60`/`0x68`);
@@ -117,7 +117,7 @@ on the release channel within hours of the hotfix.
 
    On every run, CI inspects the pinned runtime and also re-proves the recorded
    values against the 15.0.3.6 and 15.0.3.7 archives with `--native-layout-check`.
-4. **Dalamud 15.0.3.7 â†’ 15.0.3.9.** The service changes don't affect the APIs
+4. **Dalamud 15.0.3.7 → 15.0.3.9.** The service changes don't affect the APIs
    used. `AddonArgs.Addon` became an init property with the same getter, and
    there were no `IFateTable`, `IPlayerState`, `IClientState` or `IGameInventory`
    changes.
@@ -157,7 +157,7 @@ version; until then the Site rejects them and the client backs off.
 
 1. **Identify the runtime players will run.**
    - Dalamud release `version` at the newest `goatcorp/dalamud-distrib`
-     "Promoting for â€¦ from stg" commit.
+     "Promoting for … from stg" commit.
    - The `FFXIVClientStructs.dll` version and `+revision` inside that commit's
      root `latest.zip`.
    - The game build from ClientStructs `ida/data.yml` (and `game/ffxivgame.ver`
