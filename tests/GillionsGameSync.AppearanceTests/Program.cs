@@ -61,11 +61,12 @@ var consent = ConsentStatus.Read(enabled.RootElement, origin);
 Check(consent?.SettingsUrl == origin + "/gillions-sync" && consent.Categories.Select(row => row.Key).SequenceEqual(keys)
     && consent.Categories[9].Label == "Exact site label 9" && consent.Categories[9].DisplayState == "On"
     && consent.Categories[1].DisplayState == "Off" && consent.Categories[0].DisplayState == "Not set", "read-only status uses the site rows, labels and address");
-Check(AppearanceGrant.Read(enabled.RootElement) == new AppearanceGrant(123, grant), "upload grant comes from the descriptor");
+Check(AppearanceGrant.Read(enabled.RootElement, out _) == new AppearanceGrant(123, grant), "upload grant comes from the descriptor");
 using var off = JsonDocument.Parse(Response(false, origin + "/gillions-sync"));
-Check(AppearanceGrant.Read(off.RootElement) is null, "off descriptor immediately drops the grant");
+Check(AppearanceGrant.Read(off.RootElement, out var disabledCharacterId) is null && disabledCharacterId == 123,
+    "off descriptor immediately drops the grant and identifies the character");
 using var wrongUrl = JsonDocument.Parse(Response(true, "https://example.invalid/gillions-sync"));
-Check(ConsentStatus.Read(wrongUrl.RootElement, origin) is null && AppearanceGrant.Read(wrongUrl.RootElement) is not null,
+Check(ConsentStatus.Read(wrongUrl.RootElement, origin) is null && AppearanceGrant.Read(wrongUrl.RootElement, out _) is not null,
     "display status does not grant or revoke appearance");
 if(args.Length==2&&args[0]=="--fixture"){Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(args[1]))!);File.WriteAllText(args[1],JsonSerializer.Serialize(Fixture(),AppearancePolicy.Json));}
 Console.WriteLine($"Appearance fixtures: {checks} passed.");

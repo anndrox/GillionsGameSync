@@ -69,13 +69,15 @@ internal sealed class AppearancePreparation {
 internal sealed class AppearanceQueue {
     internal AppearancePreparation? Pending { get; private set; }
     private string accepted="";
+    internal void DiscardPending() => Pending = null;
     internal void Clear(){Pending=null;accepted="";}
     internal void Observe(AppearanceSnapshot p){if(!AppearancePolicy.Valid(p))return;var hash=p.ContentHash;if(hash==accepted){Pending=null;return;}if(Pending?.Hash!=hash)Pending=new(p);}
     internal void Accepted(AppearancePreparation p){accepted=p.Hash;if(ReferenceEquals(Pending,p))Pending=null;}
 }
 
 internal sealed record AppearanceGrant(long CharacterId, string Generation) {
-    internal static AppearanceGrant? Read(JsonElement root) {
+    internal static AppearanceGrant? Read(JsonElement root, out long? disabledCharacterId) {
+        disabledCharacterId = null;
         try {
             if (!root.TryGetProperty("characterAppearance", out var descriptor)
                 || descriptor.GetProperty("contract").GetString() != AppearancePolicy.Contract
@@ -83,11 +85,15 @@ internal sealed record AppearanceGrant(long CharacterId, string Generation) {
                 || descriptor.GetProperty("capability").GetString() != AppearancePolicy.Capability
                 || descriptor.GetProperty("permission").GetString() != AppearancePolicy.Permission
                 || descriptor.GetProperty("maxPayloadBytes").GetInt32() != 16384
-                || descriptor.GetProperty("maxEnvelopeBytes").GetInt32() != 20480
-                || !descriptor.GetProperty("enabled").GetBoolean()) return null;
+                || descriptor.GetProperty("maxEnvelopeBytes").GetInt32() != 20480) return null;
             var character = descriptor.GetProperty("characterId").GetInt64();
+            if (character <= 0) return null;
+            if (!descriptor.GetProperty("enabled").GetBoolean()) {
+                disabledCharacterId = character;
+                return null;
+            }
             var generation = descriptor.GetProperty("generation").GetString();
-            return character > 0 && Guid.TryParseExact(generation, "D", out var id) && id != Guid.Empty
+            return Guid.TryParseExact(generation, "D", out var id) && id != Guid.Empty
                 ? new(character, generation!) : null;
         } catch (Exception e) when (e is KeyNotFoundException or InvalidOperationException or FormatException or OverflowException) {
             return null;

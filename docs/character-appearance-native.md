@@ -61,8 +61,9 @@ from the rendered weapons. The plugin uses the SDK's typed members and checks
 both the draw object and model type before reading. When a slot has no
 rendered model, such as hidden headgear or a sheathed weapon whose draw object
 is absent, it uses the equipped item and both `InventoryItem.Stains` bytes
-at `+0x37` and `+0x38`. Its `glamourItemId` is zero. Empty inventory
-slots are sent as empty. An unreadable actor or equipped inventory still
+at `+0x37` and `+0x38`. It uses `InventoryItem.GlamourId` as `glamourItemId`
+when the ID is nonzero and exists in the Item sheet. Otherwise, it sends zero.
+Empty inventory slots are sent as empty. An unreadable actor or equipped inventory still
 withholds the look and records a one-line diagnostic reason. [Glamourer state reader](https://github.com/Ottermandias/Glamourer/blob/e165910345b17b99d9aa35990005b5e0f73ae65b/Glamourer/State/StateManager.cs),
 [Glamourer's GameData pin](https://github.com/Ottermandias/Penumbra.GameData/blob/f463b5e670b14a66e5c9b7a74a31079ab0bba11b/Interop/Model.cs),
 [Penumbra's GameData pin](https://github.com/Ottermandias/Penumbra.GameData/blob/78aa11737434e8531f8b4b8c0248b7981afdcc0f/Interop/Model.cs).
@@ -82,7 +83,9 @@ An explicit appearance Off in the site's presence response cancels pending
 uploads and clears the last accepted appearance hash. A valid grant after Off,
 or a change in grant generation, makes a fresh sample due. The current look
 uploads again even if its hash matches the deleted look. Successful uploads
-resume normal deduplication.
+resume normal deduplication. Loading screens, GPose, zone changes, and temporary
+grant unavailability cancel pending uploads and preserve the accepted hash for
+the same character and grant. Reconnecting or switching characters clears it.
 
 ## Pinned source comparison
 

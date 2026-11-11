@@ -91,13 +91,19 @@ internal sealed class CharacterAppearanceCollector(IClientState client,IObjectTa
             AppearanceDrawSlot? drawn = slot.Weapon is { } weaponSlot
                 ? ReadWeapon(&character->DrawData, weaponSlot)
                 : ReadArmour(human, slot.Armour);
+            var glamourModels = glamourId != 0 ? lookupModels(glamourId) : null;
             if (drawn is not { } model) {
                 var stains = item->Stains;
-                equipment.Add(slot.Key, new() { ItemId = itemId, Stain0Id = stains[0], Stain1Id = stains[1] });
+                equipment.Add(slot.Key, new() {
+                    ItemId = itemId,
+                    GlamourItemId = glamourModels.HasValue ? glamourId : 0,
+                    Stain0Id = stains[0],
+                    Stain1Id = stains[1],
+                });
                 continue;
             }
 
-            var glamourMatches = glamourId != 0 && Matches(lookupModels(glamourId), model.Model, slot.Weapon.HasValue);
+            var glamourMatches = Matches(glamourModels, model.Model, slot.Weapon.HasValue);
             equipment.Add(slot.Key, AppearancePolicy.FromDrawSlot(itemId, glamourId, model, glamourMatches));
         }
         return character->GameObject.DrawObject == drawObject ? equipment : null;

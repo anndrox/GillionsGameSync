@@ -133,6 +133,7 @@ internal static class AppearanceRenderPackagedTests {
         *(ulong*)(human + 0xA40) = 0x10000;
         *(byte**)(character + firstWeapon + weaponDrawObject) = null;
         *(uint*)(inventory + 0x3C) = 2000;
+        models[2000] = (0x0300030003, 0);
         off[0xA26] = off[0xA27] = 0;
         equipment = Wire();
         Check(equipment.EnumerateObject().Count() == 12, "hidden head and sheathed weapon still queue a full look");
@@ -141,12 +142,18 @@ internal static class AppearanceRenderPackagedTests {
             bool hidden = slot.Key is "head" or "mainHand";
             Check(row.EnumerateObject().Count() == 4, slot.Key + " keeps the wire field set");
             Check(row.GetProperty("itemId").GetUInt32() == 1000u + slot.Inventory
-                && row.GetProperty("glamourItemId").GetUInt32() == (hidden || slot.Inventory < 2 ? 0u : 2000u + slot.Inventory),
+                && row.GetProperty("glamourItemId").GetUInt32() == (slot.Key == "offHand" ? 0u : 2000u + slot.Inventory),
                 slot.Key + " identifies the rendered or equipped item");
             Check(row.GetProperty("stain0Id").GetByte() == (hidden ? 30 + slot.Inventory : slot.First)
                 && row.GetProperty("stain1Id").GetByte() == (hidden ? 40 + slot.Inventory : slot.Second),
                 slot.Key + " uses its own dye source");
         }
+        models.Remove(2000);
+        var unknownGlamour = Wire().GetProperty("mainHand");
+        Check(unknownGlamour.GetProperty("glamourItemId").GetUInt32() == 0
+            && unknownGlamour.GetProperty("stain0Id").GetByte() == 30
+            && unknownGlamour.GetProperty("stain1Id").GetByte() == 40,
+            "a hidden weapon with a missing Item row keeps its inventory dyes and sends no glamour ID");
         *(ushort*)(human + 0xA48) = 999;
         var unmatched = Wire().GetProperty("body");
         Check(unmatched.GetProperty("glamourItemId").GetUInt32() == 0

@@ -16,25 +16,32 @@ public sealed partial class Plugin {
     private CancellationTokenSource appearanceCancellation=new();
     private ConsentStatus? consentStatus;
     private string? appearanceGrant;
-    private long appearanceCharacterId;
+    private (ulong ContentId, AppearanceGrant Grant)? appearanceReceiptScope;
     private const int AppearanceSampleSeconds = 5;
     private CancellationToken? appearanceFlight;
     private string? appearanceReadFailure;
     private DateTime appearanceLease, appearanceNextRead, appearanceNextSend;
 
-    private void ClearAppearance() {
+    private void CancelAppearanceUpload() {
         appearanceCancellation.Cancel();
-        appearanceQueue.Clear();
+        appearanceQueue.DiscardPending();
     }
 
-    private void ResetAppearance() {
-        ClearAppearance();
-        appearanceReadFailure = null;
+    private void PauseAppearance() {
+        CancelAppearanceUpload();
         consentStatus = null;
         appearanceGrant = null;
-        appearanceCharacterId = 0;
         appearanceLease = DateTime.MinValue;
+    }
+
+    private void ResetAppearance(ulong nextContentId, bool samePairing) {
+        PauseAppearance();
+        appearanceReadFailure = null;
         appearanceRetry.Clear();
+        // Player state can temporarily lose its content ID during a zone load.
+        if (samePairing && (nextContentId == 0 || nextContentId == appearanceReceiptScope?.ContentId)) return;
+        appearanceReceiptScope = null;
+        appearanceQueue.Clear();
     }
 
     private bool AppearanceAuthorized(DateTime now) => HasPairedSession && activeOwnedState is not null
@@ -45,20 +52,23 @@ public sealed partial class Plugin {
         var character = permissionAuthority.Enrollment?.CharacterId;
         var status = ConsentStatus.Read(doc.RootElement, permit.Origin);
         consentStatus = status?.CharacterId == character ? status : null;
-        var descriptor = AppearanceGrant.Read(doc.RootElement);
+        var descriptor = AppearanceGrant.Read(doc.RootElement, out var disabledCharacterId);
         var state = consentStatus?.Categories.FirstOrDefault(category => category.Key == "appearance")?.State;
-        if (state == "off" || descriptor?.CharacterId != character || !permissionAuthority.Fresh(Environment.TickCount64))
+        var fresh = permissionAuthority.Fresh(Environment.TickCount64);
+        var off = fresh && character.HasValue && (state == "off" || disabledCharacterId == character);
+        if (off || descriptor?.CharacterId != character || !fresh)
             descriptor = null;
-        var nextCharacterId = descriptor?.CharacterId ?? 0;
-        if (descriptor?.Generation != appearanceGrant || nextCharacterId != appearanceCharacterId) {
-            // Gillions deletes the old look on Off. Forget its receipt as
-            // well as pending work so the next grant sends a fresh snapshot.
-            ClearAppearance();
+        (ulong ContentId, AppearanceGrant Grant)? nextScope = descriptor is null ? null : (permit.ContentId, descriptor);
+        if (off || (nextScope.HasValue && nextScope != appearanceReceiptScope)) {
+            CancelAppearanceUpload();
+            appearanceQueue.Clear();
+            appearanceReceiptScope = nextScope;
             appearanceRetry.Clear();
             appearanceNextRead = appearanceNextSend = DateTime.MinValue;
+        } else if (descriptor is null && appearanceGrant is not null) {
+            CancelAppearanceUpload();
         }
         appearanceGrant = descriptor?.Generation;
-        appearanceCharacterId = nextCharacterId;
         appearanceLease = DateTime.UtcNow.AddSeconds(25);
     }
 
@@ -76,7 +86,7 @@ public sealed partial class Plugin {
     }
 
     private void WithholdAppearance(string reason) {
-        ClearAppearance();
+        CancelAppearanceUpload();
         if (reason == appearanceReadFailure) return;
         appearanceReadFailure = reason;
         RecordDiagnostic($"Appearance paused. {reason}");
@@ -97,7 +107,7 @@ public sealed partial class Plugin {
 
     private void TickAppearance(DateTime now) {
         if (!AppearanceAuthorized(now)) {
-            if (appearanceGrant is not null) { appearanceGrant = null; ClearAppearance(); }
+            if (appearanceGrant is not null) PauseAppearance();
             return;
         }
         if (AppearanceSampleDue(now)) {

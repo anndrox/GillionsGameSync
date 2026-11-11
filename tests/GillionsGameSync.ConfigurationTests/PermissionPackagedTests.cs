@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Runtime.CompilerServices;
+using Dalamud.Plugin.Services;
 
 internal static class PermissionPackagedTests {
     internal static void Run(Assembly assembly) {
@@ -67,7 +68,6 @@ internal static class PermissionPackagedTests {
                 pluginType.GetField("appearanceRetry", flags)!.SetValue(plugin, retry);
                 pluginType.GetField("appearanceCancellation", flags)!.SetValue(plugin, cancellation);
                 pluginType.GetField("appearanceGrant", flags)!.SetValue(plugin, "00000000-0000-4000-8000-000000000002");
-                pluginType.GetField("appearanceCharacterId", flags)!.SetValue(plugin, 100L);
                 var permitType = assembly.GetType("GillionsGameSync.SyncRequestPermit", true)!;
                 var mode = Enum.Parse(assembly.GetType("GillionsGameSync.SyncRequestMode", true)!, "Personal");
                 var permit = Activator.CreateInstance(permitType, flags, null,
@@ -113,10 +113,18 @@ internal static class PermissionPackagedTests {
         var accepted = queueType.GetMethod("Accepted", instance)!;
         var sampleDue = pluginType.GetMethod("AppearanceSampleDue", instance)!;
         var take = pluginType.GetMethod("TakeAppearanceUpload", instance)!;
+        var withhold = pluginType.GetMethod("WithholdAppearance", instance)!;
+        var reset = pluginType.GetMethod("ResetAppearance", instance)!;
         var grantField = pluginType.GetField("appearanceGrant", instance)!;
         var cancellationField = pluginType.GetField("appearanceCancellation", instance)!;
         using var initialSource = new CancellationTokenSource();
         cancellationField.SetValue(plugin, initialSource);
+        var log = DispatchProxy.Create<IPluginLog, CollectibleServiceProxy>();
+        ((CollectibleServiceProxy)(object)log).Handler = (_, _) => null;
+        var diagnostics = new List<string>();
+        pluginType.GetField("log", instance)!.SetValue(plugin, log);
+        pluginType.GetField("diagnostics", instance)!.SetValue(plugin, diagnostics);
+        pluginType.GetField("diagnosticsLock", instance)!.SetValue(plugin, new object());
 
         string[] categories = ["marketContribution", "partyFinderContribution", "fateContribution", "personalHunts",
             "huntRoutingLocation", "automaticHuntMaps", "personalSubmarines", "itemLinks", "partyFinderLinks", "appearance"];
@@ -148,9 +156,15 @@ internal static class PermissionPackagedTests {
             ObservedAtUtc = "2026-11-11T18:00:00.000Z",
             Equipment = slots.ToDictionary(key => key, _ => new { ItemId = 123u, Stain0Id = 4 }),
         }), snapshotType)!;
-        object? Sample(DateTime at) {
+        object? Sample(DateTime at, bool ready = true) {
             if (grantField.GetValue(plugin) is null) return null;
-            if ((bool)sampleDue.Invoke(plugin, [at])!) observe.Invoke(queue, [look]);
+            if ((bool)sampleDue.Invoke(plugin, [at])!) {
+                if (!ready) {
+                    withhold.Invoke(plugin, ["The character is not ready."]);
+                    return null;
+                }
+                observe.Invoke(queue, [look]);
+            }
             return take.Invoke(plugin, [at]);
         }
         string Field(object upload, string name) => (string)upload.GetType().GetProperty(name, instance)!.GetValue(upload)!;
@@ -186,5 +200,19 @@ internal static class PermissionPackagedTests {
             "grant generation change uploads the unchanged look without a reconnect");
         accepted.Invoke(queue, [renewed]);
         check(Sample(resumedAt.AddSeconds(11)) is null, "fresh grant resumes normal hash deduplication");
+
+        var loadingAt = resumedAt.AddSeconds(16);
+        check(Sample(loadingAt, ready: false) is null
+            && diagnostics.Single().EndsWith("Appearance paused. The character is not ready.", StringComparison.Ordinal),
+            "a not-ready actor withholds the sample and records a plain diagnostic");
+        check(Sample(loadingAt.AddSeconds(5)) is null, "unchanged look after transient not ready produces no upload");
+
+        // Exercise the same appearance reset used when PlayerState reports zero
+        // during a zone transition and the previous character then returns.
+        reset.Invoke(plugin, [0UL, true]);
+        check(Sample(loadingAt.AddSeconds(6)) is null, "no upload while the character is unavailable");
+        reset.Invoke(plugin, [123UL, true]);
+        Presence("on", newGeneration);
+        check(Sample(loadingAt.AddSeconds(10)) is null, "zone change with an unchanged look produces no upload");
     }
 }
