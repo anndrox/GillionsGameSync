@@ -1614,11 +1614,13 @@ public sealed partial class Plugin : IDalamudPlugin {
                     configuration.AutomaticSync = false; configuration.SyncBlockedCode = rejection.Code;
                     configuration.SyncBlockedMessage = OperationFailureMessage(error); RequestConfigurationSave(); RefreshSessionContext();
                 } else if (background && ownsSync) {
-                    if (activeOwnedState?.PendingGilLedgerEvents.Count > 0) nextGilLedgerUploadUtc = DateTime.UtcNow.AddSeconds(AutomaticFailureRetrySeconds);
+                    var now = DateTime.UtcNow;
+                    var delay = ResourceRetry.WithJitter(TimeSpan.FromSeconds(AutomaticFailureRetrySeconds));
+                    if (activeOwnedState?.PendingGilLedgerEvents.Count > 0) nextGilLedgerUploadUtc = now.Add(delay);
                     // A Retainer retry always schedules that resource explicitly.
                     if (activeOwnedState?.RetainerState.PendingResultEvents.Count > 0 || scopes?.Contains(RetainerClientPolicy.ResourceType) == true)
-                        nextRetainerUploadUtc = DateTime.UtcNow.AddSeconds(AutomaticFailureRetrySeconds);
-                    if (scopes?.Contains("inventory") == true) inventoryUploads.Requeue(DateTime.UtcNow, TimeSpan.FromSeconds(AutomaticFailureRetrySeconds));
+                        nextRetainerUploadUtc = now.Add(delay);
+                    if (scopes?.Contains("inventory") == true) inventoryUploads.Requeue(now, delay);
                 }
                 // The connection state names a background refusal; only an account stop replaces the action message.
                 if (!background || error is GillionsSyncRejectedException blockedAccount && IsAccountAccessBlocked(blockedAccount.Code)) settingsMessage = OperationFailureMessage(error);
@@ -2321,8 +2323,8 @@ public sealed partial class Plugin : IDalamudPlugin {
         personalStatus = "Private sync waiting for explicit server permission/new positive observations, or retained state already acknowledged. No empty replacement.";
     }
     private void DelayLegacyCoverage(GillionsHttpException? error) {
-        var delay = PersonalSyncPolicy.RetrySeconds(++personalFailures) * (1 + Random.Shared.NextDouble() / 4);
-        personalRetryUtc = DateTime.UtcNow.AddSeconds(Math.Max(delay, error?.RetryAfter?.TotalSeconds ?? 0));
+        var delay = ResourceRetry.WithJitter(TimeSpan.FromSeconds(PersonalSyncPolicy.RetrySeconds(++personalFailures)));
+        personalRetryUtc = DateTime.UtcNow.AddSeconds(Math.Max(delay.TotalSeconds, error?.RetryAfter?.TotalSeconds ?? 0));
         nextPersonalUtc = personalRetryUtc;
     }
 

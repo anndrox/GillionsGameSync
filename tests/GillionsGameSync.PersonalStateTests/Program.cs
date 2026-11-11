@@ -337,13 +337,13 @@ int BillCount(HuntSplitPreparation preparation) {
     return json.RootElement.GetProperty("bills").GetArrayLength();
 }
 var initialSplit = Prepare(rev, 0)!;
-Check(BillCount(initialSplit) == 2 && initialSplit.Key == new HuntPreparationKey(rev, now), "initial history and immutable preparation key");
+Check(BillCount(initialSplit) == 2 && initialSplit.IncludesBills && initialSplit.Key == new HuntPreparationKey(rev, now), "initial history and immutable preparation key");
 Check(ReferenceEquals(initialSplit, Prepare(rev, 1)), "unchanged pending retries reuse the exact body and nonce");
 Check(!split.IsCurrent(initialSplit, rev with { PermissionEpoch = 2 }, Sample(1), now.AddSeconds(1)), "permission epoch fences the prepared body");
 split.Acknowledge(initialSplit, 1000);
 Check(Prepare(rev, 9) is null, "no coverage renewal before 10 seconds");
 var renewal = Prepare(rev, 10)!;
-Check(BillCount(renewal) == 0 && renewal.Nonce != initialSplit.Nonce && renewal.Key.ObservedAtUtc == now.AddSeconds(10),
+Check(BillCount(renewal) == 0 && !renewal.IncludesBills && renewal.Nonce != initialSplit.Nonce && renewal.Key.ObservedAtUtc == now.AddSeconds(10),
     "10-second compact renewal, fresh coverage time and nonce");
 using (var output = new MemoryStream()) {
     using (var wire = new Utf8JsonWriter(output)) {

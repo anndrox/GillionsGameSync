@@ -51,17 +51,20 @@ public sealed partial class Plugin {
             personalCancellation.Add("hunt_bills", feature);
         }
         var token = feature.Token;
+        var durable = preparation.IncludesBills ? FlushConfigurationSave(force: true) : Task.CompletedTask;
         huntSplitInFlight = true;
-        _ = Task.Run(() => SendHuntSplitAsync(permit, preparation, key, token));
+        _ = Task.Run(() => SendHuntSplitAsync(permit, preparation, key, token, durable));
     }
 
     private bool HuntSplitCurrent(HuntSplitPreparation preparation, string key, DateTime now) =>
         HuntSplitEnabled && huntSplitUpload.IsCurrent(preparation, HuntRevision, huntLocal.CurrentCoverage(key, now), now);
 
-    private async Task SendHuntSplitAsync(SyncRequestPermit permit, HuntSplitPreparation preparation, string key, CancellationToken feature) {
+    private async Task SendHuntSplitAsync(SyncRequestPermit permit, HuntSplitPreparation preparation, string key, CancellationToken feature,
+        Task durable) {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation, feature);
         linked.CancelAfter(TimeSpan.FromSeconds(30));
         try {
+            await durable.ConfigureAwait(false);
             using var request = SnapshotRequest("/api/game-sync/sync", permit, "hunt_bills", preparation.Nonce,
                 Encoding.UTF8.GetBytes(preparation.Body));
             request.Headers.Add("X-Gillions-Personal-Contract", PersonalSyncPolicy.Contract);

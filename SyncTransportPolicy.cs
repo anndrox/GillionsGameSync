@@ -190,9 +190,11 @@ internal sealed class ResourceRetry {
             return;
         }
         refusedRevision = null;
-        var jittered = Math.Min(300_000, 5000L << Math.Min(failures++, 6)) * (1 + Random.Shared.NextDouble() / 4);
-        until = now + (long)jittered;
+        var jittered = WithJitter(TimeSpan.FromMilliseconds(Math.Min(300_000, 5000L << Math.Min(failures++, 6))));
+        until = now + (long)jittered.TotalMilliseconds;
     }
+
+    internal static TimeSpan WithJitter(TimeSpan delay) => delay * (1 + Random.Shared.NextDouble() / 4);
 
     internal void Clear() {
         until = serverUntil = 0;

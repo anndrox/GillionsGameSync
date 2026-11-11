@@ -153,9 +153,9 @@ internal static class DutyPausePackagedTests {
             for (var handle = metadata.GetNextHandle(default(UserStringHandle)); !handle.IsNil; handle = metadata.GetNextHandle(handle)) {
                 literals.Add(metadata.GetUserString(handle));
             }
-            Check(literals.Any(text => text.StartsWith("Travel context accepted by Gillions", StringComparison.Ordinal))
+            Check(literals.Any(text => text == "Gillions received your current location.")
                 && literals.Any(text => text.Contains("HTTPS pairing and its separate travel grant", StringComparison.Ordinal))
-                && literals.Any(text => text.Contains("compatible Gillions acknowledgement", StringComparison.Ordinal)), "compiled public travel status strings present");
+                && literals.Any(text => text.Contains("Gillions paused location updates.", StringComparison.Ordinal)), "compiled public travel status strings present");
             Check(literals.Any(text => text.StartsWith("Awaiting compatible Gillions permission", StringComparison.Ordinal))
                 && literals.Any(text => text.StartsWith("Private sync requires compatible Gillions HTTPS pairing", StringComparison.Ordinal))
                 && literals.Any(text => text.StartsWith(": Receipt accepted by Gillions", StringComparison.Ordinal)), "compiled public personal status strings present");

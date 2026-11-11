@@ -58,7 +58,7 @@ internal static class PermissionPackagedTests {
             configuration.GetProperty("ActiveSession")!.SetValue(config,session);
             pluginType.GetField("configuration",flags)!.SetValue(plugin,config);
             pluginType.GetField("permissionAuthority",flags)!.SetValue(plugin,instance);
-            if (assembly.GetType("GillionsGameSync.AppearanceGrant") is { } grantType) {
+            if (pluginType.GetMethod("ApplySharingStatus", flags) is { } applySharingStatus) {
                 var queue = Activator.CreateInstance(assembly.GetType("GillionsGameSync.AppearanceQueue", true)!, true)!;
                 var retry = Activator.CreateInstance(assembly.GetType("GillionsGameSync.ResourceRetry", true)!, true)!;
                 using var cancellation = new CancellationTokenSource();
@@ -73,7 +73,7 @@ internal static class PermissionPackagedTests {
                     [0L, 0L, mode, 123UL, session, "https://test.gillions.app", "", CancellationToken.None], null)!;
                 var off = Fixture(true, false);
                 off["characterAppearance"] = new JsonObject { ["enabled"] = false };
-                pluginType.GetMethod("ApplySharingStatus", flags)!.Invoke(plugin, [off.ToJsonString(), permit]);
+                applySharingStatus.Invoke(plugin, [off.ToJsonString(), permit]);
                 Check(cancellation.IsCancellationRequested && pluginType.GetField("appearanceGrant", flags)!.GetValue(plugin) is null,
                     "actual presence commit cancels the in-flight appearance grant immediately on off");
             }

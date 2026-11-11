@@ -8,12 +8,14 @@ namespace GillionsGameSync;
 internal readonly record struct HuntUploadRevision(long History, long Coverage, long Epoch, long PermissionEpoch = 0);
 internal readonly record struct HuntPreparationKey(HuntUploadRevision Revision, DateTime ObservedAtUtc);
 
-internal sealed class HuntSplitPreparation(HuntPreparationKey key, string body, HuntBillObservation[] history, bool reconciles) {
+internal sealed class HuntSplitPreparation(HuntPreparationKey key, string body, HuntBillObservation[] history,
+    bool reconciles, bool includesBills) {
     internal HuntPreparationKey Key { get; } = key;
     internal string Body { get; } = body;
     internal string Nonce { get; } = Guid.NewGuid().ToString("N");
     internal HuntBillObservation[] History { get; } = history;
     internal bool Reconciles { get; } = reconciles;
+    internal bool IncludesBills { get; } = includesBills;
 }
 
 internal sealed class HuntSplitUpload {
@@ -53,7 +55,7 @@ internal sealed class HuntSplitUpload {
 
         var body = HuntBillItemCoverage.WithCoverage(HuntBillRetentionPolicy.SerializePrivateBills(changedBills), sample, compact: true);
         if (!PersonalSyncPolicy.HuntCoveragePayloadValid(body)) return null;
-        return pending = new(new(revision, sample.ObservedAtUtc), body, history, reconciliation);
+        return pending = new(new(revision, sample.ObservedAtUtc), body, history, reconciliation, changedBills.Length > 0);
     }
 
     private static bool SameBill(HuntBillObservation a, HuntBillObservation b) =>
