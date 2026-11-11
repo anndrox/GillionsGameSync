@@ -82,7 +82,11 @@ internal static class TravelTransportTests {
         Check(!TravelSyncPolicy.Terminal(429)&&!TravelSyncPolicy.Terminal(503),"rate/unavailable not retryable");
         using(var doc=JsonDocument.Parse(next.Payload)) {
             var r=doc.RootElement;
-            Check(r.EnumerateObject().Count()==16,"extra payload field");
+            Check(r.EnumerateObject().Select(field => field.Name).ToHashSet().SetEquals(new[] {
+                "territoryId", "mapId", "mapX", "mapY", "observedAtUtc", "gameBuild", "nativeVersion", "collectorVersion",
+                "teleportSupport", "destinations", "schemaVersion", "collectorSchema", "locationSource", "teleportSource",
+                "costSupport", "uploadState", "currentWorldId"
+            }) && r.GetProperty("currentWorldId").GetUInt32() == 79, "exact draft 3 travel payload");
             var d=r.GetProperty("destinations")[0];
             Check(d.EnumerateObject().Count()==9&&d.GetProperty("actualCostGil").ValueKind==JsonValueKind.Null,"extra destination/final charge");
             foreach(var key in new[]{"home","free","favored"}) Check(d.GetProperty(key).ValueKind==JsonValueKind.Null,"null flag lost");
