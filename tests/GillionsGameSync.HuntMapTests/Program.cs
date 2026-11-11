@@ -276,7 +276,9 @@ Check((await v2Processor.ProcessAsync(Parse2(V2())!,()=>now,V2Permit,V2Consume,V
 Check((await v2Processor.ProcessAsync(Parse2(V2(revision:"b"))!,()=>now,V2Permit,V2Consume,V2Present)).Contains("shown")&&v2Opened==3,"A->B opens B once");
 Check((await v2Processor.ProcessAsync(brank2,()=>now,V2Permit,V2Consume,V2Present)).Contains("shown"),"B-rank first selected candidate");
 var next2=Parse2(V2("DISCRETE_SPAWN_LOCATIONS",4,8))!;
-HuntAwarenessTests.Run(Check, now, Parse2(V2("FATE_REQUIRED"))!, brank2, next2, V2());
+var otherFate = V2("FATE_REQUIRED"); otherFate["request"]!["huntTargetId"] = 5;
+var currentMark = V2(); currentMark["request"]!["huntTargetId"] = 6;
+HuntAwarenessTests.Run(Check, now, Parse2(otherFate)!, brank2, next2, Parse2(currentMark)!, V2());
 Check((await v2Processor.ProcessAsync(next2,()=>now,V2Permit,V2Consume,V2Present)).Contains("shown")&&v2Opened==5,"browser Next distinct normal command presents next candidate");
 Check((await v2Processor.ProcessAsync(next2,()=>now,V2Permit,V2Consume,V2Present)).Contains("already attempted")&&v2Opened==5,"browser Next duplicate no replay");
 Check((await v2Processor.ProcessAsync(Parse2(V2())!,()=>now,V2Permit,r=>Task.FromResult(false),V2Present)).Contains("rejected")&&v2Opened==5,"409 false receipt never presented");

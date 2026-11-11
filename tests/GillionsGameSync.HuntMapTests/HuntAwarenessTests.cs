@@ -4,48 +4,64 @@ using GillionsGameSync;
 
 internal static class HuntAwarenessTests {
     internal static void Run(Action<bool, string> check, DateTime now, HuntMapRequest fate, HuntMapRequest bRank,
-        HuntMapRequest nextCandidate, JsonObject nextResponse) {
+        HuntMapRequest nextCandidate, HuntMapRequest ordinary, JsonObject nextResponse) {
+        const uint world = 90;
         var state = new HuntDeferState();
-        check(state.Plan(fate, HuntAvailability.NotSeen, now) is null, "Unconsumed target cannot defer");
+        check(state.Plan(fate, HuntAvailability.NotSeen, world, now) is null, "Unconsumed target cannot defer");
         state.Consumed(fate);
-        check(state.Plan(bRank, HuntAvailability.NotSeen, now) is null, "Only the current consumed target can defer");
-        check(state.Plan(fate, HuntAvailability.Unknown, now) is null, "Unknown is not negative evidence");
-        var action = state.Plan(fate, HuntAvailability.NotSeen, now)!;
+        check(state.Plan(bRank, HuntAvailability.NotSeen, world, now) is null, "Only the current consumed target can defer");
+        check(state.Plan(fate, HuntAvailability.Unknown, world, now) is null, "Unknown is not negative evidence");
+        var action = state.Plan(fate, HuntAvailability.NotSeen, world, now)!;
         CheckBody(check, action, fate, "defer", "FATE_NOT_UP");
         var empty = Progression(now.AddMinutes(60));
         check(HuntMapPolicy.TryDeferPoll(empty.ToJsonString(), now, action, out var none, out var end)
             && none is null && end == now.AddMinutes(30), "FATE cap and null next command");
         check(!HuntMapPolicy.TryPoll(empty.ToJsonString(), now, HuntMapPolicy.CapabilityV2, out _), "Normal poll rejects mutation progression");
         state.Sent(action, now);
-        state.Acknowledge(action, end);
-        check(state.Current is null && state.Plan(fate, HuntAvailability.Up, now.AddMinutes(1)) is null,
-            "Accepted defer retires the old claim, even when all targets are waiting");
+        state.Acknowledge(action, world, end);
+        check(ReferenceEquals(state.Current, fate) && !state.CanDefer && state.Plan(fate, HuntAvailability.NotSeen, world, now.AddMinutes(1)) is null,
+            "All waiting retires presentation and defer but preserves the latest consumed identity");
+        check(state.Waiting(world + 1, now).Length == 0 && state.Waiting(world, now).Single().FateId == fate.FateId,
+            "Deferred observations are scoped to the world where the target was deferred");
 
-        // Fixtures use the same target row with distinct command identities, as a newer Site claim would.
         state.Consumed(bRank);
-        check(state.Plan(bRank, HuntAvailability.Up, now.AddSeconds(59)) is null, "One shared 60-second limit for defer and clear");
-        var clear = state.Plan(bRank, HuntAvailability.Up, now.AddMinutes(1))!;
-        CheckBody(check, clear, bRank, "clear-defer", null);
+        var markDefer = state.Plan(bRank, HuntAvailability.NotSeen, world, now.AddSeconds(5))!;
+        CheckBody(check, markDefer, bRank, "defer", "B_RANK_NOT_SEEN");
+        var progression = Progression(now.AddMinutes(10));
+        nextResponse["progression"] = progression["progression"]!.DeepClone();
+        check(HuntMapPolicy.TryDeferPoll(nextResponse.ToJsonString(), now, markDefer, out var next, out var markEnd)
+            && next is not null && markEnd == now.AddMinutes(5), "B-rank cap and existing V2 next claim");
+        state.Sent(markDefer, now.AddSeconds(5));
+        state.Acknowledge(markDefer, world, markEnd);
+        var waiting = state.Waiting(world, now);
+        check(waiting.Length == 2 && waiting.Any(target => target.FateId is null), "Watch both deferred targets locally");
+        state.SawUp(waiting.Single(target => target.FateId == fate.FateId));
+        check(state.Plan(bRank, HuntAvailability.Unknown, world, now.AddSeconds(64)) is null, "One 60-second limit on the authorizing command target");
+        check(state.Plan(bRank, HuntAvailability.Unknown, world, now.AddSeconds(65)) is { Reason: null },
+            "Clear can use the last consumed claim when no new target is delivered");
+        state.Consumed(ordinary);
+        check(state.Plan(fate, HuntAvailability.Unknown, world, now.AddSeconds(65)) is null, "Clear cannot reuse the observed FATE's obsolete claim");
+        check(state.Plan(ordinary, HuntAvailability.Unknown, world + 1, now.AddSeconds(65)) is null, "Other-world sightings cannot clear waiting targets");
+        var clear = state.Plan(ordinary, HuntAvailability.Unknown, world, now.AddSeconds(65))!;
+        CheckBody(check, clear, ordinary, "clear-defer", null);
         const string cleared = "{\"ok\":true,\"request\":null,\"progression\":{\"deferCleared\":true}}";
         check(HuntMapPolicy.TryDeferPoll(cleared, now, clear, out none, out end) && none is null && end is null,
             "Valid clear with null request");
         check(!HuntMapPolicy.TryDeferPoll(cleared, now, action, out _, out _), "A clear receipt cannot acknowledge a defer");
-        state.Sent(clear, now.AddMinutes(1));
-        state.Acknowledge(clear, null);
+        state.Sent(clear, now.AddSeconds(65));
+        state.Acknowledge(clear, world, null);
+        check(state.Waiting(world, now).Length == 0 && state.Plan(ordinary, HuntAvailability.Unknown, world, now.AddSeconds(66)) is null,
+            "Clear removes every deferred target and pending sighting");
         state.Consumed(nextCandidate);
-        check(state.Plan(nextCandidate, HuntAvailability.NotSeen, now.AddSeconds(119)) is null, "Throttle survives clear and candidate changes");
-        check(state.Plan(nextCandidate, HuntAvailability.Up, now.AddMinutes(2)) is null, "Clear removes the local defer");
-        var markDefer = state.Plan(nextCandidate, HuntAvailability.NotSeen, now.AddMinutes(2))!;
-        CheckBody(check, markDefer, nextCandidate, "defer", "B_RANK_NOT_SEEN");
-        var progression = Progression(now.AddMinutes(10));
-        nextResponse["progression"] = progression["progression"]!.DeepClone();
-        check(HuntMapPolicy.TryDeferPoll(nextResponse.ToJsonString(), now, markDefer, out var next, out end)
-            && next is not null && end == now.AddMinutes(5), "B-rank cap and existing V2 next claim");
-        state.Acknowledge(markDefer, end);
-        state.Consumed(bRank);
-        check(state.Plan(bRank, HuntAvailability.Up, now.AddMinutes(5)) is null, "Expired defer does not send a clear");
+        markDefer = state.Plan(nextCandidate, HuntAvailability.NotSeen, world, now.AddMinutes(2))!;
+        state.Acknowledge(markDefer, world, markEnd);
+        state.SawUp(state.Waiting(world, now.AddMinutes(2)).Single());
+        state.Consumed(ordinary);
+        check(state.Plan(ordinary, HuntAvailability.Unknown, world, now.AddSeconds(124)) is null, "Clear throttle survives another candidate and a fresh claim");
+        check(state.Plan(ordinary, HuntAvailability.Unknown, world, now.AddSeconds(125))?.Command == ordinary, "A deferred B-rank sighting also clears using the latest claim");
+        check(state.Plan(ordinary, HuntAvailability.Unknown, world, now.AddMinutes(5)) is null, "Expired defer does not send a clear");
         state.Reset();
-        check(state.Plan(bRank, HuntAvailability.NotSeen, now) is null, "Reset invalidates the current command");
+        check(state.Plan(bRank, HuntAvailability.NotSeen, world, now) is null, "Reset invalidates the current command");
 
         var exact = new object();
         var sonar = new object();
@@ -55,14 +71,18 @@ internal static class HuntAwarenessTests {
         check(BRankSighting.Resolve(false, null, (object?)null, true) == (HuntAvailability.NotSeen, null), "A missing mark near its spawn can defer");
 
         var revision = new string('d', 64);
-        TrackedFates? Tracked(string running, TrackedFates? old = null) {
+        TrackedFates? Tracked(string running, TrackedFates? old = null, string location = "{\"mapX\":13.48,\"mapY\":26.28}") {
             using var document = JsonDocument.Parse($$"""
-                {"schemaVersion":1,"revision":"{{revision}}","items":[{"fateId":366,"name":"He's Got Legs","territoryId":140,"mapId":20,"zoneName":"Western Thanalan"}],"runningOnYourWorld":[{{running}}]}
+                {"schemaVersion":1,"revision":"{{revision}}","items":[{"fateId":366,"name":"He's Got Legs","territoryId":140,"mapId":20,"zoneName":"Western Thanalan","location":{{location}}}],"runningOnYourWorld":[{{running}}]}
                 """);
             return TrackedFates.Parse(document.RootElement, old);
         }
         var tracked = Tracked("366")!;
         check(tracked.Items.Count == 1 && tracked.Running.SetEquals([366u]), "Exact personal tracked list and running ids");
+        check(tracked.Items[366].Location == new FateMapPoint(13.48f, 26.28f), "Catalog position uses the Site's map coordinates");
+        check(Tracked("", location: "null")!.Items[366].Location is null, "Null catalog position leaves the zone name");
+        check(Tracked("", location: "{\"mapX\":101,\"mapY\":3}") is null
+            && Tracked("", location: "{\"mapX\":15,\"mapY\":3,\"extra\":true}") is null, "Malformed catalog positions fail closed");
         check(Tracked("1", tracked) is null, "Reject a running id outside the tracked list");
         check(Tracked("", tracked)!.Running.Count == 0, "Refresh running ids even when the catalogue revision is unchanged");
 

@@ -937,13 +937,16 @@ public sealed partial class Plugin : IDalamudPlugin {
         && !marketConditions[Dalamud.Game.ClientState.Conditions.ConditionFlag.BetweenAreas51];
     private void ClearHuntMapRequests() {
         CancelHuntMapPoll();
+#if GILLIONS_TEST_BUILD
+        ForgetAwareHunt();
+#endif
         huntMapNegotiation.Reset();
         huntMapProcessor = new(); huntMapStatus = "No active Hunt map request; local observations preserved.";
     }
     private void CancelHuntMapPoll() {
         huntMapCancellation.Cancel(); huntMapCancellation.Dispose(); huntMapCancellation = new();
 #if GILLIONS_TEST_BUILD
-        ForgetAwareHunt();
+        RetireAwareHuntFlag();
 #endif
     }
     private async Task PollHuntMapRequestAsync() {
@@ -1007,8 +1010,14 @@ public sealed partial class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
             await framework.RunOnFrameworkThread(() => {
                 if (!HuntMapPermitted(permit, cancellation)) return;
-                if (action is not null) huntDefer.Acknowledge(action, deferredUntil is { } until ? DateTime.UtcNow.Add(until - commandClock.UtcNow) : null);
-                if (action is not null || parsed is not null) ForgetAwareHunt();
+                if (action is not null) {
+                    var now = DateTime.UtcNow;
+                    var end = deferredUntil is { } until ? now.Add(until - commandClock.UtcNow) : (DateTime?)null;
+                    var seenUp = end is not null && (currentHuntAvailability == HuntAvailability.Up || HasCurrentHuntRelay(action.Command, now));
+                    huntDefer.Acknowledge(action, currentHuntWorld, end, seenUp);
+                    RetireAwareHuntFlag();
+                }
+                if (parsed is not null) ForgetAwareHunt();
             });
             if (action is not null && parsed is null) return;
 #endif

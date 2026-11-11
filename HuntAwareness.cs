@@ -8,7 +8,8 @@ using System.Text.RegularExpressions;
 
 namespace GillionsGameSync;
 
-internal sealed record TrackedFate(uint FateId, string Name, uint TerritoryId, uint MapId, string ZoneName);
+internal readonly record struct FateMapPoint(float MapX, float MapY);
+internal sealed record TrackedFate(uint FateId, string Name, uint TerritoryId, uint MapId, string ZoneName, FateMapPoint? Location);
 
 internal sealed record TrackedFates(string Revision, Dictionary<uint, TrackedFate> Items, HashSet<uint> Running) {
     internal static TrackedFates? Parse(JsonElement field, TrackedFates? previous) {
@@ -23,14 +24,25 @@ internal sealed record TrackedFates(string Revision, Dictionary<uint, TrackedFat
         var unchanged = previous is not null && previous.Revision == revision;
         var catalog = unchanged ? previous!.Items : new Dictionary<uint, TrackedFate>();
         if (!unchanged) foreach (var item in items.EnumerateArray()) {
-            if (!HuntMapPolicy.Exact(item, "fateId", "name", "territoryId", "mapId", "zoneName")) return null;
+            string[] fields = ["fateId", "name", "territoryId", "mapId", "zoneName"];
+            if (item.ValueKind != JsonValueKind.Object) return null;
+            var hasLocation = item.TryGetProperty("location", out var location);
+            if (!HuntMapPolicy.Exact(item, hasLocation ? [.. fields, "location"] : fields)) return null;
             var id = item.GetProperty("fateId").GetUInt32();
             var territory = item.GetProperty("territoryId").GetUInt32();
             var map = item.GetProperty("mapId").GetUInt32();
             var name = item.GetProperty("name").GetString();
             var zone = item.GetProperty("zoneName").GetString();
-            if (id == 0 || territory == 0 || map == 0 || !HuntMapPolicy.Text(name, 200) || !HuntMapPolicy.Text(zone, 160)
-                || !catalog.TryAdd(id, new(id, name!, territory, map, zone!))) return null;
+            FateMapPoint? point = null;
+            if (hasLocation && location.ValueKind != JsonValueKind.Null) {
+                if (!HuntMapPolicy.Exact(location, "mapX", "mapY")) return null;
+                var x = location.GetProperty("mapX").GetSingle();
+                var y = location.GetProperty("mapY").GetSingle();
+                if (!(x is >= 0 and <= 100 && y is >= 0 and <= 100)) return null;
+                point = new(x, y);
+            }
+            if (id == 0 || territory == 0 || map == 0 || !HuntMapPolicy.Text(name, 120) || !HuntMapPolicy.Text(zone, 80)
+                || !catalog.TryAdd(id, new(id, name!, territory, map, zone!, point))) return null;
         }
         var active = new HashSet<uint>();
         foreach (var value in running.EnumerateArray()) {
@@ -103,9 +115,13 @@ internal static class BRankSighting {
 internal sealed class HuntDeferState {
     internal const string FateNotUp = "FATE_NOT_UP";
     internal const string BRankNotSeen = "B_RANK_NOT_SEEN";
-    private readonly Dictionary<uint, DateTime> deferred = new();
+    internal sealed record WaitingTarget(uint TargetId, string Name, uint? FateId, uint TerritoryId, uint MapId,
+        uint World, DateTime Until, bool SeenUp = false);
+
+    private readonly Dictionary<uint, WaitingTarget> deferred = new();
     private readonly Dictionary<uint, DateTime> throttled = new();
     internal HuntMapRequest? Current { get; private set; }
+    internal bool CanDefer { get; private set; }
 
     internal static string? Reason(HuntMapRequest command) => command.CandidateKind switch {
         "FATE_REQUIRED" => FateNotUp,
@@ -113,29 +129,53 @@ internal sealed class HuntDeferState {
         _ => null,
     };
 
-    internal void Consumed(HuntMapRequest command) => Current = command;
-    internal void ForgetCurrent() => Current = null;
+    internal void Consumed(HuntMapRequest command) {
+        Current = command;
+        CanDefer = true;
+        deferred.Remove(command.TargetId); // This target has already returned to the route.
+    }
 
-    internal HuntDeferAction? Plan(HuntMapRequest command, HuntAvailability availability, DateTime now) {
-        if (!ReferenceEquals(command, Current) || Reason(command) is not { } reason) return null;
+    internal void RetirePresentation() => CanDefer = false;
+
+    internal void ForgetCurrent() {
+        Current = null;
+        RetirePresentation();
+    }
+
+    internal WaitingTarget[] Waiting(uint world, DateTime now) {
+        PruneWaiting(now);
+        return deferred.Values.Where(target => target.World == world && !target.SeenUp).ToArray();
+    }
+
+    private void PruneWaiting(DateTime now) {
+        foreach (var target in deferred.Values.Where(target => target.Until <= now).ToArray()) deferred.Remove(target.TargetId);
+    }
+
+    internal void SawUp(WaitingTarget target) {
+        if (deferred.TryGetValue(target.TargetId, out var waiting) && ReferenceEquals(target, waiting))
+            deferred[target.TargetId] = waiting with { SeenUp = true };
+    }
+
+    internal HuntDeferAction? Plan(HuntMapRequest command, HuntAvailability availability, uint world, DateTime now) {
+        if (!ReferenceEquals(command, Current)) return null;
         foreach (var id in throttled.Keys.Where(id => throttled[id] <= now).ToArray()) throttled.Remove(id);
-        foreach (var id in deferred.Keys.Where(id => deferred[id] <= now).ToArray()) deferred.Remove(id);
+        PruneWaiting(now);
         if (throttled.ContainsKey(command.TargetId) || throttled.Count >= 32) return null;
-        return availability switch {
-            HuntAvailability.Up when deferred.ContainsKey(command.TargetId) => new(command, null),
-            // A new current claim can follow a site-side clear (Pin, Auto, order, or expiry).
-            HuntAvailability.NotSeen => new(command, reason),
-            _ => null,
-        };
+        if (deferred.Values.Any(target => target.World == world && target.SeenUp)) return new(command, null);
+        return CanDefer && availability == HuntAvailability.NotSeen && Reason(command) is { } reason ? new(command, reason) : null;
     }
 
     internal void Sent(HuntDeferAction action, DateTime now) => throttled[action.Command.TargetId] = now.AddSeconds(60);
 
-    internal void Acknowledge(HuntDeferAction action, DateTime? until) {
+    internal void Acknowledge(HuntDeferAction action, uint world, DateTime? until, bool seenUp = false) {
         if (!ReferenceEquals(action.Command, Current)) return;
-        if (until is { } end && deferred.Count < 32) deferred[action.Command.TargetId] = end;
-        else if (until is null) deferred.Remove(action.Command.TargetId);
-        ForgetCurrent();
+        var command = action.Command;
+        if (until is { } end && deferred.Count < 32)
+            deferred[command.TargetId] = new(command.TargetId, command.FateName ?? command.TargetName, command.FateId,
+                command.TerritoryId, command.MapId, world, end, seenUp);
+        else if (action.Reason is null) deferred.Clear();
+        // A null next request leaves the latest consumed identity available for clear-defer.
+        RetirePresentation();
     }
 
     internal void Reset() {

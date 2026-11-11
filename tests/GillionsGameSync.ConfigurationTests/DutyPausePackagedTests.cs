@@ -131,8 +131,8 @@ internal static class DutyPausePackagedTests {
             Check(reads.SequenceEqual(flags.Take(Array.IndexOf(flags, flag) + 1)), $"one sampled check for {flag}");
             Check(!Gate("HuntFocusEligible") && !Property("HuntReceivingEnabled") && !Gate("TravelAdmitted"), $"admission paused for {flag}");
             Check(mapCancellation.IsCancellationRequested, "in-flight Hunt map cancelled");
-            if (huntDefer is not null) Check(huntDefer.GetType().GetProperty("Current", Instance)!.GetValue(huntDefer) is null,
-                "duty entry retires Hunt awareness for the consumed command");
+            if (huntDefer is not null) Check(!(bool)huntDefer.GetType().GetProperty("CanDefer", Instance)!.GetValue(huntDefer)!,
+                "duty entry retires Hunt presentation for the consumed command");
             Check(travelCancellation.IsCancellationRequested && pendingProperty.GetValue(travelSync) is null,
                 "pending travel cleared and cancelled");
             Call(plugin, "TickTravelSync", now);

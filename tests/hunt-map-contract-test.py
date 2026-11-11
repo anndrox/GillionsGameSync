@@ -85,8 +85,11 @@ assert awareness.startswith('#if GILLIONS_TEST_BUILD\n')
 assert 'var exact = BeginAwareHunt(r, commandClock)' in hunt and 'exact is not null ? OpenExactHuntFlag(r, exact)' in hunt
 assert 'HuntMapPolicy.Consumed(' in hunt and 'if (action is not null && parsed is null) return;' in hunt
 assert '!huntDeferSupported' in awareness and 'HuntReceivingEnabled' in awareness
+assert 'running.Running) huntDefer.SawUp(target)' in awareness and 'ObserveWaitingBRanks(waiting)' in awareness
+assert 'foreach (var target in huntDefer.Waiting(worldId, now))' in awareness
 assert 'foreach (var item in tracked.Items.Values)' in awareness
-assert 'local?.Link ?? CatalogFateLink(item)' in awareness
+assert 'PrintTrackedFateAlert(item, inZone && local?.Instance == clientState.Instance ? local.Link : null)' in awareness
+assert 'else if (fate.Location is { } point' in awareness and 'point.MapX, point.MapY' in awareness
 assert 'Silent = true' in awareness and 'if (configuration.TrackedFateAlertSound) UIGlobals.PlayChatSoundEffect(1);' in awareness
 assert 'AlertChatType(configuration.TrackedFateChatTab)' in awareness
 assert 'configuration.UseSonarChatMessages' in awareness.split('private void ReadSonarChat',1)[1].split('private bool TryReadSonarChat',1)[0]
