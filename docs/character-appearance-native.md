@@ -27,11 +27,12 @@ Wire keys retain their existing order and names.
 
 ## Exact collector reads
 
-Testing 0.0.100 reads the local player's rendered gear on the framework
+Testing 0.0.101 reads the local player's rendered gear on the framework
 thread while the current character has a fresh Gillions grant and the runtime
 passes the exact Appearance qualification. EquippedItems provides the
-underlying item and candidate glamour IDs. The Item sheet matches the rendered
-model to one of those IDs.
+underlying item and candidate glamour IDs. The Item sheet confirms whether the
+rendered model matches the candidate glamour. A rendered slot keeps both of its
+rendered stains even when the glamour cannot be identified.
 
 Testing 0.0.99 used `Character.DrawData.EquipmentModelIds` and
 `WeaponData[].ModelId`. These cached model IDs can match the rendered model
@@ -57,10 +58,12 @@ Glamourer uses `model.GetArmor` and `model.GetWeapons(actor)` on the
 rendered human. Both projects pin Penumbra.GameData, whose `Model` helpers
 read `Human.Head` as the start of the armour array and read stains directly
 from the rendered weapons. The plugin uses the SDK's typed members and checks
-both the draw object and model type before reading. If an equipped slot has no
-matching rendered model, including a hidden model that has been removed from the
-draw object, the plugin withholds the complete look. Empty inventory slots
-require no rendered object. [Glamourer state reader](https://github.com/Ottermandias/Glamourer/blob/e165910345b17b99d9aa35990005b5e0f73ae65b/Glamourer/State/StateManager.cs),
+both the draw object and model type before reading. When a slot has no
+rendered model, such as hidden headgear or a sheathed weapon whose draw object
+is absent, it uses the equipped item and both `InventoryItem.Stains` bytes
+at `+0x37` and `+0x38`. Its `glamourItemId` is zero. Empty inventory
+slots are sent as empty. An unreadable actor or equipped inventory still
+withholds the look and records a one-line diagnostic reason. [Glamourer state reader](https://github.com/Ottermandias/Glamourer/blob/e165910345b17b99d9aa35990005b5e0f73ae65b/Glamourer/State/StateManager.cs),
 [Glamourer's GameData pin](https://github.com/Ottermandias/Penumbra.GameData/blob/f463b5e670b14a66e5c9b7a74a31079ab0bba11b/Interop/Model.cs),
 [Penumbra's GameData pin](https://github.com/Ottermandias/Penumbra.GameData/blob/78aa11737434e8531f8b4b8c0248b7981afdcc0f/Interop/Model.cs).
 
@@ -69,10 +72,17 @@ DrawObject, DrawDataContainer and gearset slot definitions. Source comparisons
 for Human, Weapon, Object and CharacterBase found constructor and animation
 additions and an unrelated object type rename. The members read here and the
 type query slots match. The official Dalamud 15.0.3.6, 15.0.3.7, 15.0.3.9
-and 15.0.4.0 archives all report Appearance fingerprint `7d312d4f31472b10`.
+and 15.0.4.0 archives all report Appearance fingerprint `555794b7a8157af9`.
 The runtime list is unchanged.
 
 Lifecycle reads: IClientState.IsLoggedIn, IsGPosing; IPlayerState.IsLoaded, ContentId (existing session identity, never added to appearance payload); ICondition indexer for BetweenAreas, BetweenAreas51, LoggingOut, Transformed, RolePlaying, Disguised. Identity/availability are rechecked after copying and before dispatch. IDataManager.GameData.Repositories["ffxiv"].Version and managed assembly versions/revisions establish the runtime. All unknown tuples stop before appearance reads.
+
+
+An explicit appearance Off in the site's presence response cancels pending
+uploads and clears the last accepted appearance hash. A valid grant after Off,
+or a change in grant generation, makes a fresh sample due. The current look
+uploads again even if its hash matches the deleted look. Successful uploads
+resume normal deduplication.
 
 ## Pinned source comparison
 

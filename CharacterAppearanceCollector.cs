@@ -34,27 +34,40 @@ internal sealed class CharacterAppearanceCollector(IClientState client,IObjectTa
     internal string GameVersion => data.GameData.Repositories.TryGetValue("ffxiv",out var r)?r.Version:"unavailable";
     internal string NativeVersion => typeof(InventoryManager).Assembly.GetName().Version?.ToString()??"unavailable";
     internal bool Qualified => NativeCompatibility.SupportsRuntime(NativeFamily.Appearance, GameVersion);
-    internal bool Available(ulong character) => Qualified&&character!=0&&client.IsLoggedIn&&player.IsLoaded&&player.ContentId==character&&!client.IsGPosing
+    internal bool Available(ulong character) => Qualified && Ready(character);
+
+    private bool Ready(ulong character) => character!=0&&client.IsLoggedIn&&player.IsLoaded&&player.ContentId==character&&!client.IsGPosing
         &&!conditions[ConditionFlag.BetweenAreas]&&!conditions[ConditionFlag.BetweenAreas51]&&!conditions[ConditionFlag.LoggingOut]
         &&!conditions[ConditionFlag.Transformed]&&!conditions[ConditionFlag.RolePlaying]&&!conditions[ConditionFlag.Disguised];
-    internal unsafe AppearanceSnapshot? Read(ulong character,DateTime now) {
-        if(!Available(character))return null;
-        var local=objects.LocalPlayer;if(local is null)return null;
-        var characterAddress = (Character*)local.Address;
-        if (characterAddress == null) return null;
-        var customization=local.Customize;
-        if(customization.Length!=26)return null;
-        var hex=Convert.ToHexStringLower(customization.ToArray());
-        var manager=InventoryManager.Instance();if(manager==null)return null;
-        var container=manager->GetInventoryContainer(InventoryType.EquippedItems);
-        if(container==null||!container->IsLoaded||container->Type!=InventoryType.EquippedItems||container->Items==null||container->Size!=14)return null;
+    internal unsafe (AppearanceSnapshot? Snapshot, string? Reason) Read(ulong character, DateTime now) {
+        if (!Qualified) return (null, "This game layout is unsupported.");
+        if (!Ready(character)) return (null, "Your character is not ready.");
+        var local = objects.LocalPlayer;
+        var address = local?.Address ?? 0;
+        if (address == 0) return (null, "Your character is not ready.");
+        var customization = local!.Customize;
+        if (customization.Length != 26) return (null, "Character details could not be read.");
+        var hex = Convert.ToHexStringLower(customization.ToArray());
+        var manager = InventoryManager.Instance();
+        var container = manager == null ? null : manager->GetInventoryContainer(InventoryType.EquippedItems);
+        if (container == null || !container->IsLoaded || container->Type != InventoryType.EquippedItems
+            || container->Items == null || container->Size != 14) return (null, "Equipped items are not ready.");
+
         var items = data.GetExcelSheet<Item>();
-        var equipment = ReadEquipment(characterAddress, container->Items, id =>
+        var equipment = ReadEquipment((Character*)address, container->Items, id =>
             items.GetRowOrDefault(id) is { } row ? (row.ModelMain, row.ModelSub) : null);
-        if (equipment is null) return null;
-        if (!Available(character) || objects.LocalPlayer?.Address != local.Address) return null;
-        return new() {CollectorVersion=typeof(Plugin).Assembly.GetName().Version!.ToString(4),GameVersion=GameVersion,ClientStructsVersion=NativeVersion,
-            ObservedAtUtc=now.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'",CultureInfo.InvariantCulture),CustomizationHex=hex,Equipment=equipment};
+        if (equipment is null) return (null, "The character model or equipped items could not be read.");
+        if (!Available(character) || objects.LocalPlayer?.Address != address)
+            return (null, "Your character changed during the read.");
+
+        return (new() {
+            CollectorVersion = typeof(Plugin).Assembly.GetName().Version!.ToString(4),
+            GameVersion = GameVersion,
+            ClientStructsVersion = NativeVersion,
+            ObservedAtUtc = now.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture),
+            CustomizationHex = hex,
+            Equipment = equipment,
+        }, null);
     }
 
     internal static unsafe Dictionary<string, AppearanceSlot>? ReadEquipment(Character* character, InventoryItem* items,
@@ -78,28 +91,30 @@ internal sealed class CharacterAppearanceCollector(IClientState client,IObjectTa
             AppearanceDrawSlot? drawn = slot.Weapon is { } weaponSlot
                 ? ReadWeapon(&character->DrawData, weaponSlot)
                 : ReadArmour(human, slot.Armour);
-            if (drawn is not { } model) return null;
-            var weapon = slot.Weapon.HasValue;
-            var baseMatches = Matches(lookupModels(itemId), model.Model, weapon);
-            var glamourMatches = glamourId != 0 && Matches(lookupModels(glamourId), model.Model, weapon);
-            var result = AppearancePolicy.FromDrawSlot(itemId, glamourId, model, baseMatches, glamourMatches);
-            if (result is null) return null;
-            equipment.Add(slot.Key, result);
+            if (drawn is not { } model) {
+                var stains = item->Stains;
+                equipment.Add(slot.Key, new() { ItemId = itemId, Stain0Id = stains[0], Stain1Id = stains[1] });
+                continue;
+            }
+
+            var glamourMatches = glamourId != 0 && Matches(lookupModels(glamourId), model.Model, slot.Weapon.HasValue);
+            equipment.Add(slot.Key, AppearancePolicy.FromDrawSlot(itemId, glamourId, model, glamourMatches));
         }
         return character->GameObject.DrawObject == drawObject ? equipment : null;
     }
 
     // The game object's model IDs can match while their cached stain bytes
     // differ from the rendered equipment. Read both stains from the draw objects.
-    private static unsafe AppearanceDrawSlot ReadArmour(Human* human, EquipmentSlot slot) {
+    private static unsafe AppearanceDrawSlot? ReadArmour(Human* human, EquipmentSlot slot) {
         var armour = human->EquipmentModels[(int)slot];
-        return new(armour.Value & 0xFFFFFF, armour.Stain0, armour.Stain1);
+        return armour.Id == 0 ? null : new(armour.Value & 0xFFFFFF, armour.Stain0, armour.Stain1);
     }
 
     private static unsafe AppearanceDrawSlot? ReadWeapon(DrawDataContainer* draw, WeaponSlot slot) {
         var drawObject = draw->Weapon(slot).DrawData.DrawObject;
         if (!IsModel(drawObject, CharacterBase.ModelType.Weapon)) return null;
         var weapon = (Weapon*)drawObject;
+        if (weapon->ModelSetId == 0) return null;
         var model = weapon->ModelSetId | ((ulong)weapon->SecondaryId << 16) | ((ulong)weapon->Variant << 32);
         return new(model, weapon->Stain0, weapon->Stain1);
     }

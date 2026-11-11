@@ -18,7 +18,7 @@ internal static class NativeCompatibilityPackagedTests {
         ("Appearance", [
             ("FFXIV.Client.Game.InventoryManager", ["Instance", "GetInventoryContainer"]),
             ("FFXIV.Client.Game.InventoryContainer", ["Items", "Size", "Type", "IsLoaded"]),
-            ("FFXIV.Client.Game.InventoryItem", ["Container", "Slot", "IsSymbolic", "ItemId", "GlamourId"]),
+            ("FFXIV.Client.Game.InventoryItem", ["Container", "Slot", "IsSymbolic", "ItemId", "GlamourId", "Stains"]),
             ("FFXIV.Client.Game.InventoryType", ["EquippedItems"]),
             ("FFXIV.Client.Game.Character.Character", ["DrawData"]),
             ("FFXIV.Client.Game.Object.GameObject", ["DrawObject"]),
@@ -27,7 +27,7 @@ internal static class NativeCompatibilityPackagedTests {
             ("FFXIV.Client.Game.Character.DrawDataContainer+EquipmentSlot", ["Head", "Body", "Hands", "Legs", "Feet", "Ears", "Neck", "Wrists", "RFinger", "LFinger"]),
             ("FFXIV.Client.Game.Character.DrawObjectData", ["DrawData"]),
             ("FFXIV.Client.Game.Character.DrawData", ["DrawObject"]),
-            ("FFXIV.Client.Game.Character.EquipmentModelId", ["Value", "Stain0", "Stain1"]),
+            ("FFXIV.Client.Game.Character.EquipmentModelId", ["Id", "Value", "Stain0", "Stain1"]),
             ("FFXIV.Client.Graphics.Scene.DrawObject", ["Object"]),
             ("FFXIV.Client.Graphics.Scene.Object", ["VirtualTable", "GetObjectType"]),
             ("FFXIV.Client.Graphics.Scene.ObjectType", ["CharacterBase"]),
@@ -115,7 +115,7 @@ internal static class NativeCompatibilityPackagedTests {
         TravelLayout = "22c25911f7cc88bf", FateLayout = "6923c1e09b662322";
     private static readonly Dictionary<(string Family, string ClientStructs), string> Expected = new() {
         // Hotfix measured locally; identical pinned source at earlier tuples, rechecked on CI archives.
-        [("Appearance", "7.56.2.9136")] = "7d312d4f31472b10", [("Appearance", "7.57.0.9378")] = "7d312d4f31472b10", [("Appearance", "7.57.0.9414")] = "7d312d4f31472b10",
+        [("Appearance", "7.56.2.9136")] = "555794b7a8157af9", [("Appearance", "7.57.0.9378")] = "555794b7a8157af9", [("Appearance", "7.57.0.9414")] = "555794b7a8157af9",
         [("Hunt", "7.56.2.9136")] = HuntLayout, [("Hunt", "7.57.0.9378")] = HuntLayout, [("Hunt", "7.57.0.9414")] = HuntLayout,
         [("Submarine", "7.56.2.9136")] = SubmarineLayout, [("Submarine", "7.57.0.9414")] = SubmarineLayout,
         [("Travel", "7.56.2.9136")] = TravelLayout, [("Travel", "7.57.0.9414")] = TravelLayout,
@@ -124,7 +124,7 @@ internal static class NativeCompatibilityPackagedTests {
         [("Submarine", "7.57.0.9480")] = SubmarineLayout,
         [("Travel", "7.57.0.9480")] = TravelLayout,
         [("Fate", "7.57.0.9480")] = FateLayout,
-        [("Appearance", "7.57.0.9480")] = "7d312d4f31472b10",
+        [("Appearance", "7.57.0.9480")] = "555794b7a8157af9",
         [("Beastmaster", "7.56.2.9136")] = "7984e5ebc96f48c5", [("Beastmaster", "7.57.0.9480")] = "7984e5ebc96f48c5",
         // Recorded for comparison only; Dashboard is not admitted on 15.0.4.0.
         [("Dashboard", "7.56.2.9136")] = "72e3d331203627af", [("Dashboard", "7.57.0.9480")] = "72e3d331203627af",

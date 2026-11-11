@@ -1,6 +1,6 @@
 #if GILLIONS_TEST_BUILD
 using System;
-using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -17,7 +17,9 @@ public sealed partial class Plugin {
     private ConsentStatus? consentStatus;
     private string? appearanceGrant;
     private long appearanceCharacterId;
-    private bool appearanceFlight;
+    private const int AppearanceSampleSeconds = 5;
+    private CancellationToken? appearanceFlight;
+    private string? appearanceReadFailure;
     private DateTime appearanceLease, appearanceNextRead, appearanceNextSend;
 
     private void ClearAppearance() {
@@ -27,6 +29,7 @@ public sealed partial class Plugin {
 
     private void ResetAppearance() {
         ClearAppearance();
+        appearanceReadFailure = null;
         consentStatus = null;
         appearanceGrant = null;
         appearanceCharacterId = 0;
@@ -43,9 +46,13 @@ public sealed partial class Plugin {
         var status = ConsentStatus.Read(doc.RootElement, permit.Origin);
         consentStatus = status?.CharacterId == character ? status : null;
         var descriptor = AppearanceGrant.Read(doc.RootElement);
-        if (descriptor?.CharacterId != character || !permissionAuthority.Fresh(Environment.TickCount64)) descriptor = null;
+        var state = consentStatus?.Categories.FirstOrDefault(category => category.Key == "appearance")?.State;
+        if (state == "off" || descriptor?.CharacterId != character || !permissionAuthority.Fresh(Environment.TickCount64))
+            descriptor = null;
         var nextCharacterId = descriptor?.CharacterId ?? 0;
         if (descriptor?.Generation != appearanceGrant || nextCharacterId != appearanceCharacterId) {
+            // Gillions deletes the old look on Off. Forget its receipt as
+            // well as pending work so the next grant sends a fresh snapshot.
             ClearAppearance();
             appearanceRetry.Clear();
             appearanceNextRead = appearanceNextSend = DateTime.MinValue;
@@ -68,27 +75,51 @@ public sealed partial class Plugin {
         Link("Change on gillions.app", status.SettingsUrl);
     }
 
+    private void WithholdAppearance(string reason) {
+        ClearAppearance();
+        if (reason == appearanceReadFailure) return;
+        appearanceReadFailure = reason;
+        RecordDiagnostic($"Appearance paused. {reason}");
+    }
+
+    private bool AppearanceSampleDue(DateTime now) {
+        if (now < appearanceNextRead) return false;
+        appearanceNextRead = now.AddSeconds(AppearanceSampleSeconds);
+        return true;
+    }
+
+    private AppearancePreparation? TakeAppearanceUpload(DateTime now) {
+        if (appearanceFlight is { IsCancellationRequested: false } || now < appearanceNextSend
+            || appearanceQueue.Pending is not { } pending || !appearanceRetry.Ready(Environment.TickCount64, pending.Hash)) return null;
+        appearanceNextSend = now.AddSeconds(AppearanceSampleSeconds);
+        return pending;
+    }
+
     private void TickAppearance(DateTime now) {
         if (!AppearanceAuthorized(now)) {
             if (appearanceGrant is not null) { appearanceGrant = null; ClearAppearance(); }
             return;
         }
-        if (now >= appearanceNextRead) {
-            appearanceNextRead = now.AddSeconds(5);
+        if (AppearanceSampleDue(now)) {
             try {
-                var snapshot = appearanceCollector.Read(activeRetainerCharacterContentId, now);
-                if (snapshot is null) { ClearAppearance(); return; }
+                var (snapshot, reason) = appearanceCollector.Read(activeRetainerCharacterContentId, now);
+                if (snapshot is null) {
+                    WithholdAppearance(reason ?? "Character appearance could not be read.");
+                    return;
+                }
                 appearanceQueue.Observe(snapshot);
-            } catch (Exception) { ClearAppearance(); return; }
+                appearanceReadFailure = null;
+            } catch (Exception) {
+                WithholdAppearance("Character appearance could not be read.");
+                return;
+            }
         }
-        if (!appearanceFlight && appearanceQueue.Pending is { } p && now >= appearanceNextSend
-            && appearanceRetry.Ready(Environment.TickCount64, p.Hash)) {
-            appearanceFlight = true;
-            appearanceNextSend = now.AddSeconds(5);
+        if (TakeAppearanceUpload(now) is { } p) {
             if (appearanceCancellation.IsCancellationRequested) { appearanceCancellation.Dispose(); appearanceCancellation = new(); }
             var permit = CapturePermit(SyncRequestMode.Personal);
             var grant = appearanceGrant!;
             var cancellation = appearanceCancellation.Token;
+            appearanceFlight = cancellation;
             _ = Task.Run(() => SendAppearance(permit, p, grant, cancellation));
         }
     }
@@ -119,7 +150,11 @@ public sealed partial class Plugin {
                     appearanceRetry.Failed(Environment.TickCount64, p.Hash, error);
             });
         }
-        finally{if(!disposed)await framework.RunOnFrameworkThread(()=>appearanceFlight=false);}
+        finally {
+            if (!disposed) await framework.RunOnFrameworkThread(() => {
+                if (appearanceFlight == featureToken) appearanceFlight = null;
+            });
+        }
     }
 }
 #endif

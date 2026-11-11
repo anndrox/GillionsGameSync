@@ -65,6 +65,8 @@ internal static class AppearanceRenderPackagedTests {
             *(int*)(item + 0x08) = 1000; // EquippedItems
             *(short*)(item + 0x0C) = (short)slot.Inventory;
             *(uint*)(item + 0x10) = baseId;
+            item[0x37] = (byte)(30 + slot.Inventory);
+            item[0x38] = (byte)(40 + slot.Inventory);
             *(uint*)(item + 0x3C) = glamourId;
             if (i < 2) {
                 ulong model = 0x0300020001UL + (ulong)i;
@@ -89,9 +91,21 @@ internal static class AppearanceRenderPackagedTests {
             Pointer.Box(inventory, parameters[1].ParameterType),
             lookup,
         ]);
-        JsonElement Wire() => JsonSerializer.SerializeToElement(
-            Read() ?? throw new Exception("Complete fixture withheld"),
-            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        JsonElement Wire() {
+            const BindingFlags instance = BindingFlags.Instance | BindingFlags.NonPublic;
+            var snapshotType = plugin.GetType("GillionsGameSync.AppearanceSnapshot", true)!;
+            var snapshot = Activator.CreateInstance(snapshotType, true)!;
+            snapshotType.GetProperty("Equipment")!.SetValue(snapshot, Read() ?? throw new Exception("Complete fixture withheld"));
+            snapshotType.GetProperty("CustomizationHex")!.SetValue(snapshot, new string('0', 52));
+            snapshotType.GetProperty("ObservedAtUtc")!.SetValue(snapshot, "2026-11-11T18:00:00.000Z");
+            var queueType = plugin.GetType("GillionsGameSync.AppearanceQueue", true)!;
+            var queue = Activator.CreateInstance(queueType, true)!;
+            queueType.GetMethod("Observe", instance)!.Invoke(queue, [snapshot]);
+            var pending = queueType.GetProperty("Pending", instance)!.GetValue(queue)
+                ?? throw new Exception("Complete fixture did not queue an upload");
+            using var payload = JsonDocument.Parse((string)pending.GetType().GetProperty("Payload", instance)!.GetValue(pending)!);
+            return payload.RootElement.GetProperty("equipment").Clone();
+        }
         var equipment = Wire();
         Check(equipment.EnumerateObject().Count() == 12, "all twelve wire slots");
         foreach (var slot in slots) {
@@ -114,10 +128,36 @@ internal static class AppearanceRenderPackagedTests {
         Check(equipment.GetProperty("offHand").GetProperty("stain0Id").GetByte() == 61
             && equipment.GetProperty("offHand").GetProperty("stain1Id").GetByte() == 62, "off hand uses its draw object");
 
+        // The head model ID is zero, even though the render entry has stale
+        // variant data. The main-hand draw object is gone while sheathed.
+        *(ulong*)(human + 0xA40) = 0x10000;
+        *(byte**)(character + firstWeapon + weaponDrawObject) = null;
+        *(uint*)(inventory + 0x3C) = 2000;
+        off[0xA26] = off[0xA27] = 0;
+        equipment = Wire();
+        Check(equipment.EnumerateObject().Count() == 12, "hidden head and sheathed weapon still queue a full look");
+        foreach (var slot in slots) {
+            var row = equipment.GetProperty(slot.Key);
+            bool hidden = slot.Key is "head" or "mainHand";
+            Check(row.EnumerateObject().Count() == 4, slot.Key + " keeps the wire field set");
+            Check(row.GetProperty("itemId").GetUInt32() == 1000u + slot.Inventory
+                && row.GetProperty("glamourItemId").GetUInt32() == (hidden || slot.Inventory < 2 ? 0u : 2000u + slot.Inventory),
+                slot.Key + " identifies the rendered or equipped item");
+            Check(row.GetProperty("stain0Id").GetByte() == (hidden ? 30 + slot.Inventory : slot.First)
+                && row.GetProperty("stain1Id").GetByte() == (hidden ? 40 + slot.Inventory : slot.Second),
+                slot.Key + " uses its own dye source");
+        }
+        *(ushort*)(human + 0xA48) = 999;
+        var unmatched = Wire().GetProperty("body");
+        Check(unmatched.GetProperty("glamourItemId").GetUInt32() == 0
+            && unmatched.GetProperty("stain0Id").GetByte() == 12 && unmatched.GetProperty("stain1Id").GetByte() == 22,
+            "an unmatched rendered model keeps its rendered dyes");
         *(byte**)(character + firstWeapon + weaponStride + weaponDrawObject) = null;
-        Check(Read() is null, "missing drawn equipped weapon withholds snapshot");
         *(uint*)(inventory + 0x48 + 0x10) = 0;
         Check(Wire().GetProperty("offHand").GetProperty("itemId").GetUInt32() == 0, "empty equipped slot needs no draw object");
+        inventory[0x0E] = 1;
+        Check(Read() is null, "unreadable inventory slot withholds snapshot");
+        inventory[0x0E] = 0;
         *(byte**)(character + actorDrawObject) = main;
         Check(Read() is null, "non-human root model withholds snapshot");
         Console.WriteLine($"Packaged appearance rendered dyes PASS: {checks} checks on synthetic ClientStructs memory.");

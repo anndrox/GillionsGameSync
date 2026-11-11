@@ -17,11 +17,13 @@ var dyed = new HashSet<string> { "head", "body", "hands", "feet" };
 foreach (var key in AppearancePolicy.Slots) {
     byte firstDye = dyed.Contains(key) ? (byte)2 : (byte)0;
     byte secondDye = dyed.Contains(key) ? (byte)3 : (byte)0;
-    var slot = AppearancePolicy.FromDrawSlot(10, 20, new(100, firstDye, secondDye), !dyed.Contains(key), dyed.Contains(key));
+    var slot = AppearancePolicy.FromDrawSlot(10, 20, new(100, firstDye, secondDye), dyed.Contains(key));
     Check(slot?.ItemId == 10 && slot.GlamourItemId == (dyed.Contains(key) ? 20u : 0u)
         && slot.Stain0Id == firstDye && slot.Stain1Id == secondDye, "drawn model and dyes for " + key);
 }
-Check(AppearancePolicy.FromDrawSlot(10, 20, new(100, 1, 2), false, false) is null, "unrecognised drawn model withheld");
+var unrecognised = AppearancePolicy.FromDrawSlot(10, 20, new(100, 1, 2), false);
+Check(unrecognised.ItemId == 10 && unrecognised.GlamourItemId == 0
+    && unrecognised.Stain0Id == 1 && unrecognised.Stain1Id == 2, "unmatched rendered model keeps both rendered dyes");
 var root=Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,"../../../../../"));
 var collector=File.ReadAllText(Path.Combine(root,"CharacterAppearanceCollector.cs"));
 Check(collector.Contains("objects.LocalPlayer")&&!collector.Contains("foreach(var actor"),"local player only");
@@ -29,7 +31,10 @@ foreach(var forbidden in new[]{"SetVisor(","LoadEquipment(","SetGlasses(","Mirag
 foreach(var state in new[]{"BetweenAreas","BetweenAreas51","LoggingOut","Transformed","RolePlaying","Disguised","IsGPosing"})Check(collector.Contains(state),"withhold "+state);
 var integration=File.ReadAllText(Path.Combine(root,"PluginAppearance.cs"));Check(integration.StartsWith("#if GILLIONS_TEST_BUILD"),"Testing only");Check(integration.IndexOf("!AppearanceAuthorized(now)",StringComparison.Ordinal)<integration.IndexOf("appearanceCollector.Read(",StringComparison.Ordinal),"zero appearance reads without opt-in/grant");
 Check(collector.Contains("human->EquipmentModels") && collector.Contains("DrawData.DrawObject")
-    && !collector.Contains("item->Stains") && !collector.Contains("draw->EquipmentModelIds"), "dyes from rendered equipment");
+    && !collector.Contains("draw->EquipmentModelIds"), "dyes from rendered equipment");
+Check(collector.Contains("item->Stains") && collector.Contains("drawn is not { } model"), "inventory dyes for a missing rendered model");
+Check(integration.Contains("RecordDiagnostic($\"Appearance paused. {reason}\")")
+    && integration.Contains("reason == appearanceReadFailure"), "read failures log a plain reason once");
 Check(!integration.Contains("Checkbox") && !integration.Contains("/api/game-sync/appearance-permission")
     && integration.Contains("ConsentStatus.Read") && integration.Contains("AppearanceGrant.Read"), "site owns sharing");
 var keys = new[] { "marketContribution", "partyFinderContribution", "fateContribution", "personalHunts",

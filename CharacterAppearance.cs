@@ -42,17 +42,13 @@ internal static class AppearancePolicy {
     internal const string Permission="server:game-sync:personal:character-appearance:v1", Layout="ffxiv-customize-26-v1";
     internal static readonly string[] Slots=["mainHand","offHand","head","body","hands","legs","feet","ears","neck","wrists","ring1","ring2"];
     internal static readonly JsonSerializerOptions Json=new() { PropertyNamingPolicy=JsonNamingPolicy.CamelCase };
-    internal static AppearanceSlot? FromDrawSlot(uint itemId, uint glamourId, AppearanceDrawSlot draw,
-        bool matchesBase, bool matchesGlamour) {
-        if (itemId == 0) return glamourId == 0 ? new() : null;
-        if (!matchesBase && !matchesGlamour) return null;
-        return new() {
+    internal static AppearanceSlot FromDrawSlot(uint itemId, uint glamourId, AppearanceDrawSlot draw, bool matchesGlamour) =>
+        new() {
             ItemId = itemId,
             GlamourItemId = matchesGlamour ? glamourId : 0,
             Stain0Id = draw.Stain0,
             Stain1Id = draw.Stain1,
         };
-    }
 
     internal static string Hash(AppearanceSnapshot p) {
         var lines=new List<string> { Layout,p.CustomizationHex };
