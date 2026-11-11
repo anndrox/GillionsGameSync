@@ -104,10 +104,11 @@ internal sealed class HuntDeferAction(HuntMapRequest command, string? reason) {
 internal enum HuntAvailability { Unknown, Up, NotSeen }
 
 internal static class BRankSighting {
-    internal static (HuntAvailability Availability, T? Link) Resolve<T>(bool targetLoaded, T? objectLink, T? sonarLink, bool nearSpawn) where T : class {
+    internal static (HuntAvailability Availability, T? Link) Resolve<T>(bool targetLoaded, T? objectLink, T? sonarLink,
+        bool nearSpawn, bool inFlight = false) where T : class {
         var link = objectLink ?? sonarLink;
         var availability = targetLoaded || link is not null ? HuntAvailability.Up
-            : nearSpawn ? HuntAvailability.NotSeen : HuntAvailability.Unknown;
+            : nearSpawn && !inFlight ? HuntAvailability.NotSeen : HuntAvailability.Unknown;
         return (availability, link);
     }
 }
@@ -162,7 +163,9 @@ internal sealed class HuntDeferState {
         PruneWaiting(now);
         if (throttled.ContainsKey(command.TargetId) || throttled.Count >= 32) return null;
         if (deferred.Values.Any(target => target.World == world && target.SeenUp)) return new(command, null);
-        return CanDefer && availability == HuntAvailability.NotSeen && Reason(command) is { } reason ? new(command, reason) : null;
+        if (!CanDefer || availability != HuntAvailability.NotSeen || Reason(command) is not { } reason) return null;
+        if (reason == BRankNotSeen && command.CandidateIndex != command.CandidateCount - 1) return null;
+        return new(command, reason);
     }
 
     internal void Sent(HuntDeferAction action, DateTime now) => throttled[action.Command.TargetId] = now.AddSeconds(60);

@@ -153,12 +153,12 @@ public sealed partial class Plugin {
             return BRankSighting.Resolve(true, PositionLink(command.TerritoryId, map, npc.Position), relay, false);
         }
         if (relay is not null) return (HuntAvailability.Up, relay);
-        // Only infer absence within the loaded neighbourhood of the selected spawn.
+        // The spawn carries map XY only. Flight cannot establish that the spawn is within load range.
         var playerMap = MapUtil.WorldToMap(new Vector2(player.Position.X, player.Position.Z), map);
         var radiusOnMap = MapUtil.ConvertWorldCoordXZToMapCoord(40, map.SizeFactor, 0)
             - MapUtil.ConvertWorldCoordXZToMapCoord(0, map.SizeFactor, 0);
         var nearby = Vector2.DistanceSquared(playerMap, new(command.MapX, command.MapY)) <= radiusOnMap * radiusOnMap;
-        return BRankSighting.Resolve(false, null, relay, nearby);
+        return BRankSighting.Resolve(false, null, relay, nearby, inFlight: marketConditions[ConditionFlag.InFlight]);
     }
 
     private bool HasCurrentHuntRelay(HuntMapRequest command, DateTime now) => configuration.UseSonarChatMessages

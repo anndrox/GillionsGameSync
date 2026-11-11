@@ -85,6 +85,7 @@ assert awareness.startswith('#if GILLIONS_TEST_BUILD\n')
 assert 'var exact = BeginAwareHunt(r, commandClock)' in hunt and 'exact is not null ? OpenExactHuntFlag(r, exact)' in hunt
 assert 'HuntMapPolicy.Consumed(' in hunt and 'if (action is not null && parsed is null) return;' in hunt
 assert '!huntDeferSupported' in awareness and 'HuntReceivingEnabled' in awareness
+assert 'inFlight: marketConditions[ConditionFlag.InFlight]' in awareness
 assert 'running.Running) huntDefer.SawUp(target)' in awareness and 'ObserveWaitingBRanks(waiting)' in awareness
 assert 'foreach (var target in huntDefer.Waiting(worldId, now))' in awareness
 assert 'foreach (var item in tracked.Items.Values)' in awareness

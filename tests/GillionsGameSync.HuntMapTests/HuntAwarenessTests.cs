@@ -3,8 +3,8 @@ using System.Text.Json.Nodes;
 using GillionsGameSync;
 
 internal static class HuntAwarenessTests {
-    internal static void Run(Action<bool, string> check, DateTime now, HuntMapRequest fate, HuntMapRequest bRank,
-        HuntMapRequest nextCandidate, HuntMapRequest ordinary, JsonObject nextResponse) {
+    internal static void Run(Action<bool, string> check, DateTime now, HuntMapRequest fate, HuntMapRequest firstOfThree,
+        HuntMapRequest bRank, HuntMapRequest nextCandidate, HuntMapRequest ordinary, JsonObject nextResponse) {
         const uint world = 90;
         var state = new HuntDeferState();
         check(state.Plan(fate, HuntAvailability.NotSeen, world, now) is null, "Unconsumed target cannot defer");
@@ -24,8 +24,15 @@ internal static class HuntAwarenessTests {
         check(state.Waiting(world + 1, now).Length == 0 && state.Waiting(world, now).Single().FateId == fate.FateId,
             "Deferred observations are scoped to the world where the target was deferred");
 
+        state.Consumed(firstOfThree);
+        check(state.Plan(firstOfThree, HuntAvailability.NotSeen, world, now.AddSeconds(5)) is null,
+            "B rank at candidate index 0 of 3 sends no defer");
         state.Consumed(bRank);
+        var inFlight = BRankSighting.Resolve(false, null, (object?)null, nearSpawn: true, inFlight: true);
+        check(inFlight.Availability == HuntAvailability.Unknown && state.Plan(bRank, inFlight.Availability, world, now.AddSeconds(5)) is null,
+            "Flying above the last B-rank spawn sends no defer even at the same map XY");
         var markDefer = state.Plan(bRank, HuntAvailability.NotSeen, world, now.AddSeconds(5))!;
+        check(markDefer is { Reason: "B_RANK_NOT_SEEN" }, "B rank at candidate index 2 of 3 can defer");
         CheckBody(check, markDefer, bRank, "defer", "B_RANK_NOT_SEEN");
         var progression = Progression(now.AddMinutes(10));
         nextResponse["progression"] = progression["progression"]!.DeepClone();
@@ -65,7 +72,8 @@ internal static class HuntAwarenessTests {
 
         var exact = new object();
         var sonar = new object();
-        check(BRankSighting.Resolve(true, exact, sonar, true) == (HuntAvailability.Up, exact), "Object-table coordinates take priority");
+        check(BRankSighting.Resolve(true, exact, sonar, true, inFlight: true) == (HuntAvailability.Up, exact),
+            "Object-table coordinates take priority, including in flight");
         check(BRankSighting.Resolve(false, null, sonar, true) == (HuntAvailability.Up, sonar), "Sonar coordinates can supply the exact flag");
         check(BRankSighting.Resolve(false, null, (object?)null, false) == (HuntAvailability.Unknown, null), "Outside load range keeps the spawn-area flag");
         check(BRankSighting.Resolve(false, null, (object?)null, true) == (HuntAvailability.NotSeen, null), "A missing mark near its spawn can defer");

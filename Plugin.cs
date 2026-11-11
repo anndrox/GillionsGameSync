@@ -190,7 +190,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
-        "Testing 0.0.101 adds Hunt target awareness and tracked FATE alerts.",
+        "Testing 0.0.102 adds Hunt target awareness and tracked FATE alerts.",
         "Testing 0.0.101.1 recovers background observation and shows appearance upload status.",
         "Testing 0.0.101 shares your full look when a hat or weapon is hidden.",
         "Testing 0.0.100 reads appearance dyes from the rendered gear.",
