@@ -7,7 +7,7 @@ Use these titles for future GitHub releases:
 
 Use the player-facing release version, for example `1.0.31.9` or `0.0.98`. Keep Testing releases marked as prereleases. This format applies to the title and notes only.
 
-Copy the template below into the GitHub release description. Lead with what players will notice, and state what was tested in game.
+Copy the template below into the GitHub release description. Lead with what players will notice, and state what was tested in game. For Stable, also include the recorded ZIP SHA-256.
 
 ```markdown
 ## What's new
