@@ -73,6 +73,9 @@ internal static class DutyPausePackagedTests {
         Set("objects", Service<IObjectTable>((_, _) => localPlayer));
         Set("huntFocus", Activator.CreateInstance(TypeOf("HuntFocusState"), true)!);
         Set("huntMapCancellation", new CancellationTokenSource());
+        var testing = assembly.GetName().Name == "GillionsGameSyncTest";
+        var huntDefer = testing ? Activator.CreateInstance(TypeOf("HuntDeferState"), true)! : null;
+        if (huntDefer is not null) Set("huntDefer", huntDefer);
         var travelSync = Activator.CreateInstance(TypeOf("TravelSyncState"), true)!;
         Set("travelSync", travelSync);
         Set("travelAccepted", true);
@@ -110,7 +113,7 @@ internal static class DutyPausePackagedTests {
         var observationType = TypeOf("TravelObservation");
         var observation = Activator.CreateInstance(observationType,
             [100u, 200u, 10.1, 20.2, now, gameBuild, sdkVersion, "1.0.0", "UNAVAILABLE", Array.CreateInstance(TypeOf("TravelDestination"), 0)])!;
-        if (assembly.GetName().Name == "GillionsGameSyncTest") observationType.GetProperty("CurrentWorldId")!.SetValue(observation, 79u);
+        if (testing) observationType.GetProperty("CurrentWorldId")!.SetValue(observation, 79u);
         var flags = new[] { ConditionFlag.BoundByDuty, ConditionFlag.BoundByDuty56, ConditionFlag.BoundByDuty95 };
         var pendingProperty = travelSync.GetType().GetProperty("Pending", Instance)!;
         var travelInFlight = pluginType.GetField("travelInFlight", Instance)!;
@@ -121,12 +124,15 @@ internal static class DutyPausePackagedTests {
             var pendingLifetime = (CancellationTokenSource)pending.GetType().GetProperty("Lifetime", Instance)!.GetValue(pending)!;
             var travelCancellation = pendingLifetime.Token;
             var mapCancellation = ((CancellationTokenSource)pluginType.GetField("huntMapCancellation", Instance)!.GetValue(plugin)!).Token;
+            if (huntDefer is not null) Call(huntDefer, "Consumed", Activator.CreateInstance(TypeOf("HuntMapRequest"), true)!);
             reads.Clear();
             activeFlag = flag;
             Call(plugin, "UpdateDutyPause");
             Check(reads.SequenceEqual(flags.Take(Array.IndexOf(flags, flag) + 1)), $"one sampled check for {flag}");
             Check(!Gate("HuntFocusEligible") && !Property("HuntReceivingEnabled") && !Gate("TravelAdmitted"), $"admission paused for {flag}");
             Check(mapCancellation.IsCancellationRequested, "in-flight Hunt map cancelled");
+            if (huntDefer is not null) Check(huntDefer.GetType().GetProperty("Current", Instance)!.GetValue(huntDefer) is null,
+                "duty entry retires Hunt awareness for the consumed command");
             Check(travelCancellation.IsCancellationRequested && pendingProperty.GetValue(travelSync) is null,
                 "pending travel cleared and cancelled");
             Call(plugin, "TickTravelSync", now);
