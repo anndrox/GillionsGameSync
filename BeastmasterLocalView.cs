@@ -63,8 +63,7 @@ internal sealed class BeastmasterLocalView : IDisposable {
         if (resetPending) { resetPending = false; Clear("Session changed; awaiting fresh loading state."); nextSample = DateTime.MinValue; }
         if (!enabled || !visible) return;
         // Fail closed before any native read on a runtime this view was never qualified on.
-        if (!NativeCompatibility.Supports(NativeFamily.Beastmaster, data.GameData.Repositories.TryGetValue("ffxiv", out var repo) ? repo.Version : null,
-                typeof(XBMManager).Assembly.GetName().Version?.ToString())) {
+        if (!NativeCompatibility.SupportsRuntime(NativeFamily.Beastmaster, data.GameData.Repositories.TryGetValue("ffxiv", out var repo) ? repo.Version : null)) {
             if (status != UnsupportedRuntime) Clear(UnsupportedRuntime);
             nextSample = DateTime.MinValue; return;
         }

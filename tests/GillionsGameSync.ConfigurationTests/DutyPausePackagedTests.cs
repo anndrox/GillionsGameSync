@@ -80,16 +80,24 @@ internal static class DutyPausePackagedTests {
         Set("travelRefusals", Activator.CreateInstance(TypeOf("TravelRefusalBackoff"))!);
         Set("nextRetainerPresenceUtc", DateTime.MaxValue);
 
+        var compatibility = TypeOf("NativeCompatibility");
+        var travelFamily = Enum.Parse(TypeOf("NativeFamily"), "Travel");
+        var builds = (Array)compatibility.GetMethod("Qualified", Static)!.Invoke(null,[travelFamily])!;
+        var loadedVersion = typeof(IFramework).Assembly.GetName().Version!.ToString();
+        var runtime = builds.Cast<object>().Single(b => (string)b.GetType().GetProperty("DalamudVersion")!.GetValue(b)! == loadedVersion);
+        string RuntimeValue(string field) => (string)runtime.GetType().GetProperty(field)!.GetValue(runtime)!;
+        var gameBuild = RuntimeValue("GameBuild");
+        var sdkVersion = RuntimeValue("ClientStructsVersion");
         // Supply a supported game version without opening local game files or reading native state.
         var gameData = (GameData)RuntimeHelpers.GetUninitializedObject(typeof(GameData));
         var repo = (Repository)RuntimeHelpers.GetUninitializedObject(typeof(Repository));
-        typeof(Repository).GetField("<Version>k__BackingField", Instance)!.SetValue(repo, "2026.10.16.0000.0000");
+        typeof(Repository).GetField("<Version>k__BackingField", Instance)!.SetValue(repo, gameBuild);
         typeof(GameData).GetField("<Repositories>k__BackingField", Instance)!.SetValue(gameData, new Dictionary<string, Repository> { ["ffxiv"] = repo });
         var travelType = TypeOf("TravelContextLocalView");
         var travel = RuntimeHelpers.GetUninitializedObject(travelType);
         var travelState = Activator.CreateInstance(TypeOf("TravelContextState"), true)!;
         travelType.GetField("state", Instance)!.SetValue(travel, travelState);
-        travelType.GetField("nativeVersion", Instance)!.SetValue(travel, "7.57.0.9414");
+        travelType.GetField("nativeVersion", Instance)!.SetValue(travel, sdkVersion);
         travelType.GetField("client", Instance)!.SetValue(travel, client);
         travelType.GetField("conditions", Instance)!.SetValue(travel, conditions);
         travelType.GetField("player", Instance)!.SetValue(travel, Service<IPlayerState>((method, _) =>
@@ -101,7 +109,7 @@ internal static class DutyPausePackagedTests {
 
         var observationType = TypeOf("TravelObservation");
         var observation = Activator.CreateInstance(observationType,
-            [100u, 200u, 10.1, 20.2, now, "2026.10.16.0000.0000", "7.57.0.9414", "1.0.0", "UNAVAILABLE", Array.CreateInstance(TypeOf("TravelDestination"), 0)])!;
+            [100u, 200u, 10.1, 20.2, now, gameBuild, sdkVersion, "1.0.0", "UNAVAILABLE", Array.CreateInstance(TypeOf("TravelDestination"), 0)])!;
         var flags = new[] { ConditionFlag.BoundByDuty, ConditionFlag.BoundByDuty56, ConditionFlag.BoundByDuty95 };
         var pendingProperty = travelSync.GetType().GetProperty("Pending", Instance)!;
         var travelInFlight = pluginType.GetField("travelInFlight", Instance)!;

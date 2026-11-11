@@ -54,6 +54,38 @@ internal static class NativeCompatibilityPackagedTests {
             ("FFXIV.Component.GUI.AtkUnitBase", ["IsVisible", "Id"]),
             ("FFXIV.Client.UI.Agent.AgentInterface", ["IsAgentActive", "AddonId"]),
         ]),
+        ("Beastmaster", [
+            ("FFXIV.Client.Game.XBMManager", ["Instance", "State", "NumUnlockedPets", "IsPetUnlocked"]),
+            ("FFXIV.Client.Game.XBMManager+DataState", ["None", "Requested", "Received"]),
+            ("FFXIV.Client.Game.UI.PlayerState", ["Instance", "IsLoaded", "ContentId"]),
+        ]),
+        ("Dashboard", [
+            ("FFXIV.Client.Game.UI.PlayerState", ["Instance", "IsLoaded", "ContentId", "HasWeeklyBingoJournal",
+                "GetWeeklyBingoExpireUnixTimestamp", "WeeklyBingoNumPlacedStickers", "WeeklyBingoNumSecondChancePoints",
+                "WeeklyBingoOrderData", "GetWeeklyBingoTaskStatus", "SquadronMissionCompletionTimestamp", "SquadronTrainingCompletionTimestamp"]),
+            ("FFXIV.Client.UI.Agent.AgentContentsFinder", ["Instance"]),
+            ("FFXIV.Client.UI.Agent.AgentSatisfactionSupply", ["Instance", "NpcInfo", "NpcData"]),
+            ("FFXIV.Client.UI.Agent.AgentSatisfactionSupply+SatisfactionSupplyNpcInfo", ["Valid", "Initialized", "AddonUpdated"]),
+            ("FFXIV.Client.Game.SatisfactionSupplyManager", ["Instance", "CurrentNpcInitInProgress", "CurrentNpcInitDone",
+                "GetResetDateTime", "GetUsedAllowances", "UsedAllowances", "SatisfactionRanks", "Satisfaction"]),
+            ("FFXIV.Client.Game.SatisfactionSupplyManager+NpcInfo", ["NpcId", "MaxAllowances", "RankMax", "UsedAllowances",
+                "RankCur", "SatisfactionCur", "SatisfactionMax"]),
+            ("FFXIV.Client.UI.Agent.AgentContentsTimer", ["Instance"]),
+            ("FFXIV.Client.UI.Agent.AgentInterface", ["IsAgentActive", "AddonId"]),
+            ("FFXIV.Component.GUI.AtkUnitBase", ["IsVisible", "Id"]),
+            ("FFXIV.Client.Game.UI.InstanceContent", ["Instance", "IsRouletteComplete"]),
+            ("FFXIV.Client.Game.UI.ContentsNote", ["Instance", "State", "IsContentNoteComplete"]),
+            ("FFXIV.Client.Game.UI.ContentsNote+ContentsNoteState", ["Loaded"]),
+            ("FFXIV.Client.Game.UI.UIState", ["Instance", "NextChallengeLogResetTimestamp", "NextMapAllowanceTimestamp"]),
+            ("FFXIV.Client.Game.InventoryManager", ["Instance", "GetInventoryContainer", "GetLimitedTomestoneWeeklyLimit", "GetWeeklyAcquiredTomestoneCount"]),
+            ("FFXIV.Client.Game.InventoryType", ["Currency"]),
+            ("FFXIV.Client.Game.InventoryContainer", ["IsLoaded", "Items", "Size"]),
+            ("FFXIV.Client.Game.QuestManager", ["Instance", "GetNextLeveAllowancesUnixTimestamp", "NumLeveAllowances", "GetBeastTribeAllowance"]),
+            ("FFXIV.Client.Game.UI.PvPProfile", ["Instance", "IsLoaded", "RivalWingsWeeklyMatches", "RivalWingsWeeklyMatchesWon",
+                "FrontlineWeeklyMatches", "FrontlineWeeklyFirstPlace", "FrontlineWeeklySecondPlace"]),
+            ("FFXIV.Client.Game.DomanEnclaveManager", ["Instance", "IsLoaded", "State"]),
+            ("FFXIV.Client.Game.DomanEnclaveManager+DomanEnclaveState", ["Donated", "Allowance", "IsAcceptingDonations"]),
+        ]),
         ("Fate", [
             ("FFXIV.Client.Game.Fate.FateContext", ["FateId", "StartTimeEpoch", "Duration", "State", "Progress", "IsBonus", "Level", "MaxLevel", "Location", "Radius"]),
         ]),
@@ -72,6 +104,14 @@ internal static class NativeCompatibilityPackagedTests {
         [("Submarine", "7.56.2.9136")] = SubmarineLayout, [("Submarine", "7.57.0.9414")] = SubmarineLayout,
         [("Travel", "7.56.2.9136")] = TravelLayout, [("Travel", "7.57.0.9414")] = TravelLayout,
         [("Fate", "7.56.2.9136")] = FateLayout, [("Fate", "7.57.0.9378")] = FateLayout, [("Fate", "7.57.0.9414")] = FateLayout,
+        [("Hunt", "7.57.0.9480")] = HuntLayout,
+        [("Submarine", "7.57.0.9480")] = SubmarineLayout,
+        [("Travel", "7.57.0.9480")] = TravelLayout,
+        [("Fate", "7.57.0.9480")] = FateLayout,
+        [("Appearance", "7.57.0.9480")] = "bced42a9a7d80871",
+        [("Beastmaster", "7.56.2.9136")] = "7984e5ebc96f48c5", [("Beastmaster", "7.57.0.9480")] = "7984e5ebc96f48c5",
+        // Recorded for comparison only; Dashboard is not admitted on 15.0.4.0.
+        [("Dashboard", "7.56.2.9136")] = "72e3d331203627af", [("Dashboard", "7.57.0.9480")] = "72e3d331203627af",
     };
 
     internal static void Run(Assembly plugin,string libraries) {
@@ -97,13 +137,14 @@ internal static class NativeCompatibilityPackagedTests {
         Check(Revision(typeof(IFramework).Assembly)==P(runtime!,"DalamudRevision"),"inspected Dalamud revision differs from the table");
         var fingerprints=Fingerprints(native);
         foreach(var (family,_) in Families) {
-            if(!Builds(family).Any(b=>P(b,"ClientStructsVersion")==installed)) continue;
-            Check(Expected.TryGetValue((family,installed),out var expected),family+" has no recorded layout for "+installed);
+            var listed=Builds(family).Any(b=>P(b,"ClientStructsVersion")==installed);
+            var measured=Expected.TryGetValue((family,installed),out var expected);
+            Check(!listed || measured,family+" has no recorded layout for "+installed);
+            if(!measured) continue;
             Check(fingerprints[family].Hash==expected,family+" layout "+fingerprints[family].Hash+" differs from qualified "+expected+":\n"+string.Join("\n",fingerprints[family].Lines));
             Check(!fingerprints[family].Lines.Any(l=>l.Contains("MISSING",StringComparison.Ordinal)),family+" member missing");
         }
         Check(!Builds("Dashboard").Any(b=>P(b,"ClientStructsVersion")!="7.56.2.9136"),"Dashboard readers were never requalified after September");
-        Check(!Builds("Beastmaster").Any(b=>P(b,"ClientStructsVersion")!="7.56.2.9136"),"Beastmaster readers were never requalified after September");
 
         // Explicit, human-readable offsets kept from the October qualification.
         Type N(string name)=>native.GetType("FFXIVClientStructs.FFXIV.Client.Game."+name,true)!;
@@ -132,9 +173,23 @@ internal static class NativeCompatibilityPackagedTests {
 
         // Exact fences: each family follows only its own list.
         var game=P(runtime!,"GameBuild");
+        var supportsRuntime=table.GetMethod("SupportsRuntime",flags)!;
+        var supportsExact=table.GetMethod("SupportsExact",flags)!;
+        var buildType=runtime!.GetType();
+        object MakeRuntime(string? gameOverride=null, string? sdkRevision=null, string? dalamudRevision=null,
+            string? dalamudOverride=null, string? luminaOverride=null, string? excelOverride=null) =>
+            Activator.CreateInstance(buildType,gameOverride??game,dalamudOverride??dalamud,
+                dalamudRevision??P(runtime,"DalamudRevision"),installed,sdkRevision??P(runtime,"ClientStructsRevision"),
+                luminaOverride??P(runtime,"LuminaVersion"),excelOverride??P(runtime,"ExcelVersion"))!;
+        var mismatch=new[]{MakeRuntime(gameOverride:"2099.01.01.0000.0000"),MakeRuntime(sdkRevision:"other"),
+            MakeRuntime(dalamudRevision:"other"),MakeRuntime(dalamudOverride:"99.0.0.0"),
+            MakeRuntime(luminaOverride:"99.0.0"),MakeRuntime(excelOverride:"99.0.0")};
         var next=installed[..(installed.LastIndexOf('.')+1)]+(int.Parse(installed[(installed.LastIndexOf('.')+1)..])+1);
         foreach(var family in Enum.GetNames(familyType)) {
             var listed=Builds(family).Any(b=>P(b,"GameBuild")==game&&P(b,"ClientStructsVersion")==installed);
+            Check((bool)supportsRuntime.Invoke(null,[Family(family),game])! == listed,"loaded runtime differs from "+family+" qualification");
+            foreach(var wrong in mismatch)
+                Check(!(bool)supportsExact.Invoke(null,[Family(family),wrong])!,"mismatched runtime must block "+family);
             Check(Supports(family,game,installed)==listed,"packaged "+family+" gate differs from its own qualification list");
             Check(!Supports(family,game,next),"packaged future SDK fence: "+family);
             Check(!Supports(family,"2099.01.01.0000.0000",installed),"packaged future game fence: "+family);

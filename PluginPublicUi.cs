@@ -79,7 +79,7 @@ public sealed partial class Plugin {
         string waiting=HasPairedSession ? "Waiting for supported context" : "Gillions unavailable";
         string game=dataManager.GameData.Repositories.TryGetValue("ffxiv",out var repo) ? repo.Version : "unavailable";
         string hunts=waiting, partyFinder=waiting, fates=waiting, market=waiting;
-        if (HasPairedSession) hunts=PublicHealth.HuntState(NativeCompatibility.Supports(NativeFamily.Hunt, game,typeof(FFXIVClientStructs.FFXIV.Client.Game.UI.MobHunt).Assembly.GetName().Version?.ToString()),
+        if (HasPairedSession) hunts=PublicHealth.HuntState(NativeCompatibility.SupportsRuntime(NativeFamily.Hunt, game),
             huntLocal.Reading, huntLocal.Progress.ExpiresAt>Environment.TickCount64 && huntLocal.Progress.Availability.Length==0);
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         if (HasPairedSession) {

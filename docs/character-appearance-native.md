@@ -2,6 +2,8 @@
 
 Testing collector only. Stable has no collector or setting. Source qualification is distinct from physical acceptance: **physical check pending** on every listed tuple. No game was launched for this work.
 
+November evidence is in [the patch qualification](native-compatibility.md#november-2026-patch-qualification).
+
 ## Slot basis
 
 Owner Amendment 1 authorizes the pinned RaptureGearsetModule.GearsetItemIndex as the index basis. Full mapping: mainHand 0, offHand 1, head 2, body 3, hands 4, legs 6, feet 7, ears 8, neck 9, wrists 10, ring1 11, ring2 12. Index 5 and index 13 are not read. Ring labels have no side meaning. Physical check pending; the owner will check the mapping read-only later.

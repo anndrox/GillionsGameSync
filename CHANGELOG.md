@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.98 (Testing)
+
+- Qualifies Hunt, Travel, FATE, Submarine, Beastmaster and Appearance for the November game build and Dalamud 15.0.4.0. Dashboard stays paused on that runtime.
+- Patch-sensitive readers check the loaded runtime versions and revisions before reading. In-game confirmation and any Gillions Site admission are separate.
+
+See the [owner test checklist](docs/releases/testing-0.0.98.md).
+
 ## 1.0.31.9 (Stable candidate)
 
 Hunt check-ins, hunt maps and routing location pause while you are in a duty and resume when you leave. Status text no longer says TEST on Stable.
