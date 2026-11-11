@@ -41,8 +41,6 @@ internal static class AppearancePolicy {
     internal const string Contract="character-appearance-v1", Resource="character_appearance", Capability="character_appearance_v1";
     internal const string Permission="server:game-sync:personal:character-appearance:v1", Layout="ffxiv-customize-26-v1";
     internal static readonly string[] Slots=["mainHand","offHand","head","body","hands","legs","feet","ears","neck","wrists","ring1","ring2"];
-    // Amendment 1: GearsetItemIndex basis; physical check pending. No ring side claim.
-    internal static readonly int[] Indices=[0,1,2,3,4,6,7,8,9,10,11,12];
     internal static readonly JsonSerializerOptions Json=new() { PropertyNamingPolicy=JsonNamingPolicy.CamelCase };
     internal static AppearanceSlot? FromDrawSlot(uint itemId, uint glamourId, AppearanceDrawSlot draw,
         bool matchesBase, bool matchesGlamour) {

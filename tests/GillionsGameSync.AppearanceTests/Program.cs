@@ -5,7 +5,6 @@ void Check(bool ok,string label){checks++;if(!ok)throw new Exception(label);}
 AppearanceSnapshot Fixture(uint glamour=20)=>new(){CollectorVersion="0.0.97.0",GameVersion="2026.10.16.0000.0000",ClientStructsVersion="7.57.0.9414",ObservedAtUtc="2026-11-01T12:00:00.000Z",CustomizationHex="010001"+new string('0',46),Equipment=AppearancePolicy.Slots.ToDictionary(s=>s,s=>new AppearanceSlot{ItemId=10,GlamourItemId=glamour,Stain0Id=2,Stain1Id=3})};
 var p=Fixture();Check(AppearancePolicy.Valid(p),"complete fixture");
 Check(!new AppearanceChoice().Enabled&&!new AppearanceChoice().Pending,"default OFF");
-Check(AppearancePolicy.Indices.SequenceEqual(new[]{0,1,2,3,4,6,7,8,9,10,11,12}),"Amendment 1 exact mapping");
 Check(AppearancePolicy.Slots[^2]=="ring1"&&AppearancePolicy.Slots[^1]=="ring2","neutral ring identities");
 Check(p.Equipment["mainHand"].ItemId==10&&p.Equipment["mainHand"].GlamourItemId==20,"base and glamour retained");
 Check(p.Equipment["ring1"].Stain0Id==2&&p.Equipment["ring1"].Stain1Id==3,"both stains");
@@ -29,7 +28,8 @@ Check(collector.Contains("objects.LocalPlayer")&&!collector.Contains("foreach(va
 foreach(var forbidden in new[]{"SetVisor(","LoadEquipment(","SetGlasses(","MirageManager","GetGameObjectAddress"})Check(!collector.Contains(forbidden),"no forbidden surface "+forbidden);
 foreach(var state in new[]{"BetweenAreas","BetweenAreas51","LoggingOut","Transformed","RolePlaying","Disguised","IsGPosing"})Check(collector.Contains(state),"withhold "+state);
 var integration=File.ReadAllText(Path.Combine(root,"PluginAppearance.cs"));Check(integration.StartsWith("#if GILLIONS_TEST_BUILD"),"Testing only");Check(integration.IndexOf("!AppearanceAuthorized(now)",StringComparison.Ordinal)<integration.IndexOf("appearanceCollector.Read(",StringComparison.Ordinal),"zero appearance reads without opt-in/grant");
-Check(collector.Contains("->DrawData") && !collector.Contains("item->Stains"), "dyes from the draw slots");
+Check(collector.Contains("human->EquipmentModels") && collector.Contains("DrawData.DrawObject")
+    && !collector.Contains("item->Stains") && !collector.Contains("draw->EquipmentModelIds"), "dyes from rendered equipment");
 Check(!integration.Contains("Checkbox") && !integration.Contains("/api/game-sync/appearance-permission")
     && integration.Contains("ConsentStatus.Read") && integration.Contains("AppearanceGrant.Read"), "site owns sharing");
 var keys = new[] { "marketContribution", "partyFinderContribution", "fateContribution", "personalHunts",

@@ -13,7 +13,7 @@ internal static class NativeCompatibilityPackagedTests {
     // values, property and method signatures, native signature/address
     // attributes and agent identities. It does not hash accessor bodies (IL
     // metadata tokens differ between unrelated builds), so qualification also
-    // requires the byte-identical source comparison in docs/native-compatibility.md.
+    // requires the pinned source comparison in docs/native-compatibility.md.
     private static readonly (string Family, (string Type, string[] Members)[] Uses)[] Families = [
         ("Appearance", [
             ("FFXIV.Client.Game.InventoryManager", ["Instance", "GetInventoryContainer"]),
@@ -21,10 +21,21 @@ internal static class NativeCompatibilityPackagedTests {
             ("FFXIV.Client.Game.InventoryItem", ["Container", "Slot", "IsSymbolic", "ItemId", "GlamourId"]),
             ("FFXIV.Client.Game.InventoryType", ["EquippedItems"]),
             ("FFXIV.Client.Game.Character.Character", ["DrawData"]),
-            ("FFXIV.Client.Game.Character.DrawDataContainer", ["EquipmentModelIds", "WeaponData"]),
-            ("FFXIV.Client.Game.Character.DrawObjectData", ["ModelId"]),
+            ("FFXIV.Client.Game.Object.GameObject", ["DrawObject"]),
+            ("FFXIV.Client.Game.Character.DrawDataContainer", ["WeaponData", "Weapon"]),
+            ("FFXIV.Client.Game.Character.DrawDataContainer+WeaponSlot", ["MainHand", "OffHand"]),
+            ("FFXIV.Client.Game.Character.DrawDataContainer+EquipmentSlot", ["Head", "Body", "Hands", "Legs", "Feet", "Ears", "Neck", "Wrists", "RFinger", "LFinger"]),
+            ("FFXIV.Client.Game.Character.DrawObjectData", ["DrawData"]),
+            ("FFXIV.Client.Game.Character.DrawData", ["DrawObject"]),
             ("FFXIV.Client.Game.Character.EquipmentModelId", ["Value", "Stain0", "Stain1"]),
-            ("FFXIV.Client.Game.Character.WeaponModelId", ["Value", "Stain0", "Stain1"]),
+            ("FFXIV.Client.Graphics.Scene.DrawObject", ["Object"]),
+            ("FFXIV.Client.Graphics.Scene.Object", ["VirtualTable", "GetObjectType"]),
+            ("FFXIV.Client.Graphics.Scene.ObjectType", ["CharacterBase"]),
+            ("FFXIV.Client.Graphics.Scene.CharacterBase", ["GetModelType"]),
+            ("FFXIV.Client.Graphics.Scene.CharacterBase+ModelType", ["Human", "Weapon"]),
+            ("FFXIV.Client.Graphics.Scene.Human", ["EquipmentModels"]),
+            ("FFXIV.Client.Graphics.Scene.Weapon", ["ModelSetId", "SecondaryId", "Variant", "Stain0", "Stain1"]),
+            ("FFXIV.Client.UI.Misc.RaptureGearsetModule+GearsetItemIndex", ["MainHand", "OffHand", "Head", "Body", "Hands", "Legs", "Feet", "Ears", "Neck", "Wrists", "RingRight", "RingLeft"]),
             ("FFXIV.Client.Game.Character.CustomizeData", ["Data"]),
         ]),
         ("Hunt", [
@@ -104,7 +115,7 @@ internal static class NativeCompatibilityPackagedTests {
         TravelLayout = "22c25911f7cc88bf", FateLayout = "6923c1e09b662322";
     private static readonly Dictionary<(string Family, string ClientStructs), string> Expected = new() {
         // Hotfix measured locally; identical pinned source at earlier tuples, rechecked on CI archives.
-        [("Appearance", "7.56.2.9136")] = "bb864beff9836bfb", [("Appearance", "7.57.0.9378")] = "bb864beff9836bfb", [("Appearance", "7.57.0.9414")] = "bb864beff9836bfb",
+        [("Appearance", "7.56.2.9136")] = "7d312d4f31472b10", [("Appearance", "7.57.0.9378")] = "7d312d4f31472b10", [("Appearance", "7.57.0.9414")] = "7d312d4f31472b10",
         [("Hunt", "7.56.2.9136")] = HuntLayout, [("Hunt", "7.57.0.9378")] = HuntLayout, [("Hunt", "7.57.0.9414")] = HuntLayout,
         [("Submarine", "7.56.2.9136")] = SubmarineLayout, [("Submarine", "7.57.0.9414")] = SubmarineLayout,
         [("Travel", "7.56.2.9136")] = TravelLayout, [("Travel", "7.57.0.9414")] = TravelLayout,
@@ -113,7 +124,7 @@ internal static class NativeCompatibilityPackagedTests {
         [("Submarine", "7.57.0.9480")] = SubmarineLayout,
         [("Travel", "7.57.0.9480")] = TravelLayout,
         [("Fate", "7.57.0.9480")] = FateLayout,
-        [("Appearance", "7.57.0.9480")] = "bb864beff9836bfb",
+        [("Appearance", "7.57.0.9480")] = "7d312d4f31472b10",
         [("Beastmaster", "7.56.2.9136")] = "7984e5ebc96f48c5", [("Beastmaster", "7.57.0.9480")] = "7984e5ebc96f48c5",
         // Recorded for comparison only; Dashboard is not admitted on 15.0.4.0.
         [("Dashboard", "7.56.2.9136")] = "72e3d331203627af", [("Dashboard", "7.57.0.9480")] = "72e3d331203627af",

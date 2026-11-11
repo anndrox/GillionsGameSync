@@ -41,6 +41,7 @@ var testingProduct = pluginAssembly.GetName().Name == "GillionsGameSyncTest";
 CollectibleReadinessPackagedTests.Run(pluginAssembly);
 PublicCandidatePackagedTests.Run(pluginAssembly);
 NativeCompatibilityPackagedTests.Run(pluginAssembly,libraryPath);
+if (testingProduct) AppearanceRenderPackagedTests.Run(pluginAssembly);
 ChannelIsolationPackagedTests.Run(pluginAssembly,fixturePath);
 DistributionManifestPackagedTests.Run(pluginAssembly);
 OriginPackagedTests.Run(pluginAssembly);
