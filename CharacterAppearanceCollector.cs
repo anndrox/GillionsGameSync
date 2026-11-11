@@ -2,8 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Reflection;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -14,12 +12,7 @@ namespace GillionsGameSync;
 internal sealed class CharacterAppearanceCollector(IClientState client,IObjectTable objects,IPlayerState player,IDataManager data,ICondition conditions) {
     internal string GameVersion => data.GameData.Repositories.TryGetValue("ffxiv",out var r)?r.Version:"unavailable";
     internal string NativeVersion => typeof(InventoryManager).Assembly.GetName().Version?.ToString()??"unavailable";
-    private static string Revision(Assembly a){var v=a.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion??"";return v.Contains('+')?v[(v.IndexOf('+')+1)..].Split('.')[0]:"";}
-    internal bool Qualified => NativeCompatibility.Qualified(NativeFamily.Appearance).Any(b=>b.GameBuild==GameVersion&&b.ClientStructsVersion==NativeVersion
-        &&b.DalamudVersion==typeof(IFramework).Assembly.GetName().Version?.ToString()
-        &&b.ClientStructsRevision==Revision(typeof(InventoryManager).Assembly)&&b.DalamudRevision==Revision(typeof(IFramework).Assembly)
-        &&b.LuminaVersion==typeof(Lumina.GameData).Assembly.GetName().Version?.ToString(3)
-        &&b.ExcelVersion==typeof(Lumina.Excel.ExcelModule).Assembly.GetName().Version?.ToString(3));
+    internal bool Qualified => NativeCompatibility.SupportsRuntime(NativeFamily.Appearance, GameVersion);
     internal bool Available(ulong character) => Qualified&&character!=0&&client.IsLoggedIn&&player.IsLoaded&&player.ContentId==character&&!client.IsGPosing
         &&!conditions[ConditionFlag.BetweenAreas]&&!conditions[ConditionFlag.BetweenAreas51]&&!conditions[ConditionFlag.LoggingOut]
         &&!conditions[ConditionFlag.Transformed]&&!conditions[ConditionFlag.RolePlaying]&&!conditions[ConditionFlag.Disguised];

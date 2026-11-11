@@ -1,14 +1,14 @@
 # Native compatibility
 
-Appearance is an unreleased Testing-only family. Its exact accessor comparison,
+Appearance is a Testing-only family. Its exact accessor comparison,
 slot basis, packaged layout fingerprint and pending physical acceptance are in
 [Appearance native qualification](character-appearance-native.md). Stable does
 not include the appearance collector or setting. Source qualification does not
 authorize release or replace the owner's later read-only physical check.
 
 `NativeCompatibility.cs` is the one place that decides on which exact client
-runtimes the patch-sensitive collector families (Hunt, Submarine, Travel, FATE and
-Dashboard) may read native game state. Each family lists the exact runtimes it was
+runtimes the patch-sensitive collector families (Hunt, Submarine, Travel, FATE, Dashboard, Beastmaster and
+Appearance) may read native game state. Each family lists the exact runtimes it was
 qualified on. A runtime is the game data version Dalamud reports
 for `ffxiv`, plus the Dalamud release and the FFXIVClientStructs assembly that
 release ships. For those families, anything not listed fails closed before
@@ -21,7 +21,42 @@ Dalamud shipping ClientStructs rebuilt for each patch.
 The table is native safety only. Player consent, Site authority, Site source
 admission and capability negotiation stay where they were and are still required.
 
-## Current table
+## November 2026 patch qualification
+
+The [Dalamud 15.0.4.0 promotion](https://github.com/goatcorp/dalamud-distrib/commit/38d5859b17b014bfdbfbbd5d60d9433333ce330b)
+landed at 2026-11-10 22:00:59 UTC. Its root archive hashes to
+`E94D993BF91C8A43CE0959942602EBD18C831B788A133700150CEB928283129F` (SHA-256).
+The runtime is `2026.11.03.0000.0000` ([ClientStructs game build](https://github.com/aers/FFXIVClientStructs/blob/80cb4a7b7e11a6702e2eb8839afd301a918c638e/ida/data.yml)),
+Dalamud `15.0.4.0+12e318c1936e449e5883faa61214eb2ced478349`,
+ClientStructs `7.57.0.9480+80cb4a7b7e11a6702e2eb8839afd301a918c638e`,
+Lumina `7.7.0` and Lumina.Excel `7.5.1`.
+
+Ran `--native-layout-report` on the promoted archive and both baselines:
+[October hotfix to November](https://github.com/aers/FFXIVClientStructs/compare/dd57986b8287e7c6ed9c27198f8c76cb04a81dfe...80cb4a7b7e11a6702e2eb8839afd301a918c638e)
+and [September to November](https://github.com/aers/FFXIVClientStructs/compare/313161e448e335adddd928f8a0212b2c328b5659...80cb4a7b7e11a6702e2eb8839afd301a918c638e).
+Every listed fingerprint matches its baseline with no missing member.
+
+| Family | Baseline | Fingerprint | November source qualification |
+|---|---|---|---|
+| Hunt | 15.0.3.9 | `2312d897d65b4177` | Yes. MobHunt, key-item inventory and PlayerState sources are byte-identical. |
+| Travel | 15.0.3.9 | `22c25911f7cc88bf` | Yes. AgentTeleport, Telepo/TeleportInfo, UIState, AtkUnitBase and AgentInterface are byte-identical. |
+| FATE | 15.0.3.9 | `6923c1e09b662322` | Yes. FateContext and FateManager are byte-identical; the Dalamud FATE wrapper is unchanged. |
+| Submarine | 15.0.3.9 | `8c4e37e328c571a9` | Yes. Housing/workshop, exploration agents and PlayerState sources are byte-identical. |
+| Dashboard | 15.0.3.6 | `72e3d331203627af` | **No.** AtkUnitBase replaces two unrelated parameter names/comments. The measured members match, but the September source diff is neither byte-identical nor additive-only. |
+| Beastmaster | 15.0.3.6 | `7984e5ebc96f48c5` | Yes. XBMManager is byte-identical, including loading states and the ownership query. PlayerState adds only an unused method. Changes to bestiary addons and agents are outside this reader. |
+| Appearance | 15.0.3.9 | `bced42a9a7d80871` | Yes. Equipped-item and customization sources and the Dalamud customization wrapper are byte-identical. |
+
+The [Dalamud source comparison](https://github.com/goatcorp/Dalamud/compare/30509c3b4fd00edd9a3d65b7bbf16433d84be03b...12e318c1936e449e5883faa61214eb2ced478349)
+has no changes to the FATE and appearance wrappers used here. No layout change
+required an offset or signature fix. The runtime guards check the actual
+loaded assembly identities before entering the readers. Dashboard's measured
+fingerprint is recorded for comparison; the runtime remains unlisted for it.
+
+These are source and managed metadata checks. Physical acceptance is pending
+for the entire November runtime. Use the [Testing 0.0.98 checklist](releases/testing-0.0.98.md).
+Any Site capability and source admission requires its own evidence.
+
+## Historical table (through October)
 
 | Family | Native layouts read | Qualified runtimes |
 |---|---|---|
@@ -55,7 +90,7 @@ on the release channel within hours of the hotfix.
    AtkUnitBase, FateManager and FateContext (the struct Dalamud's `IFateTable`
    wraps; also unchanged since September). Among the C# sources, the maintainers'
    "7.57 hotfix1" signature pass changed only `PacketDispatcher`.
-2. **September → current changes for Submarine and Travel.** All of them are
+2. **September â†’ current changes for Submarine and Travel.** All of them are
    additive or cosmetic:
    - `HousingManager.RequestWardInfo` and `PlayerState.GetCurrentClassJobContentMaxLevel` were added;
    - `AgentTeleport.ContextMenuAetheryteIndex` was documented at `0x58` (the plugin reads `0x5C`/`0x60`/`0x68`);
@@ -82,7 +117,7 @@ on the release channel within hours of the hotfix.
 
    On every run, CI inspects the pinned runtime and also re-proves the recorded
    values against the 15.0.3.6 and 15.0.3.7 archives with `--native-layout-check`.
-4. **Dalamud 15.0.3.7 → 15.0.3.9.** The service changes don't affect the APIs
+4. **Dalamud 15.0.3.7 â†’ 15.0.3.9.** The service changes don't affect the APIs
    used. `AddonArgs.Addon` became an init property with the same getter, and
    there were no `IFateTable`, `IPlayerState`, `IClientState` or `IGameInventory`
    changes.
@@ -122,7 +157,7 @@ version; until then the Site rejects them and the client backs off.
 
 1. **Identify the runtime players will run.**
    - Dalamud release `version` at the newest `goatcorp/dalamud-distrib`
-     "Promoting for … from stg" commit.
+     "Promoting for â€¦ from stg" commit.
    - The `FFXIVClientStructs.dll` version and `+revision` inside that commit's
      root `latest.zip`.
    - The game build from ClientStructs `ida/data.yml` (and `game/ffxivgame.ver`

@@ -190,6 +190,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Testing 0.0.98 qualifies Hunt, Travel, FATE, Submarine, Beastmaster and Appearance for Dalamud 15.0.4.0. Dashboard remains paused. Live checks and Gillions admission are separate.",
         "Testing90 qualifies Hunt, submarine and travel reads and the FATE source for the 7.57 hotfix (Dalamud 15.0.3.9) from one per-collector compatibility table. FATE, Hunt coverage and travel uploads still need Gillions admission of the new patch.",
         "October Hunt/FATE sources are qualified with exact future-build guards. Connected FATE testing requires matching Gillions source/reference admission and independent policy.",
         "Testing88 uses a dedicated public Testing feed, separate configuration and TEST-only HTTPS requests. No production pairing is imported; historical Testing production bindings remain preserved but inactive.",

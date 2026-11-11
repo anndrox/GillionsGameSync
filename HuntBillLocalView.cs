@@ -91,7 +91,7 @@ internal sealed class HuntBillLocalView : IDisposable {
 #endif
     private string GameVersion() => data.GameData.Repositories.TryGetValue("ffxiv", out var repo) ? repo.Version : "unavailable";
     private unsafe string CurrentCharacterKey() {
-        if (!NativeCompatibility.Supports(NativeFamily.Hunt, GameVersion(), typeof(MobHunt).Assembly.GetName().Version?.ToString())) return "";
+        if (!NativeCompatibility.SupportsRuntime(NativeFamily.Hunt, GameVersion())) return "";
         var player = PlayerState.Instance();
         return client.IsLoggedIn && player != null && player->IsLoaded && player->ContentId != 0
             ? HuntBillRetentionPolicy.CharacterKey(player->ContentId) : "";
@@ -103,7 +103,7 @@ internal sealed class HuntBillLocalView : IDisposable {
         // synchronously; never retain it, strings, entity data or chat content.
         if (disposed || !ReadEnabled || !framework.IsInFrameworkUpdateThread
             || message.LogMessageId != HuntProgressMessage.LogId) return;
-        if (!NativeCompatibility.Supports(NativeFamily.Hunt, GameVersion(), typeof(MobHunt).Assembly.GetName().Version?.ToString())
+        if (!NativeCompatibility.SupportsRuntime(NativeFamily.Hunt, GameVersion())
             || conditions[ConditionFlag.BetweenAreas] || conditions[ConditionFlag.BetweenAreas51]) return;
         var key = CurrentCharacterKey();
         if (key.Length == 0) return;
@@ -162,7 +162,7 @@ internal sealed class HuntBillLocalView : IDisposable {
         LastDiagnostic = "Hunt fresh source unavailable; retained state preserved, no completion inferred.";
         if (!framework.IsInFrameworkUpdateThread) { itemCoverage.Clear(); Publish("Hunt read requires framework thread; no native access."); return; }
         attempts++; lastAttemptUtc = now;
-        if (!NativeCompatibility.Supports(NativeFamily.Hunt, GameVersion(), typeof(MobHunt).Assembly.GetName().Version?.ToString())) {
+        if (!NativeCompatibility.SupportsRuntime(NativeFamily.Hunt, GameVersion())) {
             itemCoverage.Clear();
             Publish("Unsupported game/SDK build; no Hunt native read. Retained state preserved."); return;
         }

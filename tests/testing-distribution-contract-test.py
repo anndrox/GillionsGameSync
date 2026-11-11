@@ -16,7 +16,8 @@ hunt=(r/'HuntBillLocalView.cs').read_text(encoding='utf-8').replace('    interna
 accepted_hunt=subprocess.check_output(['git','show',public+':HuntBillLocalView.cs'],cwd=r).decode().replace('\r\n','\n')
 for old_status in ['Private TEST sync is controlled separately in the main window.', 'Private TEST sync status is in the main window.']:
     accepted_hunt=accepted_hunt.replace(old_status,'Private sync requires separate permission.')
-assert hunt.replace('NativeCompatibility.Supports(NativeFamily.Hunt, ','PersonalObservationCompatibility.Supports(')==accepted_hunt
+assert hunt.replace('NativeCompatibility.SupportsRuntime(NativeFamily.Hunt, GameVersion())',
+                    'PersonalObservationCompatibility.Supports(GameVersion(), typeof(MobHunt).Assembly.GetName().Version?.ToString())')==accepted_hunt
 windows=(r/'PublicGameSyncUi.cs').read_text(encoding='utf-8')
 normalized=windows.replace('        string idSuffix=testing ? "Test" : "";\n','').replace('+idSuffix','')
 # Owner-reported duplicate windows after Reconnect -> Finish (2026-10-24): only FinishPairing may differ.
