@@ -27,6 +27,8 @@ methods = [method(source, anchor) for anchor in [
     '    private async Task SendRetainerPresenceAsync(',
     '    private void ClearRetainerServerAcceptance()',
     '    private bool CoveragePreparedCurrent(',
+    '    private void DelayLegacyCoverage(',
+    '    private ResourceRetry PrivateRetry(',
     '    private async Task SendPersonalAsync(',
 ]]
 start = source.index('    private bool PersonalEnabled(')
@@ -41,16 +43,18 @@ public sealed partial class Plugin {
 
 source = (root / 'SyncOwnership.cs').read_text(encoding='utf-8')
 (generated / 'Lifetime.cs').write_text(
-    source[:source.index('public sealed class OwnedCharacterState')]
+    source[:source.index('public sealed partial class OwnedCharacterState')]
     + source[source.index('public enum SyncRequestMode'):], encoding='utf-8')
 source = (root / 'SyncTransportPolicy.cs').read_text(encoding='utf-8')
 (generated / 'ResponseReader.cs').write_text('''using System; using System.IO; using System.Net.Http; using System.Text;
-using System.Text.Json; using System.Threading; using System.Threading.Tasks;
+using System.Text.Json; using System.Text.RegularExpressions; using System.Threading; using System.Threading.Tasks;
 namespace GillionsGameSync;
 public static class SyncResponsePolicy {
  public const int MaximumBytes = 64 * 1024;
  public const int MaximumDepth = 16;
-''' + method(source, '    public static async Task<string> ReadAsync(') + '}\n', encoding='utf-8')
+''' + source[source.index('    public static Task<string> ReadAsync('):source.index('    public static bool IsSnapshotReceipt(')]
+    + source[source.index('    public static async Task EnsureSuccessfulAsync('):source.index('    private static bool PositiveId(')] + '}\n'
+    + source[source.index('public static class SiteRefusalPolicy'):source.index('public static class SyncErrorPolicy')], encoding='utf-8')
 source = (root / 'RetainerPresence.cs').read_text(encoding='utf-8')
 (generated / 'PresenceResponse.cs').write_text(
     'using System; using System.Text.Json;\nnamespace GillionsGameSync;\n'

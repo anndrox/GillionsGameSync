@@ -8,7 +8,7 @@ internal static class TravelTransportTests {
         var now=DateTime.UtcNow;
         TravelObservation Row(DateTime? at=null) => new(100,200,10.1,20.2,at??now,
             NativeCompatibility.September.GameBuild,NativeCompatibility.September.ClientStructsVersion,"0.0.77.0","OBSERVED_PARTIAL",
-            [new(1,100,"OBSERVED_IN_PERSONAL_LIST","UNKNOWN",100,null,null,null,null)]);
+            [new(1,100,"OBSERVED_IN_PERSONAL_LIST","UNKNOWN",100,null,null,null,null)]) { CurrentWorldId = 79 };
         var descriptor=new Dictionary<string,object> { ["resourceType"]="travel_context",["schemaVersion"]=1,
             ["collectorSchema"]="travel-context-v1",["transportContract"]="travel-context-v1",["capability"]="travel_context_v1",
             ["maxPayloadBytes"]=65536,["maxEnvelopeBytes"]=69632,["maxDepth"]=8,["maxDestinations"]=256,["ttlSeconds"]=45,
@@ -82,7 +82,11 @@ internal static class TravelTransportTests {
         Check(!TravelSyncPolicy.Terminal(429)&&!TravelSyncPolicy.Terminal(503),"rate/unavailable not retryable");
         using(var doc=JsonDocument.Parse(next.Payload)) {
             var r=doc.RootElement;
-            Check(r.EnumerateObject().Count()==16,"extra payload field");
+            Check(r.EnumerateObject().Select(field => field.Name).ToHashSet().SetEquals(new[] {
+                "territoryId", "mapId", "mapX", "mapY", "observedAtUtc", "gameBuild", "nativeVersion", "collectorVersion",
+                "teleportSupport", "destinations", "schemaVersion", "collectorSchema", "locationSource", "teleportSource",
+                "costSupport", "uploadState", "currentWorldId"
+            }) && r.GetProperty("currentWorldId").GetUInt32() == 79, "exact draft 3 travel payload");
             var d=r.GetProperty("destinations")[0];
             Check(d.EnumerateObject().Count()==9&&d.GetProperty("actualCostGil").ValueKind==JsonValueKind.Null,"extra destination/final charge");
             foreach(var key in new[]{"home","free","favored"}) Check(d.GetProperty(key).ValueKind==JsonValueKind.Null,"null flag lost");

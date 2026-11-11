@@ -24,12 +24,12 @@ internal sealed class HuntTargetPresentation(Func<uint, string?> resolveName) {
             string? value;
             try { value = resolveName(target.NpcNameId); } catch (Exception) { value = null; }
             name = value is null ? "" : new string(value.Where(c => !char.IsControl(c)).Take(160).ToArray()).Trim();
-            if (name.Length == 0) name = "Target name unavailable";
+            name = name.Length == 0 ? "Target name unavailable" : HuntMonsterName.Display(name);
             if (names.Count < MaximumNames) names[target.NpcNameId] = name;
         }
         return name;
     }
-    internal string TargetLine(HuntBillTarget target) => $"  {TargetName(target)} — {target.ObservedKills}/{target.RequiredKills} kills (target ID {target.TargetId}; NPC name ID {target.NpcNameId})";
+    internal string TargetLine(HuntBillTarget target) => $"  {TargetName(target)}: {target.ObservedKills}/{target.RequiredKills} kills (target ID {target.TargetId}; NPC name ID {target.NpcNameId})";
 }
 
 // Managed admission/cadence only. No native pointers, requests or ownership inference.
@@ -222,11 +222,21 @@ internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
             throw new InvalidOperationException("Retention off or unsupported.");
         var current = store.Characters.SingleOrDefault(c => c.LocalCharacterKey == characterKey);
         if (!allowEmpty && (current is null || current.Bills.Count == 0)) throw new InvalidOperationException("No retained Hunt observations for this character.");
-        return JsonSerializer.Serialize(new {
+        return SerializePrivateBills(current?.Bills ?? []);
+    }
+
+    internal HuntBillObservation[] PrivateBills(string characterKey, DateTime freshFrom) =>
+        Supported && RetentionEnabled && PersonalObservationCompatibility.Key(characterKey)
+            ? store.Characters.SingleOrDefault(c => c.LocalCharacterKey == characterKey)?.Bills
+                .Where(bill => bill.ObservedAtUtc >= freshFrom).ToArray() ?? []
+            : [];
+
+    internal static string SerializePrivateBills(IEnumerable<HuntBillObservation> bills) =>
+        JsonSerializer.Serialize(new {
             schemaVersion = 1, collectorSchema = "hunt-bills-v1", uploadState = "local-only-no-server-contract",
             source = "naturally-loaded-mob-hunt-client-cache", completeness = "positive-observations-only",
             characterAssociation = "active-character-context-cache-ownership-unverified",
-            resetAtUtc = (DateTime?)null, resetApplicability = "unavailable", bills = (current?.Bills ?? []).OrderBy(b => b.BillTypeId).Select(b => new {
+            resetAtUtc = (DateTime?)null, resetApplicability = "unavailable", bills = bills.OrderBy(b => b.BillTypeId).Select(b => new {
                 b.ObservationId, b.BillTypeId, b.Category, b.Tier, b.OrderId, b.EventItemId, b.ObservedAtUtc, b.GameVersion, b.CollectorVersion, b.SourceEvidence,
                 acceptance = "obtained-flag-observed-not-current-acceptance-proof", targets = b.Targets.Select(t => new {
                     t.TargetIndex, t.TargetId, t.NpcNameId, t.MapId, t.PlaceNameId, t.FateId, t.RequiredKills, t.ObservedKills,
@@ -234,5 +244,4 @@ internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
                 })
             })
         }, PersonalObservationCompatibility.Json);
-    }
 }

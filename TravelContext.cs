@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace GillionsGameSync;
 
@@ -14,6 +15,8 @@ internal sealed record TravelDestination(uint AetheryteId, uint TerritoryId,
 internal sealed record TravelObservation(uint TerritoryId, uint MapId, double MapX, double MapY,
     DateTime ObservedAtUtc, string GameBuild, string NativeVersion, string CollectorVersion,
     string TeleportSupport, TravelDestination[] Destinations) {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public uint? CurrentWorldId { get; init; }
     public int SchemaVersion => 1;
     public string CollectorSchema => "travel-context-v1";
     public string LocationSource => "dalamud-local-player-maputil";
@@ -31,6 +34,9 @@ internal static class TravelPolicy {
     internal static bool Coordinate(double value) => double.IsFinite(value) && value is > 0 and <= 100 && Round(value) == value;
     internal static bool Valid(TravelObservation? value) => value is not null
         && value.TerritoryId is > 0 and <= 65535 && value.MapId is > 0 and <= 65535
+#if GILLIONS_TEST_BUILD || GILLIONS_TRAVEL_TESTS
+        && value.CurrentWorldId is > 0 and <= 65535
+#endif
         && Coordinate(value.MapX) && Coordinate(value.MapY)
         && PersonalObservationCompatibility.Utc(value.ObservedAtUtc)
         && NativeCompatibility.Supports(NativeFamily.Travel, value.GameBuild,value.NativeVersion)

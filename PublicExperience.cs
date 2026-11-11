@@ -122,8 +122,8 @@ internal sealed class HuntProgressState {
         // Empty coverage at initial load is not a target-completion event.
         bool allComplete = incomplete.Length == 0 && sample.CoverageComplete && clock < allCompleteUntil;
         Display = new(sample.Area, allComplete ? "All current Hunt targets here are complete."
-            : rows.Length == 0 ? "No observed Hunt targets in this area. Current bill coverage is unverified."
-            : incomplete.Length == 0 && !sample.CoverageComplete ? "Observed targets complete; current bill coverage is unverified." : "",
+            : rows.Length == 0 ? "None of your Hunt targets are in this zone."
+            : incomplete.Length == 0 && !sample.CoverageComplete ? "The Hunt targets you can see here are complete." : "",
             incomplete.Concat(completed.Values.Select(p => p.Row)).ToArray());
         if (incomplete.Length == 0 && completed.Count == 0 && !allComplete && !manuallyOpened) visible = false;
         prior.Clear(); foreach (var row in rows) prior[row.Key] = row;

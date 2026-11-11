@@ -125,13 +125,23 @@ internal sealed class TravelContextLocalView : IDisposable {
             var map = data.GetExcelSheet<Lumina.Excel.Sheets.Map>().GetRowOrDefault(mapId);
             if (local == null || map is null || territory == 0 || map.Value.TerritoryType.RowId != territory
                 || map.Value.SizeFactor == 0) { Unavailable("Map/player correspondence unavailable; no coordinates."); return; }
+#if GILLIONS_TEST_BUILD
+            var currentWorldId = local.CurrentWorld.RowId;
+#endif
             var position = local.Position;
             if (!float.IsFinite(position.X) || !float.IsFinite(position.Z)) { Unavailable("Invalid position; no coordinates."); return; }
             var coordinates = MapUtil.WorldToMap(new Vector2(position.X,position.Z),map.Value);
             var destinations = ReadDestinations();
             var observation = new TravelObservation(territory,mapId,TravelPolicy.Round(coordinates.X),TravelPolicy.Round(coordinates.Y),
-                now,GameVersion(),native,version,destinations.Length == 0 ? "UNAVAILABLE" : "OBSERVED_PARTIAL",destinations);
+                now,GameVersion(),native,version,destinations.Length == 0 ? "UNAVAILABLE" : "OBSERVED_PARTIAL",destinations)
+#if GILLIONS_TEST_BUILD
+                { CurrentWorldId = currentWorldId }
+#endif
+                ;
             if (player.ContentId != character || client.MapId != mapId || client.TerritoryType != territory
+#if GILLIONS_TEST_BUILD
+                || objects.LocalPlayer?.CurrentWorld.RowId != currentWorldId
+#endif
                 || !state.Observe(character,observation,now)) { Unavailable("Invalid/changing context; fail closed."); return; }
             var rows = new List<string> { $"Territory {territory}; map {mapId}; position {observation.MapX:F1}, {observation.MapY:F1}",
                 $"Observed UTC {now:yyyy-MM-dd HH:mm:ss}Z; expires after {TravelPolicy.TtlSeconds}s; {destinations.Length} public destinations observed (not a complete unlock list).",

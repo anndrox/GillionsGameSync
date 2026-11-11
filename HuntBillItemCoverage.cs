@@ -82,7 +82,11 @@ internal sealed class HuntBillItemCoverage {
     internal string? Payload(HuntBillRetentionPolicy history, string key, DateTime now, long monotonic) {
         var snapshot = Current(key, now, monotonic);
         if (snapshot is null) return null;
-        var root = JsonNode.Parse(history.PreparePrivateExport(key, allowEmpty: true))!.AsObject();
+        return WithCoverage(history.PreparePrivateExport(key, allowEmpty: true), snapshot);
+    }
+    private static readonly JsonSerializerOptions CompactJson = new(PersonalObservationCompatibility.Json) { WriteIndented = false };
+    internal static string WithCoverage(string history, HuntBillItemSnapshot snapshot, bool compact = false) {
+        var root = JsonNode.Parse(history)!.AsObject();
         root["schemaVersion"] = 2; root["collectorSchema"] = "hunt-bills-v2";
         root["billItemCoverage"] = JsonSerializer.SerializeToNode(new {
             collectorSchema = "hunt-bill-items-v1", domainKind = DomainKind,
@@ -90,7 +94,7 @@ internal sealed class HuntBillItemCoverage {
             source = "complete-loaded-key-items-snapshot", maximumAgeSeconds = MaximumAgeSeconds,
             orderOwnership = "unsupported", acquisitionIdentity = "unsupported", domains = snapshot.Domains
         }, PersonalObservationCompatibility.Json);
-        return root.ToJsonString(PersonalObservationCompatibility.Json);
+        return root.ToJsonString(compact ? CompactJson : PersonalObservationCompatibility.Json);
     }
 }
 

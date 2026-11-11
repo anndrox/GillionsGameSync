@@ -75,9 +75,10 @@ assert 'public bool SyncPersonalSubmarines { get; set; }' in plugin
 assert 'X-Gillions-Personal-Contract' in plugin and 'personalHttp.SendAsync' in plugin
 assert '!NativeProduct.TransportOrigin(permit.Origin)' in plugin
 assert 'PersonalEnabled(prepared.Resource)' in plugin and 'token.ThrowIfCancellationRequested()' in plugin
-assert 'PersistBeforeSend(() => FlushConfigurationSave(force: true))' in plugin
-assert '(force || savePolicy.ShouldSave(now))' in plugin
-assert plugin.count('configuration.Save(pluginInterface);') == 1
+assert 'var durable = FlushConfigurationSave(force: true);' in plugin
+assert 'await durable.ConfigureAwait(false)' in plugin
+assert '!force && !savePolicy.ShouldSave(now, ignoreBackoff:' in plugin
+assert plugin.count('configurationWriter.Enqueue(() => snapshot.Save(pluginInterface))') == 1
 assert plugin.index('var terminal = PersonalSyncPolicy.TerminalStatus') < plugin.index('var receipt = await PersonalSyncPolicy.ReadReceiptAsync')
 assert 'PersonalSyncPolicy.Owner(configuration.ActiveSession.Generation, HuntBillRetentionPolicy.CharacterKey(activeRetainerCharacterContentId))' in plugin
 assert 'transportCharacter == contentId' in sub and 'new SubmarineVoyageRetention { LocalRetentionEnabled = true }' in sub

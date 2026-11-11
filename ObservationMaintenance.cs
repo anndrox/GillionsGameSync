@@ -5,9 +5,7 @@ using System.Linq;
 namespace GillionsGameSync;
 
 public sealed class ObservationSavePolicy {
-    // A freshness-only save rewrites the whole configuration on the framework
-    // thread (measured ~19 ms median for a 1.5 MB config), so timestamp-only
-    // refreshes persist rarely. Durable changes still save on the next tick.
+    // Space timestamp-only checkpoints. Durable changes queue on the next tick.
     public static readonly TimeSpan FreshnessInterval = TimeSpan.FromMinutes(5);
     private DateTime nextFreshnessSave, retryAfter;
     private bool durable;
@@ -104,17 +102,19 @@ public static class TransientEvidencePolicy {
     }
 }
 
+internal readonly record struct RetainerResultValues(string RetainerId, uint Venture, uint Completion, uint Experience,
+    uint FirstId, uint FirstQuantity, uint SecondId, uint SecondQuantity) {
+    internal bool HasRewards => FirstId > 0 && FirstQuantity > 0 || SecondId > 0 && SecondQuantity > 0;
+}
+
 public sealed class RetainerResultViewCache {
-    private string? character;
-    private RetainerVentureResultRead? last;
-    public bool Changed(string contentId, RetainerVentureResultRead? read) {
-        if (read is null) { Clear(); return false; }
-        if (character == contentId && last is not null && last.RetainerId == read.RetainerId && last.VentureId == read.VentureId
-            && last.VentureCompleteUnix == read.VentureCompleteUnix && last.AwardedExperience == read.AwardedExperience
-            && last.Items.SequenceEqual(read.Items)) return false;
+    private RetainerResultValues? values;
+    internal bool Changed(string contentId, RetainerResultValues read) {
+        if (character == contentId && values == read) return false;
         character = contentId;
-        last = read with { Items = read.Items.ToArray() };
+        values = read;
         return true;
     }
-    public void Clear() { character = null; last = null; }
+    private string? character;
+    public void Clear() { character = null; values = null; }
 }

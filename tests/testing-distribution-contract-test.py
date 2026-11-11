@@ -11,8 +11,12 @@ def outside_status(text):
     return head+rest.split('\n}\n',1)[1]
 experience=(r/'PublicExperience.cs').read_bytes().replace(b'\r\n',b'\n').decode('utf-8')
 accepted=subprocess.check_output(['git','show',public+':PublicExperience.cs'],cwd=r).replace(b'\r\n',b'\n').decode('utf-8')
+experience=experience.replace("None of your Hunt targets are in this zone.",
+    "No observed Hunt targets in this area. Current bill coverage is unverified.").replace(
+    "The Hunt targets you can see here are complete.", "Observed targets complete; current bill coverage is unverified.")
 assert outside_status(experience)==outside_status(accepted)
 hunt=(r/'HuntBillLocalView.cs').read_text(encoding='utf-8').replace('    internal bool Reading => ReadEnabled;\n','')
+hunt=hunt[:hunt.index('    internal HuntBillItemSnapshot? CurrentCoverage')] + hunt[hunt.index('    internal DateTime? CoverageObservedAtUtc'):]
 accepted_hunt=subprocess.check_output(['git','show',public+':HuntBillLocalView.cs'],cwd=r).decode().replace('\r\n','\n')
 for old_status in ['Private TEST sync is controlled separately in the main window.', 'Private TEST sync status is in the main window.']:
     accepted_hunt=accepted_hunt.replace(old_status,'Private sync requires separate permission.')
@@ -34,7 +38,7 @@ pair=plugin.split('private async Task PairAsync()',1)[1].split('private ',1)[0]
 assert pair.index('!NativeProduct.RequestOrigin(origin)') < pair.index('configuration.PairingRequired = true;')
 permit=plugin.split('private bool PermitIsCurrent(',1)[1].split('private ',1)[0]
 assert 'NativeProduct.RequestOrigin(permit.Origin)' in permit
-assert '&& NativeProduct.RequestOrigin(configuration.ActiveSession?.Origin)' in plugin
+assert 'configuration.PairingRequired, configuration.DeviceId, configuration.DeviceToken, NativeProduct.RequestOrigin)' in plugin
 assert '#if GILLIONS_TEST_BUILD\n    private readonly HttpClient http = PartyFinderHttp.CreateClient();' in plugin
 for name in ['Request(string path','SnapshotRequest(string path']:
     body=plugin.split(name,1)[1].split('private ',1)[0]

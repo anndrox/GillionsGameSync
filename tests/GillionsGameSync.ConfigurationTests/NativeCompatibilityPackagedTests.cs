@@ -18,8 +18,13 @@ internal static class NativeCompatibilityPackagedTests {
         ("Appearance", [
             ("FFXIV.Client.Game.InventoryManager", ["Instance", "GetInventoryContainer"]),
             ("FFXIV.Client.Game.InventoryContainer", ["Items", "Size", "Type", "IsLoaded"]),
-            ("FFXIV.Client.Game.InventoryItem", ["Container", "Slot", "IsSymbolic", "ItemId", "GlamourId", "Stains"]),
+            ("FFXIV.Client.Game.InventoryItem", ["Container", "Slot", "IsSymbolic", "ItemId", "GlamourId"]),
             ("FFXIV.Client.Game.InventoryType", ["EquippedItems"]),
+            ("FFXIV.Client.Game.Character.Character", ["DrawData"]),
+            ("FFXIV.Client.Game.Character.DrawDataContainer", ["EquipmentModelIds", "WeaponData"]),
+            ("FFXIV.Client.Game.Character.DrawObjectData", ["ModelId"]),
+            ("FFXIV.Client.Game.Character.EquipmentModelId", ["Value", "Stain0", "Stain1"]),
+            ("FFXIV.Client.Game.Character.WeaponModelId", ["Value", "Stain0", "Stain1"]),
             ("FFXIV.Client.Game.Character.CustomizeData", ["Data"]),
         ]),
         ("Hunt", [
@@ -99,7 +104,7 @@ internal static class NativeCompatibilityPackagedTests {
         TravelLayout = "22c25911f7cc88bf", FateLayout = "6923c1e09b662322";
     private static readonly Dictionary<(string Family, string ClientStructs), string> Expected = new() {
         // Hotfix measured locally; identical pinned source at earlier tuples, rechecked on CI archives.
-        [("Appearance", "7.56.2.9136")] = "bced42a9a7d80871", [("Appearance", "7.57.0.9378")] = "bced42a9a7d80871", [("Appearance", "7.57.0.9414")] = "bced42a9a7d80871",
+        [("Appearance", "7.56.2.9136")] = "bb864beff9836bfb", [("Appearance", "7.57.0.9378")] = "bb864beff9836bfb", [("Appearance", "7.57.0.9414")] = "bb864beff9836bfb",
         [("Hunt", "7.56.2.9136")] = HuntLayout, [("Hunt", "7.57.0.9378")] = HuntLayout, [("Hunt", "7.57.0.9414")] = HuntLayout,
         [("Submarine", "7.56.2.9136")] = SubmarineLayout, [("Submarine", "7.57.0.9414")] = SubmarineLayout,
         [("Travel", "7.56.2.9136")] = TravelLayout, [("Travel", "7.57.0.9414")] = TravelLayout,
@@ -108,7 +113,7 @@ internal static class NativeCompatibilityPackagedTests {
         [("Submarine", "7.57.0.9480")] = SubmarineLayout,
         [("Travel", "7.57.0.9480")] = TravelLayout,
         [("Fate", "7.57.0.9480")] = FateLayout,
-        [("Appearance", "7.57.0.9480")] = "bced42a9a7d80871",
+        [("Appearance", "7.57.0.9480")] = "bb864beff9836bfb",
         [("Beastmaster", "7.56.2.9136")] = "7984e5ebc96f48c5", [("Beastmaster", "7.57.0.9480")] = "7984e5ebc96f48c5",
         // Recorded for comparison only; Dashboard is not admitted on 15.0.4.0.
         [("Dashboard", "7.56.2.9136")] = "72e3d331203627af", [("Dashboard", "7.57.0.9480")] = "72e3d331203627af",

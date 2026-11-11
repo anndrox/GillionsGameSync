@@ -132,7 +132,7 @@ foreach(var (name,method,paired,width,scale,tab) in cases) {
         name.Contains("duplicate-names")?(i==1?"Horned lizard":"Aspis"):name.Contains("long-name")?"An exceptionally long localized-like Hunt target name that wraps on multiple lines":i==0?"Example hunt target":"Another example hunt target",
         name.Contains("complete")?3:name.Contains("one-left")?2:1,3),i);
     T("HuntProgressState").GetProperty("Display",flags)!.SetValue(model,New("HuntProgressDisplay","Example current area",
-        name.Contains("updating")?"Hunt progress updating…":name.Contains("all-complete")?"All current Hunt targets here are complete.":name.Contains("current-area-empty")?"No observed Hunt targets in this area. Current bill coverage is unverified.":"",rows));
+        name.Contains("updating")?"Hunt progress updating…":name.Contains("all-complete")?"All current Hunt targets here are complete.":name.Contains("current-area-empty")?"None of your Hunt targets are in this zone.":"",rows));
     Set("huntProgress",model);
     Render(name,plugin,T("Plugin").GetMethod(method,flags)!,width,scale,tab);
 }

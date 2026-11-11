@@ -77,7 +77,7 @@ internal static class DutyPausePackagedTests {
         Set("travelSync", travelSync);
         Set("travelAccepted", true);
         Set("travelBinding", "binding");
-        Set("travelRefusals", Activator.CreateInstance(TypeOf("TravelRefusalBackoff"))!);
+        Set("travelRetries", Activator.CreateInstance(TypeOf("ResourceRetry"), true)!);
         Set("nextRetainerPresenceUtc", DateTime.MaxValue);
 
         var compatibility = TypeOf("NativeCompatibility");
@@ -110,6 +110,7 @@ internal static class DutyPausePackagedTests {
         var observationType = TypeOf("TravelObservation");
         var observation = Activator.CreateInstance(observationType,
             [100u, 200u, 10.1, 20.2, now, gameBuild, sdkVersion, "1.0.0", "UNAVAILABLE", Array.CreateInstance(TypeOf("TravelDestination"), 0)])!;
+        if (assembly.GetName().Name == "GillionsGameSyncTest") observationType.GetProperty("CurrentWorldId")!.SetValue(observation, 79u);
         var flags = new[] { ConditionFlag.BoundByDuty, ConditionFlag.BoundByDuty56, ConditionFlag.BoundByDuty95 };
         var pendingProperty = travelSync.GetType().GetProperty("Pending", Instance)!;
         var travelInFlight = pluginType.GetField("travelInFlight", Instance)!;
@@ -152,9 +153,9 @@ internal static class DutyPausePackagedTests {
             for (var handle = metadata.GetNextHandle(default(UserStringHandle)); !handle.IsNil; handle = metadata.GetNextHandle(handle)) {
                 literals.Add(metadata.GetUserString(handle));
             }
-            Check(literals.Any(text => text.StartsWith("Travel context accepted by Gillions", StringComparison.Ordinal))
+            Check(literals.Any(text => text == "Gillions received your current location.")
                 && literals.Any(text => text.Contains("HTTPS pairing and its separate travel grant", StringComparison.Ordinal))
-                && literals.Any(text => text.Contains("compatible Gillions acknowledgement", StringComparison.Ordinal)), "compiled public travel status strings present");
+                && literals.Any(text => text.Contains("Gillions paused location updates.", StringComparison.Ordinal)), "compiled public travel status strings present");
             Check(literals.Any(text => text.StartsWith("Awaiting compatible Gillions permission", StringComparison.Ordinal))
                 && literals.Any(text => text.StartsWith("Private sync requires compatible Gillions HTTPS pairing", StringComparison.Ordinal))
                 && literals.Any(text => text.StartsWith(": Receipt accepted by Gillions", StringComparison.Ordinal)), "compiled public personal status strings present");

@@ -19,4 +19,5 @@
     <Compile Include="../../PluginPermissions.cs" Link="PluginPermissions.cs" />
     <Compile Include="obj/generated/*.cs" />
   </ItemGroup>
+  <ItemGroup><Compile Include="../../HuntMonsterName.cs" Link="HuntMonsterName.cs" /></ItemGroup>
 </Project>

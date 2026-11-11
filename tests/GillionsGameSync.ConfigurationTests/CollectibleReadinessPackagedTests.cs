@@ -42,8 +42,14 @@ internal static class CollectibleReadinessPackagedTests {
         Check(definitions.Select(r => r.RowId).SequenceEqual(new uint[] { 344, 696, 938 }), "actual cache recovers with canonical condition rows");
         var collector = plugin.GetType("GillionsGameSync.CollectibleCollector", true)!;
         var read = collector.GetMethod("Read", statics)!;
+        var budgetType = plugin.GetType("GillionsGameSync.NativeRowBudget", true)!;
+        object Budget() {
+            var budget = Activator.CreateInstance(budgetType, true)!;
+            budgetType.GetMethod("NextTick", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(budget, null);
+            return budget;
+        }
         long[] OwnedConditions(Func<BannerCondition, bool> unlocked) =>
-            (long[])read.MakeGenericMethod(typeof(BannerCondition)).Invoke(null, [source, unlocked])!;
+            (long[])read.MakeGenericMethod(typeof(BannerCondition)).Invoke(null, [source, unlocked, Budget()])!;
         Check(OwnedConditions(row => row.RowId == 696).SequenceEqual([696L]), "compiled generic reader preserves BannerCondition ID");
         Check(OwnedConditions(_ => false).Length == 0, "loaded definitions plus no unlocks produces valid owned-empty");
         Check(OwnedConditions(row => row.RowId == 938).SequenceEqual([938L]), "compiled reader rereads ownership on subsequent character observation");
@@ -58,7 +64,7 @@ internal static class CollectibleReadinessPackagedTests {
         var unlockProxy = (CollectibleServiceProxy)unlocks;
         unlockProxy.Handler = (method, values) => method.Name == "IsBannerFrameUnlocked" && values is [BannerFrame row]
             ? row.RowId == 96 : throw new Exception("Portrait element used the wrong native unlock method.");
-        var elements = (long[])collector.GetMethod("ReadPortraitFrames", statics)!.Invoke(null, [source, unlocks])!;
+        var elements = (long[])collector.GetMethod("ReadPortraitFrames", statics)!.Invoke(null, [source, unlocks, Budget()])!;
         Check(elements.SequenceEqual([96L]), "actual portrait-frame adapter retains element IDs and IUnlockState namespace");
         Check(!OwnedConditions(_ => true).Contains(96), "element96 cannot become an owned condition through the shared reader");
 
@@ -72,7 +78,7 @@ internal static class CollectibleReadinessPackagedTests {
         var unlockCalls = unlockProxy.Calls;
         var withheld = new List<string>();
         var snapshots = (System.Collections.IEnumerable)plugin.GetType("GillionsGameSync.DirectGameSnapshotCollector", true)!
-            .GetMethod("Collect", statics)!.Invoke(null, [null, client, objects, source, unlocks, null, null, new[] { "collectibles" }, null, withheld])!;
+            .GetMethod("Collect", statics)!.Invoke(null, [null, client, objects, source, unlocks, null, null, new[] { "collectibles" }, null, withheld, Budget()])!;
         Check(!snapshots.Cast<object>().Any(), "actual collector withholds whole resource while logged out/not initialized");
         // With no local player the outer identity guard now withholds every resource
         // before the collectible gate runs; that gate's own logged-out behaviour is

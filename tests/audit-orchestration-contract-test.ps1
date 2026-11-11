@@ -15,7 +15,7 @@ $dispatch = $runtime.Substring($dispatchStart, $dispatchEnd - $dispatchStart)
 Require ($dispatch.Contains('RunOnFrameworkThread') -and $dispatch.IndexOf('RequirePermit(permit)') -lt $dispatch.IndexOf('(client ?? http).SendAsync')) 'A captured permit must still be current immediately before HTTP dispatch.'
 Require ($dispatch.Contains('HttpCompletionOption.ResponseHeadersRead') -and $dispatch.Contains('permit.Cancellation')) 'Requests must stream bounded replies and support lifecycle cancellation.'
 Require ($runtime.Contains('await CommitAsync(captured.Permit, state =>')) 'Snapshot and Gil ACKs must commit atomically through their captured owner permit.'
-Require (([regex]::Matches($runtime, 'configuration\.Save\(pluginInterface\)')).Count -eq 1) 'Only the framework save coalescer may write configuration.'
+Require ($runtime.Contains('configurationWriter.Enqueue(() => snapshot.Save(pluginInterface))') -and -not $runtime.Contains('configuration.Save(pluginInterface)')) 'Only the ordered checkpoint writer may save configuration.'
 Require (-not [regex]::IsMatch($runtime, 'Pending\w+.*RemoveRange|log\.(Error|Warning|Debug)\(error|settingsMessage\s*=\s*error\.Message|RecordDiagnostic\([^\r\n]*error\.Message')) 'Durable eviction and raw remote error sinks must remain absent.'
 Require (-not $retainers.Contains('TakeLast(MaxPendingResultEvents)')) 'The 50-event wire batch is not permission to evict older pending evidence.'
 Require ($retainers.Contains('sentFingerprints.TryGetValue(entry.EventId') -and $retainers.Contains('sent == entry.PayloadFingerprint')) 'Retainer retirement must match the exact sent fingerprint.'

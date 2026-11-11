@@ -46,11 +46,37 @@ internal static class PermissionPackagedTests {
             var pluginType=assembly.GetType("GillionsGameSync.Plugin",true)!;
             var plugin=RuntimeHelpers.GetUninitializedObject(pluginType);
             var config=Activator.CreateInstance(configuration)!;
+            Check(!(bool)configuration.GetProperty("EnableGillionsPartyFinderContributions")!.GetValue(config)!,
+                "new pairing starts with Party Finder contribution off");
+            Call("Bind","new:pairing",device);
+            Call("Apply",Fixture(false,false).ToJsonString(),issued,0L,null);
+            Check(!(bool)Call("Allows","partyFinderContribution",false,0L)!, "legacy Party Finder default off");
+            Call("Apply",Fixture(true,false).ToJsonString(),issued,0L,null);
+            Check(!(bool)Call("Allows","partyFinderContribution",true,0L)!, "site off overrides a previous local on");
             var sessionType=assembly.GetType("GillionsGameSync.PairedSession",true)!;
             var session=Activator.CreateInstance(sessionType,[1,"https://test.gillions.app",device,"enrollment",new string('a',64)])!;
             configuration.GetProperty("ActiveSession")!.SetValue(config,session);
             pluginType.GetField("configuration",flags)!.SetValue(plugin,config);
             pluginType.GetField("permissionAuthority",flags)!.SetValue(plugin,instance);
+            if (pluginType.GetMethod("ApplySharingStatus", flags) is { } applySharingStatus) {
+                var queue = Activator.CreateInstance(assembly.GetType("GillionsGameSync.AppearanceQueue", true)!, true)!;
+                var retry = Activator.CreateInstance(assembly.GetType("GillionsGameSync.ResourceRetry", true)!, true)!;
+                using var cancellation = new CancellationTokenSource();
+                pluginType.GetField("appearanceQueue", flags)!.SetValue(plugin, queue);
+                pluginType.GetField("appearanceRetry", flags)!.SetValue(plugin, retry);
+                pluginType.GetField("appearanceCancellation", flags)!.SetValue(plugin, cancellation);
+                pluginType.GetField("appearanceGrant", flags)!.SetValue(plugin, "00000000-0000-4000-8000-000000000002");
+                pluginType.GetField("appearanceCharacterId", flags)!.SetValue(plugin, 100L);
+                var permitType = assembly.GetType("GillionsGameSync.SyncRequestPermit", true)!;
+                var mode = Enum.Parse(assembly.GetType("GillionsGameSync.SyncRequestMode", true)!, "Personal");
+                var permit = Activator.CreateInstance(permitType, flags, null,
+                    [0L, 0L, mode, 123UL, session, "https://test.gillions.app", "", CancellationToken.None], null)!;
+                var off = Fixture(true, false);
+                off["characterAppearance"] = new JsonObject { ["enabled"] = false };
+                applySharingStatus.Invoke(plugin, [off.ToJsonString(), permit]);
+                Check(cancellation.IsCancellationRequested && pluginType.GetField("appearanceGrant", flags)!.GetValue(plugin) is null,
+                    "actual presence commit cancels the in-flight appearance grant immediately on off");
+            }
             var record=pluginType.GetMethod("RecordContributionDenial",flags)!;
             var hash=assembly.GetType("GillionsGameSync.PersonalSyncPolicy",true)!.GetMethod("Hash",BindingFlags.NonPublic|BindingFlags.Static)!;
             foreach(var key in new[]{"marketContribution","partyFinderContribution"}) {

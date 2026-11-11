@@ -56,7 +56,7 @@ public_ui=(root/'PluginPublicUi.cs').read_text(encoding='utf-8')
 assert 'private void DrawHuntProgress()' in public_ui and 'Native' not in public_ui.split('private void DrawHuntProgress()',1)[1]
 assert 'huntFocusActiveDiagnostic = HuntFocusActive(now)' in p # Existing managed focus signal remains, not a public privacy mirror.
 assert 'HuntMapTransport.Deadline(permit.Cancellation, CancellationToken.None)' in p
-assert 'SyncResponsePolicy.ReadAsync(response.Content, responseCancellation)' in p
+assert 'SyncResponsePolicy.ReadBoundedAsync(response.Content, 131_072, responseCancellation)' in p
 print('Hunt V2/focus source/priority/independent permission/ephemeral privacy/compatibility boundaries PASS')
 
 clock=(root/'WebsiteCommandPollClock.cs').read_text(encoding='utf-8')

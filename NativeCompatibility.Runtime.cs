@@ -7,15 +7,28 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 namespace GillionsGameSync;
 
 internal static partial class NativeCompatibility {
-    // Assemblies are constant for this plugin load. The game build is checked
-    // on each call; no file inspection or native access happens on the hot path.
+    // The assembly tuple is constant for the plugin load.
     private static readonly NativeBuild LoadedAssemblies = new("",
         VersionOf(typeof(IFramework).Assembly), RevisionOf(typeof(IFramework).Assembly),
         VersionOf(typeof(InventoryManager).Assembly), RevisionOf(typeof(InventoryManager).Assembly),
         LibraryVersion(typeof(Lumina.GameData).Assembly), LibraryVersion(typeof(Lumina.Excel.Sheets.Fate).Assembly));
 
-    internal static bool SupportsRuntime(NativeFamily family, string? game) =>
-        game is not null && SupportsExact(family, LoadedAssemblies with { GameBuild = game });
+    private sealed record RuntimeCapabilities(string Game, int Families);
+    private static RuntimeCapabilities? runtimeCapabilities;
+
+    internal static bool SupportsRuntime(NativeFamily family, string? game) {
+        if (game is null || !Enum.IsDefined(family)) return false;
+        var cached = System.Threading.Volatile.Read(ref runtimeCapabilities);
+        if (cached?.Game != game) {
+            var runtime = LoadedAssemblies with { GameBuild = game };
+            var families = 0;
+            foreach (var candidate in Enum.GetValues<NativeFamily>())
+                if (SupportsExact(candidate, runtime)) families |= 1 << (int)candidate;
+            cached = new(game, families);
+            System.Threading.Volatile.Write(ref runtimeCapabilities, cached);
+        }
+        return (cached.Families & (1 << (int)family)) != 0;
+    }
 
     private static string VersionOf(Assembly assembly) => assembly.GetName().Version?.ToString() ?? "";
     private static string RevisionOf(Assembly assembly) {

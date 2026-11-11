@@ -270,6 +270,12 @@ public sealed partial class Plugin {
             if(show && ImGui.Button("Open Hunt Progress")) QueueUiAction(()=>huntProgress.Open());
             ImGui.EndTabItem();
         }
+#if GILLIONS_TEST_BUILD
+        if (ImGui.BeginTabItem("Sharing")) {
+            DrawSharingStatus();
+            ImGui.EndTabItem();
+        }
+#endif
         if(ImGui.BeginTabItem("Connection")) {
             DrawConnection(publicHealth.Connection); Label(publicHealth.Character); DrawPrivacy();
             DrawActionFeedback();

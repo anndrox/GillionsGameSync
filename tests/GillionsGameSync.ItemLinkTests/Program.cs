@@ -5,6 +5,7 @@ using System.Text.Json;
 
 PublicExperienceTests.Run();
 PermissionAuthorityTests.Run();
+await Testing99PerformanceTests.Run();
 SyncFailureDiagnosticTests.Run();
 CollectibleReadinessTests.Run();
 NativeObservationPolicyTests.Run();

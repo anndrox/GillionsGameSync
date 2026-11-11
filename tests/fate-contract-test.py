@@ -36,7 +36,7 @@ assert 'else if(fateLocal.ContextReady && fateSender.Take' in plugin
 assert '&& fateLocal.ContextReady && FatePolicy.Compatible(source)' not in plugin
 assert 'measuring=true' not in native.split('internal FateLocalView',1)[1].split('private string GameVersion',1)[0]
 assert 'fateLocal.Tick(now)' in plugin and 'fateLocal.Dispose()' in plugin and 'fateLocal?.ClearAuthorization()' in plugin
-config = plugin.split('public sealed class PluginConfiguration',1)[1]
+config = plugin.split('public sealed partial class PluginConfiguration',1)[1]
 assert not re.search(r'public .*Fate(Observation|Prepared|Admission)|public bool .*Fate',config)
 assert not re.search(r'SendAsync|new HttpClient',native)
 assert not re.search(r'new FateAdmission|FateTransportPolicy.Request',native)

@@ -10,15 +10,33 @@ Owner Amendment 1 authorizes the pinned RaptureGearsetModule.GearsetItemIndex as
 
 ## Exact collector reads
 
-CharacterAppearanceCollector.Read is framework-thread only, after explicit per-character opt-in, current server grant and exact NativeCompatibility.Appearance runtime qualification. It uses IObjectTable.LocalPlayer only, copies ICharacter.Customize to managed bytes, and checks length 26. No direct DrawData read is made by the collector. The public getter's backing CustomizeData is documented below; reference inspection does not authorize collecting draw models.
+Testing 0.0.99 reads appearance on the framework thread while the current
+character has a fresh Gillions grant and the runtime passes the exact Appearance
+qualification. It copies the 26 customization bytes from the local player and
+uses the 12 equipped inventory entries for the underlying item IDs. It uses the
+local character's DrawData for the visible equipment and both dye IDs.
 
-InventoryManager.Instance(), GetInventoryContainer(InventoryType.EquippedItems=1000); InventoryContainer.IsLoaded, Type, Size, Items; InventoryItem.Container, Slot, IsSymbolic, ItemId, GlamourId, Stains.Length, Stains[0], Stains[1]. The generated fixed-array property is backed by _stains (FixedSizeArray2<byte>). Size is required to be 14. Only the 12 indexes above are traversed. Symbolic entries, missing/incorrectly loaded containers and inconsistent empty slots withhold the complete observation. No raw struct copy, quantity, materia, durability, flags, plate, visor, visibility, facewear, setter or mutating native call is used.
+DrawData's weapon list has main hand then off hand. Its armour list has head,
+body, hands, legs, feet, ears, neck, wrists, and the two rings in the same order
+as the equipped inventory slots above. The read uses `Character.DrawData`,
+`DrawDataContainer.WeaponData`, `EquipmentModelIds` and the models' two stain
+fields. The plugin matches the drawn model to the base or glamour item in the
+Item sheet. It withholds the look if the source cannot identify an equipped
+slot's drawn model. The payload retains the existing base item and glamour item
+fields. Glamour plates, visibility, visor and facewear stay outside this read.
+
+The four admitted ClientStructs pins contain the same `Character.cs` blob
+(`ac98b868c441befea17a85320cae4bb579e7bba3`) and the same
+`DrawDataContainer.cs` blob (`73b40e2651c0b8a93e709cad3532438f57b303d0`).
+The official archives for Dalamud 15.0.3.6, 15.0.3.7, 15.0.3.9 and 15.0.4.0
+all report `bb864beff9836bfb` for the expanded Appearance layout.
+The runtime list is the same as Testing 0.0.98.0.
 
 Lifecycle reads: IClientState.IsLoggedIn, IsGPosing; IPlayerState.IsLoaded, ContentId (existing session identity, never added to appearance payload); ICondition indexer for BetweenAreas, BetweenAreas51, LoggingOut, Transformed, RolePlaying, Disguised. Identity/availability are rechecked after copying and before dispatch. IDataManager.GameData.Repositories["ffxiv"].Version and managed assembly versions/revisions establish the runtime. All unknown tuples stop before appearance reads.
 
 ## Pinned source comparison
 
-The files below were read from public developer sources at the exact revisions in NativeCompatibility.cs. Each corresponding file has the same Git blob identity across the three runtime pins; generated fixed-array behavior is also covered by the pinned generator fixture. No third-party code was executed as part of source inspection.
+The files below were read from public developer sources at the exact revisions in NativeCompatibility.cs. Each corresponding file has the same Git blob identity across the three runtime pins; generated fixed-array behavior is also covered by the pinned generator fixture. The DrawData and Character blob identities above also match the November pin.
 
 | Revision | Source | Git blob |
 | --- | --- | --- |

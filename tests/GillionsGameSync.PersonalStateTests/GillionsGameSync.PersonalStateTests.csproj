@@ -22,4 +22,6 @@
     <Reference Include="Iced" HintPath="$(DalamudLibPath)/Iced.dll" />
   </ItemGroup>
   <ItemGroup><Compile Include="../../NativeProduct.cs" Link="NativeProduct.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../HuntMonsterName.cs" Link="HuntMonsterName.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../HuntSplitUpload.cs" Link="HuntSplitUpload.cs" /></ItemGroup>
 </Project>

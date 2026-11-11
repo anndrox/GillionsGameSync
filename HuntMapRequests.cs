@@ -36,16 +36,21 @@ internal sealed class HuntMapRequest {
     internal uint? RecommendedAetheryteId { get; init; }
     internal string? RecommendedAetheryteName { get; init; }
     internal string Capability => ContractVersion == 2 ? HuntMapPolicy.CapabilityV2 : HuntMapPolicy.Capability;
-    internal string Guidance => $"{TargetName} - Hunt area/reference location (not a sighting). " + (Classification switch {
-        "FATE_REQUIRED" => $"FATE required: {FateName}; activity not currently known.",
-        "CONDITIONAL" => "Conditional availability; activity not currently known.",
-        "UNKNOWN" => "Availability unknown.",
-        _ => "Ordinary reference; live availability unknown.",
-    }) + (ContractVersion == 1
-        ? $" Site location {CandidateIndex + 1} of {CandidateCount}; alternative cycling is not supported in v1."
-        : CandidateKind == "DISCRETE_SPAWN_LOCATIONS"
-            ? $" Possible location {CandidateIndex + 1} of {CandidateCount}; use Site Next possible location intentionally."
-            : " Site-selected primary reference anchor; not a live location.");
+    internal string Guidance {
+        get {
+            var name = HuntMonsterName.Display(TargetName);
+            var marked = CandidateKind == "DISCRETE_SPAWN_LOCATIONS"
+                ? $"possible location {CandidateIndex + 1} of {CandidateCount} marked on your map."
+                : "usual area marked on your map.";
+            var detail = Classification switch {
+                "FATE_REQUIRED" => $"This target appears during {FateName}. We do not know if the FATE is active.",
+                "CONDITIONAL" => "This target only appears under certain conditions.",
+                "UNKNOWN" => "We do not know when this target appears.",
+                _ => "This is where they normally roam, not a live sighting.",
+            };
+            return $"{name}: {marked} {detail}";
+        }
+    }
 }
 
 internal static class HuntMapPolicy {

@@ -19,9 +19,9 @@ internal static class PublicExperienceTests {
         state.Update(true,101,Snapshot(6400,3,true,101),6400); Check(state.Visible,"completion is held for 2.5 seconds");
         state.Update(true,101,Snapshot(6500,3,true,101),6500); Check(!state.Visible && state.Display.Rows.Length==0,"completed row removed and auto-window hidden");
         state.Open(); state.Update(true,101,Snapshot(7000,3,true,101),7000); Check(state.Visible,"manual reopen remains open");
-        state.Update(true,101,Snapshot(7100,3,false,101),7100); Check(state.Display.Status.Contains("coverage is unverified")&&!state.Display.Status.Contains("All current"),"fresh completed rows do not imply full current coverage or an outstanding read");
+        state.Update(true,101,Snapshot(7100,3,false,101),7100); Check(state.Display.Status == "The Hunt targets you can see here are complete."&&!state.Display.Status.Contains("All current"),"fresh completed rows do not imply full current coverage or an outstanding read");
         state.Update(true,101,new(101,"Current area","",false,[],13200),7200);
-        Check(state.Visible&&state.Display.Status.StartsWith("No observed Hunt targets in this area")&&state.Display.Rows.Length==0,"manual open with fresh empty current-area rows is explicit, not updating or no bills");
+        Check(state.Visible&&state.Display.Status=="None of your Hunt targets are in this zone."&&state.Display.Rows.Length==0,"manual open with fresh empty current-area rows is explicit, not updating or no bills");
         state.Update(true,101,new(101,"Current area","No current Hunt targets could be verified from this read. Bill state is unknown.",false,[],13300),7300);
         Check(state.Display.Status.Contains("Bill state is unknown")&&!state.Display.Status.Contains("updating"),"no admitted source observations are unknown, not an indefinitely pending update");
         state.Update(true,101,Snapshot(7400,1,false,101),7400);
