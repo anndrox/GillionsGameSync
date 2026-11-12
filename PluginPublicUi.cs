@@ -69,8 +69,15 @@ public sealed partial class Plugin {
     }
     private string PrivacyUrl => (SyncOrigin.TryNormalize(UiOrigin,out var current) ? current : GillionsEndpoints.DefaultServerUrl)+"/gillions-sync";
     private void DrawActionFeedback(bool pairing=false) {
-        string message=PublicConnectionPresentation.ActionMessage(uiState.Message,pairing);
+        string message=pairing && pairingFailureMessage.Length > 0
+            ? pairingFailureMessage : PublicConnectionPresentation.ActionMessage(uiState.Message,pairing);
         if(message.Length>0) Label(message);
+    }
+    private void ShowPairingDestinationNotice() {
+        if (!clientState.IsLoggedIn || string.IsNullOrEmpty(configuration.PairingDestinationNotice)) return;
+        chatGui.Print($"Pairing destination changed from {configuration.PairingDestinationNotice} to {PublicUrlConfiguration.StableDestination}.", "Gillions");
+        configuration.PairingDestinationNotice = "";
+        RequestConfigurationSave();
     }
     private void PublishPublicHealth(DateTime now) {
         string code=publicConnectionFailure.Length>0 ? publicConnectionFailure : configuration.SyncBlockedCode;
@@ -233,18 +240,19 @@ public sealed partial class Plugin {
             Label("Game Sync does not move your character, fight, teleport or automatically join parties.");
         }
         string nextOrigin=PublicConnectionPresentation.PairingOrigin(uiServerAddress);
+        Label((pairingRepair ? "Next pairing destination: " : "Saved pairing destination: ")
+            + PublicUrlConfiguration.DestinationLabel(uiServerAddress));
         if(nextOrigin.Length>0) {
-            if(pairingRepair) Label("Next pairing destination: "+nextOrigin);
-            else Label("You’ll continue on "+(nextOrigin.StartsWith("https://",StringComparison.Ordinal) ? nextOrigin[8..] : nextOrigin)+" to connect this device.");
             Link("Connect to Gillions",PublicConnectionPresentation.PairingUrl(uiServerAddress));
             Link("Learn about data & privacy",nextOrigin+"/gillions-sync");
         } else {
             Label("The saved pairing destination is invalid. Choose the approved default before entering a code.");
-            if(ImGui.Button("Use default pairing destination")) {
-                uiServerAddress=IsTesting ? "https://test.gillions.app" : GillionsEndpoints.DefaultServerUrl;
-                string destination=uiServerAddress;
-                QueueUiAction(()=> { configuration.ServerUrl=destination; RequestConfigurationSave(); });
-            }
+        }
+        var defaultDestination = IsTesting ? "https://test.gillions.app" : PublicUrlConfiguration.StableDestination;
+        if ((nextOrigin.Length == 0 || !IsTesting && uiServerAddress != defaultDestination)
+            && ImGui.Button(IsTesting ? "Use default pairing destination" : "Use gillions.app")) {
+            uiServerAddress = defaultDestination;
+            QueueUiAction(() => { configuration.ServerUrl = defaultDestination; RequestConfigurationSave(); });
         }
         Label(uiState.Pairing ? "Waiting for Gillions authorization…" : publicHealth.Connection);
         DrawActionFeedback(pairing:true);
@@ -268,6 +276,9 @@ public sealed partial class Plugin {
             if(ImGui.Checkbox("Lock position",ref locked)) QueueUiAction(()=> { configuration.LockHuntProgressPosition=locked; RequestConfigurationSave(); });
             Label("A local, display-only count panel for your current area. Closing it suppresses auto-show until you change territory.");
             if(show && ImGui.Button("Open Hunt Progress")) QueueUiAction(()=>huntProgress.Open());
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
+            if (travelStatus.Length > 0) Label(travelStatus);
+#endif
 #if GILLIONS_TEST_BUILD
             ImGui.Separator();
             DrawHuntAwarenessSettings();

@@ -71,6 +71,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Passive market source boundaries failed.' }
 
 & (Join-Path $root 'tests/dalamud-manifest-contract-test.ps1')
 & (Join-Path $root 'tests/package-manifest-contract-test.ps1')
+& (Join-Path $root 'tests/testing-site-admission-contract-test.ps1')
 & (Join-Path $root 'tests/bardings-collector-contract-test.ps1')
 & (Join-Path $root 'tests/folklore-collector-contract-test.ps1')
 & (Join-Path $root 'tests/performance-contract-test.ps1')

@@ -72,7 +72,8 @@ public sealed partial class Plugin : IDalamudPlugin {
     private bool travelAccepted, travelInFlight;
     private readonly ResourceRetry travelRetries = new();
     private string travelBinding = "";
-    private volatile string travelStatus = "Travel sync OFF; no location uploads.";
+    private volatile string travelStatus = "";
+    private string lastTravelUploadStatus = "";
     private readonly ICondition marketConditions;
     private readonly IPlayerState playerState;
     private readonly MarketContributor marketContributor;
@@ -127,6 +128,7 @@ public sealed partial class Plugin : IDalamudPlugin {
     private bool logoutPending;
     private volatile PluginUiSnapshot uiState = PluginUiSnapshot.Empty;
     private string uiServerAddress = "";
+    private volatile string pairingFailureMessage = "";
     private string uiPairingCode = "";
     private bool pairingInFlight;
     private bool observedAutomaticSync;
@@ -190,6 +192,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Testing 0.0.103 shows location upload status and names the site used when pairing fails.",
         "Testing 0.0.102 adds Hunt target awareness and tracked FATE alerts.",
         "Testing 0.0.101.1 recovers background observation and shows appearance upload status.",
         "Testing 0.0.101 shares your full look when a hat or weapon is hidden.",
@@ -278,6 +281,8 @@ public sealed partial class Plugin : IDalamudPlugin {
         playerState = travelPlayerState;
 #endif
         configuration = pluginInterface.GetPluginConfig() as PluginConfiguration ?? new PluginConfiguration();
+        if (configuration.ApplyPairingDestinationForVersion(PluginVersion, IsTesting,
+            pluginInterface.Reason is PluginLoadReason.Installer or PluginLoadReason.Update)) RequestConfigurationSave();
         partyFinderContributor = PartyFinderContributorFactory.Create(partyFinderGui, partyFinderHttp, log,
             () => PartyFinderContributionEnabled, CapturePartyFinderSession, RecordDiagnostic);
         uiServerAddress = configuration.ServerUrl;
@@ -380,6 +385,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                     throw new InvalidOperationException("Enter a pairing code and a supported HTTPS server address for this channel.");
                 pairingInFlight = true;
                 ownsPairAttempt = true;
+                pairingFailureMessage = "";
                 configuration.PairingRequired = true;
                 var pairingCode = configuration.PairingCode; configuration.PairingCode = "";
                 ResetSessionContext(); RefreshSessionContext(); RequestConfigurationSave();
@@ -408,7 +414,10 @@ public sealed partial class Plugin : IDalamudPlugin {
         } catch (Exception error) {
             if (!disposed) await framework.RunOnFrameworkThread(() => {
                 // A refused local input or overlapping attempt never reached Gillions.
-                if (!disposed && (permit is null || PermitIsCurrent(permit))) { settingsMessage = OperationFailureMessage(error); if (permit is not null) ObserveConnectionFailure(error); }
+                if (disposed || permit is null && pairingInFlight || permit is not null && !PermitIsCurrent(permit)) return;
+                pairingFailureMessage = PublicUrlConfiguration.PairingFailure(error, permit?.Origin);
+                settingsMessage = OperationFailureMessage(error);
+                if (permit is not null) ObserveConnectionFailure(error);
             });
             log.Warning("Gillions pairing did not complete ({Type}).", error.GetType().Name);
         } finally {
@@ -599,6 +608,8 @@ public sealed partial class Plugin : IDalamudPlugin {
         }
 #endif
         Observe("transient state", now, static (plugin, at) => plugin.MaintainTransientState(at));
+        if (!IsTesting && !string.IsNullOrEmpty(configuration.PairingDestinationNotice))
+            Observe("pairing destination notice", now, static (plugin, _) => plugin.ShowPairingDestinationNotice());
         Observe("sharing permissions", now, static (plugin, _) => plugin.ReconcilePermissions());
         Observe("Party Finder", now, static (plugin, now) => plugin.partyFinderContributor.Tick(now));
         var huntChanged = false;
@@ -1903,6 +1914,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         Observe("Hunt observation reset", now, static (plugin, _) => plugin.huntLocal.ClearProgress());
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         travelAccepted = false; travelBinding = "";
+        lastTravelUploadStatus = ""; travelStatus = "";
         Observe("travel reset", now, static (plugin, _) => {
             plugin.ClearTravelPending();
             plugin.travelLocal.ClearSession();
@@ -2301,15 +2313,20 @@ public sealed partial class Plugin : IDalamudPlugin {
         TravelEnabled, HasPairedSession && activeOwnedState is not null,
         configuration.ActiveSession?.Origin ?? "", travelAccepted);
     private void TickTravelSync(DateTime now) {
-        if (inDuty) { travelStatus = DutyPauseStatus; return; }
+        var decision = permissionAuthority.Identity("huntRoutingLocation", Environment.TickCount64);
+        var sharingKnown = !SitePermissionOrigin || decision == "legacy" || decision.StartsWith("explicit:", StringComparison.Ordinal);
+        var sharing = TravelEnabled;
+        if (sharingKnown && !sharing) lastTravelUploadStatus = "";
+        travelStatus = LocationUploadPresentation.Label(sharingKnown ? sharing : null, lastTravelUploadStatus);
+        if (inDuty) return;
         var admitted = TravelAdmitted();
         var binding = travelBinding;
         var due = travelSync.Maintain(binding,admitted,now);
-        if (!TravelEnabled) { travelStatus = "Travel sync OFF; volatile preparation cleared. Unrelated sync unchanged."; return; }
+        if (!sharing) return;
         if (HasPairedSession && activeOwnedState is not null && NativeProduct.TransportOrigin(configuration.ActiveSession!.Origin)
             && !presenceInFlight && now >= nextRetainerPresenceUtc)
             SendCurrentRetainerPresence(activeRetainerCharacterContentId,now,SyncRequestMode.Personal);
-        if (!admitted) { travelStatus = "Travel waiting for a current supported character, HTTPS pairing and its separate travel grant/capability. No location sent."; return; }
+        if (!admitted) return;
         if (!due || travelInFlight) return;
         var observation = travelLocal.Current(activeRetainerCharacterContentId, now);
         if (observation is null) return;
@@ -2354,7 +2371,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             });
             using var response = await pending!;
             int status = (int)response.StatusCode;
-            await EnsureSuccessfulResponse(response, token);
+            if (await ReadPersonalUploadFailureAsync(response, token) is { } refusal) throw refusal;
             if (status is not (200 or 201) || !TravelSyncPolicy.Receipt(status, await SyncResponsePolicy.ReadAsync(response.Content, token)))
                 throw new InvalidOperationException("Invalid travel receipt.");
             await framework.RunOnFrameworkThread(() => {
@@ -2363,17 +2380,16 @@ public sealed partial class Plugin : IDalamudPlugin {
                 if (!prepared.Fresh(DateTime.UtcNow)) { ClearTravelPending(); return; }
                 travelSync.Complete(prepared, true, status, null, DateTime.UtcNow);
                 travelRetries.Clear();
-                travelStatus = "Gillions received your current location.";
-                RecordDiagnostic(travelStatus);
+                lastTravelUploadStatus = LocationUploadPresentation.Sent;
+                travelStatus = lastTravelUploadStatus;
             });
         } catch (Exception error) {
             if (!disposed) await framework.RunOnFrameworkThread(() => {
                 if (!PermitIsCurrent(permit) || featureToken.IsCancellationRequested || !ReferenceEquals(travelSync.Pending, prepared)) return;
                 if (error is NullReferenceException) backgroundObservation.Report("travel upload", error);
                 travelRetries.Failed(Environment.TickCount64, revision, error);
-                travelStatus = error is GillionsHttpException refused
-                    ? $"Gillions paused location updates. HTTP {refused.Status} ({refused.Code})."
-                    : "The location update will retry.";
+                lastTravelUploadStatus = LocationUploadPresentation.Refusal(error);
+                travelStatus = lastTravelUploadStatus;
             });
         } finally {
             if (!disposed) await framework.RunOnFrameworkThread(() => travelInFlight=false);
@@ -2478,7 +2494,6 @@ public sealed partial class Plugin : IDalamudPlugin {
             if (prepared is null) { personalStatus = "Private preparation capacity/validation gate: existing pending state preserved; no new admission."; continue; }
             if (!ReferenceEquals(prior, prepared)) {
                 RequestConfigurationSave();
-                RecordDiagnostic($"Private {resource}: new semantic snapshot prepared; immutable nonce/body, no identifiers logged.");
             }
             if (!PersonalSyncPolicy.CanSend(true, true, configuration.ActiveSession.Origin, true, prepared)
                 || !PrivateRetry(resource).Ready(clock, prepared.PayloadHash)) continue;
@@ -2508,9 +2523,6 @@ public sealed partial class Plugin : IDalamudPlugin {
         return huntCoverageSync.Current(prepared, owner, PermissionObservationFilter.FreshPersonal("hunt_bills", huntLocal.CoveragePayload(key, now), FreshFrom("personalHunts")), huntLocal.CoverageEpoch, now, System.Diagnostics.Stopwatch.GetTimestamp());
     }
     private async Task SendPersonalAsync(SyncRequestPermit permit, PersonalPreparedSnapshot prepared, CancellationToken featureToken, bool coverage = false, Task? durable = null) {
-        var queuedAt = System.Diagnostics.Stopwatch.GetTimestamp();
-        long dispatchedAt = 0, headersAt = 0, receiptAt = 0;
-        double observationAgeAtDispatchMs = 0, preparationAgeAtDispatchMs = 0;
         try {
             using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation, featureToken);
             cancellation.CancelAfter(TimeSpan.FromSeconds(30)); // Bound headers and receipt.
@@ -2524,31 +2536,19 @@ public sealed partial class Plugin : IDalamudPlugin {
                 if (!PersonalEnabled(prepared.Resource) || !NativeProduct.TransportOrigin(permit.Origin) || !personalAccepted.Contains(prepared.Resource)) throw new OperationCanceledException();
                 if (!coverage && !configuration.PersonalSync.Prepared.Contains(prepared)) throw new OperationCanceledException();
                 if (coverage && !CoveragePreparedCurrent(prepared, permit)) throw new OperationCanceledException();
-                if (coverage) {
-                    dispatchedAt = System.Diagnostics.Stopwatch.GetTimestamp();
-                    using var body = JsonDocument.Parse(prepared.Payload);
-                    observationAgeAtDispatchMs = (DateTime.UtcNow - body.RootElement.GetProperty("billItemCoverage").GetProperty("observedAtUtc").GetDateTime()).TotalMilliseconds;
-                    preparationAgeAtDispatchMs = huntCoverageSync.PreparationAgeMilliseconds(prepared, dispatchedAt);
-                }
                 pending = personalHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
             });
             using var response = await pending!;
-            headersAt = System.Diagnostics.Stopwatch.GetTimestamp();
             // Status controls stop/retry independently of an HTML/empty/broken
             // error body. Only success needs bounded receipt JSON validation.
             var terminal = PersonalSyncPolicy.TerminalStatus((int)response.StatusCode);
-            var refusal = response.IsSuccessStatusCode ? null : await SyncResponsePolicy.ReadFailureAsync(response, token);
+            var refusal = await ReadPersonalUploadFailureAsync(response, token);
             var receipt = await PersonalSyncPolicy.ReadReceiptAsync((int)response.StatusCode,
                 () => SyncResponsePolicy.ReadAsync(response.Content, token));
-            receiptAt = System.Diagnostics.Stopwatch.GetTimestamp();
             await framework.RunOnFrameworkThread(() => {
                 var disposition = PersonalSyncPolicy.Disposition(PermitIsCurrent(permit), permit.Cancellation.IsCancellationRequested,
                     featureToken.IsCancellationRequested, PersonalEnabled(prepared.Resource), receipt, terminal);
                 if (disposition == PersonalResponseDisposition.Canceled) return;
-                if (coverage && dispatchedAt != 0) {
-                    var committedAt = System.Diagnostics.Stopwatch.GetTimestamp();
-                    RecordDiagnostic($"Hunt coverage timing: observation→dispatch={observationAgeAtDispatchMs:F2}ms; preparation→dispatch={preparationAgeAtDispatchMs:F2}ms; worker→dispatch={System.Diagnostics.Stopwatch.GetElapsedTime(queuedAt, dispatchedAt).TotalMilliseconds:F2}ms; dispatch→headers={System.Diagnostics.Stopwatch.GetElapsedTime(dispatchedAt, headersAt).TotalMilliseconds:F2}ms; headers→receipt={System.Diagnostics.Stopwatch.GetElapsedTime(headersAt, receiptAt).TotalMilliseconds:F2}ms; receipt→framework={System.Diagnostics.Stopwatch.GetElapsedTime(receiptAt, committedAt).TotalMilliseconds:F2}ms; response={disposition}; refresh observation deadline={HuntBillItemSync.RefreshAfterSeconds}s. Numeric local timings only; no identity/payload logged.");
-                }
                 if (coverage && disposition == PersonalResponseDisposition.Blocked) {
                     huntCoverageSync.Block(prepared, (int)response.StatusCode);
                     personalStatus = $"Hunt v2: HTTP {(int)response.StatusCode}; unchanged terminal input stopped in RAM. Historical progress and ordinary sync unchanged.";
@@ -2561,7 +2561,6 @@ public sealed partial class Plugin : IDalamudPlugin {
                     nextPersonalUtc = DateTime.MinValue; // Drain a newer semantic successor immediately after this receipt.
                     personalStatus = coverage ? "Hunt v2 receipt accepted: bounded item absence/presence facts only. Historical progress unchanged; exact order/cycle unsupported."
                         : $"{prepared.Resource}: Receipt accepted by Gillions. Positive retained observations only; current ownership/reset/completion claims remain limited.";
-                    RecordDiagnostic($"Uploaded private {prepared.Resource} to Gillions: HTTP {(int)response.StatusCode}; valid receipt. No live correctness claim.");
                 } else if (disposition == PersonalResponseDisposition.Blocked) {
                     prepared.Blocked = true;
                     PrivateRetry(prepared.Resource).Failed(Environment.TickCount64, prepared.PayloadHash, refusal!);
@@ -2592,6 +2591,18 @@ public sealed partial class Plugin : IDalamudPlugin {
         await framework.RunOnFrameworkThread(() => { RequirePermit(permit); change(CurrentState); });
     }
     private static string OperationFailureMessage(Exception error) => SyncErrorPolicy.Message(error);
+
+    private async Task<GillionsHttpException?> ReadPersonalUploadFailureAsync(HttpResponseMessage response, CancellationToken token) {
+        if (response.IsSuccessStatusCode) return null;
+        var code = SiteRefusalPolicy.Rejected;
+        try {
+            var failure = await SyncResponsePolicy.ReadFailureAsync(response, token);
+            code = failure.ServerCode;
+            return failure;
+        } finally {
+            log.Information("{Code}", code);
+        }
+    }
 
     private void MaintainTransientState(DateTime now) {
         if (now < nextTransientMaintenanceUtc) return;
@@ -2839,6 +2850,8 @@ public sealed partial class PluginConfiguration : IPluginConfiguration {
     public Dictionary<string, OwnedCharacterState> OwnedCharacters { get; set; } = new(StringComparer.Ordinal);
     public EvidenceCoverageGap CoverageGap { get; set; } = new();
     public string ServerUrl { get; set; } = GillionsEndpoints.DefaultServerUrl;
+    public string PairingDestinationVersion { get; set; } = "";
+    public string PairingDestinationNotice { get; set; } = "";
     public string PairingCode { get; set; } = "";
     public string DeviceId { get; set; } = "";
     public string DeviceToken { get; set; } = "";
@@ -2884,6 +2897,15 @@ public sealed partial class PluginConfiguration : IPluginConfiguration {
     public bool UseCompiledDefaultServerUrl(string compiledDefault) {
         if (!PublicUrlConfiguration.TryUseCompiledDefault(ServerUrl, compiledDefault, out var serverUrl)) return false;
         ServerUrl = serverUrl;
+        return true;
+    }
+    internal bool ApplyPairingDestinationForVersion(string version, bool testing, bool installedOrUpdated) {
+        if (testing || !installedOrUpdated && PairingDestinationVersion == version) return false;
+        PairingDestinationVersion = version;
+        if (ServerUrl != PublicUrlConfiguration.StableDestination) {
+            PairingDestinationNotice = PublicUrlConfiguration.DestinationLabel(ServerUrl);
+            ServerUrl = PublicUrlConfiguration.StableDestination;
+        }
         return true;
     }
     public void Save(IDalamudPluginInterface pluginInterface) => pluginInterface.SavePluginConfig(this);

@@ -80,7 +80,7 @@ public sealed partial class Plugin {
                 pending = personalHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linked.Token);
             });
             using var response = await pending!;
-            await SyncResponsePolicy.EnsureSuccessfulAsync(response, linked.Token);
+            if (await ReadPersonalUploadFailureAsync(response, linked.Token) is { } refusal) throw refusal;
             if ((int)response.StatusCode is not (200 or 201)
                 || !PersonalSyncPolicy.Receipt(await SyncResponsePolicy.ReadAsync(response.Content, linked.Token)))
                 throw new InvalidOperationException("Invalid Hunt receipt.");
@@ -89,7 +89,6 @@ public sealed partial class Plugin {
                 huntSplitUpload.Acknowledge(preparation, dispatched);
                 huntSplitRetry.Clear();
                 personalStatus = "Hunt update received by Gillions.";
-                RecordDiagnostic($"Hunt upload accepted. {request.Content!.Headers.ContentLength:N0} bytes.");
             });
         } catch (Exception error) when (error is not SyncNotStartedException) {
             if (!disposed) await framework.RunOnFrameworkThread(() => {

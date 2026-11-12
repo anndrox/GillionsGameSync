@@ -30,6 +30,7 @@ methods = [method(source, anchor) for anchor in [
     '    private void DelayLegacyCoverage(',
     '    private ResourceRetry PrivateRetry(',
     '    private async Task SendPersonalAsync(',
+    '    private async Task<GillionsHttpException?> ReadPersonalUploadFailureAsync(',
 ]]
 start = source.index('    private bool PersonalEnabled(')
 end = source.index('    private void SetPersonalSync(', start)

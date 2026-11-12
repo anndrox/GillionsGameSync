@@ -71,6 +71,10 @@ public static class SyncResponsePolicy {
         } catch (Exception error) when (error is JsonException or InvalidOperationException or HttpRequestException or IOException
             || error is OperationCanceledException && !cancellation.IsCancellationRequested) { }
         // The Site's text only classifies a refusal; it is never displayed or logged.
+        var serverCode = SiteRefusalPolicy.LogCode(code);
+        var travelBuildRejected = code is "TRAVEL_CLIENT_UNSUPPORTED" or "CLIENT_VERSION_UNSUPPORTED"
+            || code == "INVALID_TRAVEL_CONTEXT"
+                && detail is "Travel metadata is unsupported." or "Travel reference is not qualified." or "Travel build metadata is invalid.";
         code = SiteRefusalPolicy.Classify(code, detail);
         var status = (int)response.StatusCode;
         var retry = response.Headers.RetryAfter;
@@ -81,8 +85,8 @@ public static class SyncResponsePolicy {
             _ => $"Gillions rejected the request (HTTP {status}).",
         };
         if (SiteRefusalPolicy.IsRefusal(status))
-            return new GillionsSyncRejectedException(code, message, status, retryAfter);
-        return new GillionsHttpException(code, message, status, retryAfter);
+            return new GillionsSyncRejectedException(code, message, status, retryAfter) { ServerCode = serverCode, TravelBuildRejected = travelBuildRejected };
+        return new GillionsHttpException(code, message, status, retryAfter) { ServerCode = serverCode, TravelBuildRejected = travelBuildRejected };
     }
 
     private static bool PositiveId(JsonElement id) => id.ValueKind switch {
@@ -149,6 +153,8 @@ public static class SiteRefusalPolicy {
     private const string CharacterNotLinkedText = "This in-game character is not linked to your Gillions account.";
     private const string ProductMismatchText = "Retainer presence client identity does not match the authenticated product.";
     private static readonly Regex Code = new("^[A-Z][A-Z0-9_]{0,63}$", RegexOptions.CultureInvariant);
+    internal static string LogCode(string code) =>
+        Code.IsMatch(code) || code is "character_mismatch" or "character_not_found" ? code : Rejected;
     // 409 is a per-resource state conflict (e.g. Retainer upload not enabled),
     // retried rather than reported as a refused device.
     public static bool IsRefusal(int status) => status is >= 400 and < 500 and not 408 and not 409 and not 429;
@@ -164,6 +170,8 @@ public class GillionsHttpException(string code, string message, int status, Time
     public string Code { get; } = code;
     public int Status { get; } = status;
     public TimeSpan? RetryAfter { get; } = retryAfter;
+    internal string ServerCode { get; init; } = SiteRefusalPolicy.Rejected;
+    internal bool TravelBuildRejected { get; init; }
 }
 
 public sealed class GillionsSyncRejectedException(string code, string message, int status = 0, TimeSpan? retryAfter = null)

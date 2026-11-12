@@ -38,9 +38,9 @@ assert 'personalHttp.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,
 send=plugin.split('private async Task SendTravelAsync',1)[1].split('private bool PersonalEnabled',1)[0]
 assert 'RequirePermit(permit)' in send and '!TravelAdmitted()' in send and '!prepared.Fresh(DateTime.UtcNow)' in send
 assert 'X-Gillions-Personal-Resource' in send and 'X-Gillions-Personal-Capability' in send
-assert 'status is not (200 or 201)' in send and 'EnsureSuccessfulResponse' in send
+assert 'status is not (200 or 201)' in send and 'ReadPersonalUploadFailureAsync' in send
 assert 'local.CurrentWorld.RowId' in source and 'CurrentWorldId = currentWorldId' in source
-assert 'RequestConfigurationSave' not in send and 'prepared.Payload' not in send.split('RecordDiagnostic(',1)[1]
+assert 'RequestConfigurationSave' not in send and 'RecordDiagnostic(' not in send
 assert 'Save' not in transport and 'List<TravelPrepared>' not in transport and 'CancelAfter' in transport
 assert 'AllowAutoRedirect = false' in (root/'PartyFinderContributionCore.cs').read_text(encoding='utf-8')
 config=plugin.split('public sealed partial class PluginConfiguration',1)[1]
