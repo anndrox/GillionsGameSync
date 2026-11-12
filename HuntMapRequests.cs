@@ -67,7 +67,7 @@ internal static class HuntMapPolicy {
         foreach (var p in value.EnumerateObject()) if (!keys.Remove(p.Name)) return false;
         return keys.Count == 0;
     }
-    private static bool Hex(string? value, int length) => value is not null && value.Length == length
+    internal static bool Hex(string? value, int length) => value is not null && value.Length == length
         && value.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
     internal static bool Text(string? value, int limit) => !string.IsNullOrWhiteSpace(value) && value.Length <= limit
         && value == value.Trim() && !value.Any(c => char.IsControl(c)
@@ -105,8 +105,16 @@ internal static class HuntMapPolicy {
     internal static HuntMapRequest? Parse(string json, DateTime now) {
         return TryPoll(json, now, Capability, out var request) ? request : null;
     }
-    internal static bool TryPoll(string json, DateTime now, string capability, out HuntMapRequest? request) {
+    internal static bool TryPoll(string json, DateTime now, string capability, out HuntMapRequest? request) =>
+        TryPollResponse(json, now, capability, out request, null, out _);
+
+    internal static bool TryDeferPoll(string json, DateTime now, HuntDeferAction action, out HuntMapRequest? request, out DateTime? deferredUntil) =>
+        TryPollResponse(json, now, CapabilityV2, out request, action, out deferredUntil);
+
+    private static bool TryPollResponse(string json, DateTime now, string capability, out HuntMapRequest? request,
+        HuntDeferAction? action, out DateTime? deferredUntil) {
         request = null;
+        deferredUntil = null;
         var v2 = capability == CapabilityV2;
         if (capability != Capability && !v2 || now.Kind != DateTimeKind.Utc) return false;
         if (Encoding.UTF8.GetByteCount(json) > MaximumResponseBytes) return false;
@@ -116,9 +124,11 @@ internal static class HuntMapPolicy {
             // Site's actual v1 acknowledgment is just ok + request, NOT PF's nativeRequests descriptor.
             if (!(v2 ? Exact(root, "ok", "request", "progression") : Exact(root, "ok", "request"))
                 || root.GetProperty("ok").ValueKind != JsonValueKind.True) return false;
-            // This Native only performs normal polls. Browser Next queues a
-            // normal command with progression:null. No device-side Next action.
-            if (v2 && root.GetProperty("progression").ValueKind != JsonValueKind.Null) return false;
+            if (v2) {
+                var progression = root.GetProperty("progression");
+                if (action is null ? progression.ValueKind != JsonValueKind.Null
+                    : !action.TryProgression(progression, now, out deferredUntil)) return false;
+            }
             var r = root.GetProperty("request");
             if (r.ValueKind == JsonValueKind.Null) return true;
             string[] fields = ["requestType", "requestId", "claimToken", "huntTargetId", "huntTargetName", "availability",

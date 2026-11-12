@@ -11,7 +11,9 @@ internal static class FatePackagedTests {
         var plugin=assembly.GetType("GillionsGameSync.Plugin",true)!;
         Check(plugin.GetConstructors().Single().GetParameters().Any(p=>p.ParameterType==typeof(Dalamud.Plugin.Services.IFateTable))==true,"FATE service injection must be Testing only.");
         var config=assembly.GetType("GillionsGameSync.PluginConfiguration",true)!;
-        Check(!config.GetProperties().Any(p=>p.Name.Contains("Fate",StringComparison.OrdinalIgnoreCase)),"FATE session must not add a permanent configuration permission/history.");
+        var fateProperties = config.GetProperties().Where(p => p.Name.Contains("Fate", StringComparison.OrdinalIgnoreCase)).Select(p => p.Name).ToHashSet();
+        Check(fateProperties.SetEquals(testing ? ["TrackedFateAlerts", "TrackedFateAlertSound", "TrackedFateChatTab"] : []),
+            "Only local alert settings may persist. FATE collection has no configuration permission or history.");
 
         Type T(string name) => assembly.GetType("GillionsGameSync."+name,true)!;
         const BindingFlags flags=BindingFlags.Static|BindingFlags.NonPublic;

@@ -79,3 +79,21 @@ assert 'ClearHuntMapRequests(); websiteItemPoll.Reset()' not in p
 assert 'if (!commandClock.Unexpired(request.ExpiresAtUtc)) return false;' in p
 assert 'request => ConsumeItemLinkRequestAsync(permit, request\n#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD\n                    , commandClock' in p
 print('Exact-origin bounded issuer timeline/parser/consume/presentation/monotonic focus boundaries PASS')
+
+awareness=(root/'PluginHuntAwareness.cs').read_text(encoding='utf-8')
+assert awareness.startswith('#if GILLIONS_TEST_BUILD\n')
+assert 'var exact = BeginAwareHunt(r, commandClock)' in hunt and 'exact is not null ? OpenExactHuntFlag(r, exact)' in hunt
+assert 'HuntMapPolicy.Consumed(' in hunt and 'if (action is not null && parsed is null) return;' in hunt
+assert '!huntDeferSupported' in awareness and 'HuntReceivingEnabled' in awareness
+assert 'inFlight: marketConditions[ConditionFlag.InFlight]' in awareness
+assert 'running.Running) huntDefer.SawUp(target)' in awareness and 'ObserveWaitingBRanks(waiting)' in awareness
+assert 'foreach (var target in huntDefer.Waiting(worldId, now))' in awareness
+assert 'foreach (var item in tracked.Items.Values)' in awareness
+assert 'PrintTrackedFateAlert(item, inZone && local?.Instance == clientState.Instance ? local.Link : null)' in awareness
+assert 'else if (fate.Location is { } point' in awareness and 'point.MapX, point.MapY' in awareness
+assert 'Silent = true' in awareness and 'if (configuration.TrackedFateAlertSound) UIGlobals.PlayChatSoundEffect(1);' in awareness
+assert 'AlertChatType(configuration.TrackedFateChatTab)' in awareness
+assert 'configuration.UseSonarChatMessages' in awareness.split('private void ReadSonarChat',1)[1].split('private bool TryReadSonarChat',1)[0]
+for forbidden in ['HttpClient', 'SendAsync', 'SendChat', 'GetIpc', 'unsafe', 'WriteAll']:
+    assert forbidden not in awareness, forbidden
+print('Testing awareness wiring PASS: current claimed Hunt, local exact flags and tracked alerts, quiet opt-in Sonar, no observation transport.')

@@ -35,6 +35,17 @@ if (args.Length == 4 && args[3] is "--upgrade-write" or "--upgrade-check" or "--
     return;
 }
 var configurationType = pluginAssembly.GetType("GillionsGameSync.PluginConfiguration", throwOnError: true)!;
+var awarenessSettings = new Dictionary<string, object> {
+    ["TrackedFateAlerts"] = true, ["TrackedFateAlertSound"] = true, ["TrackedFateChatTab"] = 0, ["UseSonarChatMessages"] = false,
+};
+foreach (var (name, defaultValue) in awarenessSettings) {
+    var property = configurationType.GetProperty(name);
+    if (pluginAssembly.GetName().Name == "GillionsGameSyncTest") {
+        Assert(property is not null && Equals(property.GetValue(Activator.CreateInstance(configurationType)), defaultValue)
+            && Equals(property.GetValue(JsonConvert.DeserializeObject("{\"AutomaticSync\":true}", configurationType)), defaultValue),
+            $"Testing Hunt awareness setting {name} defaults for new and existing configurations.");
+    } else Assert(property is null, $"Public must not expose Testing Hunt awareness setting {name}.");
+}
 var pluginType = pluginAssembly.GetType("GillionsGameSync.Plugin", throwOnError: true)!;
 var partyFinderOptIn = configurationType.GetProperty("EnablePartyFinderContributions")!;
 Assert(!(bool)partyFinderOptIn.GetValue(Activator.CreateInstance(configurationType))!,
