@@ -296,7 +296,11 @@ internal sealed class HuntBillLocalView : IDisposable {
                 : $"Observed {observations.Count} positive bill cache snapshots; {partial} partial/unmatched. Admission uses current Key Item corroboration or a bounded same-session final-counter transition. Bill windows not required. Current order/cache ownership/reset unverified. Private sync requires separate permission.";
             if (store.CapacityReached) status += " Retention capacity reached: new character observations paused; existing history preserved.";
             Publish(status, characterKey, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
-        } catch (Exception) { itemCoverage.Clear(); Publish("Hunt read/save failed; history preserved. New data may be memory-only. No live correctness claim."); }
+        } catch (Exception) {
+            itemCoverage.Clear();
+            Publish("Hunt read/save failed; history preserved. New data may be memory-only. No live correctness claim.");
+            if (!force) throw;
+        }
     }
     private void PublishProgress(string characterKey, List<HuntBillObservation> observations, int partial, DateTime now) {
         uint territory = client.TerritoryType;

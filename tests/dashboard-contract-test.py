@@ -56,8 +56,8 @@ assert "state.Allowance == 0" in doman and "state.Donated > state.Allowance" in 
 assert "state.IsAcceptingDonations" in doman and "Completed:" not in doman
 assert 'Observation("doman-enclave-weekly"' in doman
 assert "client.Logout -= OnLogout" in source and "client.Login -= OnLogin" in source and "client.TerritoryChanged -= OnTerritoryChanged" in source
-assert "dashboardLocal.Tick(now);" in plugin and "dashboardLocal.Dispose();" in plugin
-assert plugin.index("dashboardLocal.Tick(now);") < plugin.index("if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;")
+assert "plugin.dashboardLocal.Tick(at)" in plugin and "dashboardLocal.Dispose();" in plugin
+assert plugin.index("plugin.dashboardLocal.Tick(at)") < plugin.index("if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;")
 copy = source.split('ImGui.Button("Copy PRIVATE facts JSON', 1)[1].split('ImGui.Button("Copy aggregate', 1)[0]
 assert "CurrentKey()" in copy and "key != activeKey" in copy and "policy.Export" in copy
 draw = source.split("private void Draw()", 1)[1]

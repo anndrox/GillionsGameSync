@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 namespace GillionsGameSync;
 
 public sealed partial class Plugin {
-    private CharacterAppearanceCollector appearanceCollector=null!;
+    private readonly ICharacterAppearanceSource appearanceCollector;
     private readonly AppearanceQueue appearanceQueue=new();
     private readonly ResourceRetry appearanceRetry = new();
     private CancellationTokenSource appearanceCancellation=new();
@@ -20,6 +20,9 @@ public sealed partial class Plugin {
     private const int AppearanceSampleSeconds = 5;
     private CancellationToken? appearanceFlight;
     private string? appearanceReadFailure;
+    private string? appearanceSendFailure;
+    private DateTime? appearanceLastSentUtc;
+    private volatile string appearanceSharingStatus = "Waiting for Gillions to confirm sharing.";
     private DateTime appearanceLease, appearanceNextRead, appearanceNextSend;
 
     private void CancelAppearanceUpload() {
@@ -29,6 +32,7 @@ public sealed partial class Plugin {
 
     private void PauseAppearance() {
         CancelAppearanceUpload();
+        appearanceSendFailure = null;
         consentStatus = null;
         appearanceGrant = null;
         appearanceLease = DateTime.MinValue;
@@ -42,6 +46,7 @@ public sealed partial class Plugin {
         if (samePairing && (nextContentId == 0 || nextContentId == appearanceReceiptScope?.ContentId)) return;
         appearanceReceiptScope = null;
         appearanceQueue.Clear();
+        appearanceLastSentUtc = null;
     }
 
     private bool AppearanceAuthorized(DateTime now) => HasPairedSession && activeOwnedState is not null
@@ -63,6 +68,8 @@ public sealed partial class Plugin {
             CancelAppearanceUpload();
             appearanceQueue.Clear();
             appearanceReceiptScope = nextScope;
+            appearanceLastSentUtc = null;
+            appearanceSendFailure = null;
             appearanceRetry.Clear();
             appearanceNextRead = appearanceNextSend = DateTime.MinValue;
         } else if (descriptor is null && appearanceGrant is not null) {
@@ -76,13 +83,31 @@ public sealed partial class Plugin {
         var status = consentStatus;
         if (status is null || DateTime.UtcNow >= appearanceLease) {
             Label("Sharing status is unavailable.");
+            Label("Character appearance");
+            Label(appearanceSharingStatus);
             return;
         }
         Dalamud.Bindings.ImGui.ImGui.PushTextWrapPos(0);
-        foreach (var category in status.Categories)
+        foreach (var category in status.Categories) {
             Dalamud.Bindings.ImGui.ImGui.TextUnformatted($"{category.Label}: {category.DisplayState}");
+            if (category.Key == "appearance") Label(appearanceSharingStatus);
+        }
         Dalamud.Bindings.ImGui.ImGui.PopTextWrapPos();
         Link("Change on gillions.app", status.SettingsUrl);
+    }
+
+    private string AppearanceStatus(DateTime now) {
+        if (!HasPairedSession) return "Connect Game Sync to Gillions.";
+        if (!clientState.IsLoggedIn || activeOwnedState is null) return "Waiting for your character to load.";
+        if (publicConnectionFailure is SiteRefusalPolicy.CharacterNotLinked or SiteRefusalPolicy.CharacterMismatch)
+            return "Verify this character on gillions.app.";
+        if (now < appearanceLease && consentStatus?.Categories.FirstOrDefault(category => category.Key == "appearance")?.State == "off")
+            return "Appearance sharing is off on gillions.app.";
+        if (!AppearanceAuthorized(now)) return "Waiting for Gillions to confirm sharing.";
+        if (appearanceReadFailure is { } readFailure) return readFailure;
+        if (appearanceQueue.Pending is not null && appearanceSendFailure is { } sendFailure) return sendFailure;
+        if (appearanceLastSentUtc is { } sent) return $"Last sent {sent.ToLocalTime():T}";
+        return appearanceFlight is { IsCancellationRequested: false } ? "Sending your current look." : "Waiting to send your current look.";
     }
 
     private void WithholdAppearance(string reason) {
@@ -121,23 +146,30 @@ public sealed partial class Plugin {
                 appearanceReadFailure = null;
             } catch (Exception) {
                 WithholdAppearance("Character appearance could not be read.");
-                return;
+                throw;
             }
         }
         if (TakeAppearanceUpload(now) is { } p) {
-            if (appearanceCancellation.IsCancellationRequested) { appearanceCancellation.Dispose(); appearanceCancellation = new(); }
             var permit = CapturePermit(SyncRequestMode.Personal);
-            var grant = appearanceGrant!;
+            if (!AppearanceAuthorized(now) || appearanceGrant is not { } grant || !ReferenceEquals(appearanceQueue.Pending, p)) return;
+            if (appearanceCancellation.IsCancellationRequested) { appearanceCancellation.Dispose(); appearanceCancellation = new(); }
             var cancellation = appearanceCancellation.Token;
             appearanceFlight = cancellation;
             _ = Task.Run(() => SendAppearance(permit, p, grant, cancellation));
         }
     }
 
+    private void AcceptAppearance(AppearancePreparation upload, DateTime now) {
+        appearanceRetry.Clear();
+        appearanceQueue.Accepted(upload);
+        appearanceLastSentUtc = now;
+        appearanceSendFailure = null;
+    }
+
     private static void AppearanceHeaders(HttpRequestMessage r){r.Headers.Add("X-Gillions-Personal-Contract",AppearancePolicy.Contract);r.Headers.Add("X-Gillions-Personal-Resource",AppearancePolicy.Resource);r.Headers.Add("X-Gillions-Personal-Capability",AppearancePolicy.Capability);}
     private async Task SendAppearance(SyncRequestPermit permit,AppearancePreparation p,string grant,CancellationToken featureToken){
-        using var linked=CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation,featureToken);linked.CancelAfter(TimeSpan.FromSeconds(20));var token=linked.Token;
         try{
+            using var linked=CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation,featureToken);linked.CancelAfter(TimeSpan.FromSeconds(20));var token=linked.Token;
             using var request=SnapshotRequest("/api/game-sync/sync",permit,AppearancePolicy.Resource,p.Nonce,Encoding.UTF8.GetBytes(p.Payload));AppearanceHeaders(request);request.Headers.Add("X-Gillions-Appearance-Grant",grant);
             if(request.Content!.Headers.ContentLength>20480)throw new InvalidOperationException();
             Task<HttpResponseMessage>? pending=null;
@@ -151,13 +183,20 @@ public sealed partial class Plugin {
                 || receipt.GetProperty("contentHash").GetString() != p.Hash) throw new InvalidOperationException("Invalid appearance receipt.");
             await framework.RunOnFrameworkThread(() => {
                 if (!PermitIsCurrent(permit) || token.IsCancellationRequested || appearanceGrant != grant) return;
-                appearanceRetry.Clear();
-                appearanceQueue.Accepted(p);
+                AcceptAppearance(p, DateTime.UtcNow);
             });
         } catch (Exception error) {
             if (!disposed) await framework.RunOnFrameworkThread(() => {
-                if (PermitIsCurrent(permit) && !featureToken.IsCancellationRequested && appearanceGrant == grant)
-                    appearanceRetry.Failed(Environment.TickCount64, p.Hash, error);
+                if (!PermitIsCurrent(permit) || featureToken.IsCancellationRequested || appearanceGrant != grant) return;
+                appearanceRetry.Failed(Environment.TickCount64, p.Hash, error);
+                appearanceSendFailure = error switch {
+                    GillionsHttpException refusal when refusal.Code is SiteRefusalPolicy.CharacterNotLinked or SiteRefusalPolicy.CharacterMismatch
+                        => "Verify this character on gillions.app.",
+                    GillionsHttpException { Status: 401 or 403 } => "Gillions declined appearance sharing. Check your sharing settings on gillions.app.",
+                    _ => "Gillions did not accept the look yet. Game Sync will retry.",
+                };
+                if (error is not (OperationCanceledException or HttpRequestException or GillionsHttpException))
+                    backgroundObservation.Report("character appearance upload", error);
             });
         }
         finally {

@@ -83,52 +83,61 @@ public sealed partial class Plugin {
         nextPermissionMaintenanceUtc = now.AddMilliseconds(250);
         var clock = Environment.TickCount64;
         foreach (var key in PermissionAuthority.Keys) {
-            var identity = SitePermissionOrigin ? permissionAuthority.Identity(key, clock) : "historical";
-            if (key == "itemLinks") identity += ":" + ItemLinksEnabled;
-#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
-            identity += ":" + (key switch {
-                "marketContribution" => MarketEnabled,
-                "partyFinderContribution" => PartyFinderContributionEnabled,
-                "personalHunts" => PersonalEnabled("hunt_bills"),
-                "personalSubmarines" => PersonalEnabled("submarine_personal"),
-                "huntRoutingLocation" => TravelEnabled,
-                "partyFinderLinks" => PartyFinderLinksEnabled,
-                "automaticHuntMaps" => HuntReceivingEnabled,
-                _ => false,
-            });
-#endif
-            if (permissionTransitions.GetValueOrDefault(key) == identity) continue;
-            permissionTransitions[key] = identity; permissionFreshFrom[key] = DateTime.UtcNow;
-#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
-            if (key == "marketContribution") { marketContributor.SetEnabled(false); marketContributor.RefreshSession(null); }
-            if (key == "partyFinderContribution") partyFinderContributor.SetEnabled(false);
-            if (key == "huntRoutingLocation") { ClearTravelPending(); travelLocal.ClearSession(); travelRetries.Clear(); }
-            if (key is "personalHunts" or "personalSubmarines") {
-                var resource = key == "personalHunts" ? "hunt_bills" : "submarine_personal";
-                privateRetries?.Remove(resource);
-                if (personalCancellation.Remove(resource, out var previous)) { previous.Cancel(); previous.Dispose(); }
-                if (key == "personalHunts") {
-                    huntCoverageSync.Clear();
-#if GILLIONS_TEST_BUILD
-                    ResetHuntSplit();
-#endif
-                }
-                if (HasPairedSession && activeOwnedState is not null) {
-                    var owner = PersonalSyncPolicy.Owner(configuration.ActiveSession!.Generation,
-                        HuntBillRetentionPolicy.CharacterKey(activeRetainerCharacterContentId));
-                    // Retained history is not erased. Obsolete prepared contribution
-                    // copies/nonces are withdrawn so OFF -> ON cannot replay them.
-                    if (PersonalSyncPolicy.Withdraw(configuration.PersonalSync, owner, resource) > 0)
-                        RequestConfigurationSave();
-                }
-                nextPersonalUtc = DateTime.MinValue;
+            try {
+                ReconcilePermission(key, clock, now);
+            } catch (Exception error) {
+                backgroundObservation.Report(key, error);
             }
-#endif
         }
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
-        marketContributor.SetEnabled(MarketEnabled);
-        travelLocal.SetEnabled(TravelEnabled);
+        Observe("market permission", now, static (plugin, _) => plugin.marketContributor.SetEnabled(plugin.MarketEnabled));
+        Observe("travel permission", now, static (plugin, _) => plugin.travelLocal.SetEnabled(plugin.TravelEnabled));
 #endif
-        partyFinderContributor.SetEnabled(PartyFinderContributionEnabled);
+        Observe("Party Finder permission", now, static (plugin, _) => plugin.partyFinderContributor.SetEnabled(plugin.PartyFinderContributionEnabled));
+    }
+
+    private void ReconcilePermission(string key, long clock, DateTime now) {
+        var identity = SitePermissionOrigin ? permissionAuthority.Identity(key, clock) : "historical";
+        if (key == "itemLinks") identity += ":" + ItemLinksEnabled;
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
+        identity += ":" + (key switch {
+            "marketContribution" => MarketEnabled,
+            "partyFinderContribution" => PartyFinderContributionEnabled,
+            "personalHunts" => PersonalEnabled("hunt_bills"),
+            "personalSubmarines" => PersonalEnabled("submarine_personal"),
+            "huntRoutingLocation" => TravelEnabled,
+            "partyFinderLinks" => PartyFinderLinksEnabled,
+            "automaticHuntMaps" => HuntReceivingEnabled,
+            _ => false,
+        });
+#endif
+        if (permissionTransitions.GetValueOrDefault(key) == identity) return;
+#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
+        if (key == "marketContribution") { marketContributor.SetEnabled(false); marketContributor.RefreshSession(null); }
+        if (key == "partyFinderContribution") partyFinderContributor.SetEnabled(false);
+        if (key == "huntRoutingLocation") { ClearTravelPending(); travelLocal.ClearSession(); travelRetries.Clear(); }
+        if (key is "personalHunts" or "personalSubmarines") {
+            var resource = key == "personalHunts" ? "hunt_bills" : "submarine_personal";
+            privateRetries?.Remove(resource);
+            if (personalCancellation.Remove(resource, out var previous)) { previous.Cancel(); previous.Dispose(); }
+            if (key == "personalHunts") {
+                huntCoverageSync.Clear();
+#if GILLIONS_TEST_BUILD
+                ResetHuntSplit();
+#endif
+            }
+            if (HasPairedSession && activeOwnedState is not null) {
+                var owner = PersonalSyncPolicy.Owner(configuration.ActiveSession!.Generation,
+                    HuntBillRetentionPolicy.CharacterKey(activeRetainerCharacterContentId));
+                // Retained history is not erased. Obsolete prepared contribution
+                // copies/nonces are withdrawn so OFF -> ON cannot replay them.
+                if (PersonalSyncPolicy.Withdraw(configuration.PersonalSync, owner, resource) > 0)
+                    RequestConfigurationSave();
+            }
+            nextPersonalUtc = DateTime.MinValue;
+        }
+#endif
+        permissionTransitions[key] = identity;
+        permissionFreshFrom[key] = now;
     }
 }

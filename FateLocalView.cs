@@ -181,6 +181,7 @@ internal sealed class FateLocalView : IDisposable {
                 : $"Copied {rows.Length}; admitted {state.Current.Length} positive observations; no global coverage claim.";
         } catch (Exception e) {
             Invalidate(); outcome=$"Read failed closed ({e.GetType().Name}); no negative inference.";
+            throw;
         } finally {
             if (preparing) { prepareMs=Stopwatch.GetElapsedTime(start).TotalMilliseconds; prepareBytes=GC.GetAllocatedBytesForCurrentThread()-allocated; }
             else { readMs=Stopwatch.GetElapsedTime(start).TotalMilliseconds; readBytes=GC.GetAllocatedBytesForCurrentThread()-allocated; }

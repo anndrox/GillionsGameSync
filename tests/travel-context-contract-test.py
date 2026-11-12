@@ -27,12 +27,13 @@ assert 'private void Logout' in source and 'state.Clear(); Reset();' in source
 assert 'Math.Min(5,destinations.Length)' in source and 'label.Length>80' in source
 assert 'PlaceName.Value.Name.ExtractText()' in source
 assert 'public bool ShareHuntRoutingLocation { get; set; }' in plugin
-assert 'travelLocal.Tick(now)' in plugin and 'travelLocal.Dispose()' in plugin
-assert 'travelLocal.SetEnabled(TravelEnabled)' in (root/'PluginPermissions.cs').read_text()
+assert 'plugin.travelLocal.Tick(at)' in plugin and 'travelLocal.Dispose()' in plugin
+assert 'plugin.travelLocal.SetEnabled(plugin.TravelEnabled)' in (root/'PluginPermissions.cs').read_text()
 ui=(root/'PluginPublicUi.cs').read_text(encoding='utf-8')
 assert 'configuration.ShareHuntRoutingLocation=' not in ui
 assert 'travelLocal.Invalidated += ClearTravelPending' in plugin
-assert 'travelAccepted = false; travelBinding = ""; ClearTravelPending(); travelLocal?.ClearSession();' in plugin
+reset = plugin.split('private void ResetSessionContext()', 1)[1].split('private void RefreshSessionContext()', 1)[0]
+assert 'travelAccepted = false; travelBinding = "";' in reset and 'plugin.ClearTravelPending();' in reset and 'plugin.travelLocal.ClearSession();' in reset
 assert 'personalHttp.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,token)' in plugin
 send=plugin.split('private async Task SendTravelAsync',1)[1].split('private bool PersonalEnabled',1)[0]
 assert 'RequirePermit(permit)' in send and '!TravelAdmitted()' in send and '!prepared.Fresh(DateTime.UtcNow)' in send

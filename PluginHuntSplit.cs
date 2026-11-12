@@ -61,9 +61,9 @@ public sealed partial class Plugin {
 
     private async Task SendHuntSplitAsync(SyncRequestPermit permit, HuntSplitPreparation preparation, string key, CancellationToken feature,
         Task durable) {
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation, feature);
-        linked.CancelAfter(TimeSpan.FromSeconds(30));
         try {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(permit.Cancellation, feature);
+            linked.CancelAfter(TimeSpan.FromSeconds(30));
             await durable.ConfigureAwait(false);
             using var request = SnapshotRequest("/api/game-sync/sync", permit, "hunt_bills", preparation.Nonce,
                 Encoding.UTF8.GetBytes(preparation.Body));
@@ -94,6 +94,7 @@ public sealed partial class Plugin {
         } catch (Exception error) when (error is not SyncNotStartedException) {
             if (!disposed) await framework.RunOnFrameworkThread(() => {
                 if (!PermitIsCurrent(permit) || feature.IsCancellationRequested || !HuntSplitEnabled) return;
+                if (error is NullReferenceException) backgroundObservation.Report("Hunt bills", error);
                 huntSplitRetry.Failed(Environment.TickCount64, preparation.Key.Revision, error);
                 personalStatus = error is GillionsHttpException refused
                     ? $"Gillions paused Hunt uploads. HTTP {refused.Status} ({refused.Code})."

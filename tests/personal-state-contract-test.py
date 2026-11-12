@@ -26,7 +26,7 @@ assert "InventoryType.KeyItems" in hunt and "!keyItems->IsLoaded" in hunt
 assert "keyItems->Size is < 1 or > 256" in hunt and "item.Quantity > 0" in hunt
 assert "presentItems.Contains(type.EventItem.RowId)" in hunt and "HuntObservationAdmission.CanUseBillCache" in hunt
 assert "huntLocal.Tick(now);" in plugin
-assert plugin.index("huntLocal.Tick(now);") < plugin.index("if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;")
+assert plugin.index("TickHuntObservation(now)") < plugin.index("if (!HasPairedSession || activeOwnedState is null || !clientState.IsLoggedIn) return;")
 assert "ObtainedFlags" in hunt and "GetObtainedHuntOrderRowId(index)" in hunt
 assert "CurrentKills[index].Counts" in hunt and "CatalogTargets" in hunt
 assert "hunt->GetKillCount(index, t.TargetIndex)" in hunt and "!c.Valid(catalog[n].RequiredKills)" in hunt
@@ -55,7 +55,7 @@ assert "session.Reset()" in hunt and "session.Bind(characterKey)" in hunt
 for event in ("client.TerritoryChanged", "conditions.ConditionChange"):
     assert event + " +=" in hunt and event + " -=" in hunt
 assert "if (value && flag is ConditionFlag.BetweenAreas or ConditionFlag.BetweenAreas51) ClearLiveBaseline()" in hunt
-assert "TickPersonalSync(now, prompt: huntChanged)" in plugin
+assert "state.Plugin.TickPersonalSync(at, prompt: state.HuntChanged)" in plugin
 manual = plugin.split("private async Task SyncAsync",1)[1].split("var snapshots = captured.Snapshots",1)[0]
 assert "PersonalEnabled(\"hunt_bills\")" in manual and "huntLocal.Tick(DateTime.UtcNow, force: true)" in manual
 assert "TickPersonalSync(DateTime.UtcNow, prompt: true)" in manual

@@ -6,7 +6,7 @@ plugin = (r / 'Plugin.cs').read_text(encoding='utf-8').replace('\r\n', '\n')
 tick = plugin.split('private void UpdateOwnedState()', 1)[1].split('private void QueueRetainerUpload(', 1)[0]
 gate = tick.index('if (syncInFlight || characterRefusals.Waiting(now)) return;')
 # Local capture runs before the gate; every ordinary upload dispatch comes after it.
-for capture in ['CaptureRetainerResult(', 'CaptureOwnedGilLedgerChange();', 'CaptureLoadedRetainerListings()']:
+for capture in ['plugin.ObserveRetainerVentures(at)', 'plugin.CaptureOwnedGilLedgerChange()', 'CaptureLoadedRetainerListings()']:
     assert tick.index(capture) < gate, capture
 for dispatch in ['SyncAutomaticallyAsync([NextAutomaticScope()]);', 'inventoryUploads.TryDispatch(now)',
                  'SyncAutomaticallyAsync([RetainerClientPolicy.ResourceType]);', 'SyncAutomaticallyAsync([]);']:
