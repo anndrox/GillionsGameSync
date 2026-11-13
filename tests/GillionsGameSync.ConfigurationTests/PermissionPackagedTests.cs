@@ -27,7 +27,13 @@ internal static class PermissionPackagedTests {
                 ["issuedAt"]=issued.ToString("O"),["expiresAt"]=issued.AddSeconds(30).ToString("O"),["permissions"]=decisions}};
         }
         Call("Bind","synthetic-enrollment:content",device);
+        var legacySite = Fixture(false, false);
+        ((JsonObject)legacySite["permissionAuthority"]!["permissions"]!).Remove("desynthesisResults");
+        Check((bool)Call("Apply", legacySite.ToJsonString(), issued, 0L, null)!
+            && !(bool)Call("Allows", "desynthesisResults", true, 0L)!
+            && (bool)Call("Allows", "itemLinks", true, 0L)!, "older Site renews existing permissions without enabling desynthesis");
         Check((bool)Call("Apply",Fixture(false,false).ToJsonString(),issued,0L,null)!,"legacy authority accepted");
+        Check((bool)Call("Allows", "desynthesisResults", true, 0L)!, "new pairing's legacy desynthesis defaults on");
         foreach(var key in keys) {
             Check(!(bool)Call("Allows",key,false,0L)!,key+" historical OFF preserved");
             Check((bool)Call("Allows",key,true,0L)!,key+" historical ON preserved");
@@ -35,9 +41,11 @@ internal static class PermissionPackagedTests {
         Check((bool)Call("Apply",Fixture(true,true).ToJsonString(),issued,0L,null)!,"explicit authority accepted");
         foreach(var key in keys)Check((bool)Call("Allows",key,false,0L)!,key+" fresh explicit ON supersedes local OFF");
         var mixed=Fixture(true,true);
+        mixed["permissionAuthority"]!["permissions"]!["desynthesisResults"]!["enabled"]=false;
         mixed["permissionAuthority"]!["permissions"]!["itemLinks"]!["enabled"]=false;
         mixed["permissionAuthority"]!["permissions"]!["automaticHuntMaps"]!["enabled"]=false;
         Check((bool)Call("Apply",mixed.ToJsonString(),issued,0L,null)!,"mixed authority accepted");
+        Check(!(bool)Call("Allows", "desynthesisResults", true, 0L)!, "site Off overrides the default");
         Check(!(bool)Call("Allows","itemLinks",true,0L)!&&(bool)Call("PartyFinderLinks",false,false,0L)!,"PF receiving independent of item OFF");
         Check(!(bool)Call("Allows","automaticHuntMaps",true,0L)!&&(bool)Call("HuntReceiving",false,0L)!,"manual Hunt eligible while automatic OFF");
         foreach(var key in keys)Check(!(bool)Call("Allows",key,true,30000L)!,key+" exact lease expiry");

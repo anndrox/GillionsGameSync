@@ -294,7 +294,7 @@ foreach (var client in new[] { RetainerClientPolicy.Stable, RetainerClientPolicy
     var plain = JsonSerializer.Serialize(RetainerPresencePolicy.CreateNative(new("111", "Fixture", "Test"), ventureNow, RetainerClientPolicy.Stable, "0.0.0"));
     Assert(!plain.Contains("localPreferences", StringComparison.Ordinal) && !plain.Contains("gameVersion", StringComparison.Ordinal),
         "presence without local preferences keeps the exact earlier wire shape");
-    var local = new PresenceLocalPreferences(true, false, false, true, false, true, false, true);
+    var local = new PresenceLocalPreferences(true, false, false, true, false, true, false, true, true);
     using var full = JsonDocument.Parse(JsonSerializer.Serialize(RetainerPresencePolicy.CreateNative(new("111", "Fixture", "Test"), ventureNow,
         RetainerClientPolicy.Stable, "0.0.0", local, "2026.10.16.0000.0000")));
     var prefs = full.RootElement.GetProperty("localPreferences");

@@ -25,16 +25,21 @@ internal sealed record ConsentStatus(long CharacterId, DateTimeOffset IssuedAt, 
             var url = status.GetProperty("settingsUrl").GetString();
             if (url != origin + "/gillions-sync") return null;
             var rows = status.GetProperty("categories");
-            if (rows.GetArrayLength() != Keys.Length) return null;
+            var length = rows.GetArrayLength();
+            if (length != Keys.Length && length != Keys.Length + 1) return null;
 
-            var categories = new ConsentCategory[Keys.Length];
+            var categories = new ConsentCategory[length];
+            var nextKey = 0;
+            var desynthesisSeen = false;
             for (int i = 0; i < categories.Length; i++) {
                 var row = rows[i];
                 var key = row.GetProperty("key").GetString();
                 var label = row.GetProperty("label").GetString();
                 var state = row.GetProperty("state").GetString();
                 var generation = row.TryGetProperty("generation", out var id) ? id.GetString() : null;
-                if (key != Keys[i] || string.IsNullOrWhiteSpace(label)
+                if (key == "desynthesisResults" && !desynthesisSeen) desynthesisSeen = true;
+                else if (nextKey >= Keys.Length || key != Keys[nextKey++]) return null;
+                if (string.IsNullOrWhiteSpace(label)
                     || state is not ("on" or "off" or "not-set") || row.GetProperty("changeOn").GetString() != "site"
                     || generation is not null && !Guid.TryParseExact(generation, "D", out _)) return null;
                 DateTimeOffset? decisionTime = null;
@@ -42,8 +47,9 @@ internal sealed record ConsentStatus(long CharacterId, DateTimeOffset IssuedAt, 
                     if (!Timestamp(decidedAt, out var parsed)) return null;
                     decisionTime = parsed;
                 }
-                categories[i] = new(key, label, state, generation, decisionTime);
+                categories[i] = new(key!, label, state, generation, decisionTime);
             }
+            if (nextKey != Keys.Length) return null;
             return new(status.GetProperty("characterId").GetInt64(), issuedAt, url, Array.AsReadOnly(categories));
         } catch (Exception e) when (e is KeyNotFoundException or InvalidOperationException or FormatException or OverflowException) {
             return null;

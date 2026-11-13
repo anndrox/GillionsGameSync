@@ -45,7 +45,8 @@ public sealed record PresenceLocalPreferences(
     [property: JsonPropertyName("huntRoutingLocation")] bool HuntRoutingLocation,
     [property: JsonPropertyName("itemLinks")] bool ItemLinks,
     [property: JsonPropertyName("partyFinderLinks")] bool PartyFinderLinks,
-    [property: JsonPropertyName("automaticHuntMaps")] bool AutomaticHuntMaps);
+    [property: JsonPropertyName("automaticHuntMaps")] bool AutomaticHuntMaps,
+    [property: JsonPropertyName("desynthesisResults"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? DesynthesisResults = null);
 
 public sealed record RetainerPresenceDocument(
     [property: JsonPropertyName("schemaVersion")] int SchemaVersion,

@@ -16,7 +16,9 @@ internal sealed record PermissionDecision(string State, bool? Enabled, string? G
 internal sealed class PermissionAuthority {
     internal const string Origin = "https://test.gillions.app";
     internal static readonly string[] Keys = ["marketContribution", "partyFinderContribution", "personalHunts",
-        "personalSubmarines", "huntRoutingLocation", "itemLinks", "partyFinderLinks", "automaticHuntMaps"];
+        "personalSubmarines", "huntRoutingLocation", "itemLinks", "partyFinderLinks", "automaticHuntMaps", "desynthesisResults"];
+    private const string DesynthesisPermission = "desynthesisResults";
+    private static readonly string[] LegacyKeys = Keys.Where(key => key != DesynthesisPermission).ToArray();
     private readonly Dictionary<string, PermissionDecision> decisions = new(StringComparer.Ordinal);
     private readonly HashSet<string> explicitSeen = new(StringComparer.Ordinal);
     private string session = "", device = "";
@@ -74,11 +76,12 @@ internal sealed class PermissionAuthority {
             if (issued < latestIssued) return false;
             if (expires <= issuerUpperUtc) return Reject();
             var permissions = a.GetProperty("permissions");
-            if (!Shape(permissions, Keys)) return Reject();
+            // A Site predating desynthesis can still renew all its existing
+            // permissions. Missing desynthesis authority never permits capture.
+            if (!Shape(permissions, Keys) && !Shape(permissions, LegacyKeys)) return Reject();
             var next = new Dictionary<string, PermissionDecision>(StringComparer.Ordinal);
             foreach (var key in Keys) {
-                var p = permissions.GetProperty(key);
-                next.Add(key, ParseDecision(key, p, issued));
+                if (permissions.TryGetProperty(key, out var p)) next.Add(key, ParseDecision(key, p, issued));
             }
             Enrollment = enrollment; latestIssued = issued;
             decisions.Clear(); foreach (var (key, decision) in next) {

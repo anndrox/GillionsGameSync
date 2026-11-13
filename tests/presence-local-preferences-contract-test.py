@@ -11,7 +11,8 @@ assert plugin.count('RetainerPresencePolicy.CreateNative(') == 1
 # Each named field reports its own key's legacy input (named arguments keep the order honest).
 field = {'marketContribution': 'MarketContribution', 'partyFinderContribution': 'PartyFinderContribution',
          'personalHunts': 'PersonalHunts', 'personalSubmarines': 'PersonalSubmarines', 'huntRoutingLocation': 'HuntRoutingLocation',
-         'itemLinks': 'ItemLinks', 'partyFinderLinks': 'PartyFinderLinks', 'automaticHuntMaps': 'AutomaticHuntMaps'}
+         'itemLinks': 'ItemLinks', 'partyFinderLinks': 'PartyFinderLinks', 'automaticHuntMaps': 'AutomaticHuntMaps',
+         'desynthesisResults': 'DesynthesisResults'}
 lines = {m.group(1): m.group(2) for m in re.finditer(r'(\w+): Local\("(\w+)", ', local)}
 assert {v: k for k, v in lines.items()} == {k: v for k, v in field.items()}, lines
 def argument(name): return local.split(name + ': Local(', 1)[1].split('),\n', 1)[0].split(');', 1)[0]
@@ -25,4 +26,5 @@ assert 'configuration.SubmarineVoyages.LocalRetentionEnabled' in argument('Perso
 assert 'configuration.EnableItemLinkRequests && configuration.EnablePartyFinderLinkRequests' in argument('PartyFinderLinks')
 assert 'configuration.AutomaticallyShowHuntMap' in argument('AutomaticHuntMaps')
 assert 'historical && !permissionAuthority.ExplicitSeen(key)' in local
+assert 'DesynthesisResults: Local("desynthesisResults", true)' in local
 print('Presence local preferences PASS: Gillions origins only, one presence factory, each key reports its own legacy input.')

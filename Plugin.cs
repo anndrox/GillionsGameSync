@@ -325,6 +325,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         travelLocal = new TravelContextLocalView(pluginInterface,clientState,objects,travelPlayerState,dataManager,gameGui,marketConditions);
 #if GILLIONS_TEST_BUILD
         appearanceCollector = new CharacterAppearanceCollector(clientState, objects, travelPlayerState, dataManager, marketConditions);
+        desynthesisSource = new DesynthesisResultSource(addonLifecycle, gameGui, dataManager, framework, AuthorizeDesynthesisCapture, desynthesisQueue);
 #endif
         fateLocal = new FateLocalView(pluginInterface,commands,clientState,travelPlayerState,dataManager,marketConditions,fateTable,framework);
 #if GILLIONS_TEST_BUILD
@@ -448,6 +449,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
                 awarenessPresenceWorld = AwarenessWorld();
                 request.Headers.Add("X-Gillions-Appearance-Capability",AppearancePolicy.Capability);
+                request.Headers.Add("X-Gillions-Desynthesis-Capability", DesynthesisResults.Capability);
                 request.Headers.Add(HuntDeferHeader, "hunt_defer_v1");
                 request.Headers.Add(TrackedFatesHeader, "tracked_fates_v1");
 #endif
@@ -489,8 +491,13 @@ public sealed partial class Plugin : IDalamudPlugin {
                 travelAccepted = NativeProduct.TransportOrigin(permit.Origin) && TravelSyncPolicy.Compatible(responseJson, permit.Origin);
                 if (!travelAccepted) ClearTravelPending();
 #if GILLIONS_TEST_BUILD
-                if (permissionsAccepted) ApplySharingStatus(responseJson, permit);
-                else if (!permissionAuthority.Fresh(Environment.TickCount64)) PauseAppearance();
+                if (permissionsAccepted) {
+                    ApplySharingStatus(responseJson, permit);
+                    desynthesisSupported = DesynthesisResults.Compatible(responseJson, permit.Origin);
+                } else if (!permissionAuthority.Fresh(Environment.TickCount64)) {
+                    PauseAppearance();
+                    desynthesisSupported = false;
+                }
                 if (permissionsAccepted && request.Headers.Contains(TrackedFatesHeader)
                     && response.RequestMessage?.RequestUri?.GetLeftPart(UriPartial.Authority) == permit.Origin)
                     ApplyHuntAwareness(responseJson, awarenessPresenceWorld);
@@ -548,7 +555,13 @@ public sealed partial class Plugin : IDalamudPlugin {
             HuntRoutingLocation: Local("huntRoutingLocation", configuration.ShareHuntRoutingLocation),
             ItemLinks: Local("itemLinks", configuration.EnableItemLinkRequests),
             PartyFinderLinks: Local("partyFinderLinks", configuration.EnableItemLinkRequests && configuration.EnablePartyFinderLinkRequests),
-            AutomaticHuntMaps: Local("automaticHuntMaps", configuration.AutomaticallyShowHuntMap));
+            AutomaticHuntMaps: Local("automaticHuntMaps", configuration.AutomaticallyShowHuntMap),
+#if GILLIONS_TEST_BUILD
+            DesynthesisResults: Local("desynthesisResults", true)
+#else
+            DesynthesisResults: null
+#endif
+        );
 #else
         return null;
 #endif
@@ -628,6 +641,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         Observe("travel upload", now, static (plugin, at) => plugin.TickTravelSync(at));
 #if GILLIONS_TEST_BUILD
         Observe("character appearance", now, static (plugin, at) => plugin.TickAppearance(at));
+        Observe("desynthesis results", now, static (plugin, _) => plugin.TickDesynthesis());
         Observe("Hunt awareness", now, static (plugin, _) => plugin.TickHuntAwareness());
 #endif
         if (now >= nextMarketMaintenanceUtc) {
@@ -1905,6 +1919,8 @@ public sealed partial class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         backgroundObservation.Run("appearance reset", (Plugin: this, ContentId: nextContentId, SamePairing: samePairing), now,
             static (state, _) => state.Plugin.ResetAppearance(state.ContentId, state.SamePairing));
+        desynthesisSupported = false;
+        Observe("desynthesis reset", now, static (plugin, _) => plugin.ResetDesynthesis());
         Observe("Hunt awareness reset", now, static (plugin, _) => plugin.ResetHuntAwareness());
 #endif
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
@@ -2766,6 +2782,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         beastmasterLocal.Dispose();
         dashboardLocal.Dispose();
+        desynthesisSource.Dispose();
 #endif
         submarineLocal.Dispose();
         fateSender.Dispose();
@@ -2786,6 +2803,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         disposed = true; requestLifetime.Dispose(); ClearTransientState();
 #if GILLIONS_TEST_BUILD
         appearanceCancellation.Cancel();appearanceCancellation.Dispose();appearanceQueue.Clear();
+        ResetDesynthesis();
 #endif
         clientState.Login -= OnLogin; clientState.Logout -= OnLogout;
         chatGui.ChatMessage -= OnChatMessage;

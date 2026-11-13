@@ -15,6 +15,14 @@ internal static class NativeCompatibilityPackagedTests {
     // metadata tokens differ between unrelated builds), so qualification also
     // requires the pinned source comparison in docs/native-compatibility.md.
     private static readonly (string Family, (string Type, string[] Members)[] Uses)[] Families = [
+        ("Desynthesis", [
+            ("FFXIV.Client.UI.Agent.AgentId", ["Salvage"]),
+            ("FFXIV.Client.UI.Agent.AgentSalvage", ["DesynthItemId", "_desynthResults", "DesynthResults"]),
+            ("FFXIV.Client.UI.Agent.SalvageResult", ["ItemId", "Quantity"]),
+            ("FFXIV.Client.UI.AddonSalvageResult", []),
+            ("FFXIV.Client.UI.AddonSalvageAutoDialog", ["AtkUnitBase", "IsDesynthesizing"]),
+            ("FFXIV.Component.GUI.AtkUnitBase", ["IsVisible"]),
+        ]),
         ("Appearance", [
             ("FFXIV.Client.Game.InventoryManager", ["Instance", "GetInventoryContainer"]),
             ("FFXIV.Client.Game.InventoryContainer", ["Items", "Size", "Type", "IsLoaded"]),
@@ -125,6 +133,7 @@ internal static class NativeCompatibilityPackagedTests {
         [("Travel", "7.57.0.9480")] = TravelLayout,
         [("Fate", "7.57.0.9480")] = FateLayout,
         [("Appearance", "7.57.0.9480")] = "555794b7a8157af9",
+        [("Desynthesis", "7.57.0.9480")] = "e25c169d60f8290b",
         [("Beastmaster", "7.56.2.9136")] = "7984e5ebc96f48c5", [("Beastmaster", "7.57.0.9480")] = "7984e5ebc96f48c5",
         // Recorded for comparison only; Dashboard is not admitted on 15.0.4.0.
         [("Dashboard", "7.56.2.9136")] = "72e3d331203627af", [("Dashboard", "7.57.0.9480")] = "72e3d331203627af",
@@ -153,7 +162,9 @@ internal static class NativeCompatibilityPackagedTests {
         Check(Revision(typeof(IFramework).Assembly)==P(runtime!,"DalamudRevision"),"inspected Dalamud revision differs from the table");
         var fingerprints=Fingerprints(native);
         foreach(var (family,_) in Families) {
-            var listed=Builds(family).Any(b=>P(b,"ClientStructsVersion")==installed);
+            var listed=family=="Desynthesis"
+                ? plugin.GetName().Name=="GillionsGameSyncTest" && installed=="7.57.0.9480"
+                : Builds(family).Any(b=>P(b,"ClientStructsVersion")==installed);
             var measured=Expected.TryGetValue((family,installed),out var expected);
             Check(!listed || measured,family+" has no recorded layout for "+installed);
             if(!measured) continue;
