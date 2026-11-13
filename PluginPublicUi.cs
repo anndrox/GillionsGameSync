@@ -143,7 +143,7 @@ public sealed partial class Plugin {
 
     private static void DrawConnection(string state) {
         if (state == "Connected") DrawStatus("✓", UiGreen, "Connected to Gillions");
-        else if (state is "Not connected" or "Connecting") DrawStatus("○", UiAmber, state);
+        else if (state is "Not connected" or "Connecting") DrawStatus("?", UiAmber, state);
         else DrawStatus("×", UiRed, state);
     }
     private void DrawPairingBranding() {
@@ -192,17 +192,17 @@ public sealed partial class Plugin {
         Label("Privacy and data controls are managed on Gillions.");
         Link("Open privacy & data settings",PrivacyUrl);
     }
-    private static void BeginPolishedSpacing() {
+    private static void BeginPolishedSpacing(float itemGap = 7) {
         var style = ImGui.GetStyle();
         var scale = ImGui.GetFontSize() / 17f;
-        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(style.ItemSpacing.X, 7 * scale));
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(style.ItemSpacing.X, itemGap * scale));
         ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(6, 4) * scale);
     }
 
     private static void EndPolishedSpacing() => ImGui.PopStyleVar(2);
 
     private void DrawMainPublic() {
-        BeginPolishedSpacing();
+        BeginPolishedSpacing(4);
         try { DrawMainContent(); }
         finally { EndPolishedSpacing(); }
     }
@@ -243,12 +243,21 @@ public sealed partial class Plugin {
             && h.Hunts=="Gillions unavailable" && h.PartyFinder=="Gillions unavailable"
             && h.Fates=="Gillions unavailable" && h.Market=="Gillions unavailable";
         DrawFeatureHealth(h,sharedUnavailable);
-        ImGui.Separator(); DrawPrivacy();
+        ImGui.Separator();
+        Label("Privacy and data controls are managed on Gillions.");
+        Link("Open privacy & data settings", PrivacyUrl);
+        if (ButtonsFit("Open privacy & data settings", "Open Gillions", "Settings")) ImGui.SameLine();
         Link("Open Gillions",UiOrigin);
-        if (ImGui.GetContentRegionAvail().X >= ImGui.CalcTextSize("Open Gillions    Settings").X + ImGui.GetStyle().FramePadding.X * 4)
-            ImGui.SameLine();
+        if (ButtonsFit("Open Gillions", "Settings")) ImGui.SameLine();
         if(ImGui.Button("Settings")) publicUi.ShowSettings();
     }
+    private static bool ButtonsFit(params string[] labels) {
+        var style = ImGui.GetStyle();
+        float width = (labels.Length - 1) * style.ItemSpacing.X;
+        foreach (var label in labels) width += ImGui.CalcTextSize(label).X + 2 * style.FramePadding.X;
+        return ImGui.GetWindowContentRegionMax().X - ImGui.GetWindowContentRegionMin().X >= width;
+    }
+
     private void DrawPairingPublic() {
         BeginPolishedSpacing();
         try { DrawPairingContent(); }
@@ -283,6 +292,7 @@ public sealed partial class Plugin {
         else DrawConnection(publicHealth.Connection);
         if(nextOrigin.Length>0) {
             Link("Connect to Gillions",PublicConnectionPresentation.PairingUrl(uiServerAddress));
+            if (ButtonsFit("Connect to Gillions", "Learn about data & privacy")) ImGui.SameLine();
             Link("Learn about data & privacy",nextOrigin+"/gillions-sync");
         } else {
             Label("The saved pairing destination is invalid. Choose the approved default before entering a code.");

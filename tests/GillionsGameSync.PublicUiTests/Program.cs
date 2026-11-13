@@ -131,7 +131,9 @@ foreach(var (name,method,paired,width,scale,tab) in cases) {
     var ui=T("PluginUiSnapshot").GetField("Empty",BindingFlags.Public|BindingFlags.Static)!.GetValue(null)!;
     ui=ui.GetType().GetMethod("<Clone>$")!.Invoke(ui,[])!;
     ui.GetType().GetProperty("Paired")!.SetValue(ui,paired);Set("uiState",ui);
-    if(name.StartsWith("17-"))ui.GetType().GetProperty("Message")!.SetValue(ui,"Gillions could not complete the request. Pending records were kept; please try again.");
+    Set("pairingFailureMessage", name.StartsWith("17-")
+        ? "Pairing did not complete at https://test.gillions.app. Create a fresh one-time code there and try again."
+        : "");
     if(name.StartsWith("20-"))ui.GetType().GetProperty("Pairing")!.SetValue(ui,true);
     var model=Activator.CreateInstance(T("HuntProgressState"),true)!;
     var rows=Array.CreateInstance(T("HuntProgressRow"),name.Contains("scroll")||name.Contains("wide-static")?10:name.Contains("duplicate-names")?3:name.Contains("multiple")?2:name.Contains("updating")||name.Contains("all-complete")||name.Contains("current-area-empty")?0:1);
