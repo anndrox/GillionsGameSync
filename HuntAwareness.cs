@@ -62,20 +62,37 @@ internal sealed class FateAlertOccurrences {
     private readonly Dictionary<(uint Fate, string World), DateTime> legacyAlerts = new();
 
     internal void RememberLegacy(uint fate, string world, DateTime now) {
-        foreach (var key in legacyAlerts.Keys.Where(key => legacyAlerts[key] <= now).ToArray()) legacyAlerts.Remove(key);
-        if (legacyAlerts.Count < 128 || legacyAlerts.ContainsKey((fate, world))) legacyAlerts[(fate, world)] = now.AddSeconds(45);
+        foreach (var stale in legacyAlerts.Keys.Where(key => legacyAlerts[key] <= now).ToArray()) legacyAlerts.Remove(stale);
+        var key = (fate, world.ToUpperInvariant());
+        if (legacyAlerts.Count < 128 || legacyAlerts.ContainsKey(key)) legacyAlerts[key] = now.AddSeconds(45);
     }
 
-    internal bool ObserveSite(string id, uint fate, string world, DateTime now) {
+    private readonly Dictionary<(uint Fate, string World), DateTime> siteAlerts = new();
+
+    internal bool ObserveSite(string id, uint fate, string world, DateTime now, DateTime? endsAt = null) {
         if (!siteOccurrences.Add(id)) return false;
         siteOrder.Enqueue(id);
         if (siteOrder.Count > 512) siteOccurrences.Remove(siteOrder.Dequeue());
-        // Presence supplies no occurrence ID. A recent alert on the same world
-        // can cover one matching Site occurrence when switching sources.
-        return !legacyAlerts.Remove((fate, world), out var until) || until <= now;
+        // The local table and Sonar have no Site occurrence ID. Bridge one
+        // matching FATE on the same world, while keeping distinct Site IDs.
+        var key = (fate, world.ToUpperInvariant());
+        if (legacyAlerts.Remove(key, out var until) && until > now) return false;
+        foreach (var stale in siteAlerts.Keys.Where(key => siteAlerts[key] <= now).ToArray()) siteAlerts.Remove(stale);
+        if (siteAlerts.Count < 128 || siteAlerts.ContainsKey(key))
+            siteAlerts[key] = endsAt is { } end && end > now ? end : now.AddSeconds(45);
+        return true;
     }
 
-    internal bool LegacyAlerted(uint fate) => active.TryGetValue(fate, out var value) && value.Alerted;
+    internal bool ObserveLocal(uint fate, string world, bool isActive, int start, bool enabled, DateTime now) {
+        var key = (fate, world.ToUpperInvariant());
+        if (Observe(fate, isActive, start, enabled)) {
+            if (siteAlerts.Remove(key, out var until) && until > now) return false;
+            RememberLegacy(fate, world, now);
+            return true;
+        }
+        if (isActive && legacyAlerts.ContainsKey(key)) legacyAlerts[key] = now.AddSeconds(45);
+        return false;
+    }
 
     internal void ClearLegacy() => active.Clear();
 
@@ -88,8 +105,10 @@ internal sealed class FateAlertOccurrences {
         return alert;
     }
 
-    internal void Retain(TrackedFates? tracked) {
-        foreach (var id in active.Keys.Where(id => tracked?.Items.ContainsKey(id) != true).ToArray()) active.Remove(id);
+    internal void Retain(TrackedFates? tracked) => Retain((IReadOnlyCollection<uint>?)tracked?.Items.Keys ?? Array.Empty<uint>());
+
+    internal void Retain(IReadOnlyCollection<uint> ids) {
+        foreach (var id in active.Keys.Where(id => !ids.Contains(id)).ToArray()) active.Remove(id);
     }
 
     internal void Clear() {
@@ -97,6 +116,7 @@ internal sealed class FateAlertOccurrences {
         siteOccurrences.Clear();
         siteOrder.Clear();
         legacyAlerts.Clear();
+        siteAlerts.Clear();
     }
 }
 

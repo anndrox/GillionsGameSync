@@ -48,7 +48,17 @@ internal static class WatchedFateTests {
         poll.Complete(new(HttpStatusCode.NotFound), 760000, 0);
         check(!poll.LegacyFallback, "Do not resume legacy delivery after the endpoint was accepted");
 
+        check(poll.WatchedIds(76000)?.SequenceEqual(new uint[] { 490 }) == true,
+            "Fresh Site watch IDs remain available to local and Sonar matching without active Site rows");
+        check(poll.WatchedIds(805000) is null, "Expired Site watches cannot admit local or Sonar alerts");
+
         var alerts = new FateAlertOccurrences();
+        check(alerts.ObserveSite(id, 490, "Balmung", now, now.AddMinutes(2)), "Site can supply the first sighting");
+        check(!alerts.ObserveLocal(490, "balmung", true, 0, true, now.AddMinutes(1)), "Site-to-Sonar suppresses the same occurrence");
+        check(!alerts.ObserveLocal(490, "Balmung", true, 10, true, now.AddMinutes(1)), "Local start confirms the same occurrence");
+        check(alerts.ObserveLocal(490, "Balmung", true, 20, true, now.AddMinutes(3)), "A new local start can alert");
+        check(!alerts.ObserveSite(revision, 490, "Balmung", now.AddMinutes(3)), "Local-to-Site suppresses the same occurrence");
+        alerts.Clear();
         alerts.RememberLegacy(490, "Balmung", now);
         check(!alerts.ObserveSite(id, 490, "Balmung", now.AddSeconds(5)), "Legacy-to-Site handoff suppresses duplicate alert");
         check(!alerts.ObserveSite(id, 490, "Balmung", now.AddSeconds(10)), "Same ID cannot alert twice");

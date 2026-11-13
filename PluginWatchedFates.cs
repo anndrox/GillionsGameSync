@@ -17,7 +17,6 @@ public sealed partial class Plugin {
     private string? watchedFatePairing;
     private (SyncRequestPermit Permit, Task<WatchedFateReply> Task)? watchedFateRequest;
     private long watchedFateViewUntil;
-    private long nextWatchedFateAlert;
 
     private string CurrentFateWorld() => huntPlayerState.CurrentWorld.ValueNullable?.Name.ExtractText() ?? "";
 
@@ -27,7 +26,7 @@ public sealed partial class Plugin {
     private bool IsWatchedFate(uint id, long now) => watchedFatePoll.IsWatched(id, now)
         || watchedFatePoll.LegacyFallback && trackedFates?.Items.ContainsKey(id) == true;
 
-    private void TickWatchedFates(DateTime now) {
+    private void TickWatchedFates() {
         if (HasPairedSession && configuration.ActiveSession!.Generation != watchedFatePairing) {
             watchedFatePairing = configuration.ActiveSession.Generation;
             watchedFatePoll.NewPairing();
@@ -47,18 +46,6 @@ public sealed partial class Plugin {
             && watchedFatePoll.Due(tick)) {
             var permit = CapturePermit(SyncRequestMode.Manual);
             watchedFateRequest = (permit, ReadWatchedFatesAsync(permit, watchedFatePoll.ETag(tick)));
-        }
-
-        if (!configuration.TrackedFateAlerts || tick < nextWatchedFateAlert) return;
-        nextWatchedFateAlert = tick + 1000;
-        if (!HuntAwarenessReady()) return;
-        var world = CurrentFateWorld();
-        if (world.Length == 0) return;
-        foreach (var occurrence in watchedFatePoll.Active(tick)) {
-            if (!fateAlerts.ObserveSite(occurrence.Id, occurrence.Fate.FateId, occurrence.World, now)) continue;
-            string? elsewhere = string.Equals(world, occurrence.World, StringComparison.OrdinalIgnoreCase)
-                ? null : $"{occurrence.World} ({occurrence.DataCentre})";
-            PrintTrackedFateAlert(occurrence.Fate, null, elsewhere, occurrence.EndsAt);
         }
     }
 

@@ -88,8 +88,11 @@ assert '!huntDeferSupported' in awareness and 'HuntReceivingEnabled' in awarenes
 assert 'inFlight: marketConditions[ConditionFlag.InFlight]' in awareness
 assert 'running.Running) huntDefer.SawUp(target)' in awareness and 'ObserveWaitingBRanks(waiting)' in awareness
 assert 'foreach (var target in huntDefer.Waiting(worldId, now))' in awareness
-assert 'foreach (var item in tracked.Items.Values)' in awareness
-assert 'PrintTrackedFateAlert(item, inZone && local?.Instance == clientState.Instance ? local.Link : null)' in awareness
+assert 'watchedFatePoll.WatchedIds(stamp)' in awareness and 'watchedFates.UnionWith(watchIds)' in awareness
+assert 'siteWatches.Select(id => DescribeWatchedFate(id, territory, map))' in awareness
+assert 'fateAlerts.ObserveLocal(' in awareness and 'fateAlerts.ObserveSite(' in awareness
+assert awareness.count('watchedFateNotifications.AddNotification') == 1
+assert 'PrintTrackedFateAlert' not in (root/'PluginWatchedFates.cs').read_text(encoding='utf-8')
 assert 'watchedFateNotifications.AddNotification' in awareness
 assert 'else if (fate.Location is { } point' in awareness and 'point.MapX, point.MapY' in awareness
 assert 'Silent = true' in awareness and 'if (configuration.TrackedFateAlertSound) UIGlobals.PlayChatSoundEffect(1);' in awareness

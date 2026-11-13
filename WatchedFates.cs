@@ -87,6 +87,7 @@ internal sealed class WatchedFatePoll {
     internal bool Due(long now) => !Blocked && now >= next;
     private Cache? Fresh(long now) => cache is { } value && now < value.Until ? value : null;
     internal string? ETag(long now) => Fresh(now)?.ETag;
+    internal IReadOnlyCollection<uint>? WatchedIds(long now) => Fresh(now)?.Snapshot.Ids;
     internal bool IsWatched(uint id, long now) => Fresh(now)?.Snapshot.Ids.Contains(id) == true;
     internal IEnumerable<WatchedFateOccurrence> Active(long now) {
         if (Fresh(now) is not { } value) yield break;

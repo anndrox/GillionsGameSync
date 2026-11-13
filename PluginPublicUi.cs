@@ -333,6 +333,7 @@ public sealed partial class Plugin {
             ImGui.EndTabItem();
         }
         if(ImGui.BeginTabItem("Hunts")) {
+            System.Threading.Volatile.Write(ref huntTabRequestedUntil, Environment.TickCount64 + 1000);
 #if GILLIONS_TEST_BUILD
             RequestWatchedFateMarkers();
 #endif

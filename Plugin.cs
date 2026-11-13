@@ -634,7 +634,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         Observe("travel upload", now, static (plugin, at) => plugin.TickTravelSync(at));
 #if GILLIONS_TEST_BUILD
         Observe("character appearance", now, static (plugin, at) => plugin.TickAppearance(at));
-        Observe("Watched FATEs", now, static (plugin, at) => plugin.TickWatchedFates(at));
+        Observe("Watched FATEs", now, static (plugin, _) => plugin.TickWatchedFates());
         Observe("Hunt awareness", now, static (plugin, _) => plugin.TickHuntAwareness());
 #endif
         if (now >= nextMarketMaintenanceUtc) {
@@ -721,7 +721,8 @@ public sealed partial class Plugin : IDalamudPlugin {
     }
 
     private bool TickHuntObservation(DateTime now) {
-        huntLocal.ProgressRequested = configuration.ShowHuntProgress;
+        huntLocal.ProgressRequested = configuration.ShowHuntProgress
+            || Environment.TickCount64 < Volatile.Read(ref huntTabRequestedUntil);
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         var huntRevision = huntLocal.SemanticRevision;
         var coverageRevision = huntLocal.CoverageRevision;
