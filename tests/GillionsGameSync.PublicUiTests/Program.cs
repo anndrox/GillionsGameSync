@@ -95,6 +95,8 @@ var cases=new[]{
     ("53-fates-here-narrow","DrawPublicSettings",true,420f,1f,1),
     ("54-fates-here-empty","DrawPublicSettings",true,420f,1f,1),
     ("55-fates-here-unavailable","DrawPublicSettings",true,420f,1f,1),
+    ("56-fates-here-name-tooltip","DrawPublicSettings",true,420f,1f,1),
+    ("57-fates-here-flag-tooltip","DrawPublicSettings",true,420f,1f,1),
 };
 if(args.Length==4 && args[3]=="final") {
     string[] selected=["01","02","03","04","08","09","18","19","20","23","24","25","26","30","31","34","37","39","40","41"];
@@ -152,7 +154,7 @@ foreach(var (name,method,paired,width,scale,tab) in cases) {
     var markRows = Array.CreateInstance(T("HuntTabMark"), 0);
     var fatesFixture = name.Contains("fates-here");
     var huntsFixture = name.Contains("hunts-option-a") || fatesFixture;
-    var emptyBills = name.Contains("hunts-option-a-empty");
+    var emptyBills = name.EndsWith("-empty");
     object? MapPoint(uint targetId, uint mapId) {
         if (!huntsFixture || emptyBills) return null;
         var now = DateTime.UtcNow;
@@ -177,7 +179,8 @@ foreach(var (name,method,paired,width,scale,tab) in cases) {
         if (!fatesFixture) markRows.SetValue(New("HuntTabMark", 201u, "Gnath Cometdrone", "The Dravanian Forelands", null, null), 1);
     }
     var bills = New("HuntTabBills", billRows, emptyBills, huntsFixture ? long.MaxValue : 0L);
-    Set("huntTab", New("HuntsTabView", emptyBills ? "Location: sharing off" : "Location: sent", bills, markRows, MapPoint(100u, 50u)));
+    Set("huntTab", New("HuntsTabView", emptyBills ? "Location: sharing off" : name.EndsWith("unavailable")
+        ? "Location: not accepted by the site (game version)" : "Location: sent", bills, markRows, MapPoint(100u, 50u)));
     var local = RuntimeHelpers.GetUninitializedObject(T("FateLocalView"));
     var fateSnapshot = T("HuntsFates").GetField("Unavailable", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
     if (fatesFixture && !name.EndsWith("unavailable")) {
@@ -191,7 +194,7 @@ foreach(var (name,method,paired,width,scale,tab) in cases) {
             fates.SetValue(New("HuntsFateRow", (ushort)1052, "The Gold Rush", (byte)59, (byte)100,
                 "ending", tick + 19000, null), 2);
         }
-        fateSnapshot = New("HuntsFates", New("FateContext", 123ul, 1u, 1u, 0u), 50u, long.MaxValue, true, fates);
+        fateSnapshot = New("HuntsFates", New("FateContext", 123ul, 1u, 1u, 0u), 50u, long.MaxValue, true, fates, "Azys Lla");
     }
     T("FateLocalView").GetField("hunts", flags)!.SetValue(local, fateSnapshot);
     Set("fateLocal", local);
@@ -220,7 +223,7 @@ unsafe void Render(string name,object plugin,MethodInfo draw,float width,float s
         ImGui.StyleColorsDark();ImGui.GetStyle().ScaleAllSizes(scale);
         string title=draw.Name=="DrawHuntProgress"?"Hunt Progress":draw.Name=="DrawPublicSettings"?"Gillions Settings":draw.Name=="DrawPairingPublic"?"Welcome to Gillions":"Gillions Game Sync";
         if(testing&&draw.Name!="DrawHuntProgress")title+=" [TESTING]";
-        // Synthetic ImGui IO restricted to the Settings tab strip, not OS input.
+        // Select the Settings tab and hover fixture rows with synthetic ImGui IO.
         bool hunt=draw.Name=="DrawHuntProgress";
         string surface=hunt?"hunts":draw.Name=="DrawPublicSettings"?"settings":draw.Name=="DrawPairingPublic"?"pairing":"main";
         var actualWindow=(Window)T("PublicGameSyncUi").GetField(surface,flags)!.GetValue(actualWindows)!;
@@ -228,14 +231,18 @@ unsafe void Render(string name,object plugin,MethodInfo draw,float width,float s
         var chosenSize=new Vector2(width*scale,(hunt?(name.Contains("duplicate-names")?300:180):actualWindow.Size!.Value.Y)*scale);
         if(name.Contains("short"))chosenSize.Y=constraints.MinimumSize.Y*scale;
         if(name.Contains("hunts-option-a"))chosenSize.Y=800*scale;
-        if(name.Contains("fates-here"))chosenSize.Y=(name.EndsWith("narrow") ? 1280 : 1080)*scale;
+        if(name.Contains("fates-here"))chosenSize.Y=(name.EndsWith("empty") ? 260 : 460)*scale;
         chosenSize=Vector2.Max(chosenSize,constraints.MinimumSize*scale);
         var progressModel=hunt?T("Plugin").GetField("huntProgress",flags)!.GetValue(plugin):null;
         var displayProperty=T("HuntProgressState").GetProperty("Display",flags)!;
         var originalDisplay=hunt?displayProperty.GetValue(progressModel):null;
         float scrollMax=0;
-        for(int frame=0;frame<7;frame++) {
-            if(tab>0&&frame>0){
+        bool hoverFixture = name.EndsWith("-tooltip");
+        for(int frame=0;frame<(hoverFixture ? 10 : 7);frame++) {
+            if (hoverFixture && frame >= 5) {
+                // First FATE name or its map flag in the 420px fixture.
+                io.AddMousePosEvent(name.Contains("name-tooltip") ? 102 : 423, 404);
+            } else if(tab>0&&frame>0){
                 var style=ImGui.GetStyle();
                 string[] labels = testing ? ["General", "Hunts", "Sharing", "Connection", "Advanced"] : ["General", "Hunts", "Connection", "Advanced"];
                 int targetTab = testing && tab >= 2 ? tab + 1 : tab;

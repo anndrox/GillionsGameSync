@@ -87,162 +87,157 @@ public sealed partial class Plugin {
     }
 
     private void DrawHuntsTab(HuntsTabView view, HuntsFates fates) {
-        ImGui.Spacing();
-        if (view.Location.Length > 0) Label(view.Location);
-        bool wide = ImGui.GetContentRegionAvail().X >= ImGui.GetFontSize() * 30;
+        if (view.Location.Length > 0 && view.Location != LocationUploadPresentation.Sent) Label(view.Location);
         long tick = Environment.TickCount64;
-        DrawHuntTabHeading("Hunt bill targets");
-        var bills = view.Bills;
         ImGui.PushStyleColor(ImGuiCol.PlotHistogram, new Vector4(.28f, .41f, .55f, 1));
-        if (Environment.TickCount64 >= bills.ExpiresAt || (!bills.EmptyConfirmed && bills.Rows.Length == 0))
-            Label("Hunt bill state is unknown.");
-        else if (bills.EmptyConfirmed)
-            Label("No hunt bills open");
+        DrawBillTargets(view, fates, tick);
+        DrawBRankMarks(view.Marks);
+        DrawFatesHere(fates, tick);
+        ImGui.PopStyleColor();
+    }
 
-        else
-            foreach (var group in bills.Rows.GroupBy(row => (row.Weekly, row.BillId, row.OrderId, row.Tier))
-                .OrderBy(group => group.Key.Weekly).ThenBy(group => group.Key.BillId)) {
-                ImGui.PushID(group.Key.BillId);
-                Label(group.Key.Weekly ? "Weekly bill" : $"Daily bill · Tier {group.Key.Tier}");
-                bool table = wide && ImGui.BeginTable("Bill targets", 3,
-                    ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerH);
-                if (table) {
-                    ImGui.TableSetupColumn("Target", ImGuiTableColumnFlags.WidthStretch);
-                    ImGui.TableSetupColumn("Progress", ImGuiTableColumnFlags.WidthFixed, ImGui.GetFontSize() * 7);
-                    ImGui.TableSetupColumn("Map", ImGuiTableColumnFlags.WidthFixed);
-                }
+    private void DrawBillTargets(HuntsTabView view, HuntsFates fates, long tick) {
+        var bills = view.Bills;
+        if (tick >= bills.ExpiresAt || bills.EmptyConfirmed || bills.Rows.Length == 0) return;
+        DrawHuntTabHeading("Hunt bill targets");
+        foreach (var group in bills.Rows.GroupBy(row => (row.Weekly, row.BillId, row.OrderId, row.Tier))
+            .OrderBy(group => group.Key.Weekly).ThenBy(group => group.Key.BillId)) {
+            ImGui.PushID(group.Key.BillId);
+            Label(group.Key.Weekly ? "Weekly bill" : $"Daily bill · Tier {group.Key.Tier}");
+            if (BeginHuntRows("Bill targets", true)) {
                 foreach (var row in group) {
                     ImGui.PushID(row.Target.Key);
-                    if (table) { ImGui.TableNextRow(); ImGui.TableNextColumn(); }
-                    else ImGui.Separator();
+                    ImGui.TableNextRow();
+                    ImGui.TableNextColumn();
                     bool fateLinked = !string.IsNullOrWhiteSpace(row.FateName);
                     var fate = fateLinked ? Array.Find(fates.Rows, candidate => candidate.Id == row.FateId) : null;
                     if (fateLinked) {
                         DrawHuntBadge("FATE", true);
                         ImGui.SameLine();
                     }
-                    Label(row.Target.Name);
-                    Label(row.Zone);
-                    if (table) ImGui.TableNextColumn();
-                    float barWidth = table ? -1 : Math.Max(ImGui.GetFontSize() * 3, ImGui.GetContentRegionAvail().X
-                        - ImGui.CalcTextSize("Flag on map").X - 2 * ImGui.GetStyle().FramePadding.X - ImGui.GetStyle().ItemSpacing.X);
-                    ImGui.ProgressBar((float)row.Target.Current / row.Target.Required, new Vector2(barWidth, 0),
+                    DrawHuntName(row.Target.Name, row.Zone);
+                    ImGui.TableNextColumn();
+                    ImGui.ProgressBar((float)row.Target.Current / row.Target.Required, new Vector2(-1, 0),
                         $"{row.Target.Current}/{row.Target.Required} kills");
-                    if (table) ImGui.TableNextColumn();
-                    else ImGui.SameLine();
+                    ImGui.TableSetColumnIndex(3);
                     var point = view.Point?.Matches(row.TargetId, row.MapId) == true ? view.Point : null;
                     if (point is null && fate is { Position: not null }) DrawFateMapButton(fates, fate);
                     else DrawHuntTabMapButton(point);
-                    if (fateLinked) {
-                        if (table) { ImGui.TableNextRow(); ImGui.TableNextColumn(); }
-                        DrawBillFate(row.FateName!, fate, fates.Complete, table, tick);
+                    if (fate is not null) {
+                        ImGui.TableNextRow();
+                        ImGui.TableNextColumn();
+                        ImGui.Indent(ImGui.GetFontSize());
+                        DrawHuntName(row.FateName!, fates.Zone, FateLevel(fate));
+                        ImGui.Unindent(ImGui.GetFontSize());
+                        ImGui.TableNextColumn();
+                        DrawFateProgress(fate, "FATE ");
+                        ImGui.TableNextColumn();
+                        DrawHuntCellText(fate.TimeLeft(tick));
                     }
                     ImGui.PopID();
                 }
-                if (table) ImGui.EndTable();
-                ImGui.PopID();
+                ImGui.EndTable();
             }
-
-        DrawHuntTabHeading("B-rank marks");
-        if (view.Marks.Length == 0) Label("No B-rank marks to show.");
-        bool markTable = view.Marks.Length > 0 && wide && ImGui.BeginTable("B-rank rows", 3,
-            ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerH);
-        if (markTable) {
-            ImGui.TableSetupColumn("Mark", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn("Last seen", ImGuiTableColumnFlags.WidthFixed, ImGui.GetFontSize() * 9);
-            ImGui.TableSetupColumn("Map", ImGuiTableColumnFlags.WidthFixed);
+            ImGui.PopID();
         }
-        foreach (var mark in view.Marks) {
+    }
+
+    private void DrawBRankMarks(HuntTabMark[] marks) {
+        if (marks.Length == 0) return;
+        DrawHuntTabHeading("B-rank marks");
+        if (!BeginHuntRows("B-rank rows", false)) return;
+        foreach (var mark in marks) {
             ImGui.PushID((int)mark.TargetId);
-            if (markTable) { ImGui.TableNextRow(); ImGui.TableNextColumn(); }
-            else ImGui.Separator();
+            ImGui.TableNextRow();
+            ImGui.TableNextColumn();
             DrawHuntBadge("B", false);
             ImGui.SameLine();
-            ImGui.BeginGroup();
-            Label(mark.Name);
-            Label(mark.Zone);
-            ImGui.EndGroup();
-            if (markTable) ImGui.TableNextColumn();
-            Label(mark.SeenAt is { } seen ? LastSeenLabel(seen, DateTime.UtcNow) : "Last seen unknown");
-            if (markTable) ImGui.TableNextColumn();
+            DrawHuntName(mark.Name, mark.Zone);
+            ImGui.TableNextColumn();
+            DrawHuntCellText(mark.SeenAt is { } seen ? LastSeenLabel(seen, DateTime.UtcNow) : "Last seen unknown");
+            ImGui.TableNextColumn();
             DrawHuntTabMapButton(mark.Point);
             ImGui.PopID();
         }
-        if (markTable) ImGui.EndTable();
-        DrawFatesHere(fates, wide, tick);
-        ImGui.PopStyleColor();
+        ImGui.EndTable();
     }
 
-    private static void DrawBillFate(string name, HuntsFateRow? row, bool complete, bool table, long tick) {
-        Label(name);
-        if (row is null) {
-            Label(complete ? "Not active here" : "FATE status unavailable");
-            if (table) ImGui.TableNextColumn();
-            Label("Progress unavailable");
-            if (table) ImGui.TableNextColumn();
-            Label("Time unavailable");
-            return;
-        }
-        if (table) ImGui.TableNextColumn();
-        DrawFateProgress(row, "FATE ");
-        if (table) ImGui.TableNextColumn();
-        Label(row.TimeLeft(tick));
-    }
-
-    private void DrawFatesHere(HuntsFates snapshot, bool wide, long tick) {
+    private void DrawFatesHere(HuntsFates snapshot, long tick) {
+        if (snapshot.Rows.Length == 0) return;
         DrawHuntTabHeading("FATEs here");
-        if (snapshot.Rows.Length == 0) {
-            Label(snapshot.Complete ? "No FATEs active in this area" : "FATEs unavailable in this area");
-            return;
-        }
-        bool table = wide && ImGui.BeginTable("Local FATE rows", 4,
-            ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerH);
-        if (table) {
-            ImGui.TableSetupColumn("FATE", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableSetupColumn("Progress", ImGuiTableColumnFlags.WidthFixed, ImGui.GetFontSize() * 6);
-            ImGui.TableSetupColumn("Time and state", ImGuiTableColumnFlags.WidthFixed, ImGui.GetFontSize() * 6);
-            ImGui.TableSetupColumn("Map", ImGuiTableColumnFlags.WidthFixed);
-        }
+        if (!snapshot.Complete && ImGui.IsItemHovered()) ImGui.SetTooltip("Some FATE details are unavailable.");
+        if (!BeginHuntRows("Local FATE rows", true)) return;
         for (int index = 0; index < snapshot.Rows.Length; index++) {
             var row = snapshot.Rows[index];
             ImGui.PushID(index);
-            if (table) { ImGui.TableNextRow(); ImGui.TableNextColumn(); }
-            else ImGui.Separator();
-            Label(row.Name);
-            Label(row.Level is { } level ? $"Level {level}" : "Level unknown");
-            if (table) ImGui.TableNextColumn();
-            string time = row.TimeLeft(tick);
-            string state = row.State switch { "preparing" => "Preparing", "running" => "Running", _ => "Ending" };
-            var style = ImGui.GetStyle();
-            float remaining = ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize("Flag on map").X
-                - 2 * style.FramePadding.X - 2 * style.ItemSpacing.X
-                - Math.Max(ImGui.CalcTextSize(time).X, ImGui.CalcTextSize(state).X);
-            bool inline = !table && remaining >= ImGui.GetFontSize() * 9;
-            DrawFateProgress(row, "", inline ? remaining : -1);
-            if (table) ImGui.TableNextColumn();
-            else if (inline) ImGui.SameLine();
-            ImGui.BeginGroup();
-            Label(time);
-            Label(state);
-            ImGui.EndGroup();
-            if (table) ImGui.TableNextColumn();
-            else if (inline) ImGui.SameLine();
+            ImGui.TableNextRow();
+            ImGui.TableNextColumn();
+            DrawHuntName(row.Name, snapshot.Zone, FateLevel(row));
+            ImGui.TableNextColumn();
+            DrawFateProgress(row, "");
+            ImGui.TableNextColumn();
+            DrawHuntCellText(row.TimeLeft(tick));
+            ImGui.TableNextColumn();
             DrawFateMapButton(snapshot, row);
             ImGui.PopID();
         }
-        if (table) ImGui.EndTable();
-        if (!snapshot.Complete) Label("Some FATE details are unavailable.");
+        ImGui.EndTable();
     }
 
-    private static void DrawFateProgress(HuntsFateRow row, string prefix, float width = -1) {
+    private static bool BeginHuntRows(string id, bool progress) {
+        if (!ImGui.BeginTable(id, progress ? 4 : 3, ImGuiTableFlags.SizingFixedFit)) return false;
+        ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
+        if (progress) ImGui.TableSetupColumn("Progress", ImGuiTableColumnFlags.WidthFixed, ImGui.GetFontSize() * 5);
+        ImGui.TableSetupColumn("Time", ImGuiTableColumnFlags.WidthFixed, ImGui.GetFontSize() * (progress ? 6 : 10));
+        ImGui.TableSetupColumn("Map", ImGuiTableColumnFlags.WidthFixed, ImGui.GetFrameHeight());
+        return true;
+    }
+
+    private static string FateLevel(HuntsFateRow row) => row.Level is { } level ? $"Level {level}" : "Level unknown";
+
+    private static void DrawHuntName(string name, string zone, string? level = null) {
+        DrawHuntCellText(name);
+        if (!ImGui.IsItemHovered()) return;
+        ImGui.BeginTooltip();
+        ImGui.TextUnformatted(name);
+        ImGui.TextUnformatted(zone);
+        if (level is not null) ImGui.TextUnformatted(level);
+        ImGui.EndTooltip();
+    }
+
+    private static void DrawHuntCellText(string text) {
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextUnformatted(text);
+    }
+
+    private static void DrawFateProgress(HuntsFateRow row, string prefix) {
+        if (row.State == "preparing") ImGui.PushStyleVar(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * .6f);
         if (row.Progress is { } progress)
-            ImGui.ProgressBar(progress / 100f, new Vector2(width, 0), $"{prefix}{progress}%");
-        else Label("Progress unavailable");
+            ImGui.ProgressBar(progress / 100f, new Vector2(-1, 0), $"{prefix}{progress}%");
+        else {
+            DrawHuntCellText("Unknown");
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Progress unavailable");
+        }
+        if (row.State == "preparing") ImGui.PopStyleVar();
+    }
+
+    private static bool DrawFlagButton(bool disabled) {
+        float size = ImGui.GetFrameHeight();
+        ImGui.BeginDisabled(disabled);
+        bool clicked = ImGui.Button("##Flag on map", new Vector2(size));
+        var start = ImGui.GetItemRectMin() + new Vector2(size * .31f, size * .27f);
+        var ink = ImGui.GetWindowDrawList();
+        uint colour = ImGui.GetColorU32(ImGuiCol.Text);
+        ink.AddLine(start, start + new Vector2(0, size * .49f), colour, Math.Max(1, size * .065f));
+        ink.AddTriangleFilled(start, start + new Vector2(size * .45f, size * .13f),
+            start + new Vector2(0, size * .27f), colour);
+        ImGui.EndDisabled();
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip("Flag on map");
+        return clicked;
     }
 
     private void DrawFateMapButton(HuntsFates snapshot, HuntsFateRow row) {
-        ImGui.BeginDisabled(row.Position is null);
-        if (ImGui.Button("Flag on map") && row.Position is { } position)
+        if (DrawFlagButton(row.Position is null) && row.Position is { } position)
             QueueUiAction(() => {
                 if (!fateLocal.CanFlag(snapshot) || !HuntsFateRow.ValidPosition(position)) return;
                 var territory = snapshot.Context!.Territory;
@@ -251,12 +246,11 @@ public sealed partial class Plugin {
                 huntMapGui.OpenMapWithMapLink(new MapLinkPayload(territory, snapshot.Map,
                     (int)Math.Round(position.X * 1000), (int)Math.Round(position.Z * 1000)));
             });
-        ImGui.EndDisabled();
     }
 
     private static string LastSeenLabel(DateTime seen, DateTime now) {
         var age = now - seen;
-        if (age.TotalMinutes < 1) return "Last seen less than a minute ago";
+        if (age.TotalMinutes < 1) return "Last seen <1 min ago";
         if (age.TotalHours < 1) return $"Last seen {(int)age.TotalMinutes} min ago";
         return $"Last seen {seen.ToLocalTime():t}";
     }
@@ -293,11 +287,10 @@ public sealed partial class Plugin {
     }
 
     private void DrawHuntTabMapButton(HuntTabMapPoint? point) {
-        ImGui.BeginDisabled(point is null || !point.Clock.Unexpired(point.ExpiresAt) || point.RelayUntil <= DateTime.UtcNow);
-        if (ImGui.Button("Flag on map") && point is not null)
+        if (DrawFlagButton(point is null || !point.Clock.Unexpired(point.ExpiresAt) || point.RelayUntil <= DateTime.UtcNow)
+            && point is not null)
             QueueUiAction(() => {
                 if (ReferenceEquals(point, CurrentHuntTabPoint())) huntMapGui.OpenMapWithMapLink(point.Link);
             });
-        ImGui.EndDisabled();
     }
 }

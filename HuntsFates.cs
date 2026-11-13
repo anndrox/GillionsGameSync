@@ -23,7 +23,7 @@ internal sealed record HuntsFateRow(ushort Id, string Name, byte? Level, byte? P
 }
 
 internal sealed record HuntsFates(FateContext? Context, uint Map, long ExpiresAt,
-    bool Complete, HuntsFateRow[] Rows) {
-    internal static readonly HuntsFates Unavailable = new(null, 0, 0, false, []);
+    bool Complete, HuntsFateRow[] Rows, string Zone) {
+    internal static readonly HuntsFates Unavailable = new(null, 0, 0, false, [], "Zone unknown");
     internal bool IsFresh(long tick) => Context is not null && tick < ExpiresAt;
 }

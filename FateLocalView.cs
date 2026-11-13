@@ -209,10 +209,14 @@ internal sealed class FateLocalView : IDisposable {
                 if (collect) Invalidate(); else ClearHunts();
                 outcome="Context/table changed during read; epoch discarded."; return;
             }
-            if (local is not null)
+            if (local is not null) {
+                var zone = data.GetExcelSheet<TerritoryType>().GetRowOrDefault(before.Territory)?
+                    .PlaceName.ValueNullable?.Name.ExtractText();
                 hunts = map == client.MapId && (complete || local.Count > 0)
-                    ? new(before, map, sampledAt + FatePolicy.ReadSeconds * 2000, complete, local.ToArray())
+                    ? new(before, map, sampledAt + FatePolicy.ReadSeconds * 2000, complete, local.ToArray(),
+                        string.IsNullOrWhiteSpace(zone) ? "Zone unknown" : zone)
                     : HuntsFates.Unavailable;
+            }
             if (!collect) return;
             rows=copied.ToArray();
             readMs=Stopwatch.GetElapsedTime(start).TotalMilliseconds;

@@ -329,21 +329,12 @@ public sealed partial class Plugin {
         if(!ImGui.BeginTabBar("GillionsSettingsTabs")) return;
         if(ImGui.BeginTabItem("General")) {
             Label("Window placement and resizing follow Dalamud. Drag a window edge to resize it; shorter windows scroll. Game Sync never automates gameplay.");
+            DrawHuntSettings();
             ImGui.EndTabItem();
         }
         if(ImGui.BeginTabItem("Hunts")) {
-            SettingsGroup("Hunt Progress");
-            bool show=configuration.ShowHuntProgress, locked=configuration.LockHuntProgressPosition;
-            if(ImGui.Checkbox("Show Hunt Progress",ref show)) QueueUiAction(()=> { configuration.ShowHuntProgress=show; RequestConfigurationSave(); });
-            SettingsHelp("Show Hunt targets for your current area. Closing the panel hides it until you change area.");
-            if(ImGui.Checkbox("Lock position",ref locked)) QueueUiAction(()=> { configuration.LockHuntProgressPosition=locked; RequestConfigurationSave(); });
-            SettingsHelp("Keep the Hunt Progress window in place.");
-            if(show && ImGui.Button("Open Hunt Progress")) QueueUiAction(()=>huntProgress.Open());
             fateLocal.RequestHunts();
             DrawHuntsTab(huntTab, fateLocal.Hunts);
-#if GILLIONS_TEST_BUILD
-            DrawHuntAwarenessSettings();
-#endif
             ImGui.EndTabItem();
         }
 #if GILLIONS_TEST_BUILD
@@ -402,6 +393,20 @@ public sealed partial class Plugin {
         }
         ImGui.EndTabBar();
     }
+
+    private void DrawHuntSettings() {
+        SettingsGroup("Hunt Progress");
+        bool show=configuration.ShowHuntProgress, locked=configuration.LockHuntProgressPosition;
+        if(ImGui.Checkbox("Show Hunt Progress",ref show)) QueueUiAction(()=> { configuration.ShowHuntProgress=show; RequestConfigurationSave(); });
+        SettingsHelp("Show Hunt targets for your current area. Closing the panel hides it until you change area.");
+        if(ImGui.Checkbox("Lock position",ref locked)) QueueUiAction(()=> { configuration.LockHuntProgressPosition=locked; RequestConfigurationSave(); });
+        SettingsHelp("Keep the Hunt Progress window in place.");
+        if(show && ImGui.Button("Open Hunt Progress")) QueueUiAction(()=>huntProgress.Open());
+#if GILLIONS_TEST_BUILD
+        DrawHuntAwarenessSettings();
+#endif
+    }
+
     private void DrawHuntProgress() {
         var display=huntProgress.Display;
         Label(display.Area);
