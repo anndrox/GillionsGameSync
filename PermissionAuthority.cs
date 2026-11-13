@@ -36,7 +36,8 @@ internal sealed class PermissionAuthority {
     internal bool ExplicitSeen(string key) => explicitSeen.Contains(key);
     internal bool Explicit(string key, long clock) => Fresh(clock) && decisions.TryGetValue(key, out var p) && p.State == "explicit";
     internal bool Allows(string key, bool historical, long clock) => Fresh(clock) && decisions.TryGetValue(key, out var p)
-        && (p.State == "explicit" ? p.Enabled == true : p.State == "legacy" && !explicitSeen.Contains(key) && historical);
+        && (p.State == "explicit" ? p.Enabled == true
+            : key != DesynthesisPermission && p.State == "legacy" && !explicitSeen.Contains(key) && historical);
     internal string Identity(string key, long clock) => !Fresh(clock) || !decisions.TryGetValue(key, out var p) ? "unavailable"
         : p.Identity;
     // Denial custody is not authorization. Keep the last known decision identity

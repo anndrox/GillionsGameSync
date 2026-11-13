@@ -18,7 +18,7 @@ public sealed partial class Plugin {
     private bool DesynthesisAllowed => !disposed && clientState.IsLoggedIn && activeOwnedState is not null
         && playerState.IsLoaded && playerState.ContentId != 0 && playerState.ContentId == activeRetainerCharacterContentId
         && SitePermissionOrigin && HasPairedSession
-        && permissionAuthority.Allows(DesynthesisResults.Permission, true, Environment.TickCount64);
+        && permissionAuthority.Allows(DesynthesisResults.Permission, false, Environment.TickCount64);
 
     private void ResetDesynthesis() {
         desynthesisQueue.SetEnabled(false);

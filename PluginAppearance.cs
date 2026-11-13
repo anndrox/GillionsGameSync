@@ -85,7 +85,7 @@ public sealed partial class Plugin {
             Label("Sharing status is unavailable.");
             Label("Character appearance");
             Label(appearanceSharingStatus);
-            Label(DesynthesisResults.Label);
+            Label($"{DesynthesisResults.Label}: Off");
             Label(DesynthesisResults.Description);
             return;
         }
@@ -96,8 +96,7 @@ public sealed partial class Plugin {
             if (category.Key == "appearance") Label(appearanceSharingStatus);
         }
         var desynthesis = status.Categories.FirstOrDefault(category => category.Key == DesynthesisResults.Permission);
-        Label(desynthesis is null ? DesynthesisResults.Label
-            : $"{DesynthesisResults.Label}: {(desynthesis.State == "not-set" && DesynthesisAllowed ? "On" : desynthesis.DisplayState)}");
+        Label($"{DesynthesisResults.Label}: {desynthesis?.DisplayState ?? "Off"}");
         Label(DesynthesisResults.Description);
         Dalamud.Bindings.ImGui.ImGui.PopTextWrapPos();
         Link("Change on gillions.app", status.SettingsUrl);

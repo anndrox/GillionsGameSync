@@ -557,7 +557,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             PartyFinderLinks: Local("partyFinderLinks", configuration.EnableItemLinkRequests && configuration.EnablePartyFinderLinkRequests),
             AutomaticHuntMaps: Local("automaticHuntMaps", configuration.AutomaticallyShowHuntMap),
 #if GILLIONS_TEST_BUILD
-            DesynthesisResults: Local("desynthesisResults", true)
+            DesynthesisResults: Local("desynthesisResults", false)
 #else
             DesynthesisResults: null
 #endif

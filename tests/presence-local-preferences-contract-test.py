@@ -26,5 +26,5 @@ assert 'configuration.SubmarineVoyages.LocalRetentionEnabled' in argument('Perso
 assert 'configuration.EnableItemLinkRequests && configuration.EnablePartyFinderLinkRequests' in argument('PartyFinderLinks')
 assert 'configuration.AutomaticallyShowHuntMap' in argument('AutomaticHuntMaps')
 assert 'historical && !permissionAuthority.ExplicitSeen(key)' in local
-assert 'DesynthesisResults: Local("desynthesisResults", true)' in local
+assert 'DesynthesisResults: Local("desynthesisResults", false)' in local
 print('Presence local preferences PASS: Gillions origins only, one presence factory, each key reports its own legacy input.')

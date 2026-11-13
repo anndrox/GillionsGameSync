@@ -162,9 +162,7 @@ internal static class NativeCompatibilityPackagedTests {
         Check(Revision(typeof(IFramework).Assembly)==P(runtime!,"DalamudRevision"),"inspected Dalamud revision differs from the table");
         var fingerprints=Fingerprints(native);
         foreach(var (family,_) in Families) {
-            var listed=family=="Desynthesis"
-                ? plugin.GetName().Name=="GillionsGameSyncTest" && installed=="7.57.0.9480"
-                : Builds(family).Any(b=>P(b,"ClientStructsVersion")==installed);
+            var listed=Builds(family).Any(b=>P(b,"ClientStructsVersion")==installed);
             var measured=Expected.TryGetValue((family,installed),out var expected);
             Check(!listed || measured,family+" has no recorded layout for "+installed);
             if(!measured) continue;
@@ -178,6 +176,15 @@ internal static class NativeCompatibilityPackagedTests {
         void Offset(Type t,string f,int at)=>Check(t.GetField(f,BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic)!
             .GetCustomAttribute<FieldOffsetAttribute>()?.Value==at,t.Name+"."+f+" offset");
         var hunt=N("UI.MobHunt");Check(hunt.StructLayoutAttribute!.Size==0x1f0,"MobHunt size");
+        Check(Builds("Desynthesis") is [var desynthesis]
+            && P(desynthesis,"GameBuild")=="2026.11.03.0000.0000"
+            && P(desynthesis,"ClientStructsVersion")=="7.57.0.9480", "Desynthesis has its own November-only runtime");
+        if (installed=="7.57.0.9480") {
+            Type Ui(string name)=>native.GetType("FFXIVClientStructs.FFXIV."+name,true)!;
+            Offset(Ui("Component.GUI.AtkUnitBase"),"Flags198",0x198);
+            Check(Convert.ToByte(Enum.Parse(Ui("Component.GUI.AtkUnitBaseVisibilityState"),"Show"))==2,
+                "Desynthesis addon visibility uses the Show bit");
+        }
         Offset(hunt,"_availableMarkId",0x08);Offset(hunt,"_obtainedMarkId",0x1e);Offset(hunt,"_currentKills",0x34);Offset(hunt,"ObtainedFlags",0x1ec);
         Check(hunt.GetMethod("GetKillCount")!.ReturnType==typeof(int)
             && hunt.GetMethod("GetKillCount")!.GetParameters().Select(p=>p.ParameterType).SequenceEqual(new[]{typeof(byte),typeof(byte)}),"kill accessor ABI");

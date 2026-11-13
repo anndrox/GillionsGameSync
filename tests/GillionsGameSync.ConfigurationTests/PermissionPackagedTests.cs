@@ -33,10 +33,10 @@ internal static class PermissionPackagedTests {
             && !(bool)Call("Allows", "desynthesisResults", true, 0L)!
             && (bool)Call("Allows", "itemLinks", true, 0L)!, "older Site renews existing permissions without enabling desynthesis");
         Check((bool)Call("Apply",Fixture(false,false).ToJsonString(),issued,0L,null)!,"legacy authority accepted");
-        Check((bool)Call("Allows", "desynthesisResults", true, 0L)!, "new pairing's legacy desynthesis defaults on");
+        Check(!(bool)Call("Allows", "desynthesisResults", true, 0L)!, "unset desynthesis stays Off even with a historical On input");
         foreach(var key in keys) {
             Check(!(bool)Call("Allows",key,false,0L)!,key+" historical OFF preserved");
-            Check((bool)Call("Allows",key,true,0L)!,key+" historical ON preserved");
+            Check((bool)Call("Allows",key,true,0L)! == (key != "desynthesisResults"), key+" historical ON policy");
         }
         Check((bool)Call("Apply",Fixture(true,true).ToJsonString(),issued,0L,null)!,"explicit authority accepted");
         foreach(var key in keys)Check((bool)Call("Allows",key,false,0L)!,key+" fresh explicit ON supersedes local OFF");
@@ -69,6 +69,11 @@ internal static class PermissionPackagedTests {
             pluginType.GetField("configuration",flags)!.SetValue(plugin,config);
             pluginType.GetField("permissionAuthority",flags)!.SetValue(plugin,instance);
             if (pluginType.GetMethod("ApplySharingStatus", flags) is { } applySharingStatus) {
+                var category = assembly.GetType("GillionsGameSync.ConsentCategory", true)!;
+                string? State(string value) => (string?)category.GetProperty("DisplayState", flags)!.GetValue(
+                    Activator.CreateInstance(category, ["desynthesisResults", "Desynthesis results", value, null, null]));
+                Check(State("not-set") == "Off" && State("off") == "Off" && State("on") == "On",
+                    "Sharing shows unset desynthesis as Off and honours explicit Site decisions");
                 var queue = Activator.CreateInstance(assembly.GetType("GillionsGameSync.AppearanceQueue", true)!, true)!;
                 var retry = Activator.CreateInstance(assembly.GetType("GillionsGameSync.ResourceRetry", true)!, true)!;
                 using var cancellation = new CancellationTokenSource();

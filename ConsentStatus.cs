@@ -7,7 +7,12 @@ using System.Text.Json;
 namespace GillionsGameSync;
 
 internal sealed record ConsentCategory(string Key, string Label, string State, string? Generation, DateTimeOffset? DecidedAt) {
-    internal string DisplayState => State switch { "on" => "On", "off" => "Off", _ => "Not set" };
+    internal string DisplayState => State switch {
+        "on" => "On",
+        "off" => "Off",
+        _ when Key == "desynthesisResults" => "Off",
+        _ => "Not set",
+    };
 }
 
 internal sealed record ConsentStatus(long CharacterId, DateTimeOffset IssuedAt, string SettingsUrl, IReadOnlyList<ConsentCategory> Categories) {

@@ -8,12 +8,12 @@ internal sealed record NativeBuild(string GameBuild, string DalamudVersion, stri
     string ClientStructsVersion, string ClientStructsRevision, string LuminaVersion, string ExcelVersion);
 
 // Each collector family reads different native layouts and is qualified on its
-// own. A build is listed for a family only after the ClientStructs members that
-// family reads were compared with an earlier accepted qualification (evidence
-// and the patch-day procedure: docs/native-compatibility.md). Anything unlisted
+// own. Each entry requires a pinned source and shipped layout review, including
+// comparison to the previous qualification where one exists (evidence and the
+// patch-day procedure: docs/native-compatibility.md). Anything unlisted
 // fails closed before any native read; qualifying one family never admits
 // another. Site authority and player consent remain separate, later gates.
-internal enum NativeFamily { Hunt, Submarine, Travel, Fate, Dashboard, Beastmaster, Appearance }
+internal enum NativeFamily { Hunt, Submarine, Travel, Fate, Dashboard, Beastmaster, Appearance, Desynthesis }
 
 internal static partial class NativeCompatibility {
     internal static readonly NativeBuild September = new("2026.09.15.0000.0000", "15.0.3.6",
@@ -33,6 +33,7 @@ internal static partial class NativeCompatibility {
         NativeFamily.Submarine or NativeFamily.Travel => [September, OctoberHotfix, November],
         NativeFamily.Beastmaster => [September, November],
         NativeFamily.Dashboard => [September],
+        NativeFamily.Desynthesis => [November],
         _ => [],
     };
 

@@ -49,11 +49,8 @@ internal sealed class DesynthesisResultSource : IDisposable {
             if (args.AddonName == Bulk) bulkActive = false;
             return;
         }
-        // Reuse the exact loaded SDK tuple check and restrict this new reader
-        // to the separately fingerprinted November salvage layout.
         if (!data.GameData.Repositories.TryGetValue("ffxiv", out var game)
-            || game.Version != NativeCompatibility.November.GameBuild
-            || !NativeCompatibility.SupportsRuntime(NativeFamily.Appearance, game.Version)) return;
+            || !NativeCompatibility.SupportsRuntime(NativeFamily.Desynthesis, game.Version)) return;
         // One route owns each result. While the bulk dialog is running, ignore
         // the single-result window's lifecycle even if the game also opens it.
         if (args.AddonName == Bulk) {
