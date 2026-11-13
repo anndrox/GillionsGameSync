@@ -175,7 +175,7 @@ public sealed partial class Plugin {
             Task<HttpResponseMessage>? pending=null;
             await framework.RunOnFrameworkThread(()=>{RequirePermit(permit);token.ThrowIfCancellationRequested();if(!AppearanceAuthorized(DateTime.UtcNow)||appearanceGrant!=grant||!appearanceCollector.Available(permit.ContentId))throw new OperationCanceledException();pending=personalHttp.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,token);});
             using var response = await pending!;
-            await SyncResponsePolicy.EnsureSuccessfulAsync(response, token);
+            if (await ReadPersonalUploadFailureAsync(response, token) is { } refusal) throw refusal;
             if ((int)response.StatusCode is not (200 or 201)) throw new InvalidOperationException("Invalid appearance receipt.");
             using var d = JsonDocument.Parse(await SyncResponsePolicy.ReadAsync(response.Content, token));
             var receipt = d.RootElement;

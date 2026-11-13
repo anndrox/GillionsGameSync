@@ -42,7 +42,8 @@ assert 'newest > observedUtc && newest <= now' in model
 assert 'candidateObservedUtc <= observedUtc' in model
 assert 'now - observedUtc >= TimeSpan.FromSeconds(RefreshAfterSeconds)' in model
 assert 'nextReadUtc = now.AddSeconds(3)' in (root/'HuntBills.cs').read_text()
-assert 'Hunt coverage timing:' in plugin and 'Numeric local timings only; no identity/payload logged.' in plugin
+assert 'var refusal = await ReadPersonalUploadFailureAsync(response, token);' in plugin
+assert 'Hunt coverage timing:' not in plugin and 'Uploaded private' not in plugin
 assert 'huntCoverageSync' not in plugin.split('public sealed partial class PluginConfiguration',1)[1]
 assert 'itemCoverage' not in plugin.split('public sealed partial class PluginConfiguration',1)[1]
 assert 'PermissionEnabled("personalHunts", configuration.SyncPersonalHunts) && (configuration.HuntBills.LocalRetentionEnabled || ExplicitPermission("personalHunts"))' in plugin

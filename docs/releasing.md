@@ -14,6 +14,40 @@ unchanged. Follow [Testing88 limits](releases/testing-0.0.88.md), including one
 enabled copy and separate TEST-only enrollment. Historical feed instructions
 below apply only to the original stream and do not authorize overwriting it now.
 
+### Publish a new Testing release
+
+1. Give Site the exact four-part Testing assembly version and full game build. TEST must deploy that admission before publication. A source change or an admitted older plugin version is insufficient.
+2. After review and publication approval, merge at the exact reviewed PR head and check out its merge commit. Use the qualified Dalamud SDK and run the Testing publisher with the reviewed notes.
+
+   ```powershell
+   ./scripts/publish-testing-github-release.ps1 -Version 0.0.103 -GameBuild 2026.11.03.0000.0000 -ReviewedHead <40-character-PR-head> -NotesFile <reviewed-notes-file>
+   ```
+
+3. The publisher checks live TEST admission before creating the prerelease and again before updating the feed. It verifies the public ZIP and manifest by checksum and checks the canonical Testing feed after the update. Use this script for new Testing publications.
+
+The Site dependency is an anonymous, read-only HTTPS GET on
+`https://test.gillions.app/api/game-sync/testing-release-admission` with
+`product=GillionsGameSyncTest`, `version` and `gameBuild` query parameters.
+TEST must evaluate its deployed exact-version and current-build admission and
+return HTTP 200 with `Cache-Control: no-store` and this JSON shape for a confirmed
+match.
+
+```json
+{
+  "ok": true,
+  "admitted": true,
+  "origin": "https://test.gillions.app",
+  "product": "GillionsGameSyncTest",
+  "version": "0.0.103.0",
+  "currentGameBuild": "2026.11.03.0000.0000"
+}
+```
+
+The response above illustrates the contract. The publisher stops on denial,
+an unavailable endpoint, a redirect, or a mismatch in product, origin, version,
+or current game build. The endpoint must derive the current build from Site's
+deployed reference.
+
 ## Prepared Public 1.0.31.3 successor
 
 Published Stable remains 1.0.31.2. The isolated window/status correction now has
