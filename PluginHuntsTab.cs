@@ -172,7 +172,15 @@ public sealed partial class Plugin {
             ImGui.PushID(index);
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            DrawHuntName(row.Name, snapshot.Zone, FateLevel(row));
+            bool watched = false;
+#if GILLIONS_TEST_BUILD
+            watched = IsWatchedFate(row.Id, tick);
+#endif
+            if (watched) {
+                DrawWatchedFateStar();
+                ImGui.SameLine();
+            }
+            DrawHuntName(row.Name, snapshot.Zone, FateLevel(row), watched);
             ImGui.TableNextColumn();
             DrawFateProgress(row, "");
             ImGui.TableNextColumn();
@@ -195,13 +203,32 @@ public sealed partial class Plugin {
 
     private static string FateLevel(HuntsFateRow row) => row.Level is { } level ? $"Level {level}" : "Level unknown";
 
-    private static void DrawHuntName(string name, string zone, string? level = null) {
+    private static void DrawWatchedFateStar() {
+        float size = ImGui.GetTextLineHeight();
+        var center = ImGui.GetCursorScreenPos() + new Vector2(size / 2, ImGui.GetFrameHeight() / 2);
+        var ink = ImGui.GetWindowDrawList();
+        uint colour = ImGui.GetColorU32(new Vector4(.95f, .77f, .37f, 1));
+        Vector2 Tip(int i, float radius) {
+            float angle = (i * MathF.PI / 5) - MathF.PI / 2;
+            return center + new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * size * radius;
+        }
+        for (int i = 0; i < 10; i += 2) {
+            var inner = Tip(i + 1, .19f);
+            ink.AddTriangleFilled(center, Tip(i, .43f), inner, colour);
+            ink.AddTriangleFilled(center, inner, Tip(i + 2, .43f), colour);
+        }
+        ImGui.Dummy(new Vector2(size, ImGui.GetFrameHeight()));
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip("Watched");
+    }
+
+    private static void DrawHuntName(string name, string zone, string? level = null, bool watched = false) {
         DrawHuntCellText(name);
         if (!ImGui.IsItemHovered()) return;
         ImGui.BeginTooltip();
         ImGui.TextUnformatted(name);
         ImGui.TextUnformatted(zone);
         if (level is not null) ImGui.TextUnformatted(level);
+        if (watched) ImGui.TextUnformatted("Watched");
         ImGui.EndTooltip();
     }
 

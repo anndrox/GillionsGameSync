@@ -197,7 +197,7 @@ public sealed partial class Plugin {
         if (world == 0) return;
         if (awarenessWorld != world) {
             awarenessWorld = world;
-            localFates.Clear(); sonarFates.Clear(); fateAlerts.Clear();
+            localFates.Clear(); sonarFates.Clear(); fateAlerts.ClearLegacy();
         }
         var now = DateTime.UtcNow;
         var command = CurrentAwareHunt(world);
@@ -212,7 +212,7 @@ public sealed partial class Plugin {
         if (settled && !inDuty && !clientState.IsPvP && !clientState.IsGPosing) {
             var watchedFates = waiting.Where(target => target.FateId.HasValue).Select(target => target.FateId!.Value).ToHashSet();
             if (huntFate) watchedFates.Add(huntFateId!.Value);
-            if (configuration.TrackedFateAlerts && trackedFates is { } tracked) {
+            if (watchedFatePoll.LegacyFallback && configuration.TrackedFateAlerts && trackedFates is { } tracked) {
                 foreach (var fate in tracked.Items.Values)
                     if (fate.TerritoryId == zone.Territory && fate.MapId == zone.Map) watchedFates.Add(fate.FateId);
             }
@@ -266,24 +266,34 @@ public sealed partial class Plugin {
     }
 
     private void TickTrackedFateAlerts(DateTime now, uint world, bool settled) {
-        if (trackedFates is not { } tracked) return;
+        if (!watchedFatePoll.LegacyFallback || trackedFates is not { } tracked) return;
         foreach (var item in tracked.Items.Values) {
             var inZone = clientState.TerritoryType == item.TerritoryId && clientState.MapId == item.MapId;
             if (inZone && !settled) continue; // Let the first in-zone table read supply the link.
             var local = localFates.TryGetValue(item.FateId, out var seen) && seen.Until > now ? seen : null;
             var sonar = configuration.UseSonarChatMessages && sonarFates.TryGetValue(item.FateId, out var relayUntil) && relayUntil > now;
             var remote = trackedFateWorld == world && tracked.Running.Contains(item.FateId);
-            if (!fateAlerts.Observe(item.FateId, local is not null || sonar || remote, local?.Start ?? 0, configuration.TrackedFateAlerts)) continue;
-            PrintTrackedFateAlert(item, inZone && local?.Instance == clientState.Instance ? local.Link : null);
+            bool alert = fateAlerts.Observe(item.FateId, local is not null || sonar || remote, local?.Start ?? 0, configuration.TrackedFateAlerts);
+            if (fateAlerts.LegacyAlerted(item.FateId)) fateAlerts.RememberLegacy(item.FateId, CurrentFateWorld(), now);
+            if (alert) PrintTrackedFateAlert(item, inZone && local?.Instance == clientState.Instance ? local.Link : null);
         }
     }
 
-    private void PrintTrackedFateAlert(TrackedFate fate, MapLinkPayload? link) {
-        var message = new SeStringBuilder().AddText($"[Gillions] Your tracked FATE {fate.Name} started in {fate.ZoneName}");
+    private void PrintTrackedFateAlert(TrackedFate fate, MapLinkPayload? link, string? elsewhere = null, DateTime? endsAt = null) {
+        string place = string.IsNullOrEmpty(fate.ZoneName) ? "" : $" in {fate.ZoneName}";
+        string region = elsewhere is null ? "" : $" on {elsewhere}";
+        int seconds = endsAt is { } end ? (int)Math.Clamp(Math.Ceiling((end - DateTime.UtcNow).TotalSeconds), 0, 32767) : 0;
+        string time = seconds > 0 ? $" · {seconds / 60:00}:{seconds % 60:00} left" : "";
+        var message = new SeStringBuilder().AddText($"[Gillions] Watched FATE {fate.Name}{place}{region}{time}");
         if (link is not null) message.AddText(" ").Append(SeString.CreateMapLink(fate.TerritoryId, fate.MapId, link.RawX, link.RawY));
         else if (fate.Location is { } point && ValidatedAwarenessMap(fate.TerritoryId, fate.MapId) is not null)
             message.AddText(" ").Append(SeString.CreateMapLink(fate.TerritoryId, fate.MapId, point.MapX, point.MapY));
         chatGui.Print(new XivChatEntry { Type = AlertChatType(configuration.TrackedFateChatTab), Message = message.Build(), Silent = true });
+        watchedFateNotifications.AddNotification(new Dalamud.Interface.ImGuiNotification.Notification {
+            Title = fate.Name,
+            Content = $"Watched FATE{place}{region}{time}",
+            Type = Dalamud.Interface.ImGuiNotification.NotificationType.Info
+        });
         if (configuration.TrackedFateAlertSound) UIGlobals.PlayChatSoundEffect(1);
     }
 
@@ -333,7 +343,7 @@ public sealed partial class Plugin {
                 matched = true;
             }
         }
-        if (!configuration.TrackedFateAlerts || trackedFates is not { } tracked) return matched;
+        if (!watchedFatePoll.LegacyFallback || !configuration.TrackedFateAlerts || trackedFates is not { } tracked) return matched;
         var matches = tracked.Items.Values.Where(f => f.TerritoryId == territory && f.MapId == map
             && SonarChatRelay.Matches(content, world, f.Name, false)).Take(2).ToArray();
         if (matches.Length != 1) return matched;
@@ -354,8 +364,8 @@ public sealed partial class Plugin {
         var tab = Math.Clamp(configuration.TrackedFateChatTab, 0, 2);
         var sonar = configuration.UseSonarChatMessages;
         SettingsGroup("Alerts");
-        if (ImGui.Checkbox("Tracked FATE alerts", ref alerts)) QueueUiAction(() => { configuration.TrackedFateAlerts = alerts; RequestConfigurationSave(); });
-        SettingsHelp("Show a chat message when a tracked FATE is spotted.");
+        if (ImGui.Checkbox("FATE alerts in game", ref alerts)) QueueUiAction(() => { configuration.TrackedFateAlerts = alerts; RequestConfigurationSave(); });
+        SettingsHelp("Show a notification and chat line when a watched FATE is spotted.");
         ImGui.BeginDisabled(!alerts);
         if (ImGui.Checkbox("Alert sound", ref sound)) QueueUiAction(() => { configuration.TrackedFateAlertSound = sound; RequestConfigurationSave(); });
         SettingsHelp("Play a sound with the chat alert.");

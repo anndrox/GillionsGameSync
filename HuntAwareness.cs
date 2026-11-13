@@ -57,6 +57,28 @@ internal sealed class FateAlertOccurrences {
     private sealed record Occurrence(int Start, bool Alerted);
     private readonly Dictionary<uint, Occurrence> active = new();
 
+    private readonly HashSet<string> siteOccurrences = new(StringComparer.Ordinal);
+    private readonly Queue<string> siteOrder = new();
+    private readonly Dictionary<(uint Fate, string World), DateTime> legacyAlerts = new();
+
+    internal void RememberLegacy(uint fate, string world, DateTime now) {
+        foreach (var key in legacyAlerts.Keys.Where(key => legacyAlerts[key] <= now).ToArray()) legacyAlerts.Remove(key);
+        if (legacyAlerts.Count < 128 || legacyAlerts.ContainsKey((fate, world))) legacyAlerts[(fate, world)] = now.AddSeconds(45);
+    }
+
+    internal bool ObserveSite(string id, uint fate, string world, DateTime now) {
+        if (!siteOccurrences.Add(id)) return false;
+        siteOrder.Enqueue(id);
+        if (siteOrder.Count > 512) siteOccurrences.Remove(siteOrder.Dequeue());
+        // Presence supplies no occurrence ID. A recent alert on the same world
+        // can cover one matching Site occurrence when switching sources.
+        return !legacyAlerts.Remove((fate, world), out var until) || until <= now;
+    }
+
+    internal bool LegacyAlerted(uint fate) => active.TryGetValue(fate, out var value) && value.Alerted;
+
+    internal void ClearLegacy() => active.Clear();
+
     internal bool Observe(uint id, bool isActive, int start, bool enabled) {
         if (!isActive) { active.Remove(id); return false; }
         if (!active.TryGetValue(id, out var occurrence) || (start > 0 && occurrence.Start > 0 && start != occurrence.Start))
@@ -70,7 +92,12 @@ internal sealed class FateAlertOccurrences {
         foreach (var id in active.Keys.Where(id => tracked?.Items.ContainsKey(id) != true).ToArray()) active.Remove(id);
     }
 
-    internal void Clear() => active.Clear();
+    internal void Clear() {
+        ClearLegacy();
+        siteOccurrences.Clear();
+        siteOrder.Clear();
+        legacyAlerts.Clear();
+    }
 }
 
 internal sealed class HuntDeferAction(HuntMapRequest command, string? reason) {

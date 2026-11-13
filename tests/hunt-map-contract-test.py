@@ -90,6 +90,7 @@ assert 'running.Running) huntDefer.SawUp(target)' in awareness and 'ObserveWaiti
 assert 'foreach (var target in huntDefer.Waiting(worldId, now))' in awareness
 assert 'foreach (var item in tracked.Items.Values)' in awareness
 assert 'PrintTrackedFateAlert(item, inZone && local?.Instance == clientState.Instance ? local.Link : null)' in awareness
+assert 'watchedFateNotifications.AddNotification' in awareness
 assert 'else if (fate.Location is { } point' in awareness and 'point.MapX, point.MapY' in awareness
 assert 'Silent = true' in awareness and 'if (configuration.TrackedFateAlertSound) UIGlobals.PlayChatSoundEffect(1);' in awareness
 assert 'AlertChatType(configuration.TrackedFateChatTab)' in awareness

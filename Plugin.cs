@@ -261,7 +261,13 @@ public sealed partial class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         , IAddonLifecycle addonLifecycle, IMarketBoard marketBoard, IGameGui gameGui, IPlayerState travelPlayerState, IFateTable fateTable
 #endif
+#if GILLIONS_TEST_BUILD
+        , INotificationManager notificationManager
+#endif
     ) {
+#if GILLIONS_TEST_BUILD
+        watchedFateNotifications = notificationManager;
+#endif
         this.pluginInterface = pluginInterface;
         this.textureProvider = textureProvider;
         this.commands = commands;
@@ -628,6 +634,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         Observe("travel upload", now, static (plugin, at) => plugin.TickTravelSync(at));
 #if GILLIONS_TEST_BUILD
         Observe("character appearance", now, static (plugin, at) => plugin.TickAppearance(at));
+        Observe("Watched FATEs", now, static (plugin, at) => plugin.TickWatchedFates(at));
         Observe("Hunt awareness", now, static (plugin, _) => plugin.TickHuntAwareness());
 #endif
         if (now >= nextMarketMaintenanceUtc) {
@@ -1917,6 +1924,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         backgroundObservation.Run("appearance reset", (Plugin: this, ContentId: nextContentId, SamePairing: samePairing), now,
             static (state, _) => state.Plugin.ResetAppearance(state.ContentId, state.SamePairing));
+        Observe("Watched FATE reset", now, static (plugin, _) => plugin.watchedFatePoll.ClearSession());
         Observe("Hunt awareness reset", now, static (plugin, _) => plugin.ResetHuntAwareness());
 #endif
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD

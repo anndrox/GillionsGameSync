@@ -198,6 +198,17 @@ foreach(var (name,method,paired,width,scale,tab) in cases) {
     }
     T("FateLocalView").GetField("hunts", flags)!.SetValue(local, fateSnapshot);
     Set("fateLocal", local);
+    if (testing) {
+        var poll = Activator.CreateInstance(T("WatchedFatePoll"), true)!;
+        if (fatesFixture && !name.EndsWith("empty") && !name.EndsWith("unavailable")) {
+            var snapshot = New("WatchedFateSnapshot", new HashSet<uint> { 1050u }, Array.CreateInstance(T("WatchedFateOccurrence"), 0));
+            var clock = T("WebsiteResponseClock").GetMethod("Capture", BindingFlags.NonPublic | BindingFlags.Static)!
+                .Invoke(null, [null, DateTime.UtcNow, TimeSpan.Zero])!;
+            var response = New("WatchedFateReply", System.Net.HttpStatusCode.OK, snapshot, null, clock, null);
+            T("WatchedFatePoll").GetMethod("Complete", flags)!.Invoke(poll, [response, Environment.TickCount64, 0]);
+        }
+        Set("watchedFatePoll", poll);
+    }
     Render(name,plugin,T("Plugin").GetMethod(method,flags)!,width,scale,tab);
 }
 File.WriteAllText(Path.Combine(output,"controlled-render.json"),JsonSerializer.Serialize(new{

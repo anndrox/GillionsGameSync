@@ -333,6 +333,9 @@ public sealed partial class Plugin {
             ImGui.EndTabItem();
         }
         if(ImGui.BeginTabItem("Hunts")) {
+#if GILLIONS_TEST_BUILD
+            RequestWatchedFateMarkers();
+#endif
             fateLocal.RequestHunts();
             DrawHuntsTab(huntTab, fateLocal.Hunts);
             ImGui.EndTabItem();
