@@ -148,6 +148,9 @@ internal sealed class HuntDeferState {
         return deferred.Values.Where(target => target.World == world && !target.SeenUp).ToArray();
     }
 
+    internal IEnumerable<WaitingTarget> DeferredBRanks(uint world, DateTime now) =>
+        deferred.Values.Where(target => target.World == world && target.FateId is null && target.Until > now);
+
     private void PruneWaiting(DateTime now) {
         foreach (var target in deferred.Values.Where(target => target.Until <= now).ToArray()) deferred.Remove(target.TargetId);
     }

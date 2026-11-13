@@ -40,6 +40,7 @@ public sealed partial class Plugin {
     private (uint World, uint Territory, uint Map, uint Instance)? sampledFateZone;
     private (uint World, uint Territory, uint Map, uint Instance)? settledAwarenessZone;
     private HuntAvailability currentHuntAvailability;
+    private DateTime? currentBRankSeenAt;
 
     private sealed record LocalFate(uint Territory, uint Map, uint Instance, int Start, DateTime Until, bool Running, MapLinkPayload? Link);
 
@@ -72,6 +73,7 @@ public sealed partial class Plugin {
     private void RetireAwareHuntFlag() {
         huntDefer.RetirePresentation();
         huntAwarenessClock = null;
+        currentBRankSeenAt = null;
         huntSonar = null;
         currentHuntAvailability = HuntAvailability.Unknown;
     }
@@ -135,7 +137,10 @@ public sealed partial class Plugin {
         exactHuntFlag = false;
         if (HuntDeferState.Reason(command) != HuntDeferState.BRankNotSeen) return null;
         var mark = ObserveBRank(command);
-        if (mark.Availability == HuntAvailability.Up) currentHuntAvailability = mark.Availability;
+        if (mark.Availability == HuntAvailability.Up) {
+            currentHuntAvailability = mark.Availability;
+            currentBRankSeenAt = BRankSightingTime(mark.Link, DateTime.UtcNow);
+        }
         exactHuntFlag = mark.Link is not null;
         return mark.Link;
     }
@@ -160,6 +165,9 @@ public sealed partial class Plugin {
         var nearby = Vector2.DistanceSquared(playerMap, new(command.MapX, command.MapY)) <= radiusOnMap * radiusOnMap;
         return BRankSighting.Resolve(false, null, relay, nearby, inFlight: marketConditions[ConditionFlag.InFlight]);
     }
+
+    private DateTime BRankSightingTime(MapLinkPayload? link, DateTime now) =>
+        huntSonar is { } sighting && ReferenceEquals(link, sighting.Link) ? sighting.Until.AddSeconds(-60) : now;
 
     private bool HasCurrentHuntRelay(HuntMapRequest command, DateTime now) => configuration.UseSonarChatMessages
         && huntSonar is { } relay && relay.Until > now
@@ -223,6 +231,9 @@ public sealed partial class Plugin {
             if (HuntDeferState.Reason(command) == HuntDeferState.BRankNotSeen) {
                 var mark = ObserveBRank(command);
                 currentHuntAvailability = settled || mark.Availability == HuntAvailability.Up ? mark.Availability : HuntAvailability.Unknown;
+                if (mark.Availability == HuntAvailability.Up) currentBRankSeenAt = BRankSightingTime(mark.Link, now);
+                if (mark.Link is not null && huntAwarenessClock is { } clock)
+                    RememberHuntTabMap(command, mark.Link, clock);
                 if (!exactHuntFlag && !huntMapPollInFlight && mark.Link is not null) {
                     exactHuntFlag = true;
                     OpenExactHuntFlag(command, mark.Link);

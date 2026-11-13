@@ -276,9 +276,7 @@ public sealed partial class Plugin {
             if(ImGui.Checkbox("Lock position",ref locked)) QueueUiAction(()=> { configuration.LockHuntProgressPosition=locked; RequestConfigurationSave(); });
             Label("A local, display-only count panel for your current area. Closing it suppresses auto-show until you change territory.");
             if(show && ImGui.Button("Open Hunt Progress")) QueueUiAction(()=>huntProgress.Open());
-#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
-            if (travelStatus.Length > 0) Label(travelStatus);
-#endif
+            DrawHuntsTab(huntTab);
 #if GILLIONS_TEST_BUILD
             ImGui.Separator();
             DrawHuntAwarenessSettings();

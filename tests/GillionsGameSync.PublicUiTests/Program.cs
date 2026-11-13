@@ -11,7 +11,7 @@ using Dalamud.Interface.Windowing;
 // Offline actual candidate Draw methods; no plugin constructor/services,
 // Windows input, browser, game or network. C# is needed for the typed .NET
 // ImGui API; Python rasterizes its actual triangles, not a second UI design.
-if(args.Length is not (3 or 4) || (args.Length==4 && args[3]!="final")) throw new ArgumentException("Exact DLL, Dalamud library directory, output directory, optional final subset required.");
+if(args.Length is not (3 or 4) || (args.Length==4 && args[3] is not ("final" or "hunts" or "polish"))) throw new ArgumentException("Exact DLL, Dalamud library directory, output directory, optional final, hunts or polish subset required.");
 string binary=Path.GetFullPath(args[0]),libs=Path.GetFullPath(args[1]),output=Path.GetFullPath(args[2]);
 Directory.CreateDirectory(output);
 AssemblyLoadContext.Default.Resolving+=(_,name)=>{var file=Path.Combine(libs,name.Name+".dll");return File.Exists(file)?AssemblyLoadContext.Default.LoadFromAssemblyPath(file):null;};
@@ -88,11 +88,16 @@ var cases=new[]{
     ("46-hunt-current-area-empty","DrawHuntProgress",true,300f,1f,0),
     ("47-pairing-short-scroll","DrawPairingPublic",false,400f,1f,0),
     ("48-pairing-short-scroll-bottom","DrawPairingPublic",false,400f,1.5f,0),
+    ("49-hunts-option-a","DrawPublicSettings",true,620f,1f,1),
+    ("50-hunts-option-a-narrow","DrawPublicSettings",true,420f,1f,1),
+    ("51-hunts-option-a-empty","DrawPublicSettings",true,420f,1f,1),
 };
-if(args.Length==4) {
+if(args.Length==4 && args[3]=="final") {
     string[] selected=["01","02","03","04","08","09","18","19","20","23","24","25","26","30","31","34","37","39","40","41"];
     cases=cases.Where(c=>selected.Contains(c.Item1[..2])).ToArray();
 }
+if(args.Length==4 && args[3]=="hunts") cases=cases.Where(c=>c.Item1.Contains("hunts-option-a")).ToArray();
+if(args.Length==4 && args[3]=="polish") cases=cases.Where(c=>c.Item1 is "01-pairing-welcome" or "03-main-connected" or "49-hunts-option-a").ToArray();
 foreach(var (name,method,paired,width,scale,tab) in cases) {
     object plugin=RuntimeHelpers.GetUninitializedObject(T("Plugin"));
     void Set(string field,object? v)=>T("Plugin").GetField(field,flags)!.SetValue(plugin,v);
@@ -134,6 +139,33 @@ foreach(var (name,method,paired,width,scale,tab) in cases) {
     T("HuntProgressState").GetProperty("Display",flags)!.SetValue(model,New("HuntProgressDisplay","Example current area",
         name.Contains("updating")?"Hunt progress updating…":name.Contains("all-complete")?"All current Hunt targets here are complete.":name.Contains("current-area-empty")?"None of your Hunt targets are in this zone.":"",rows));
     Set("huntProgress",model);
+    var billRows = Array.CreateInstance(T("HuntTabBillRow"), 0);
+    var markRows = Array.CreateInstance(T("HuntTabMark"), 0);
+    var huntsFixture = name.Contains("hunts-option-a");
+    var emptyBills = name.Contains("hunts-option-a-empty");
+    object? MapPoint(uint targetId, uint mapId) {
+        if (!huntsFixture || emptyBills) return null;
+        var now = DateTime.UtcNow;
+        var clock = T("WebsiteResponseClock").GetMethod("Capture", BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, [null, now, TimeSpan.Zero])!;
+        var mapLink = Assembly.Load("Dalamud").GetType("Dalamud.Game.Text.SeStringHandling.Payloads.MapLinkPayload", true)!;
+        var link = Activator.CreateInstance(mapLink, [1u, mapId, 24f, 20f])!;
+        return New("HuntTabMapPoint", targetId, mapId, 1u, 1u, mapId, 0u, link, clock, now.AddMinutes(1));
+    }
+    if (huntsFixture && !emptyBills) {
+        billRows = Array.CreateInstance(T("HuntTabBillRow"), 3);
+        billRows.SetValue(New("HuntTabBillRow", (byte)0, 10u, false, (byte)1,
+            New("HuntProgressRow", "daily-1", "Aspis", 2, 3), "Azys Lla", 100u, 50u), 0);
+        billRows.SetValue(New("HuntTabBillRow", (byte)0, 10u, false, (byte)1,
+            New("HuntProgressRow", "daily-2", "Horned lizard", 1, 3), "The Fringes", 101u, 51u), 1);
+        billRows.SetValue(New("HuntTabBillRow", (byte)1, 11u, true, (byte)1,
+            New("HuntProgressRow", "weekly-1", "Weekly hunt target", 0, 1), "The Lochs", 102u, 52u), 2);
+        markRows = Array.CreateInstance(T("HuntTabMark"), 2);
+        markRows.SetValue(New("HuntTabMark", 200u, "Squonk", "The Sea of Clouds", DateTime.UtcNow.AddMinutes(-4), MapPoint(200u, 53u)), 0);
+        markRows.SetValue(New("HuntTabMark", 201u, "Gnath Cometdrone", "The Dravanian Forelands", null, null), 1);
+    }
+    var bills = New("HuntTabBills", billRows, emptyBills, huntsFixture ? long.MaxValue : 0L);
+    Set("huntTab", New("HuntsTabView", emptyBills ? "Location: sharing off" : "Location: sent", bills, markRows, MapPoint(100u, 50u)));
     Render(name,plugin,T("Plugin").GetMethod(method,flags)!,width,scale,tab);
 }
 File.WriteAllText(Path.Combine(output,"controlled-render.json"),JsonSerializer.Serialize(new{
@@ -166,6 +198,7 @@ unsafe void Render(string name,object plugin,MethodInfo draw,float width,float s
         var constraints=actualWindow.SizeConstraints!.Value;
         var chosenSize=new Vector2(width*scale,(hunt?(name.Contains("duplicate-names")?300:180):actualWindow.Size!.Value.Y)*scale);
         if(name.Contains("short"))chosenSize.Y=constraints.MinimumSize.Y*scale;
+        if(name.Contains("hunts-option-a"))chosenSize.Y=800*scale;
         chosenSize=Vector2.Max(chosenSize,constraints.MinimumSize*scale);
         var progressModel=hunt?T("Plugin").GetField("huntProgress",flags)!.GetValue(plugin):null;
         var displayProperty=T("HuntProgressState").GetProperty("Display",flags)!;
@@ -189,7 +222,7 @@ unsafe void Render(string name,object plugin,MethodInfo draw,float width,float s
             ImGui.SetNextWindowSizeConstraints(constraints.MinimumSize*scale,constraints.MaximumSize);
             // One synthetic player resize, including the owner's 180px saved
             // width. Do not force size on subsequent frames or reopenings.
-            ImGui.SetNextWindowSize(frame==2?new Vector2(width*scale,chosenSize.Y):actualWindow.Size!.Value*scale,
+            ImGui.SetNextWindowSize(frame==2?chosenSize:actualWindow.Size!.Value*scale,
                 frame==2?ImGuiCond.Always:actualWindow.SizeCondition);
             bool open=true;
             if(ImGui.Begin(actualWindow.WindowName,ref open,actualWindow.Flags)) {

@@ -951,6 +951,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         ForgetAwareHunt();
 #endif
+        huntTabMap = null;
         huntMapNegotiation.Reset();
         huntMapProcessor = new(); huntMapStatus = "No active Hunt map request; local observations preserved.";
     }
@@ -1048,6 +1049,14 @@ public sealed partial class Plugin : IDalamudPlugin {
                     var opened =
 #endif
                         huntMapGui.OpenMapWithMapLink(new MapLinkPayload(r.TerritoryId, r.MapId, r.MapX, r.MapY));
+                    if (opened) {
+#if GILLIONS_TEST_BUILD
+                        var tabPoint = exact;
+#else
+                        MapLinkPayload? tabPoint = null;
+#endif
+                        RememberHuntTabMap(r, tabPoint ?? new MapLinkPayload(r.TerritoryId, r.MapId, r.MapX, r.MapY), commandClock);
+                    }
                     timing.MapFinished();
                     RecordDiagnostic($"Hunt command timing: command {r.RequestId[..8]}; focus={(HuntFocusActive(DateTime.UtcNow) ? "active" : "background")}; {timing.Describe()}. Consume precedes presentation; no browser/queue timing inferred.");
                     RecordDiagnostic($"Hunt map: new one-time Site request consumed; target ID {r.TargetId}, candidate {r.CandidateId}, revision {r.Revision[..12]}; presentation={(opened ? "shown" : "unavailable")}. No Native target inference.");
@@ -1815,6 +1824,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         Observe("appearance status", now, static (plugin, at) => plugin.appearanceSharingStatus = plugin.AppearanceStatus(at));
 #endif
         settingsVisible = publicUi.Visible;
+        if (settingsVisible) Observe("Hunts tab", now, static (plugin, at) => plugin.huntTab = plugin.ReadHuntsTab(at));
         Observe("connection status", now, static (plugin, at) => plugin.PublishPublicHealth(at));
         Observe("Hunt progress display", now, static (plugin, _) => plugin.huntProgress.Update(
             plugin.configuration.ShowHuntProgress, plugin.clientState.TerritoryType, plugin.huntLocal.Progress, Environment.TickCount64));

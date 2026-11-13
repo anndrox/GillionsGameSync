@@ -60,7 +60,11 @@ internal sealed class HuntBillLocalView : IDisposable {
     private string export { get; set; } = "";
     internal HuntProgressSnapshot Progress { get; private set; } = HuntProgressSnapshot.Unavailable;
     internal bool ProgressRequested { get; set; }
-    internal void ClearProgress() => Progress = HuntProgressSnapshot.Unavailable;
+    internal HuntTabBills TabBills { get; private set; } = HuntTabBills.Unknown;
+    internal void ClearProgress() {
+        Progress = HuntProgressSnapshot.Unavailable;
+        TabBills = HuntTabBills.Unknown;
+    }
     private bool ReadEnabled => policy.RetentionEnabled || ProgressRequested;
     internal bool Reading => ReadEnabled;
     private readonly Dictionary<uint, uint> targetTerritories = new();
@@ -100,7 +104,7 @@ internal sealed class HuntBillLocalView : IDisposable {
             ? HuntBillRetentionPolicy.CharacterKey(player->ContentId) : "";
     }
     private void OnLogout(int _, int __) { ClearLiveBaseline(); Publish("Logged out; retained Hunt state is historical, not current. Private sync paused."); }
-    private void ClearLiveBaseline() { Progress = HuntProgressSnapshot.Unavailable; export = ""; schedule.Reset(); session.Reset(); itemCoverage.Clear(); rawFingerprint = ""; lastProgressDiagnostic = "Structured Hunt progress cleared on session/transition."; }
+    private void ClearLiveBaseline() { ClearProgress(); export = ""; schedule.Reset(); session.Reset(); itemCoverage.Clear(); rawFingerprint = ""; lastProgressDiagnostic = "Structured Hunt progress cleared on session/transition."; }
     private void OnProgressMessage(ILogMessage message) {
         // The event wrapper is borrowed. Copy only three typed numeric values
         // synchronously; never retain it, strings, entity data or chat content.
@@ -158,10 +162,10 @@ internal sealed class HuntBillLocalView : IDisposable {
     // all native access; no new polling subscription, requests or interface dependency.
     // Supported lifecycle subscriptions only invalidate the RAM admission baseline.
     internal unsafe void Tick(DateTime now, bool force = false) {
-        if (!ReadEnabled) { session.Reset(); itemCoverage.Clear(); Progress = HuntProgressSnapshot.Unavailable; }
+        if (!ReadEnabled) { session.Reset(); itemCoverage.Clear(); ClearProgress(); }
         if (force) LastDiagnostic = "Hunt read not due/eligible (one-second manual admission bound); retained state preserved.";
         if (disposed || !schedule.TryBegin(now, ReadEnabled, force)) return;
-        Progress = HuntProgressSnapshot.Unavailable;
+        ClearProgress();
         LastDiagnostic = "Hunt fresh source unavailable; retained state preserved, no completion inferred.";
         if (!framework.IsInFrameworkUpdateThread) { itemCoverage.Clear(); Publish("Hunt read requires framework thread; no native access."); return; }
         attempts++; lastAttemptUtc = now;
@@ -312,6 +316,8 @@ internal sealed class HuntBillLocalView : IDisposable {
         // fallback until the existing source can supply that stronger proof.
         bool complete = false;
         var rows = new List<HuntProgressRow>();
+        var tabRows = new List<HuntTabBillRow>();
+        var territories = data.GetExcelSheet<TerritoryType>();
         foreach (var bill in observations) foreach (var target in bill.Targets) {
             if (!targetTerritories.TryGetValue(target.TargetId, out var targetTerritory)) {
                 targetTerritory = target.MapId > 0 ? data.GetExcelSheet<Lumina.Excel.Sheets.Map>().GetRowOrDefault(target.MapId)?.TerritoryType.RowId ?? 0 : 0;
@@ -324,16 +330,20 @@ internal sealed class HuntBillLocalView : IDisposable {
                 if (targetTerritories.Count < 512) targetTerritories[target.TargetId] = targetTerritory;
             }
             if (targetTerritory == 0) complete = false;
-            if (targetTerritory != territory) continue;
-            // Presentation uses this admitted read (including exact, bounded
-            // session progress evidence), never a maximum from retained history.
-            // Reacquisition/order/reset ambiguity must not turn an old complete
-            // record into proof of a current completed target.
-            rows.Add(new($"{bill.BillTypeId}:{bill.OrderId}:{target.TargetIndex}:{target.TargetId}",
-                presentation.TargetName(target), target.ObservedKills, target.RequiredKills));
+            // Both views use this admitted read, never a maximum from retained history.
+            var row = new HuntProgressRow($"{bill.BillTypeId}:{bill.OrderId}:{target.TargetIndex}:{target.TargetId}",
+                presentation.TargetName(target), target.ObservedKills, target.RequiredKills);
+            if (targetTerritory == territory) rows.Add(row);
+            var targetZone = territories.GetRowOrDefault(targetTerritory)?.PlaceName.Value.Name.ExtractText();
+            tabRows.Add(new(bill.BillTypeId, bill.OrderId, bill.Category == "weekly", bill.Tier,
+                row, string.IsNullOrEmpty(targetZone) ? "Zone unknown" : targetZone, target.TargetId, target.MapId));
         }
+        long expiresAt = Environment.TickCount64 + 6000;
         Progress = new(territory, name, observations.Count == 0 && !complete ? "No current Hunt targets could be verified from this read. Bill state is unknown." : "", complete,
-            rows.ToArray(), Environment.TickCount64 + 6000);
+            rows.ToArray(), expiresAt);
+        var coverage = itemCoverage.Current(characterKey, now, Stopwatch.GetTimestamp());
+        TabBills = new(tabRows.ToArray(), tabRows.Count == 0 && coverage is { Domains.Length: 22 }
+            && coverage.Domains.All(domain => domain.State == "absent_confirmed"), expiresAt);
     }
 #if GILLIONS_TEST_BUILD
     private void Draw() {
