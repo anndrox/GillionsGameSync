@@ -18,6 +18,10 @@ AssemblyLoadContext.Default.Resolving += (_, name) => {
     return File.Exists(path) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(path) : null;
 };
 var pluginAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(assemblyPath);
+if (args.Length == 4 && args[3] == "--desynthesis-check") {
+    DesynthesisPackagedTests.Run(pluginAssembly);
+    return;
+}
 if (args.Length == 4 && args[3].StartsWith("--measure-config-save=", StringComparison.Ordinal)) {
     NativeObservationPackagedTests.MeasureSave(pluginAssembly, fixturePath, int.Parse(args[3]["--measure-config-save=".Length..]));
     return;
@@ -57,8 +61,10 @@ CollectibleReadinessPackagedTests.Run(pluginAssembly);
 PublicCandidatePackagedTests.Run(pluginAssembly);
 NativeCompatibilityPackagedTests.Run(pluginAssembly,libraryPath);
 if (testingProduct) AppearanceRenderPackagedTests.Run(pluginAssembly);
+if (testingProduct) DesynthesisPackagedTests.Run(pluginAssembly);
 if (testingProduct) AppearanceBackgroundPackagedTests.Run(pluginAssembly);
-ChannelIsolationPackagedTests.Run(pluginAssembly,fixturePath);
+if (args.Length != 4 || args[3] != "--skip-channel-uninstall")
+    ChannelIsolationPackagedTests.Run(pluginAssembly,fixturePath);
 DistributionManifestPackagedTests.Run(pluginAssembly);
 OriginPackagedTests.Run(pluginAssembly);
 var nativeCapabilities = pluginAssembly.GetType("GillionsGameSync.FateLocalView") is not null;
@@ -66,7 +72,7 @@ FatePackagedTests.Run(pluginAssembly,testingProduct,fixturePath);
 PermissionPackagedTests.Run(pluginAssembly);
 await PersonalUploadAndPairingPackagedTests.Run(pluginAssembly, testingProduct);
 DutyPausePackagedTests.Run(pluginAssembly);
-HuntV2PackagedTests.Run(pluginAssembly, nativeCapabilities, args.Length == 4 ? args[3] : null);
+HuntV2PackagedTests.Run(pluginAssembly, nativeCapabilities, args.Length == 4 && args[3] != "--skip-channel-uninstall" ? args[3] : null);
 HuntBillItemPackagedTests.Run(pluginAssembly, nativeCapabilities);
 var intakeOptIn = configurationType.GetProperty("EnableGillionsPartyFinderContributions")!;
 var legacyOptedIn = Activator.CreateInstance(configurationType)!;

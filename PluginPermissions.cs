@@ -112,6 +112,9 @@ public sealed partial class Plugin {
         });
 #endif
         if (permissionTransitions.GetValueOrDefault(key) == identity) return;
+#if GILLIONS_TEST_BUILD
+        if (key == DesynthesisResults.Permission) ResetDesynthesis();
+#endif
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         if (key == "marketContribution") { marketContributor.SetEnabled(false); marketContributor.RefreshSession(null); }
         if (key == "partyFinderContribution") partyFinderContributor.SetEnabled(false);

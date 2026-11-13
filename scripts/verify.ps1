@@ -1,4 +1,4 @@
-param()
+param([switch]$NoFileDeletion)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -70,7 +70,9 @@ python (Join-Path $root 'tests/market-contribution-contract-test.py')
 if ($LASTEXITCODE -ne 0) { throw 'Passive market source boundaries failed.' }
 
 & (Join-Path $root 'tests/dalamud-manifest-contract-test.ps1')
-& (Join-Path $root 'tests/package-manifest-contract-test.ps1')
+# The package fixture replaces existing local ZIPs. The uninstall fixture
+# deletes its disposable configuration. Omit both when deletions are disabled.
+if (!$NoFileDeletion) { & (Join-Path $root 'tests/package-manifest-contract-test.ps1') }
 & (Join-Path $root 'tests/testing-site-admission-contract-test.ps1')
 & (Join-Path $root 'tests/bardings-collector-contract-test.ps1')
 & (Join-Path $root 'tests/folklore-collector-contract-test.ps1')
@@ -94,7 +96,9 @@ foreach ($channel in @('stable', 'testing')) {
     $assemblyName = if ($channel -eq 'stable') { 'GillionsGameSync.dll' } else { 'GillionsGameSyncTest.dll' }
     $binary = Join-Path $root "artifacts/verification/$channel/$assemblyName"
     $fixtureDirectory = Join-Path $root "artifacts/verification/configuration-fixtures/$channel"
-    dotnet run --project $configurationTests -c Release -- $binary $dalamudPath $fixtureDirectory
+    $fixtureArguments = @($binary, $dalamudPath, $fixtureDirectory)
+    if ($NoFileDeletion) { $fixtureArguments += '--skip-channel-uninstall' }
+    dotnet run --project $configurationTests -c Release -- @fixtureArguments
     if ($LASTEXITCODE -ne 0) { throw "$channel actual-serializer preservation fixtures failed." }
 }
 

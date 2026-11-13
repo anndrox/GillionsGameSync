@@ -15,6 +15,14 @@ internal static class NativeCompatibilityPackagedTests {
     // metadata tokens differ between unrelated builds), so qualification also
     // requires the pinned source comparison in docs/native-compatibility.md.
     private static readonly (string Family, (string Type, string[] Members)[] Uses)[] Families = [
+        ("Desynthesis", [
+            ("FFXIV.Client.UI.Agent.AgentId", ["Salvage"]),
+            ("FFXIV.Client.UI.Agent.AgentSalvage", ["DesynthItemId", "_desynthResults", "DesynthResults"]),
+            ("FFXIV.Client.UI.Agent.SalvageResult", ["ItemId", "Quantity"]),
+            ("FFXIV.Client.UI.AddonSalvageResult", []),
+            ("FFXIV.Client.UI.AddonSalvageAutoDialog", ["AtkUnitBase", "IsDesynthesizing"]),
+            ("FFXIV.Component.GUI.AtkUnitBase", ["IsVisible"]),
+        ]),
         ("Appearance", [
             ("FFXIV.Client.Game.InventoryManager", ["Instance", "GetInventoryContainer"]),
             ("FFXIV.Client.Game.InventoryContainer", ["Items", "Size", "Type", "IsLoaded"]),
@@ -125,6 +133,7 @@ internal static class NativeCompatibilityPackagedTests {
         [("Travel", "7.57.0.9480")] = TravelLayout,
         [("Fate", "7.57.0.9480")] = FateLayout,
         [("Appearance", "7.57.0.9480")] = "555794b7a8157af9",
+        [("Desynthesis", "7.57.0.9480")] = "e25c169d60f8290b",
         [("Beastmaster", "7.56.2.9136")] = "7984e5ebc96f48c5", [("Beastmaster", "7.57.0.9480")] = "7984e5ebc96f48c5",
         // Recorded for comparison only; Dashboard is not admitted on 15.0.4.0.
         [("Dashboard", "7.56.2.9136")] = "72e3d331203627af", [("Dashboard", "7.57.0.9480")] = "72e3d331203627af",
@@ -167,6 +176,15 @@ internal static class NativeCompatibilityPackagedTests {
         void Offset(Type t,string f,int at)=>Check(t.GetField(f,BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic)!
             .GetCustomAttribute<FieldOffsetAttribute>()?.Value==at,t.Name+"."+f+" offset");
         var hunt=N("UI.MobHunt");Check(hunt.StructLayoutAttribute!.Size==0x1f0,"MobHunt size");
+        Check(Builds("Desynthesis") is [var desynthesis]
+            && P(desynthesis,"GameBuild")=="2026.11.03.0000.0000"
+            && P(desynthesis,"ClientStructsVersion")=="7.57.0.9480", "Desynthesis has its own November-only runtime");
+        if (installed=="7.57.0.9480") {
+            Type Ui(string name)=>native.GetType("FFXIVClientStructs.FFXIV."+name,true)!;
+            Offset(Ui("Component.GUI.AtkUnitBase"),"Flags198",0x198);
+            Check(Convert.ToByte(Enum.Parse(Ui("Component.GUI.AtkUnitBaseVisibilityState"),"Show"))==2,
+                "Desynthesis addon visibility uses the Show bit");
+        }
         Offset(hunt,"_availableMarkId",0x08);Offset(hunt,"_obtainedMarkId",0x1e);Offset(hunt,"_currentKills",0x34);Offset(hunt,"ObtainedFlags",0x1ec);
         Check(hunt.GetMethod("GetKillCount")!.ReturnType==typeof(int)
             && hunt.GetMethod("GetKillCount")!.GetParameters().Select(p=>p.ParameterType).SequenceEqual(new[]{typeof(byte),typeof(byte)}),"kill accessor ABI");
