@@ -353,17 +353,22 @@ public sealed partial class Plugin {
         var sound = configuration.TrackedFateAlertSound;
         var tab = Math.Clamp(configuration.TrackedFateChatTab, 0, 2);
         var sonar = configuration.UseSonarChatMessages;
+        SettingsGroup("Alerts");
         if (ImGui.Checkbox("Tracked FATE alerts", ref alerts)) QueueUiAction(() => { configuration.TrackedFateAlerts = alerts; RequestConfigurationSave(); });
+        SettingsHelp("Show a chat message when a tracked FATE is spotted.");
         ImGui.BeginDisabled(!alerts);
         if (ImGui.Checkbox("Alert sound", ref sound)) QueueUiAction(() => { configuration.TrackedFateAlertSound = sound; RequestConfigurationSave(); });
+        SettingsHelp("Play a sound with the chat alert.");
         if (ImGui.Combo("Chat tab", ref tab, "Echo\0System messages\0Notices\0"))
             QueueUiAction(() => { configuration.TrackedFateChatTab = tab; RequestConfigurationSave(); });
         ImGui.EndDisabled();
+        SettingsGroup("Sighting sources");
         if (ImGui.Checkbox("Use Sonar's chat messages", ref sonar)) QueueUiAction(() => {
             configuration.UseSonarChatMessages = sonar;
             if (!sonar) { huntSonar = null; sonarFates.Clear(); currentHuntAvailability = HuntAvailability.Unknown; }
             RequestConfigurationSave();
         });
+        SettingsHelp("Use Sonar chat reports for supported Hunt and FATE sightings.");
     }
 }
 #endif

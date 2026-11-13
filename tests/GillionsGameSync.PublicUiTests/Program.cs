@@ -97,7 +97,9 @@ if(args.Length==4 && args[3]=="final") {
     cases=cases.Where(c=>selected.Contains(c.Item1[..2])).ToArray();
 }
 if(args.Length==4 && args[3]=="hunts") cases=cases.Where(c=>c.Item1.Contains("hunts-option-a")).ToArray();
-if(args.Length==4 && args[3]=="polish") cases=cases.Where(c=>c.Item1 is "01-pairing-welcome" or "03-main-connected" or "49-hunts-option-a").ToArray();
+if(args.Length==4 && args[3]=="polish") cases=cases.Where(c=>c.Item1 is
+    "01-pairing-welcome" or "03-main-connected" or "17-pairing-failure-recovery"
+    or "34-pairing-narrow" or "49-hunts-option-a" or "50-hunts-option-a-narrow").ToArray();
 foreach(var (name,method,paired,width,scale,tab) in cases) {
     object plugin=RuntimeHelpers.GetUninitializedObject(T("Plugin"));
     void Set(string field,object? v)=>T("Plugin").GetField(field,flags)!.SetValue(plugin,v);
@@ -206,12 +208,15 @@ unsafe void Render(string name,object plugin,MethodInfo draw,float width,float s
         float scrollMax=0;
         for(int frame=0;frame<7;frame++) {
             if(tab>0&&frame>0){
-                var style=ImGui.GetStyle();string[] labels=["General","Hunts","Connection","Advanced"];
+                var style=ImGui.GetStyle();
+                string[] labels = testing ? ["General", "Hunts", "Sharing", "Connection", "Advanced"] : ["General", "Hunts", "Connection", "Advanced"];
+                int targetTab = testing && tab >= 2 ? tab + 1 : tab;
+                float itemSpacing = 7 * scale, framePaddingX = 6 * scale, framePaddingY = 4 * scale;
                 float x=24+style.WindowPadding.X;
-                for(int i=0;i<tab;i++)x+=ImGui.CalcTextSize(labels[i]).X+style.FramePadding.X*2+style.ItemInnerSpacing.X;
-                x+=ImGui.CalcTextSize(labels[tab]).X/2+style.FramePadding.X;
+                for(int i=0;i<targetTab;i++)x+=ImGui.CalcTextSize(labels[i]).X+framePaddingX*2+style.ItemInnerSpacing.X;
+                x+=ImGui.CalcTextSize(labels[targetTab]).X/2+framePaddingX;
                 float line=ImGui.GetFontSize();
-                float y=24+style.FramePadding.Y*2+line+style.WindowPadding.Y+20*scale+style.ItemSpacing.Y+(style.FramePadding.Y*2+line)/2;
+                float y=24+style.FramePadding.Y*2+line+style.WindowPadding.Y+24*scale+itemSpacing+(framePaddingY*2+line)/2;
                 io.AddMousePosEvent(x,y);io.AddMouseButtonEvent(0,frame==2);
             }
             ImGui.NewFrame();

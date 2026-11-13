@@ -131,10 +131,20 @@ public sealed partial class Plugin {
         ImGui.SetCursorScreenPos(start);
         ImGui.Dummy(band);
     }
+    private static readonly Vector4 UiGreen = new(.55f,.86f,.67f,1);
+    private static readonly Vector4 UiAmber = new(.95f,.77f,.45f,1);
+    private static readonly Vector4 UiRed = new(1,.64f,.65f,1);
+
+    private static void DrawStatus(string icon, Vector4 colour, string text) {
+        ImGui.TextColored(colour, icon);
+        ImGui.SameLine();
+        Label(text);
+    }
+
     private static void DrawConnection(string state) {
-        // Emphasis is redundant with readable text, never a color-only state.
-        ImGui.TextColored(state=="Connected" ? new Vector4(.54f,.86f,.87f,1) : ImGui.GetStyle().Colors[(int)ImGuiCol.Text],
-            state=="Connected" ? "Connected to Gillions" : state);
+        if (state == "Connected") DrawStatus("✓", UiGreen, "Connected to Gillions");
+        else if (state is "Not connected" or "Connecting") DrawStatus("○", UiAmber, state);
+        else DrawStatus("×", UiRed, state);
     }
     private void DrawPairingBranding() {
         // First-run composition: two-line identity, deliberate negative space,
@@ -182,16 +192,33 @@ public sealed partial class Plugin {
         Label("Privacy and data controls are managed on Gillions.");
         Link("Open privacy & data settings",PrivacyUrl);
     }
+    private static void BeginPolishedSpacing() {
+        var style = ImGui.GetStyle();
+        var scale = ImGui.GetFontSize() / 17f;
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(style.ItemSpacing.X, 7 * scale));
+        ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(6, 4) * scale);
+    }
+
+    private static void EndPolishedSpacing() => ImGui.PopStyleVar(2);
+
     private void DrawMainPublic() {
+        BeginPolishedSpacing();
+        try { DrawMainContent(); }
+        finally { EndPolishedSpacing(); }
+    }
+
+    private void DrawMainContent() {
 #if GILLIONS_TEST_BUILD
-        Label("TESTING — offline unless separately paired to supported HTTPS TEST. Keep installed Public disabled while this copy is enabled.");
+        Label("Testing requires a separate pairing to supported HTTPS TEST. Keep Public disabled while Testing is enabled.");
         if(configuration.ActiveSession is not null && !NativeProduct.TransportOrigin(configuration.ActiveSession.Origin))
             Label("Existing non-TEST pairing is inactive and preserved. Do not copy or reset Public settings.");
 #endif
         var h=publicHealth;
-        DrawBranding(32); ImGui.Separator(); DrawConnection(h.Connection); Label(h.Character);
-        if(h.LastSync is { } t) Label($"Last sync: {t.ToLocalTime():g}");
-        else Label("Waiting for first sync");
+        DrawBranding(42);
+        DrawConnection(h.Connection);
+        if (h.LastSync is { } t) DrawStatus("✓", UiGreen, $"Last sync: {t.ToLocalTime():g}");
+        else DrawStatus("?", UiAmber, "Waiting for first sync");
+        Label(h.Character);
         if(uiState.Model.Warning is { } warning) Label(warning);
         if(h.Connection=="Not connected" || h.Connection=="Authorization expired or revoked") {
             Label("Connect Game Sync to your Gillions account to use supported current-game features.");
@@ -218,10 +245,17 @@ public sealed partial class Plugin {
         DrawFeatureHealth(h,sharedUnavailable);
         ImGui.Separator(); DrawPrivacy();
         Link("Open Gillions",UiOrigin);
-        ImGui.SameLine();
+        if (ImGui.GetContentRegionAvail().X >= ImGui.CalcTextSize("Open Gillions    Settings").X + ImGui.GetStyle().FramePadding.X * 4)
+            ImGui.SameLine();
         if(ImGui.Button("Settings")) publicUi.ShowSettings();
     }
     private void DrawPairingPublic() {
+        BeginPolishedSpacing();
+        try { DrawPairingContent(); }
+        finally { EndPolishedSpacing(); }
+    }
+
+    private void DrawPairingContent() {
         DrawPairingBranding(); ImGui.Separator();
         if(uiState.Paired && !pairingRepair) {
             Label("Game Sync is ready"); Label("Connected as:"); Label(publicHealth.Character); DrawPrivacy();
@@ -234,14 +268,19 @@ public sealed partial class Plugin {
             DrawConnection(publicHealth.Connection); Label(publicHealth.Character);
             Label("You already have a saved pairing. Enter a new code only if you want to reconnect this device. Reconnect requests new authorization; saved history is not erased.");
         } else {
-            Label("Welcome to Gillions Game Sync");
-            Label("Connect supported current FFXIV information to Gillions so Hunts and other companion tools stay useful while you play.");
-            Label("Some public-world observations may be contributed according to your Gillions account settings.");
-            Label("Game Sync does not move your character, fight, teleport or automatically join parties.");
+            ImGui.TextColored(new Vector4(.92f,.78f,.48f,1), "Connect Game Sync");
+            Label("Connect this device to use Hunts and other Gillions tools while you play.");
+            Label("Some public-world observations may be shared according to your Gillions settings. Game Sync never automates play.");
         }
         string nextOrigin=PublicConnectionPresentation.PairingOrigin(uiServerAddress);
-        Label((pairingRepair ? "Next pairing destination: " : "Saved pairing destination: ")
-            + PublicUrlConfiguration.DestinationLabel(uiServerAddress));
+        if (pairingRepair)
+            Label("Next pairing destination: " + PublicUrlConfiguration.DestinationLabel(uiServerAddress));
+        else {
+            ImGui.TextDisabled("Saved pairing destination");
+            Label(PublicUrlConfiguration.DestinationLabel(uiServerAddress));
+        }
+        if (uiState.Pairing) DrawStatus("?", UiAmber, "Waiting for Gillions authorization…");
+        else DrawConnection(publicHealth.Connection);
         if(nextOrigin.Length>0) {
             Link("Connect to Gillions",PublicConnectionPresentation.PairingUrl(uiServerAddress));
             Link("Learn about data & privacy",nextOrigin+"/gillions-sync");
@@ -254,31 +293,44 @@ public sealed partial class Plugin {
             uiServerAddress = defaultDestination;
             QueueUiAction(() => { configuration.ServerUrl = defaultDestination; RequestConfigurationSave(); });
         }
-        Label(uiState.Pairing ? "Waiting for Gillions authorization…" : publicHealth.Connection);
         DrawActionFeedback(pairing:true);
-        // Leave room for the established visible field label in narrow windows.
-        // Field identity, password masking and pairing actions stay unchanged.
-        ImGui.PushItemWidth(Math.Max(80*ImGui.GetFontSize()/17f,
-            ImGui.GetContentRegionAvail().X-ImGui.CalcTextSize("Pairing code").X-ImGui.GetStyle().ItemInnerSpacing.X));
+        ImGui.Separator();
         DrawPairingControls(uiState);
-        ImGui.PopItemWidth();
     }
+    private static void SettingsGroup(string name) {
+        ImGui.Separator();
+        ImGui.TextColored(new Vector4(.92f,.78f,.48f,1), name);
+    }
+
+    private static void SettingsHelp(string description) {
+        ImGui.Indent();
+        Label(description);
+        ImGui.Unindent();
+    }
+
     private void DrawPublicSettings() {
-        DrawBranding(20);
+        BeginPolishedSpacing();
+        try { DrawSettingsContent(); }
+        finally { EndPolishedSpacing(); }
+    }
+
+    private void DrawSettingsContent() {
+        DrawBranding(24);
         if(!ImGui.BeginTabBar("GillionsSettingsTabs")) return;
         if(ImGui.BeginTabItem("General")) {
             Label("Window placement and resizing follow Dalamud. Drag a window edge to resize it; shorter windows scroll. Game Sync never automates gameplay.");
             ImGui.EndTabItem();
         }
         if(ImGui.BeginTabItem("Hunts")) {
+            SettingsGroup("Hunt Progress");
             bool show=configuration.ShowHuntProgress, locked=configuration.LockHuntProgressPosition;
             if(ImGui.Checkbox("Show Hunt Progress",ref show)) QueueUiAction(()=> { configuration.ShowHuntProgress=show; RequestConfigurationSave(); });
+            SettingsHelp("Show Hunt targets for your current area. Closing the panel hides it until you change area.");
             if(ImGui.Checkbox("Lock position",ref locked)) QueueUiAction(()=> { configuration.LockHuntProgressPosition=locked; RequestConfigurationSave(); });
-            Label("A local, display-only count panel for your current area. Closing it suppresses auto-show until you change territory.");
+            SettingsHelp("Keep the Hunt Progress window in place.");
             if(show && ImGui.Button("Open Hunt Progress")) QueueUiAction(()=>huntProgress.Open());
             DrawHuntsTab(huntTab);
 #if GILLIONS_TEST_BUILD
-            ImGui.Separator();
             DrawHuntAwarenessSettings();
 #endif
             ImGui.EndTabItem();

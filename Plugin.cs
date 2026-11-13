@@ -1848,7 +1848,9 @@ public sealed partial class Plugin : IDalamudPlugin {
 
     private void DrawPairingControls(PluginUiSnapshot view) {
         ImGui.TextWrapped("Create a one-time code on Gillions, then paste it below. Never share your code.");
-        ImGui.InputText("Pairing code", ref uiPairingCode, 256, ImGuiInputTextFlags.Password);
+        Label("Pairing code");
+        ImGui.SetNextItemWidth(-1);
+        ImGui.InputText("###Pairing code", ref uiPairingCode, 256, ImGuiInputTextFlags.Password);
         ImGui.BeginDisabled(view.Pairing || string.IsNullOrWhiteSpace(uiPairingCode) || !SyncOrigin.TryNormalize(uiServerAddress, out _));
         if (ImGui.Button(view.Pairing ? "Connecting…" : "Pair this device")) {
             var code = uiPairingCode.Trim(); var address = PublicConnectionPresentation.PairingOrigin(uiServerAddress); uiPairingCode = "";
