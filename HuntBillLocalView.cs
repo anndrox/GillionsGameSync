@@ -335,8 +335,11 @@ internal sealed class HuntBillLocalView : IDisposable {
                 presentation.TargetName(target), target.ObservedKills, target.RequiredKills);
             if (targetTerritory == territory) rows.Add(row);
             var targetZone = territories.GetRowOrDefault(targetTerritory)?.PlaceName.Value.Name.ExtractText();
+            var fateName = target.FateId != 0
+                ? data.GetExcelSheet<Fate>().GetRowOrDefault(target.FateId)?.Name.ExtractText() : null;
             tabRows.Add(new(bill.BillTypeId, bill.OrderId, bill.Category == "weekly", bill.Tier,
-                row, string.IsNullOrEmpty(targetZone) ? "Zone unknown" : targetZone, target.TargetId, target.MapId));
+                row, string.IsNullOrEmpty(targetZone) ? "Zone unknown" : targetZone, target.TargetId, target.MapId,
+                target.FateId, fateName));
         }
         long expiresAt = Environment.TickCount64 + 6000;
         Progress = new(territory, name, observations.Count == 0 && !complete ? "No current Hunt targets could be verified from this read. Bill state is unknown." : "", complete,

@@ -339,7 +339,8 @@ public sealed partial class Plugin {
             if(ImGui.Checkbox("Lock position",ref locked)) QueueUiAction(()=> { configuration.LockHuntProgressPosition=locked; RequestConfigurationSave(); });
             SettingsHelp("Keep the Hunt Progress window in place.");
             if(show && ImGui.Button("Open Hunt Progress")) QueueUiAction(()=>huntProgress.Open());
-            DrawHuntsTab(huntTab);
+            fateLocal.RequestHunts();
+            DrawHuntsTab(huntTab, fateLocal.Hunts);
 #if GILLIONS_TEST_BUILD
             DrawHuntAwarenessSettings();
 #endif
