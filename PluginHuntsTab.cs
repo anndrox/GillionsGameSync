@@ -30,6 +30,7 @@ internal sealed record HuntsTabView(string Location, HuntTabBills Bills, HuntTab
 }
 
 public sealed partial class Plugin {
+    private long huntTabRequestedUntil;
     private volatile HuntsTabView huntTab = HuntsTabView.Empty;
     private HuntTabMapPoint? huntTabMap;
 

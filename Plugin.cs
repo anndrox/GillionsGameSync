@@ -714,7 +714,8 @@ public sealed partial class Plugin : IDalamudPlugin {
     }
 
     private bool TickHuntObservation(DateTime now) {
-        huntLocal.ProgressRequested = configuration.ShowHuntProgress;
+        huntLocal.ProgressRequested = configuration.ShowHuntProgress
+            || Environment.TickCount64 < Volatile.Read(ref huntTabRequestedUntil);
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         var huntRevision = huntLocal.SemanticRevision;
         var coverageRevision = huntLocal.CoverageRevision;
