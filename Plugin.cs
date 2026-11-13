@@ -261,7 +261,13 @@ public sealed partial class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         , IAddonLifecycle addonLifecycle, IMarketBoard marketBoard, IGameGui gameGui, IPlayerState travelPlayerState, IFateTable fateTable
 #endif
+#if GILLIONS_TEST_BUILD
+        , INotificationManager notificationManager
+#endif
     ) {
+#if GILLIONS_TEST_BUILD
+        watchedFateNotifications = notificationManager;
+#endif
         this.pluginInterface = pluginInterface;
         this.textureProvider = textureProvider;
         this.commands = commands;
@@ -628,6 +634,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         Observe("travel upload", now, static (plugin, at) => plugin.TickTravelSync(at));
 #if GILLIONS_TEST_BUILD
         Observe("character appearance", now, static (plugin, at) => plugin.TickAppearance(at));
+        Observe("Watched FATEs", now, static (plugin, _) => plugin.TickWatchedFates());
         Observe("Hunt awareness", now, static (plugin, _) => plugin.TickHuntAwareness());
 #endif
         if (now >= nextMarketMaintenanceUtc) {
@@ -714,7 +721,8 @@ public sealed partial class Plugin : IDalamudPlugin {
     }
 
     private bool TickHuntObservation(DateTime now) {
-        huntLocal.ProgressRequested = configuration.ShowHuntProgress;
+        huntLocal.ProgressRequested = configuration.ShowHuntProgress
+            || Environment.TickCount64 < Volatile.Read(ref huntTabRequestedUntil);
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         var huntRevision = huntLocal.SemanticRevision;
         var coverageRevision = huntLocal.CoverageRevision;
@@ -951,6 +959,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         ForgetAwareHunt();
 #endif
+        huntTabMap = null;
         huntMapNegotiation.Reset();
         huntMapProcessor = new(); huntMapStatus = "No active Hunt map request; local observations preserved.";
     }
@@ -1048,6 +1057,14 @@ public sealed partial class Plugin : IDalamudPlugin {
                     var opened =
 #endif
                         huntMapGui.OpenMapWithMapLink(new MapLinkPayload(r.TerritoryId, r.MapId, r.MapX, r.MapY));
+                    if (opened) {
+#if GILLIONS_TEST_BUILD
+                        var tabPoint = exact;
+#else
+                        MapLinkPayload? tabPoint = null;
+#endif
+                        RememberHuntTabMap(r, tabPoint ?? new MapLinkPayload(r.TerritoryId, r.MapId, r.MapX, r.MapY), commandClock);
+                    }
                     timing.MapFinished();
                     RecordDiagnostic($"Hunt command timing: command {r.RequestId[..8]}; focus={(HuntFocusActive(DateTime.UtcNow) ? "active" : "background")}; {timing.Describe()}. Consume precedes presentation; no browser/queue timing inferred.");
                     RecordDiagnostic($"Hunt map: new one-time Site request consumed; target ID {r.TargetId}, candidate {r.CandidateId}, revision {r.Revision[..12]}; presentation={(opened ? "shown" : "unavailable")}. No Native target inference.");
@@ -1815,6 +1832,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         Observe("appearance status", now, static (plugin, at) => plugin.appearanceSharingStatus = plugin.AppearanceStatus(at));
 #endif
         settingsVisible = publicUi.Visible;
+        if (settingsVisible) Observe("Hunts tab", now, static (plugin, at) => plugin.huntTab = plugin.ReadHuntsTab(at));
         Observe("connection status", now, static (plugin, at) => plugin.PublishPublicHealth(at));
         Observe("Hunt progress display", now, static (plugin, _) => plugin.huntProgress.Update(
             plugin.configuration.ShowHuntProgress, plugin.clientState.TerritoryType, plugin.huntLocal.Progress, Environment.TickCount64));
@@ -1838,7 +1856,9 @@ public sealed partial class Plugin : IDalamudPlugin {
 
     private void DrawPairingControls(PluginUiSnapshot view) {
         ImGui.TextWrapped("Create a one-time code on Gillions, then paste it below. Never share your code.");
-        ImGui.InputText("Pairing code", ref uiPairingCode, 256, ImGuiInputTextFlags.Password);
+        Label("Pairing code");
+        ImGui.SetNextItemWidth(-1);
+        ImGui.InputText("###Pairing code", ref uiPairingCode, 256, ImGuiInputTextFlags.Password);
         ImGui.BeginDisabled(view.Pairing || string.IsNullOrWhiteSpace(uiPairingCode) || !SyncOrigin.TryNormalize(uiServerAddress, out _));
         if (ImGui.Button(view.Pairing ? "Connecting…" : "Pair this device")) {
             var code = uiPairingCode.Trim(); var address = PublicConnectionPresentation.PairingOrigin(uiServerAddress); uiPairingCode = "";
@@ -1905,6 +1925,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #if GILLIONS_TEST_BUILD
         backgroundObservation.Run("appearance reset", (Plugin: this, ContentId: nextContentId, SamePairing: samePairing), now,
             static (state, _) => state.Plugin.ResetAppearance(state.ContentId, state.SamePairing));
+        Observe("Watched FATE reset", now, static (plugin, _) => plugin.watchedFatePoll.ClearSession());
         Observe("Hunt awareness reset", now, static (plugin, _) => plugin.ResetHuntAwareness());
 #endif
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD

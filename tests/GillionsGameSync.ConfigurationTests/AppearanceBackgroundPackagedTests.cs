@@ -109,6 +109,8 @@ internal static class AppearanceBackgroundPackagedTests {
             samples++;
             return Activator.CreateInstance(method.ReturnType, [look, null]);
         }));
+        // This fixture isolates appearance and does not open Hunts.
+        configType.GetProperty("TrackedFateAlerts")!.SetValue(config, false);
         var transport = new AppearanceTransport();
         using var http = new HttpClient(transport);
         // Every client is in-process, including unexpected requests during the fixture.

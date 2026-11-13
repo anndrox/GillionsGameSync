@@ -42,7 +42,9 @@ assert 'bool complete = false' in progress # item coverage does not prove curren
 assert 'No current Hunt targets could be verified from this read. Bill state is unknown.' in progress
 assert 'target.MapId > 0' in progress and 'target.PlaceNameId > 0' in progress
 assert 'ReadEnabled => policy.RetentionEnabled || ProgressRequested' in hunt
-assert 'huntLocal.ProgressRequested = configuration.ShowHuntProgress' in plugin
+hunts_tab = ui.split('ImGui.BeginTabItem("Hunts")', 1)[1].split('ImGui.EndTabItem()', 1)[0]
+assert 'Volatile.Write(ref huntTabRequestedUntil, Environment.TickCount64 + 1000)' in hunts_tab
+assert re.search(r'huntLocal\.ProgressRequested = configuration\.ShowHuntProgress\s*\|\| Environment\.TickCount64 < Volatile\.Read\(ref huntTabRequestedUntil\)', plugin)
 assert 'CoveragePayload(string key, DateTime now) => policy.RetentionEnabled' in hunt
 assert plugin.count('fateLocal.Tick(now)')==1 and plugin.count('plugin.TickFateSender(at)')==1
 permission=(root/'PluginPermissions.cs').read_text()
