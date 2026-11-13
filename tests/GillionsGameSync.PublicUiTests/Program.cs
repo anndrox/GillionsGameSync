@@ -149,7 +149,7 @@ foreach(var (name,method,paired,width,scale,tab) in cases) {
         var clock = T("WebsiteResponseClock").GetMethod("Capture", BindingFlags.NonPublic | BindingFlags.Static)!
             .Invoke(null, [null, now, TimeSpan.Zero])!;
         var mapLink = Assembly.Load("Dalamud").GetType("Dalamud.Game.Text.SeStringHandling.Payloads.MapLinkPayload", true)!;
-        var link = Activator.CreateInstance(mapLink, [1u, mapId, 24f, 20f])!;
+        var link = Activator.CreateInstance(mapLink, [1u, mapId, 24000, 20000])!;
         return New("HuntTabMapPoint", targetId, mapId, 1u, 1u, mapId, 0u, link, clock, now.AddMinutes(1));
     }
     if (huntsFixture && !emptyBills) {
