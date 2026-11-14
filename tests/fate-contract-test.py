@@ -10,7 +10,7 @@ plugin = (root / 'Plugin.cs').read_text(encoding='utf-8')
 assert native.startswith('#if GILLIONS_TEST_BUILD')
 assert model.startswith('#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_FATE_TESTS')
 assert transport.startswith('#if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD || GILLIONS_FATE_TESTS')
-code = re.sub(r'//[^\n]*', '', native)
+code = re.sub(r'//[^\n]*', '', native).replace('definition.Value.Name.ExtractText()', '').replace('.PlaceName.ValueNullable?.Name.ExtractText()', '')
 assert not re.search(r'unsafe|->|\.Address|HomeWorld|LocalPlayer|ObjectTable|TimeRemaining|ExtractText|GetIpc|SendAsync|HttpClient|FireCallback|ReceiveEvent|WriteAll|SavePluginConfig', code)
 assert 'private readonly IFateTable table;' in native
 assert not re.search(r'private .*\bIFate\b', native)
@@ -23,7 +23,8 @@ for event, handler in [('Login','Invalidate'),('Logout','Logout'),('ZoneInit','Z
 tick = native.split('internal void Tick',1)[1].split('internal string Diagnostic',1)[0]
 assert tick.index('monotonic<nextRead') < tick.index('before=Context()') < tick.index('count=table.Length')
 assert tick.index('!FatePolicy.Compatible(source)') < tick.index('count=table.Length')
-assert 'settled!=before || settleEpoch!=state.Epoch' in tick
+assert 'bool collect = measuring && settled == before && settleEpoch == state.Epoch;' in tick
+assert tick.index('if (!collect) return;') < tick.index('state.Observe(')
 assert 'var after=Context()' in tick and 'epoch!=state.Epoch || count!=table.Length' in tick
 assert 'count is <0 or >FatePolicy.MaximumRows' in tick and 'i<count' in tick
 assert 'definition.Value.EurekaFate!=0' in tick

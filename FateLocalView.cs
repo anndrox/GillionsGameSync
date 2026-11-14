@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState;
 using Dalamud.Game.ClientState.Conditions;
@@ -39,6 +40,18 @@ internal sealed class FateLocalView : IDisposable {
     private long nextRead;
     private FateContext? settled;
     private long settleEpoch;
+    private (FateContext Context, uint Map)? huntsSettled;
+    private long huntsRequestedUntil;
+    private volatile HuntsFates hunts = HuntsFates.Unavailable;
+    internal HuntsFates Hunts {
+        get {
+            var snapshot = hunts;
+            return snapshot.IsFresh(Environment.TickCount64) ? snapshot : HuntsFates.Unavailable;
+        }
+    }
+    internal void RequestHunts() => Volatile.Write(ref huntsRequestedUntil, Environment.TickCount64 + 1000);
+    internal bool CanFlag(HuntsFates snapshot) => ReferenceEquals(snapshot, Hunts)
+        && snapshot.Context is { } context && Context() == context && snapshot.Map == client.MapId;
     private sealed record View(string Status, FateContext? Context, FateObservation[] Rows, FateCost[] Costs, int TableRows);
     private volatile View view=new("Local FATE diagnostic session stopped; Site admission unavailable. No sends.",null,[],[],0);
     private string summary="No measured samples.";
@@ -88,11 +101,13 @@ internal sealed class FateLocalView : IDisposable {
 #endif
     private void Invalidate() {
         state.Invalidate(); settled=null; settleEpoch=state.Epoch;
+        ClearHunts();
         Invalidated?.Invoke();
         // Lifecycle cannot bypass five-second read admission. ZoneInit happens
         // before ClientState assigns the new territory/instance.
         view=new("Context invalidated; unsent epoch cleared. Missing FATEs are UNKNOWN. No sends.",null,[],measurements.Snapshot(),0);
     }
+    private void ClearHunts() { huntsSettled = null; hunts = HuntsFates.Unavailable; }
     internal void ClearAuthorization() => Invalidate();
     private void Logout(int _,int __)=>Invalidate();
     private void Changed(uint _)=>Invalidate();
@@ -111,7 +126,9 @@ internal sealed class FateLocalView : IDisposable {
         return new(character,world.RowId,territory,client.Instance);
     }
     internal void Tick(DateTime now) {
-        if (disposed || !measuring) return;
+        bool showHunts = Environment.TickCount64 < Volatile.Read(ref huntsRequestedUntil);
+        if (!showHunts && huntsSettled is not null) ClearHunts();
+        if (disposed || (!measuring && !showHunts)) return;
         long monotonic=Stopwatch.GetTimestamp();
         if (monotonic<nextRead) return; // no FATE/position/player reads per frame
         nextRead=monotonic+(long)(Stopwatch.Frequency*FatePolicy.ReadSeconds);
@@ -121,51 +138,86 @@ internal sealed class FateLocalView : IDisposable {
         FateContext? before=null; FateObservation[] rows=[];
         try {
             if (!FatePolicy.Compatible(source) || GameVersion()!=source!.GameVersion) {
-                Invalidate(); outcome="Unsupported source/game matrix; no FATE reads."; return;
+                if (measuring) Invalidate(); else ClearHunts();
+                outcome="Unsupported source/game matrix; no FATE reads."; return;
             }
             before=Context();
             // Invalidate once on leaving a supported context. Re-invalidating every
             // read would change the epoch, and with it the Site discovery binding.
             if (before is null) {
-                if (settled is not null || state.Prepared is not null || state.Current.Length>0) Invalidate();
+                if (measuring && (settled is not null || state.Prepared is not null || state.Current.Length>0)) Invalidate();
+                else ClearHunts();
                 outcome="Unavailable/unsupported public context. No negative inference."; return;
             }
             // Two independently scheduled stable context checks, rather than a
             // guessed settle timeout or reading inside a zoning event.
-            if (settled!=before || settleEpoch!=state.Epoch) {
+            bool collect = measuring && settled == before && settleEpoch == state.Epoch;
+            if (measuring && !collect) {
                 state.Invalidate(); settled=before; settleEpoch=state.Epoch;
+            }
+            uint map = showHunts ? client.MapId : 0;
+            bool show = showHunts && huntsSettled == (before, map);
+            if (showHunts && !show) {
+                hunts = HuntsFates.Unavailable;
+                huntsSettled = (before, map);
+            }
+            if (!collect && !show) {
                 outcome="Awaiting a second settled context check; no rows admitted."; return;
             }
             long epoch=state.Epoch;
             count=table.Length;
             if (count is <0 or >FatePolicy.MaximumRows) {
-                Invalidate(); outcome="Table count outside bounded support; no negative inference."; return;
+                if (collect) Invalidate(); else ClearHunts();
+                outcome="Table count outside bounded support; no negative inference."; return;
             }
             var copied=new List<FateObservation>(count);
+            var local = show ? new List<HuntsFateRow>(count) : null;
+            bool complete = true;
+            long sampledAt = Environment.TickCount64;
+            var mapRow = show ? data.GetExcelSheet<Map>().GetRowOrDefault(map) : null;
+            bool canFlag = mapRow is { SizeFactor: > 0 } && mapRow.Value.TerritoryType.RowId == before.Territory;
             for (int i=0;i<count;i++) {
                 var f=table[i];
-                if (f is null || !table.IsValid(f)) continue;
+                if (f is null || !table.IsValid(f)) { complete = false; continue; }
                 // Do not store IFate or an address. Each value is copied during
                 // this bounded framework pass and never dereferenced afterward.
                 ushort id=f.FateId; var territory=f.TerritoryType; var definition=f.GameData;
                 var value=FatePolicy.State((byte)f.State);
                 if (id==0 || value is null || !territory.IsValid || territory.RowId!=before.Territory
-                    || !definition.IsValid || definition.RowId!=id || definition.Value.EurekaFate!=0) continue;
+                    || !definition.IsValid || definition.RowId!=id) { complete = false; continue; }
+                if (definition.Value.EurekaFate!=0) continue;
                 byte progress=f.Progress, level=f.Level, max=f.MaxLevel;
                 var position=f.Position; float radius=f.Radius;
                 var timer=FatePolicy.Timing(f.StartTimeEpoch,f.Duration,now);
                 bool levels=level>0 && max>=level && !(level==1 && max==255);
-                copied.Add(new(id,before.World,before.Territory,
+                if (collect) copied.Add(new(id,before.World,before.Territory,
                     new(before.Instance==0 ? "noninstanced" : "public_instance",before.Instance),value,now,
                     progress<=100 ? progress : null,f.HasBonus,levels ? level : null,levels ? max : null,
                     float.IsFinite(position.X) && float.IsFinite(position.Y) && float.IsFinite(position.Z)
                         ? new(position.X,position.Y,position.Z) : null,
                     float.IsFinite(radius) && radius>0 ? radius : null,timer));
+                if (local is not null && value.Raw is 3 or 4 or 5) {
+                    var name = definition.Value.Name.ExtractText();
+                    local.Add(new(id, string.IsNullOrWhiteSpace(name) ? "FATE name unavailable" : name,
+                        levels ? level : null, progress <= 100 ? progress : null, value.Kind,
+                        HuntsFateRow.EndsAt(timer, now, sampledAt),
+                        canFlag && HuntsFateRow.ValidPosition(position) ? position : null));
+                }
             }
             var after=Context();
             if (after!=before || after is null || epoch!=state.Epoch || count!=table.Length) {
-                Invalidate(); outcome="Context/table changed during read; epoch discarded."; return;
+                if (collect) Invalidate(); else ClearHunts();
+                outcome="Context/table changed during read; epoch discarded."; return;
             }
+            if (local is not null) {
+                var zone = data.GetExcelSheet<TerritoryType>().GetRowOrDefault(before.Territory)?
+                    .PlaceName.ValueNullable?.Name.ExtractText();
+                hunts = map == client.MapId && (complete || local.Count > 0)
+                    ? new(before, map, sampledAt + FatePolicy.ReadSeconds * 2000, complete, local.ToArray(),
+                        string.IsNullOrWhiteSpace(zone) ? "Zone unknown" : zone)
+                    : HuntsFates.Unavailable;
+            }
+            if (!collect) return;
             rows=copied.ToArray();
             readMs=Stopwatch.GetElapsedTime(start).TotalMilliseconds;
             readBytes=GC.GetAllocatedBytesForCurrentThread()-allocated;
@@ -180,15 +232,18 @@ internal sealed class FateLocalView : IDisposable {
             outcome=count==0 ? "Empty/unavailable table; no negative observation or replacement batch."
                 : $"Copied {rows.Length}; admitted {state.Current.Length} positive observations; no global coverage claim.";
         } catch (Exception e) {
-            Invalidate(); outcome=$"Read failed closed ({e.GetType().Name}); no negative inference.";
+            if (measuring) Invalidate(); else ClearHunts();
+            outcome=$"Read failed closed ({e.GetType().Name}); no negative inference.";
             throw;
         } finally {
             if (preparing) { prepareMs=Stopwatch.GetElapsedTime(start).TotalMilliseconds; prepareBytes=GC.GetAllocatedBytesForCurrentThread()-allocated; }
             else { readMs=Stopwatch.GetElapsedTime(start).TotalMilliseconds; readBytes=GC.GetAllocatedBytesForCurrentThread()-allocated; }
-            var cost=new FateCost(readMs,readBytes,prepareMs,prepareBytes,count,state.Current.Length,state.LastChanged,outcome);
-            measurements.Add(cost);
-            view=new(outcome,before,state.Current.ToArray(),measurements.Snapshot(),count);
-            summary=FateMeasurements.Summary(view.Costs); // once per bounded read, never every UI frame
+            if (measuring) {
+                var cost=new FateCost(readMs,readBytes,prepareMs,prepareBytes,count,state.Current.Length,state.LastChanged,outcome);
+                measurements.Add(cost);
+                view=new(outcome,before,state.Current.ToArray(),measurements.Snapshot(),count);
+                summary=FateMeasurements.Summary(view.Costs); // once per bounded read, never every UI frame
+            }
         }
     }
 #if GILLIONS_TEST_BUILD

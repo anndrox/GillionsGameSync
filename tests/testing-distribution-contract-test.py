@@ -25,11 +25,26 @@ hunt_fault = '''        } catch (Exception) {
         }'''
 assert hunt.count(hunt_fault) == 1
 hunt = hunt.replace(hunt_fault, '        } catch (Exception) { itemCoverage.Clear(); Publish("Hunt read/save failed; history preserved. New data may be memory-only. No live correctness claim."); }')
+# The Hunts tab projects the same admitted observations without changing how they are read.
+# Reverse its presentation-only additions before comparing the rest of the collector.
+hunt=hunt[:hunt.index('    internal HuntTabBills TabBills')] + '    internal void ClearProgress() => Progress = HuntProgressSnapshot.Unavailable;\n' + hunt[hunt.index('    private bool ReadEnabled'):]
+
+hunt=hunt.replace('private void ClearLiveBaseline() { ClearProgress();',
+    'private void ClearLiveBaseline() { Progress = HuntProgressSnapshot.Unavailable;')
+hunt=hunt.replace('itemCoverage.Clear(); ClearProgress();', 'itemCoverage.Clear(); Progress = HuntProgressSnapshot.Unavailable;')
+hunt=hunt.replace('        ClearProgress();\n        LastDiagnostic', '        Progress = HuntProgressSnapshot.Unavailable;\n        LastDiagnostic')
 accepted_hunt=subprocess.check_output(['git','show',public+':HuntBillLocalView.cs'],cwd=r).decode().replace('\r\n','\n')
 for old_status in ['Private TEST sync is controlled separately in the main window.', 'Private TEST sync status is in the main window.']:
     accepted_hunt=accepted_hunt.replace(old_status,'Private sync requires separate permission.')
-assert hunt.replace('NativeCompatibility.SupportsRuntime(NativeFamily.Hunt, GameVersion())',
-                    'PersonalObservationCompatibility.Supports(GameVersion(), typeof(MobHunt).Assembly.GetName().Version?.ToString())')==accepted_hunt
+progress_end='\n#if GILLIONS_TEST_BUILD\n    private void Draw()'
+def without_tab_projection(text):
+    head,rest=text.split('    private void PublishProgress(',1)
+    projection,tail=rest.split(progress_end,1)
+    start,rows=projection.split('        var rows = new List<HuntProgressRow>();',1)
+    territory_lookup=rows[rows.index('        foreach (var bill in observations)'):rows.index('            if (targetTerritory == 0) complete = false;')]
+    return head+start+territory_lookup+progress_end+tail
+assert without_tab_projection(hunt).replace('NativeCompatibility.SupportsRuntime(NativeFamily.Hunt, GameVersion())',
+                    'PersonalObservationCompatibility.Supports(GameVersion(), typeof(MobHunt).Assembly.GetName().Version?.ToString())')==without_tab_projection(accepted_hunt)
 windows=(r/'PublicGameSyncUi.cs').read_text(encoding='utf-8')
 normalized=windows.replace('        string idSuffix=testing ? "Test" : "";\n','').replace('+idSuffix','')
 # Owner-reported duplicate windows after Reconnect -> Finish (2026-10-24): only FinishPairing may differ.

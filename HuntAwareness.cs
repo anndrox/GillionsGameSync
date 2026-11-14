@@ -57,6 +57,45 @@ internal sealed class FateAlertOccurrences {
     private sealed record Occurrence(int Start, bool Alerted);
     private readonly Dictionary<uint, Occurrence> active = new();
 
+    private readonly HashSet<string> siteOccurrences = new(StringComparer.Ordinal);
+    private readonly Queue<string> siteOrder = new();
+    private readonly Dictionary<(uint Fate, string World), DateTime> legacyAlerts = new();
+
+    internal void RememberLegacy(uint fate, string world, DateTime now) {
+        foreach (var stale in legacyAlerts.Keys.Where(key => legacyAlerts[key] <= now).ToArray()) legacyAlerts.Remove(stale);
+        var key = (fate, world.ToUpperInvariant());
+        if (legacyAlerts.Count < 128 || legacyAlerts.ContainsKey(key)) legacyAlerts[key] = now.AddSeconds(45);
+    }
+
+    private readonly Dictionary<(uint Fate, string World), DateTime> siteAlerts = new();
+
+    internal bool ObserveSite(string id, uint fate, string world, DateTime now, DateTime? endsAt = null) {
+        if (!siteOccurrences.Add(id)) return false;
+        siteOrder.Enqueue(id);
+        if (siteOrder.Count > 512) siteOccurrences.Remove(siteOrder.Dequeue());
+        // The local table and Sonar have no Site occurrence ID. Bridge one
+        // matching FATE on the same world, while keeping distinct Site IDs.
+        var key = (fate, world.ToUpperInvariant());
+        if (legacyAlerts.Remove(key, out var until) && until > now) return false;
+        foreach (var stale in siteAlerts.Keys.Where(key => siteAlerts[key] <= now).ToArray()) siteAlerts.Remove(stale);
+        if (siteAlerts.Count < 128 || siteAlerts.ContainsKey(key))
+            siteAlerts[key] = endsAt is { } end && end > now ? end : now.AddSeconds(45);
+        return true;
+    }
+
+    internal bool ObserveLocal(uint fate, string world, bool isActive, int start, bool enabled, DateTime now) {
+        var key = (fate, world.ToUpperInvariant());
+        if (Observe(fate, isActive, start, enabled)) {
+            if (siteAlerts.Remove(key, out var until) && until > now) return false;
+            RememberLegacy(fate, world, now);
+            return true;
+        }
+        if (isActive && legacyAlerts.ContainsKey(key)) legacyAlerts[key] = now.AddSeconds(45);
+        return false;
+    }
+
+    internal void ClearLegacy() => active.Clear();
+
     internal bool Observe(uint id, bool isActive, int start, bool enabled) {
         if (!isActive) { active.Remove(id); return false; }
         if (!active.TryGetValue(id, out var occurrence) || (start > 0 && occurrence.Start > 0 && start != occurrence.Start))
@@ -66,11 +105,19 @@ internal sealed class FateAlertOccurrences {
         return alert;
     }
 
-    internal void Retain(TrackedFates? tracked) {
-        foreach (var id in active.Keys.Where(id => tracked?.Items.ContainsKey(id) != true).ToArray()) active.Remove(id);
+    internal void Retain(TrackedFates? tracked) => Retain((IReadOnlyCollection<uint>?)tracked?.Items.Keys ?? Array.Empty<uint>());
+
+    internal void Retain(IReadOnlyCollection<uint> ids) {
+        foreach (var id in active.Keys.Where(id => !ids.Contains(id)).ToArray()) active.Remove(id);
     }
 
-    internal void Clear() => active.Clear();
+    internal void Clear() {
+        ClearLegacy();
+        siteOccurrences.Clear();
+        siteOrder.Clear();
+        legacyAlerts.Clear();
+        siteAlerts.Clear();
+    }
 }
 
 internal sealed class HuntDeferAction(HuntMapRequest command, string? reason) {
@@ -147,6 +194,9 @@ internal sealed class HuntDeferState {
         PruneWaiting(now);
         return deferred.Values.Where(target => target.World == world && !target.SeenUp).ToArray();
     }
+
+    internal IEnumerable<WaitingTarget> DeferredBRanks(uint world, DateTime now) =>
+        deferred.Values.Where(target => target.World == world && target.FateId is null && target.Until > now);
 
     private void PruneWaiting(DateTime now) {
         foreach (var target in deferred.Values.Where(target => target.Until <= now).ToArray()) deferred.Remove(target.TargetId);

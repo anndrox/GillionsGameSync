@@ -23,7 +23,8 @@ internal static class PermissionAuthorityTests {
         PermissionAuthority Bound() { var a=new PermissionAuthority();a.Bind("paired-session:999999999999",device);return a; }
         foreach(var key in PermissionAuthority.Keys) {
             var legacy=Bound();Check(legacy.Apply(Fixture().ToJsonString(),issued,1000),key+" legacy parse");
-            Check(legacy.Allows(key,true,1000),key+" legacy ON");Check(!legacy.Allows(key,false,1000),key+" legacy OFF");
+            Check(legacy.Allows(key,true,1000) == (key != "desynthesisResults"), key+" legacy ON policy");
+            Check(!legacy.Allows(key,false,1000),key+" legacy OFF");
             var on=Bound();Check(on.Apply(Fixture("explicit",true).ToJsonString(),issued,1000),key+" ON parse");
             Check(on.Allows(key,false,1000),key+" explicit overrides historical OFF");
             Check(!on.Allows(key,true,31000),key+" exact lease expiry");

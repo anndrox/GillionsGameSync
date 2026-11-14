@@ -6,9 +6,12 @@ slot basis, packaged layout fingerprint and pending physical acceptance are in
 not include the appearance collector or setting. Source qualification does not
 authorize release or replace the owner's later read-only physical check.
 
+Desynthesis is a separate Testing-only reader with a first source and metadata
+baseline for November. See [Desynthesis native source review](desynthesis-native.md).
+
 `NativeCompatibility.cs` is the one place that decides on which exact client
 runtimes the patch-sensitive collector families (Hunt, Submarine, Travel, FATE, Dashboard, Beastmaster and
-Appearance) may read native game state. Each family lists the exact runtimes it was
+Appearance and Desynthesis) may read native game state. Each family lists the exact runtimes it was
 qualified on. A runtime is the game data version Dalamud reports
 for `ffxiv`, plus the Dalamud release and the FFXIVClientStructs assembly that
 release ships. For those families, anything not listed fails closed before
@@ -34,7 +37,7 @@ Lumina `7.7.0` and Lumina.Excel `7.5.1`.
 Ran `--native-layout-report` on the promoted archive and both baselines:
 [October hotfix to November](https://github.com/aers/FFXIVClientStructs/compare/dd57986b8287e7c6ed9c27198f8c76cb04a81dfe...80cb4a7b7e11a6702e2eb8839afd301a918c638e)
 and [September to November](https://github.com/aers/FFXIVClientStructs/compare/313161e448e335adddd928f8a0212b2c328b5659...80cb4a7b7e11a6702e2eb8839afd301a918c638e).
-Every listed fingerprint matches its baseline with no missing member.
+Every previously qualified family fingerprint matches its baseline with no missing member.
 
 | Family | Baseline | Fingerprint | November source qualification |
 |---|---|---|---|
@@ -45,6 +48,7 @@ Every listed fingerprint matches its baseline with no missing member.
 | Dashboard | 15.0.3.6 | `72e3d331203627af` | **No.** AtkUnitBase replaces two unrelated parameter names/comments. The measured members match, but the September source diff is neither byte-identical nor additive-only. |
 | Beastmaster | 15.0.3.6 | `7984e5ebc96f48c5` | Yes. XBMManager is byte-identical, including loading states and the ownership query. PlayerState adds only an unused method. Changes to bestiary addons and agents are outside this reader. |
 | Appearance | 15.0.3.9 | `555794b7a8157af9` (Testing 0.0.101) | Yes. The rendered equipment, equipped-item stains, and type queries match every previously qualified runtime. |
+| Desynthesis | First baseline, 15.0.4.0 | `e25c169d60f8290b` | November-only source review and layout baseline. Physical single and bulk capture pending. |
 
 The [Dalamud source comparison](https://github.com/goatcorp/Dalamud/compare/30509c3b4fd00edd9a3d65b7bbf16433d84be03b...12e318c1936e449e5883faa61214eb2ced478349)
 has no changes to the FATE and appearance wrappers used here. No layout change

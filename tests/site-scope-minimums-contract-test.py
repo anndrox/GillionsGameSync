@@ -10,7 +10,8 @@ assert re.fullmatch(r'\d{4}\.\d{2}\.\d{2}\.\d{4}\.\d{4}', game)
 
 authority = (r / 'PermissionAuthority.cs').read_text(encoding='utf-8')
 keys = re.findall(r'"(\w+)"', authority.split('internal static readonly string[] Keys = [', 1)[1].split('];', 1)[0])
-assert len(keys) == 8 and sorted(table['scopes']) == sorted(keys + ['fate']), sorted(table['scopes'])
+# Desynthesis starts in Testing and has no deployed scope minimum in this table yet.
+assert len(keys) == 9 and sorted(table['scopes']) == sorted(set(keys) - {'desynthesisResults'} | {'fate'}), sorted(table['scopes'])
 
 # Which native families qualify this game build (NativeCompatibility.cs is the authority).
 native = (r / 'NativeCompatibility.cs').read_text(encoding='utf-8')

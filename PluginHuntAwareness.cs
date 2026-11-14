@@ -35,11 +35,12 @@ public sealed partial class Plugin {
     private uint currentHuntWorld;
     private bool exactHuntFlag;
     private (DateTime Until, int Instance, MapLinkPayload Link)? huntSonar;
-    private readonly Dictionary<uint, DateTime> sonarFates = new();
+    private readonly Dictionary<uint, (DateTime Until, MapLinkPayload Link)> sonarFates = new();
     private readonly Dictionary<uint, LocalFate> localFates = new();
     private (uint World, uint Territory, uint Map, uint Instance)? sampledFateZone;
     private (uint World, uint Territory, uint Map, uint Instance)? settledAwarenessZone;
     private HuntAvailability currentHuntAvailability;
+    private DateTime? currentBRankSeenAt;
 
     private sealed record LocalFate(uint Territory, uint Map, uint Instance, int Start, DateTime Until, bool Running, MapLinkPayload? Link);
 
@@ -59,9 +60,7 @@ public sealed partial class Plugin {
         }
         trackedFates = next;
         trackedFateWorld = world;
-        if (next is not null) fateAlerts.Retain(next);
-        foreach (var id in sonarFates.Keys.Where(id => next?.Items.ContainsKey(id) != true).ToArray()) sonarFates.Remove(id);
-        foreach (var id in localFates.Keys.Where(id => next?.Items.ContainsKey(id) != true).ToArray()) localFates.Remove(id);
+
     }
 
     private void ForgetAwareHunt() {
@@ -72,6 +71,7 @@ public sealed partial class Plugin {
     private void RetireAwareHuntFlag() {
         huntDefer.RetirePresentation();
         huntAwarenessClock = null;
+        currentBRankSeenAt = null;
         huntSonar = null;
         currentHuntAvailability = HuntAvailability.Unknown;
     }
@@ -135,7 +135,10 @@ public sealed partial class Plugin {
         exactHuntFlag = false;
         if (HuntDeferState.Reason(command) != HuntDeferState.BRankNotSeen) return null;
         var mark = ObserveBRank(command);
-        if (mark.Availability == HuntAvailability.Up) currentHuntAvailability = mark.Availability;
+        if (mark.Availability == HuntAvailability.Up) {
+            currentHuntAvailability = mark.Availability;
+            currentBRankSeenAt = BRankSightingTime(mark.Link, DateTime.UtcNow);
+        }
         exactHuntFlag = mark.Link is not null;
         return mark.Link;
     }
@@ -161,6 +164,9 @@ public sealed partial class Plugin {
         return BRankSighting.Resolve(false, null, relay, nearby, inFlight: marketConditions[ConditionFlag.InFlight]);
     }
 
+    private DateTime BRankSightingTime(MapLinkPayload? link, DateTime now) =>
+        huntSonar is { } sighting && ReferenceEquals(link, sighting.Link) ? sighting.Until.AddSeconds(-60) : now;
+
     private bool HasCurrentHuntRelay(HuntMapRequest command, DateTime now) => configuration.UseSonarChatMessages
         && huntSonar is { } relay && relay.Until > now
         && (clientState.TerritoryType != command.TerritoryId || relay.Instance == clientState.Instance);
@@ -179,19 +185,27 @@ public sealed partial class Plugin {
     }
 
     private void TickHuntAwareness() {
-        if (!huntDeferSupported && trackedFates is null) return;
-        if (!permissionAuthority.Fresh(Environment.TickCount64)) { SuspendHuntAwareness(); return; }
-        if (!HuntAwarenessReady()) { sampledFateZone = settledAwarenessZone = null; return; }
         var stamp = Environment.TickCount64;
+        if (!permissionAuthority.Fresh(stamp)) SuspendHuntAwareness();
+        var siteWatches = watchedFatePoll.WatchedIds(stamp);
+        if (!huntDeferSupported && trackedFates is null && siteWatches is null) return;
+        if (!HuntAwarenessReady()) { sampledFateZone = settledAwarenessZone = null; return; }
         if (stamp < nextAwarenessRead) return;
         nextAwarenessRead = stamp + 3000;
         var world = AwarenessWorld();
         if (world == 0) return;
         if (awarenessWorld != world) {
             awarenessWorld = world;
-            localFates.Clear(); sonarFates.Clear(); fateAlerts.Clear();
+            localFates.Clear(); sonarFates.Clear(); fateAlerts.ClearLegacy();
         }
         var now = DateTime.UtcNow;
+        var legacy = watchedFatePoll.LegacyFallback ? trackedFates : null;
+        IReadOnlyCollection<uint> watchIds = siteWatches ?? (IReadOnlyCollection<uint>?)legacy?.Items.Keys ?? Array.Empty<uint>();
+        if (siteWatches is not null || legacy is not null) {
+            fateAlerts.Retain(watchIds);
+            foreach (var id in sonarFates.Keys.Where(id => !watchIds.Contains(id)).ToArray()) sonarFates.Remove(id);
+            foreach (var id in localFates.Keys.Where(id => !watchIds.Contains(id)).ToArray()) localFates.Remove(id);
+        }
         var command = CurrentAwareHunt(world);
         var zone = (World: world, Territory: (uint)clientState.TerritoryType, Map: clientState.MapId, Instance: clientState.Instance);
         var settled = settledAwarenessZone == zone;
@@ -204,10 +218,7 @@ public sealed partial class Plugin {
         if (settled && !inDuty && !clientState.IsPvP && !clientState.IsGPosing) {
             var watchedFates = waiting.Where(target => target.FateId.HasValue).Select(target => target.FateId!.Value).ToHashSet();
             if (huntFate) watchedFates.Add(huntFateId!.Value);
-            if (configuration.TrackedFateAlerts && trackedFates is { } tracked) {
-                foreach (var fate in tracked.Items.Values)
-                    if (fate.TerritoryId == zone.Territory && fate.MapId == zone.Map) watchedFates.Add(fate.FateId);
-            }
+            if (configuration.TrackedFateAlerts) watchedFates.UnionWith(watchIds);
             if (watchedFates.Count > 0) local = ReadAwarenessFates(zone.Territory, zone.Map, zone.Instance, watchedFates, now);
             if (waiting.Length > 0) ObserveWaitingBRanks(waiting);
         }
@@ -217,12 +228,15 @@ public sealed partial class Plugin {
                 if (target.FateId is { } id && local.TryGetValue(id, out var running) && running.Running) huntDefer.SawUp(target);
             foreach (var id in localFates.Keys.Where(id => localFates[id].Territory == zone.Territory && localFates[id].Map == zone.Map
                 && localFates[id].Instance == zone.Instance && !local.ContainsKey(id)).ToArray()) localFates.Remove(id);
-            foreach (var (id, fate) in local) if (trackedFates?.Items.ContainsKey(id) == true) localFates[id] = fate;
+            foreach (var (id, fate) in local) if (watchIds.Contains(id)) localFates[id] = fate;
         }
         if (command is not null) {
             if (HuntDeferState.Reason(command) == HuntDeferState.BRankNotSeen) {
                 var mark = ObserveBRank(command);
                 currentHuntAvailability = settled || mark.Availability == HuntAvailability.Up ? mark.Availability : HuntAvailability.Unknown;
+                if (mark.Availability == HuntAvailability.Up) currentBRankSeenAt = BRankSightingTime(mark.Link, now);
+                if (mark.Link is not null && huntAwarenessClock is { } clock)
+                    RememberHuntTabMap(command, mark.Link, clock);
                 if (!exactHuntFlag && !huntMapPollInFlight && mark.Link is not null) {
                     exactHuntFlag = true;
                     OpenExactHuntFlag(command, mark.Link);
@@ -232,7 +246,7 @@ public sealed partial class Plugin {
                     : local.TryGetValue(huntFateId!.Value, out var f) && f.Running ? HuntAvailability.Up : HuntAvailability.NotSeen;
             }
         }
-        TickTrackedFateAlerts(now, world, settled);
+        TickTrackedFateAlerts(now, stamp, world, settled, watchIds, legacy);
     }
 
     private Dictionary<uint, LocalFate>? ReadAwarenessFates(uint territory, uint mapId, uint instance, HashSet<uint> watchedFates, DateTime now) {
@@ -254,25 +268,56 @@ public sealed partial class Plugin {
         return count == huntFateTable.Length ? result : null;
     }
 
-    private void TickTrackedFateAlerts(DateTime now, uint world, bool settled) {
-        if (trackedFates is not { } tracked) return;
-        foreach (var item in tracked.Items.Values) {
-            var inZone = clientState.TerritoryType == item.TerritoryId && clientState.MapId == item.MapId;
+    private void TickTrackedFateAlerts(DateTime now, long stamp, uint world, bool settled,
+        IReadOnlyCollection<uint> watchIds, TrackedFates? legacy) {
+        if (!configuration.TrackedFateAlerts) return;
+        var worldName = CurrentFateWorld();
+        if (worldName.Length == 0) return;
+        foreach (var id in watchIds) {
+            var local = localFates.TryGetValue(id, out var seen) && seen.Until > now ? seen : null;
+            MapLinkPayload? relay = configuration.UseSonarChatMessages
+                && sonarFates.TryGetValue(id, out var sighting) && sighting.Until > now ? sighting.Link : null;
+            var item = legacy?.Items.GetValueOrDefault(id);
+            var inZone = clientState.TerritoryType == (local?.Territory ?? item?.TerritoryId ?? relay?.TerritoryType.RowId)
+                && clientState.MapId == (local?.Map ?? item?.MapId ?? relay?.Map.RowId);
             if (inZone && !settled) continue; // Let the first in-zone table read supply the link.
-            var local = localFates.TryGetValue(item.FateId, out var seen) && seen.Until > now ? seen : null;
-            var sonar = configuration.UseSonarChatMessages && sonarFates.TryGetValue(item.FateId, out var relayUntil) && relayUntil > now;
-            var remote = trackedFateWorld == world && tracked.Running.Contains(item.FateId);
-            if (!fateAlerts.Observe(item.FateId, local is not null || sonar || remote, local?.Start ?? 0, configuration.TrackedFateAlerts)) continue;
-            PrintTrackedFateAlert(item, inZone && local?.Instance == clientState.Instance ? local.Link : null);
+            var remote = trackedFateWorld == world && legacy?.Running.Contains(id) == true;
+            var link = inZone && local?.Instance == clientState.Instance ? local.Link : relay;
+            if (item is null && local is not null) item = DescribeWatchedFate(id, local.Territory, local.Map);
+            if (item is null && relay is not null) item = DescribeWatchedFate(id, relay.TerritoryType.RowId, relay.Map.RowId);
+            if (fateAlerts.ObserveLocal(id, worldName, item is not null && (local is not null || relay is not null || remote),
+                local?.Start ?? 0, enabled: true, now))
+                PrintTrackedFateAlert(item!, link, endsAt: local is { Running: true } ? local.Until : null);
+        }
+        foreach (var occurrence in watchedFatePoll.Active(stamp)) {
+            if (!fateAlerts.ObserveSite(occurrence.Id, occurrence.Fate.FateId, occurrence.World, now, occurrence.EndsAt)) continue;
+            var elsewhere = string.Equals(worldName, occurrence.World, StringComparison.OrdinalIgnoreCase)
+                ? null : $"{occurrence.World} ({occurrence.DataCentre})";
+            PrintTrackedFateAlert(occurrence.Fate, null, elsewhere, occurrence.EndsAt);
         }
     }
 
-    private void PrintTrackedFateAlert(TrackedFate fate, MapLinkPayload? link) {
-        var message = new SeStringBuilder().AddText($"[Gillions] Your tracked FATE {fate.Name} started in {fate.ZoneName}");
+    private TrackedFate? DescribeWatchedFate(uint id, uint territory, uint map) {
+        if (dataManager.GetExcelSheet<Fate>().GetRowOrDefault(id)?.Name.ExtractText() is not { Length: > 0 } name) return null;
+        var zone = dataManager.GetExcelSheet<TerritoryType>().GetRowOrDefault(territory)?.PlaceName.ValueNullable?.Name.ExtractText();
+        return new(id, name, territory, map, zone ?? "", null);
+    }
+
+    private void PrintTrackedFateAlert(TrackedFate fate, MapLinkPayload? link, string? elsewhere = null, DateTime? endsAt = null) {
+        string place = string.IsNullOrEmpty(fate.ZoneName) ? "" : $" in {fate.ZoneName}";
+        string region = elsewhere is null ? "" : $" on {elsewhere}";
+        int seconds = endsAt is { } end ? (int)Math.Clamp(Math.Ceiling((end - DateTime.UtcNow).TotalSeconds), 0, 32767) : 0;
+        string time = seconds > 0 ? $" · {seconds / 60:00}:{seconds % 60:00} left" : "";
+        var message = new SeStringBuilder().AddText($"[Gillions] Watched FATE {fate.Name}{place}{region}{time}");
         if (link is not null) message.AddText(" ").Append(SeString.CreateMapLink(fate.TerritoryId, fate.MapId, link.RawX, link.RawY));
         else if (fate.Location is { } point && ValidatedAwarenessMap(fate.TerritoryId, fate.MapId) is not null)
             message.AddText(" ").Append(SeString.CreateMapLink(fate.TerritoryId, fate.MapId, point.MapX, point.MapY));
         chatGui.Print(new XivChatEntry { Type = AlertChatType(configuration.TrackedFateChatTab), Message = message.Build(), Silent = true });
+        watchedFateNotifications.AddNotification(new Dalamud.Interface.ImGuiNotification.Notification {
+            Title = fate.Name,
+            Content = $"Watched FATE{place}{region}{time}",
+            Type = Dalamud.Interface.ImGuiNotification.NotificationType.Info
+        });
         if (configuration.TrackedFateAlertSound) UIGlobals.PlayChatSoundEffect(1);
     }
 
@@ -287,15 +332,17 @@ public sealed partial class Plugin {
     }
 
     private void ReadSonarChat(IHandleableChatMessage message) {
-        if (!configuration.UseSonarChatMessages || (!huntDeferSupported && trackedFates is null)
-            || !SonarChatRelay.IsSender(message.OriginalSender.ExtractText()) || !HuntAwarenessReady()) return;
+        if (!configuration.UseSonarChatMessages || !SonarChatRelay.IsSender(message.OriginalSender.ExtractText())
+            || !HuntAwarenessReady()) return;
+        var siteWatches = watchedFatePoll.WatchedIds(Environment.TickCount64);
+        if (!huntDeferSupported && trackedFates is null && siteWatches is not { Count: > 0 }) return;
         try {
-            if (TryReadSonarChat(message)) return;
+            if (TryReadSonarChat(message, siteWatches)) return;
         } catch (Exception e) when (e is InvalidOperationException or FormatException or ArgumentException or IOException) { }
         if (ignoredSonarLines < int.MaxValue) ignoredSonarLines++;
     }
 
-    private bool TryReadSonarChat(IHandleableChatMessage message) {
+    private bool TryReadSonarChat(IHandleableChatMessage message, IReadOnlyCollection<uint>? siteWatches) {
         if (message.OriginalMessage.ByteLength > 2048) return false;
         var links = SeString.Parse(message.OriginalMessage.Data.Span).Payloads.OfType<MapLinkPayload>().Take(2).ToArray();
         if (links.Length != 1) return false;
@@ -322,12 +369,15 @@ public sealed partial class Plugin {
                 matched = true;
             }
         }
-        if (!configuration.TrackedFateAlerts || trackedFates is not { } tracked) return matched;
-        var matches = tracked.Items.Values.Where(f => f.TerritoryId == territory && f.MapId == map
+        if (!configuration.TrackedFateAlerts) return matched;
+        var candidates = siteWatches is not null
+            ? siteWatches.Select(id => DescribeWatchedFate(id, territory, map)).OfType<TrackedFate>()
+            : watchedFatePoll.LegacyFallback && trackedFates is { } tracked ? tracked.Items.Values : Enumerable.Empty<TrackedFate>();
+        var matches = candidates.Where(f => f.TerritoryId == territory && f.MapId == map
             && SonarChatRelay.Matches(content, world, f.Name, false)).Take(2).ToArray();
         if (matches.Length != 1) return matched;
         var id = matches[0].FateId;
-        if (!sonarFates.TryGetValue(id, out var prior) || prior <= now) sonarFates[id] = now.AddMinutes(30);
+        if (!sonarFates.TryGetValue(id, out var prior) || prior.Until <= now) sonarFates[id] = (now.AddMinutes(30), link);
         return true;
     }
 
@@ -342,17 +392,22 @@ public sealed partial class Plugin {
         var sound = configuration.TrackedFateAlertSound;
         var tab = Math.Clamp(configuration.TrackedFateChatTab, 0, 2);
         var sonar = configuration.UseSonarChatMessages;
-        if (ImGui.Checkbox("Tracked FATE alerts", ref alerts)) QueueUiAction(() => { configuration.TrackedFateAlerts = alerts; RequestConfigurationSave(); });
+        SettingsGroup("Alerts");
+        if (ImGui.Checkbox("FATE alerts in game", ref alerts)) QueueUiAction(() => { configuration.TrackedFateAlerts = alerts; RequestConfigurationSave(); });
+        SettingsHelp("Show a notification and chat line when a watched FATE is spotted.");
         ImGui.BeginDisabled(!alerts);
         if (ImGui.Checkbox("Alert sound", ref sound)) QueueUiAction(() => { configuration.TrackedFateAlertSound = sound; RequestConfigurationSave(); });
+        SettingsHelp("Play a sound with the chat alert.");
         if (ImGui.Combo("Chat tab", ref tab, "Echo\0System messages\0Notices\0"))
             QueueUiAction(() => { configuration.TrackedFateChatTab = tab; RequestConfigurationSave(); });
         ImGui.EndDisabled();
+        SettingsGroup("Sighting sources");
         if (ImGui.Checkbox("Use Sonar's chat messages", ref sonar)) QueueUiAction(() => {
             configuration.UseSonarChatMessages = sonar;
             if (!sonar) { huntSonar = null; sonarFates.Clear(); currentHuntAvailability = HuntAvailability.Unknown; }
             RequestConfigurationSave();
         });
+        SettingsHelp("Use Sonar chat reports for supported Hunt and FATE sightings.");
     }
 }
 #endif
