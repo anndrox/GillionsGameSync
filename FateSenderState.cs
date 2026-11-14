@@ -52,7 +52,9 @@ internal sealed class FateSenderState : IDisposable {
         if(idleWait && Grant is {Admission.Granted:false,Reason:"FATE_POLICY_REQUIRED"}) { nextDiscovery=Math.Min(nextDiscovery,clock); idleWait=false; }
     }
     internal void UploadFinished() { UploadBusy=false; inFlightId=null; }
-    internal void Install(FateGrant? grant, DateTime now,long clock) {
+    // retryAfterSeconds above 10 is a Site-requested idle wait after a valid "no"
+    // (Testing only, FateIdleDiscovery). Stable always passes the default.
+    internal void Install(FateGrant? grant, DateTime now,long clock,int retryAfterSeconds=5) {
         bool continuity=!suspended && Grant is {Admission.Granted:true} prior && grant is {Admission.Granted:true}
             && prior.PolicyGeneration==grant.PolicyGeneration && prior.PairedAt==grant.PairedAt
             && prior.Admission.AdmittedSource==grant.Admission.AdmittedSource;
@@ -62,13 +64,13 @@ internal sealed class FateSenderState : IDisposable {
         Grant=grant; suspended=false;
         if(grant is not null) discoveryFailures=0;
         idleWait=false;
-        if(grant is {Admission.Granted:false} && grant.RetryAfterSeconds>10) {
-            nextDiscovery=Math.Max(nextDiscovery,clock+1000L*grant.RetryAfterSeconds); idleWait=true;
+        if(grant is {Admission.Granted:false} && retryAfterSeconds>10) {
+            nextDiscovery=Math.Max(nextDiscovery,clock+1000L*retryAfterSeconds); idleWait=true;
         }
         expires=grant is null ? 0 : clock+(long)Math.Min(30000,Math.Max(0,(grant.Admission.ExpiresAt-now).TotalMilliseconds));
         Status=grant is null ? "Malformed/unavailable discovery; no contributions."
             : grant.Admission.Granted ? "Site policy ON; awaiting fresh positive observations."
-            : grant.Reason==FateDiscovery.ReferenceMismatch ? "FATE data on Gillions differs from this build; no contributions."
+            : grant.Reason=="FATE_REFERENCE_MISMATCH" ? "FATE data on Gillions differs from this build; no contributions."
             : $"Site policy {(grant.PolicyEnabled ? "ON" : "OFF")}; {grant.Reason}; no contributions.";
         if(correctionRequired) Status="FATE shape/receipt requires correction; no blind retry. Other sync unchanged.";
     }

@@ -8,12 +8,8 @@ using System.Text.RegularExpressions;
 namespace GillionsGameSync;
 
 internal sealed record FateGrant(FateAdmission Admission, Guid? PolicyGeneration, DateTime PairedAt,
-    DateTime IssuedAt, bool PolicyEnabled, string? Reason, int RetryAfterSeconds = 5);
+    DateTime IssuedAt, bool PolicyEnabled, string? Reason);
 internal static class FateDiscovery {
-    // Local reason: Site's FATE reference differs from this build's. Never sent.
-    internal const string ReferenceMismatch="FATE_REFERENCE_MISMATCH";
-    // A valid "no" may ask for a slower next discovery (Site #745, gated by version).
-    internal const int MaximumIdleRetrySeconds=900, ReferenceMismatchRetrySeconds=600;
     internal const string Origin="https://test.gillions.app", Path="/api/game-sync/fates/capability";
     internal static readonly string[] RowCodes=["FATE_DEFINITION_UNSUPPORTED","FATE_TERRITORY_UNSUPPORTED",
         "FATE_REFERENCE_CONTEXT_MISMATCH","FATE_WORLD_UNSUPPORTED","FATE_TERMINAL_UNSUPPORTED","AMBIGUOUS_OBSERVATION"];
@@ -49,13 +45,9 @@ internal static class FateDiscovery {
             if(S("capability")!=FatePolicy.Capability || g.GetProperty("schemaVersion").GetInt32()!=1
                 || S("collectorSchema")!=FatePolicy.Capability || S("coverage")!="positive_only"
                 || S("endpoint")!="/api/game-sync/fates/contribute" || g.GetProperty("maxPayloadBytes").GetInt32()!=FatePolicy.MaximumBytes
-                || g.GetProperty("maxObservations").GetInt32()!=FatePolicy.MaximumRows || S("acceptedClientProduct")!=NativeProduct.Name) return null;
-            var retryAfter=g.GetProperty("retryAfterSeconds").GetInt32();
-            var epoch=S("referenceCompatibilityEpoch");
-            // A well-formed different epoch is a reason, not a malformed reply.
-            bool referenceMatches=epoch=="fate-reference:"+source.ReferenceGameVersion;
-            if(!referenceMatches && (epoch is null
-                || !Regex.IsMatch(epoch,@"^fate-reference:\d{4}\.\d{2}\.\d{2}\.\d{4}\.\d{4}$",RegexOptions.CultureInvariant))) return null;
+                || g.GetProperty("maxObservations").GetInt32()!=FatePolicy.MaximumRows || S("acceptedClientProduct")!=NativeProduct.Name
+                || S("referenceCompatibilityEpoch")!="fate-reference:"+source.ReferenceGameVersion
+                || g.GetProperty("retryAfterSeconds").GetInt32()!=5) return null;
             var s=g.GetProperty("acceptedSource");
             if(!Shape(s,["family","collectorVersion","gameVersion","dalamudApiLevel","dalamudVersion","dalamudRevision",
                 "clientStructsVersion","clientStructsRevision","luminaVersion","excelVersion","referenceGameVersion"])) return null;
@@ -75,25 +67,12 @@ internal static class FateDiscovery {
                 if(!Uuid(pg.GetString(),out var parsed)) return null; policyGeneration=parsed;
             }
             string? reason=S("reason");
-            if(authorized ? reason is not null || !enabled || policyGeneration is null || referenceMatches && admitted!=source
+            if(authorized ? reason is not null || !enabled || policyGeneration is null || admitted!=source
                 : reason is null || !ErrorCodes.Contains(reason)) return null;
-            // Authorized keeps the fixed 5; only a valid "no" may slow discovery.
-            if(authorized ? retryAfter!=5 : retryAfter is <5 or >MaximumIdleRetrySeconds) return null;
-            bool granted=authorized && referenceMatches;
-            if(!referenceMatches) { reason=ReferenceMismatch; retryAfter=Math.Max(retryAfter,ReferenceMismatchRetrySeconds); }
             return new(new(generation,origin,NativeProduct.Name,FatePolicy.Capability,1,FatePolicy.Capability,
-                admitted!,FatePolicy.AccountPolicy,1,granted,false,expires,true,true),policyGeneration,paired,issued,enabled,reason,retryAfter);
+                admitted!,FatePolicy.AccountPolicy,1,authorized,false,expires,true,true),policyGeneration,paired,issued,enabled,reason);
         } catch(Exception e) when(e is JsonException or InvalidOperationException or FormatException
             or System.Collections.Generic.KeyNotFoundException or OverflowException or ArgumentException) { return null; }
-    }
-    // Presence carries the same policy object. It is only a hint to ask discovery
-    // now; discovery stays the single authority for any grant.
-    internal static bool PresenceAuthorized(string json) {
-        try {
-            using var d=JsonDocument.Parse(json,new JsonDocumentOptions {MaxDepth=8}); var r=d.RootElement;
-            return r.ValueKind==JsonValueKind.Object && r.TryGetProperty("fateContribution",out var g)
-                && g.ValueKind==JsonValueKind.Object && g.TryGetProperty("authorized",out var a) && a.ValueKind==JsonValueKind.True;
-        } catch(JsonException) { return false; }
     }
     internal static bool Error(string json,out string code,out int? retry) {
         code="Unavailable"; retry=null;

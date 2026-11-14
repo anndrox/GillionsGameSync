@@ -23,7 +23,7 @@ internal sealed class FakeHandler : HttpMessageHandler {
 internal sealed class ImmediateFramework { internal Task RunOnFrameworkThread(Action action) {action();return Task.CompletedTask;} }
 internal sealed class Noop {internal void SetEnabled(bool b){} internal void RefreshSession(object? o){} internal void ClearSession(){} internal void Clear(){} internal bool Supported=>false; internal void Apply(params object[] a){} internal void Debug(string s,params object[] a){} internal void Information(string s, params object[] a){} internal void Wake(long c){} }
 internal static class MarketContributor {internal static bool Compatible(string s)=>false;}
-internal static class FateDiscovery {internal static bool PresenceAuthorized(string s)=>false;}
+internal static class FateIdleDiscovery {internal static bool PresenceAuthorized(string s)=>false;}
 internal static class TravelSyncPolicy {internal const string Capability="travel_context_v1";internal static bool Compatible(string s,string o)=>false;}
 internal static class HuntFocusState {internal const string Header="X-Synthetic-Focus",Contract="none";}
 internal static class HuntMapTransport { internal static CancellationTokenSource Deadline(CancellationToken a,CancellationToken b)=>CancellationTokenSource.CreateLinkedTokenSource(a,b); }
