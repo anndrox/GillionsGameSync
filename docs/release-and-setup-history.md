@@ -1,5 +1,11 @@
 # Gillions Game Sync
 
+## Stable 1.0.31.10 (prepared)
+
+Game Sync supports the November game update. Hunt routing can defer a mark while its FATE or B rank is down, and tracked FATEs can announce their start in chat. Appearance shares a complete look with hidden headgear or a sheathed weapon. Settings shows your sharing choices and the result of sharing your location, and the pairing screen shows your saved destination.
+
+See the [candidate notes](releases/v1.0.31.10.md).
+
 ## Stable 1.0.31.9 (prepared)
 
 Hunt check-ins, hunt maps and routing location pause while you are in a duty and resume when you leave. Status text no longer says TEST on Stable.
