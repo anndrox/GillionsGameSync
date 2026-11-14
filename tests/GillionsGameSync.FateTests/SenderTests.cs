@@ -81,6 +81,14 @@ internal static class SenderTests {
             idle.Install(denied,now,751_000);
             check(!idle.Discover(760_999) && idle.Discover(761_000),"an answer of 5 keeps the 10 s cadence");
         }
+        // Reviewer 1: the 30 s policy expiry (Maintain) must not end a sharing-off wake.
+        foreach(var (result,idleDelay,wakes) in new[]{(idleOff!.Value,120,true),(unsupportedIdle!.Value,600,false)}) {
+            using var late=new FateSenderState(); late.Bind("late",1); check(late.Discover(0),"late first discovery"); late.DiscoveryFinished();
+            late.Install(result.Grant,now,0,idleDelay); late.Maintain(now.AddSeconds(31),31_000);
+            check(!late.Status.StartsWith("Site discovery expired",StringComparison.Ordinal),"an idle wait keeps its denial status after expiry");
+            late.Wake(45_000);
+            check(late.Discover(45_000)==wakes,wakes ? "sharing back on wakes after the policy expired" : "an unsupported wait stays asleep after expiry");
+        }
         FateObservation Row(int second,int progress=1)=>new(1000,21,134,new("noninstanced",0),new("running",4),now.AddSeconds(second),
             (byte)progress,false,15,20,null,null,new((int)new DateTimeOffset(now).ToUnixTimeSeconds()-10,900));
         FatePrepared Batch(int second,int progress=1)=>FatePolicy.Prepare(1,source,[Row(second,progress)],now.AddSeconds(second))!;
