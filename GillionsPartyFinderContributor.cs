@@ -34,6 +34,15 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
         return new Uri(origin + ContributionPath);
     }
     internal const int MaximumBodyBytes = 262144;
+    // One upload carries every native burst seen within this window of its oldest,
+    // stamped with that oldest time. Region-wide Party Finder delivers many small
+    // bursts; one burst per upload at 6 uploads a minute dropped listings at
+    // 5 minutes. The older stamp only shortens a listing's remaining time at the
+    // Site by at most this window; it never makes an observation look newer.
+    internal const int PackWindowSeconds = 30;
+    // The Site's current-listing cap is expected to rise for region-wide Party
+    // Finder (B15). Accept any plausible count so a raised cap is not invalid here.
+    internal const int MaximumAcknowledgedCount = 1_000_000;
     private sealed record Observation(PartyFinderContributionListing Listing, DateTime At, long Sequence);
     private readonly object gate = new();
     private readonly IPartyFinderContributionSource source;
@@ -128,8 +137,10 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
         RefreshSession();
         lock (gate) {
             if (disposed || !enabledState || session is null || blockedAuthorization == session.AuthorizationKey || endpointStopped || inFlight) return;
-            foreach (var row in pending.Where(pair => !Fresh(pair.Value, now)).ToArray()) pending.Remove(row.Key);
+            // Check the deadline before scanning; this runs every frame.
             if (pending.Count == 0 || now < due) return;
+            foreach (var row in pending.Where(pair => !Fresh(pair.Value, now)).ToArray()) pending.Remove(row.Key);
+            if (pending.Count == 0) return;
             while (attempts.TryPeek(out var attempt) && attempt <= now.AddMinutes(-1)) attempts.Dequeue();
             if (attempts.Count >= 6) { due = attempts.Peek().AddMinutes(1); return; }
             inFlight = true;
@@ -148,11 +159,23 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
         double wait = 10;
         string outcome = "";
         try {
+            Observation[] snapshot;
+            int limit;
             lock (gate) {
                 if (!Current(captured, epoch)) return;
-                var first = pending.Values.OrderBy(row => row.Sequence).FirstOrDefault();
-                if (first is null) return;
-                batch = pending.Values.Where(row => row.At == first.At && Fresh(row, utcNow())).OrderBy(row => row.Sequence).Take(batchLimit).ToArray();
+                snapshot = pending.Values.ToArray();
+                limit = batchLimit;
+            }
+            // Sort outside the lock so native listing callbacks are not held up.
+            var selectedAt = utcNow();
+            var ordered = snapshot.Where(row => Fresh(row, selectedAt)).OrderBy(row => row.At).ThenBy(row => row.Sequence).ToArray();
+            if (ordered.Length == 0) return;
+            var windowEnd = ordered[0].At.AddSeconds(PackWindowSeconds);
+            var candidates = ordered.TakeWhile(row => row.At <= windowEnd).Take(limit).ToArray();
+            lock (gate) {
+                if (!Current(captured, epoch)) return;
+                // A listing seen again since the snapshot keeps its newer observation queued.
+                batch = candidates.Where(row => pending.TryGetValue(row.Listing.Identity, out var current) && ReferenceEquals(current, row)).ToArray();
                 foreach (var row in batch) pending.Remove(row.Listing.Identity);
             }
             if (batch.Length == 0) return;
@@ -257,7 +280,7 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
         var root = doc.RootElement;
         if (root.GetProperty("ok").ValueKind != JsonValueKind.True || root.GetProperty("schemaVersion").GetInt32() != 1
             || !DateTimeOffset.TryParseExact(root.GetProperty("receivedAtUtc").GetString(), "yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out _)
-            || root.GetProperty("currentCount").GetInt32() is < 0 or > 6000) throw new InvalidDataException("Invalid acknowledgement envelope.");
+            || root.GetProperty("currentCount").GetInt32() is < 0 or > MaximumAcknowledgedCount) throw new InvalidDataException("Invalid acknowledgement envelope.");
         var keys = batch.Select(row => Key(row.Listing)).ToHashSet(StringComparer.Ordinal);
         foreach (var entry in root.GetProperty("accepted").EnumerateArray()) {
             if (!keys.Remove(entry.GetProperty("listingKey").GetString() ?? "")

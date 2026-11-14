@@ -46,13 +46,16 @@ internal static class GillionsPartyFinderTests {
         internal async Task Flush(int seconds = 10) { Now = Now.AddSeconds(seconds); Contributor.Tick(Now); await Contributor.WhenIdleAsync(); }
         public void Dispose() { Contributor.Dispose(); Lifetime.Dispose(); }
     }
-    private static HttpResponseMessage Ack(byte[] body, bool wrong = false) {
+    private static string Stamp(byte[] body) => JsonDocument.Parse(body).RootElement.GetProperty("observedAtUtc").GetString()!;
+    private static uint[] Ids(byte[] body) => JsonDocument.Parse(body).RootElement.GetProperty("listings").EnumerateArray()
+        .Select(row => row.GetProperty("id").GetUInt32()).ToArray();
+    private static HttpResponseMessage Ack(byte[] body, bool wrong = false, int? count = null) {
         using var doc = JsonDocument.Parse(body);
         var accepted = doc.RootElement.GetProperty("listings").EnumerateArray().Select(row => new {
             listingKey = wrong ? "wrong" : $"{row.GetProperty("created_world")}:{row.GetProperty("last_server_restart")}:{row.GetProperty("id")}", status = "inserted"
         }).ToArray();
         return new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new {
-            ok = true, schemaVersion = 1, receivedAtUtc = "2026-09-30T12:00:00.000Z", accepted, currentCount = accepted.Length
+            ok = true, schemaVersion = 1, receivedAtUtc = "2026-09-30T12:00:00.000Z", accepted, currentCount = count ?? accepted.Length
         })) };
     }
     private static HttpResponseMessage Error(HttpStatusCode status, string code, int retry = 0) {
@@ -94,7 +97,29 @@ internal static class GillionsPartyFinderTests {
             h.Handler = (body, _) => Task.FromResult(Error(HttpStatusCode.TooManyRequests, "RATE_LIMITED", 45));
             h.Source.Emit(); await h.Flush(); var original = h.Requests.Single();
             h.Source.Emit(2); await h.Flush(44); Check(h.Requests.Count == 1, "Fresh observations bypassed Retry-After.");
-            await h.Flush(2); Check(h.Requests.Count == 2 && original.SequenceEqual(h.Requests[1]), "Retry regenerated timestamp or payload.");
+            // The retried burst keeps its original stamp; the newer burst within the
+            // pack window travels with it under that older stamp.
+            await h.Flush(2); Check(h.Requests.Count == 2 && Stamp(original) == Stamp(h.Requests[1])
+                && Ids(h.Requests[1]).SequenceEqual([1u, 2u]), "Retry regenerated timestamp or dropped the retried listing.");
+        }
+        using (var h = new Harness { Enabled = true }) {
+            // Region-wide Party Finder: several native bursts fill one upload.
+            h.Source.Emit(1); h.Now = h.Now.AddSeconds(3); h.Source.Emit(2); h.Now = h.Now.AddSeconds(3); h.Source.Emit(3);
+            await h.Flush();
+            Check(h.Requests.Count == 1 && Ids(h.Requests[0]).SequenceEqual([1u, 2u, 3u]) && Stamp(h.Requests[0]) == "2026-09-30T12:00:00.000Z",
+                "Bursts within the pack window were not sent together under the oldest stamp.");
+        }
+        using (var h = new Harness { Enabled = true }) {
+            h.Source.Emit(1); h.Now = h.Now.AddSeconds(31); h.Source.Emit(2);
+            await h.Flush(); await h.Flush();
+            Check(h.Requests.Count == 2 && Ids(h.Requests[0]).SequenceEqual([1u]) && Ids(h.Requests[1]).SequenceEqual([2u])
+                && Stamp(h.Requests[1]) == "2026-09-30T12:00:31.000Z", "A burst outside the pack window was stamped with an older time.");
+        }
+        using (var h = new Harness { Enabled = true }) {
+            // A raised Site cap (above 6000) is a valid acknowledgement.
+            h.Handler = (body, _) => Task.FromResult(Ack(body, count: 24000));
+            h.Source.Emit(); await h.Flush();
+            Check(h.Contributor.PendingCount == 0 && h.Reports.Any(s => s.Contains("accepted 1")), "A current count above 6000 was treated as invalid.");
         }
         foreach (var failure in new[] { HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden, HttpStatusCode.Redirect, HttpStatusCode.NotFound }) {
             using var h = new Harness { Enabled = true };
