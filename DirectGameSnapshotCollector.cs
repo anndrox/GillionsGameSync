@@ -149,12 +149,20 @@ public static class DirectGameSnapshotCollector {
             });
         }
         if (selected.Contains("collectibles")) {
-            var collectibles = CollectibleSnapshotPolicy.Capture(() => CollectibleCollector.ReadCharacter(clientState), () => new {
+            var collectibles = CollectibleSnapshotPolicy.Capture(() => CollectibleCollector.ReadCharacter(clientState), () => {
+            object payload = new {
             character = identity, complete = true,
             cards = CollectibleCollector.ReadCards(dataManager, unlockState, budget), minions = CollectibleCollector.ReadMinions(dataManager, unlockState, budget), mounts = CollectibleCollector.ReadMounts(dataManager, unlockState, budget), bardings = CollectibleCollector.ReadBardings(dataManager, unlockState, budget), emotes = CollectibleCollector.ReadEmotes(dataManager, unlockState, budget),
             orchestrions = CollectibleCollector.ReadOrchestrions(dataManager, unlockState, budget), fashions = CollectibleCollector.ReadFashions(dataManager, unlockState, budget), blueMageSpells = CollectibleCollector.ReadBlueMageSpells(dataManager, unlockState, budget), sightseeingLogIds = CollectibleCollector.ReadSightseeingLog(dataManager, unlockState, budget), aetherCurrentIds = CollectibleCollector.ReadAetherCurrents(dataManager, unlockState, budget),
             portraitBackgrounds = CollectibleCollector.ReadPortraitBackgrounds(dataManager, unlockState, budget), portraitConditions = CollectibleCollector.ReadPortraitConditions(dataManager, unlockState, budget), portraitDecorations = CollectibleCollector.ReadPortraitDecorations(dataManager, unlockState, budget), portraitFacials = CollectibleCollector.ReadPortraitFacials(dataManager, unlockState, budget), portraitFrames = CollectibleCollector.ReadPortraitFrames(dataManager, unlockState, budget), portraitPoses = CollectibleCollector.ReadPortraitPoses(dataManager, unlockState, budget),
             masterRecipeBookIds = CollectibleCollector.ReadMasterRecipeBooks(dataManager, unlockState, budget), folkloreBookIds = CollectibleCollector.ReadFolkloreBookIds(dataManager, budget)
+            };
+#if GILLIONS_TEST_BUILD
+            // Testing only: gallery ownership keys. Outfits are omitted, never empty, until a dresser is loaded.
+            payload = CollectibleOwnership.With(payload, CollectibleCollector.ReadFacewear(dataManager, unlockState, budget),
+                CollectibleCollector.ReadHairstyleUnlockLinks(dataManager, unlockState, budget), CollectibleCollector.ReadOutfitSetIds(dataManager));
+#endif
+            return payload;
             });
             if (collectibles is not null) yield return new GameSnapshot("collectibles", collectibles);
         }
@@ -761,6 +769,21 @@ internal static class ArmoireCollector {
         return catalog;
     }
 
+#if GILLIONS_TEST_BUILD
+    // Null unless the armoire and its catalog are loaded.
+    internal static unsafe uint[]? OwnedItemIds(IDataManager dataManager) {
+        try {
+            var uiState = UIState.Instance();
+            if (uiState == null || !uiState->Cabinet.IsCabinetLoaded()) return null;
+            var cabinet = &uiState->Cabinet;
+            var catalog = GetCatalog(dataManager);
+            return catalog.Length == 0 ? null : ArmoireSnapshotPolicy.BuildOwnedItemIds(catalog, cabinet->IsItemInCabinet);
+        } catch {
+            return null;
+        }
+    }
+
+#endif
     public static unsafe ArmoireRead Read(IDataManager dataManager) {
         try {
             var uiState = UIState.Instance();
@@ -853,6 +876,26 @@ internal static class CollectibleCollector {
     public static long[] ReadPortraitFacials(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<BannerFacial>(dataManager, unlockState.IsBannerFacialUnlocked, budget);
     public static long[] ReadPortraitFrames(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<BannerFrame>(dataManager, unlockState.IsBannerFrameUnlocked, budget);
     public static long[] ReadPortraitPoses(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<BannerTimeline>(dataManager, unlockState.IsBannerTimelineUnlocked, budget);
+#if GILLIONS_TEST_BUILD
+    // Facewear: every unlocked Glasses row (one per style colour), sent as facewearGlassesIds.
+    public static long[] ReadFacewear(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<Glasses>(dataManager, unlockState.IsGlassesUnlocked, budget);
+    // Hairstyles and face paints: one entry per nonzero CharaMakeCustomize.UnlockLink, the Scribe catalog key.
+    // Race, tribe and gender variants share an unlock link, so values are deduplicated.
+    public static long[] ReadHairstyleUnlockLinks(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) =>
+        CollectibleOwnership.Distinct(budget.Ids(SheetRowCache<CharaMakeCustomize>.GetRequired(dataManager),
+            row => row.UnlockLink != 0 && unlockState.IsUnlockLinkUnlocked(row.UnlockLink), row => row.UnlockLink));
+    // Outfits: Mirage Store set items held in the glamour dresser, plus any in the armoire. Null (key omitted)
+    // until this session has loaded the dresser: an unloaded dresser is never evidence of a missing outfit.
+    public static unsafe long[]? ReadOutfitSetIds(IDataManager dataManager) {
+        var manager = MirageManager.Instance();
+        if (manager == null || !manager->PrismBoxLoaded) return null;
+        var sets = SheetRowCache<MirageStoreSetItem>.Get(dataManager);
+        if (sets.Length == 0) return null;
+        var dresser = new List<uint>(800);
+        foreach (var itemId in manager->PrismBoxItemIds) dresser.Add(itemId);
+        return CollectibleOwnership.OutfitSetIds(sets.Select(row => row.RowId), dresser, ArmoireCollector.OwnedItemIds(dataManager) ?? []);
+    }
+#endif
     public static long[] ReadMasterRecipeBooks(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<SecretRecipeBook>(dataManager, unlockState.IsSecretRecipeBookUnlocked, budget);
 
     // Folklore ownership is read from the authoritative unlock state keyed by
