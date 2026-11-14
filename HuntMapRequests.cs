@@ -39,16 +39,17 @@ internal sealed class HuntMapRequest {
     internal string Guidance {
         get {
             var name = HuntMonsterName.Display(TargetName);
+            // One chat line: where, then one short caveat in brackets.
             var marked = CandidateKind == "DISCRETE_SPAWN_LOCATIONS"
-                ? $"possible location {CandidateIndex + 1} of {CandidateCount} marked on your map."
-                : "usual area marked on your map.";
+                ? $"possible location {CandidateIndex + 1} of {CandidateCount} marked on your map"
+                : "usual area marked on your map";
             var detail = Classification switch {
-                "FATE_REQUIRED" => $"This target appears during {FateName}. We do not know if the FATE is active.",
-                "CONDITIONAL" => "This target only appears under certain conditions.",
-                "UNKNOWN" => "We do not know when this target appears.",
-                _ => "This is where they normally roam, not a live sighting.",
+                "FATE_REQUIRED" => $"appears during {FateName ?? "a FATE"}, which may not be active",
+                "CONDITIONAL" => "appears only under certain conditions",
+                "UNKNOWN" => "spawn timing unknown",
+                _ => "not a live sighting",
             };
-            return $"{name}: {marked} {detail}";
+            return $"{name}: {marked} ({detail}).";
         }
     }
 }

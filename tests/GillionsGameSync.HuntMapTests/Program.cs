@@ -94,7 +94,7 @@ Check(shortFocus.Apply(shortJson,now,true,now),"short valid focus accepted");
 Thread.Sleep(25);
 Check(!shortFocus.Active(now.AddHours(-1),true),"local clock rollback cannot extend focus after monotonic expiry");
 Check(a != null && a.MapX == 14.41f && a.MapY == 6.84f && a.CandidateIndex == 0, "exact Site payload XY/order");
-Check(a!.Guidance.Contains("during He's Got Legs") && a.Guidance.Contains("We do not know if the FATE is active."), "honest FATE reference");
+Check(a!.Guidance.Contains("during He's Got Legs") && a.Guidance.Contains(", which may not be active)."), "honest FATE reference");
 Check(typeof(HuntMapRequest).GetMethod("ToString")!.DeclaringType == typeof(object), "no token ToString");
 foreach (var field in aJson["request"]!.AsObject().Select(x => x.Key).ToArray()) {
     var x = Fixture(); x["request"]!.AsObject().Remove(field); Check(Parse(x) == null, "missing " + field);
@@ -125,7 +125,7 @@ foreach(var json in new[] {"{", "[]", "{\"ok\":true,\"request\":null}", "{\"ok\"
     Check(HuntMapPolicy.Parse(json,now)==null,"malformed/null/duplicate/oversized");
 foreach (var cls in new[] { "ALWAYS_AVAILABLE", "CONDITIONAL", "UNKNOWN" }) {
     var x=Fixture(); x["request"]!["availability"]!["classification"]=cls; x["request"]!["availability"]!["fateId"]=null; x["request"]!["availability"]!["fateName"]=null;
-    var r=Parse(x); Check(r!=null && !r.Guidance.Contains("FATE active"),"classification " + cls);
+    var r=Parse(x); Check(r!=null && !r.Guidance.Contains("FATE") && !r.Guidance.Contains('\n') && r.Guidance.EndsWith(").") && r.Guidance.Split(": ").Length == 2,"one-line classification " + cls);
 }
 Check(HuntMapPolicy.Consumed("{\"ok\":true,\"consumed\":true}"),"exact consume ack");
 foreach(var json in new[] {"{}","{\"ok\":true,\"consumed\":false}","{\"ok\":false,\"consumed\":true}",
@@ -199,10 +199,10 @@ Check(HuntMonsterName.Display("lan'laii Gundu") == "Lan'laii Gundu"
     && HuntMonsterName.Display("lone yeti") == "Lone Yeti", "Hunt name display capitalisation");
 var ordinary2 = Parse2(V2())!;
 Check(ordinary2.ContractVersion == 2 && ordinary2.Capability == HuntMapPolicy.CapabilityV2 && ordinary2.CandidateCount == 1, "V2 ordinary exact single anchor");
-Check(ordinary2.Guidance == "Daddy Longlegs: usual area marked on your map. This is where they normally roam, not a live sighting.", "V2 honest ordinary guidance");
-Check(Parse2(V2("FATE_REQUIRED"))!.Guidance.Contains("We do not know if the FATE is active."), "V2 FATE reference no fake activity");
+Check(ordinary2.Guidance == "Daddy Longlegs: usual area marked on your map (not a live sighting).", "V2 honest ordinary guidance");
+Check(Parse2(V2("FATE_REQUIRED"))!.Guidance.EndsWith(", which may not be active)."), "V2 FATE reference no fake activity");
 var brank2 = Parse2(V2("DISCRETE_SPAWN_LOCATIONS", 3, 8))!;
-Check(brank2.CandidateIndex == 3 && brank2.Guidance.Contains("possible location 4 of 8 marked on your map."), "Site B-rank specific candidate");
+Check(brank2.CandidateIndex == 3 && brank2.Guidance.Contains(": possible location 4 of 8 marked on your map ("), "Site B-rank specific candidate");
 foreach(var availability in new[]{"ALWAYS_AVAILABLE","UNKNOWN","CONDITIONAL"}) {
     var x=V2("DISCRETE_SPAWN_LOCATIONS",1,17);x["request"]!["availability"]!["classification"]=availability;
     Check(Parse2(x) is not null,"B-rank geography independent of availability " + availability);

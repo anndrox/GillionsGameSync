@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -61,7 +62,10 @@ public sealed record RetainerPresenceDocument(
     [property: JsonPropertyName("appliedPlans")] object[] AppliedPlans,
     // Optional, ignored by Sites that predate them (Site PR #137); omitted when unknown.
     [property: JsonPropertyName("localPreferences"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] PresenceLocalPreferences? LocalPreferences = null,
-    [property: JsonPropertyName("gameVersion"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? GameVersion = null);
+    [property: JsonPropertyName("gameVersion"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? GameVersion = null,
+    // A95: per-family native fingerprints, top-level (never in the allowlisted
+    // capabilities). Testing only; Sites that predate A95 ignore the key.
+    [property: JsonPropertyName("nativeFingerprints"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyDictionary<string, string>? NativeFingerprints = null);
 
 public static class RetainerPresenceResponsePolicy {
     public static bool TryParse(

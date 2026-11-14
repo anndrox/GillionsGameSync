@@ -24,10 +24,15 @@ internal sealed class FateSenderState : IDisposable {
     private long nextDiscovery, nextSend, expires;
     private DateTime consentAfter=DateTime.MaxValue;
     private int failures, discoveryFailures;
-    private bool suspended, correctionRequired, disposed;
+    private bool suspended, correctionRequired, disposed, idleWait;
+    // The denial reason behind an idle wait; it outlives the 30 s policy expiry.
+    private string? idleReason;
 
     internal void Bind(string binding,long epoch) {
         if(Binding==binding && Epoch==epoch) return;
+        // A Site-requested idle wait belongs to the old policy answer; failure
+        // backoff (below) still survives context churn.
+        if(idleWait) { nextDiscovery=0; idleWait=false; idleReason=null; }
         Cancel(); Binding=binding; Epoch=epoch; Grant=null; suspended=false; correctionRequired=false;
         consentAfter=DateTime.MaxValue; acknowledged=null; LastAcknowledged=null; LastAccepted=0;
         Status="Site policy unavailable; session/context changed.";
@@ -43,8 +48,18 @@ internal sealed class FateSenderState : IDisposable {
         DiscoveryBusy=true; nextDiscovery=clock+10000; return true;
     }
     internal void DiscoveryFinished()=>DiscoveryBusy=false;
+    // Sharing turned back on (presence hint): ask discovery now instead of
+    // finishing the Site's idle wait. Only a sharing-off answer is woken.
+    internal void Wake(long clock) {
+        if(idleWait && idleReason=="FATE_POLICY_REQUIRED") { nextDiscovery=Math.Min(nextDiscovery,clock); idleWait=false; idleReason=null; }
+    }
     internal void UploadFinished() { UploadBusy=false; inFlightId=null; }
-    internal void Install(FateGrant? grant, DateTime now,long clock) {
+    // retryAfterSeconds above 10 is a Site-requested idle wait after a valid "no"
+    // (Testing only, FateIdleDiscovery). Stable always passes the default.
+    internal void Install(FateGrant? grant, DateTime now,long clock)=>InstallCore(grant,now,clock,5);
+    // Testing only (FateIdleDiscovery): a valid "no" with the Site's idle delay.
+    internal void InstallIdle(FateGrant grant, DateTime now,long clock,int retryAfterSeconds)=>InstallCore(grant,now,clock,retryAfterSeconds);
+    private void InstallCore(FateGrant? grant, DateTime now,long clock,int retryAfterSeconds) {
         bool continuity=!suspended && Grant is {Admission.Granted:true} prior && grant is {Admission.Granted:true}
             && prior.PolicyGeneration==grant.PolicyGeneration && prior.PairedAt==grant.PairedAt
             && prior.Admission.AdmittedSource==grant.Admission.AdmittedSource;
@@ -53,9 +68,14 @@ internal sealed class FateSenderState : IDisposable {
         }
         Grant=grant; suspended=false;
         if(grant is not null) discoveryFailures=0;
+        idleWait=false; idleReason=null;
+        if(grant is {Admission.Granted:false} && retryAfterSeconds>10) {
+            nextDiscovery=Math.Max(nextDiscovery,clock+1000L*retryAfterSeconds); idleWait=true; idleReason=grant.Reason;
+        }
         expires=grant is null ? 0 : clock+(long)Math.Min(30000,Math.Max(0,(grant.Admission.ExpiresAt-now).TotalMilliseconds));
         Status=grant is null ? "Malformed/unavailable discovery; no contributions."
             : grant.Admission.Granted ? "Site policy ON; awaiting fresh positive observations."
+            : grant.Reason=="FATE_REFERENCE_MISMATCH" ? "FATE data on Gillions differs from this build; no contributions."
             : $"Site policy {(grant.PolicyEnabled ? "ON" : "OFF")}; {grant.Reason}; no contributions.";
         if(correctionRequired) Status="FATE shape/receipt requires correction; no blind retry. Other sync unchanged.";
     }
@@ -66,7 +86,8 @@ internal sealed class FateSenderState : IDisposable {
     internal void Maintain(DateTime now,long clock) {
         if(Grant is not null && (clock>=expires || Grant.Admission.ExpiresAt<=now)) {
             Cancel(); Grant=null; consentAfter=DateTime.MaxValue;
-            Status="Site discovery expired; unsent observations discarded.";
+            // An idle wait keeps its denial status; it is not an expired grant.
+            if(!idleWait) Status="Site discovery expired; unsent observations discarded.";
         }
         if(retryBatch is not null && !FatePolicy.Fresh(retryBatch.OldestObservation,now)) retryBatch=null;
     }
