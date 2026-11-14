@@ -591,6 +591,10 @@ public sealed partial class Plugin : IDalamudPlugin {
         var presence = RetainerPresencePolicy.CreateNative(new(contentId.ToString(), CurrentState.CharacterName, CurrentState.CharacterWorld), now, RetainerClient, PluginVersion,
             SitePermissionOrigin ? LocalPreferences() : null,
             SitePermissionOrigin && dataManager.GameData.Repositories.TryGetValue("ffxiv", out var game) ? game.Version : null);
+#if GILLIONS_TEST_BUILD
+        // A95: TEST may admit an unchanged native family by fingerprint, not only by version.
+        presence = presence with { NativeFingerprints = NativeFingerprints.ByFamily };
+#endif
         ClearRetainerServerAcceptance(); presenceInFlight = true;
         _ = SendRetainerPresenceAsync(permit, presence);
     }

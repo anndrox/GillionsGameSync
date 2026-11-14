@@ -1,0 +1,12 @@
+# Native fingerprint file sets (A95). Reviewed by Reviewer 1; change only with a parity review.
+# One line per set: a name, then repository-relative files. "core" is part of every family.
+# A family's fingerprint is SHA-256 over its sorted files' LF-normalized SHA-256 hashes.
+# It changes whenever any listed file or the package pins (packages.lock.json) change.
+# Dalamud API reads (IPlayerState, IObjectTable, IFateTable) stay outside, as in the parity notes.
+core NativeCompatibility.cs NativeCompatibility.Runtime.cs NativeObservationPolicy.cs NativeProduct.cs NativeRowBudget.cs packages.lock.json
+hunt HuntBillLocalView.cs HuntBillItemCoverage.cs PluginHuntAwareness.cs
+travel TravelContextLocalView.cs
+fate FateLocalView.cs FateObservations.cs
+submarine SubmarineLocalView.cs
+appearance CharacterAppearanceCollector.cs
+desynthesis DesynthesisResultSource.cs
