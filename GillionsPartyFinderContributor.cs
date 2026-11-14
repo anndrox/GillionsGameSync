@@ -191,7 +191,10 @@ internal sealed class GillionsPartyFinderContributor : IPartyFinderContributor {
             }
             cancellation.Token.ThrowIfCancellationRequested();
             lock (gate) {
-                if (!Current(captured, epoch) || batch.Any(row => !Fresh(row, utcNow()))) return;
+                if (!Current(captured, epoch)) return;
+                // A row that went stale while the body was built drops only itself;
+                // the packed batch's fresh rows return to the queue unchanged.
+                if (batch.Any(row => !Fresh(row, utcNow()))) { foreach (var row in batch) Requeue(row); return; }
                 attempts.Enqueue(utcNow());
             }
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
