@@ -511,6 +511,10 @@ public sealed partial class Plugin : IDalamudPlugin {
 #endif
                 if (requestFocus && focusClock is not null) huntFocus.Apply(responseJson, focusClock.UtcNow, HuntFocusEligible() && personalAccepted.Contains("hunt_bills"), DateTime.UtcNow);
                 else huntFocus.Clear();
+#if GILLIONS_TEST_BUILD
+                // FATE sharing turned back on: end a Site idle wait so discovery asks now.
+                if (NativeProduct.TransportOrigin(permit.Origin) && FateIdleDiscovery.PresenceAuthorized(responseJson)) fateSender.Wake(Environment.TickCount64);
+#endif
 #endif
                 nextRetainerPresenceUtc = DateTime.UtcNow.Add(SitePermissionOrigin ? TimeSpan.FromSeconds(15)
                     : RetainerPresencePolicy.NextSuccessDelay(Random.Shared.Next(-5, 6)));
@@ -2171,7 +2175,14 @@ public sealed partial class Plugin : IDalamudPlugin {
                 ?? (response.Headers.RetryAfter?.Date is { } at ? (at-DateTimeOffset.UtcNow).TotalSeconds : null);
             var text=await SyncResponsePolicy.ReadAsync(response.Content,deadline.Token);
             var now=DateTime.UtcNow;
+#if GILLIONS_TEST_BUILD
+            // Testing: a valid "no" may carry the Site's idle delay (FFXIV-Gillions#745).
+            var parsed=response.StatusCode==HttpStatusCode.OK ? FateIdleDiscovery.Parse(text,permit.Session!.Generation,permit.Session.DeviceId,source,now,permit.Origin) : null;
+            var grant=parsed?.Grant; var idleRetry=parsed?.RetryAfterSeconds ?? 5;
+#else
             var grant=response.StatusCode==HttpStatusCode.OK ? FateDiscovery.Parse(text,permit.Session!.Generation,permit.Session.DeviceId,source,now,permit.Origin) : null;
+            const int idleRetry=5;
+#endif
             FateDiscovery.Error(text,out _,out var retry);
             var header=response.Headers.RetryAfter;
             double? retrySeconds=header?.Delta?.TotalSeconds ?? (header?.Date is { } date ? (date-DateTimeOffset.UtcNow).TotalSeconds : retry);
@@ -2179,7 +2190,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 // Transport deadlines do not revoke authority to commit an
                 // already-classified OFF/denial/backoff result on this session.
                 if(!FateRequestCurrent(permit,binding,epoch,feature)) return;
-                if(grant is not null) fateSender.Install(grant,DateTime.UtcNow,Environment.TickCount64);
+                if(grant is not null) fateSender.InstallIdle(grant,DateTime.UtcNow,Environment.TickCount64,idleRetry);
                 else fateSender.DiscoveryFailed(Environment.TickCount64,retrySeconds);
                 if(!fateSender.Authorized(DateTime.UtcNow,Environment.TickCount64)) fateLocal.CancelUnsent();
             });

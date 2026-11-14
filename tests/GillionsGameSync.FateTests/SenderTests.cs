@@ -43,6 +43,52 @@ internal static class SenderTests {
         var unsupported=off.DeepClone(); unsupported["fateContribution"]!["reason"]="FATE_SOURCE_UNSUPPORTED";
         check(FateDiscovery.Parse(unsupported.ToJsonString(),"session",device,source with {CollectorVersion="0.0.86.0"},now)
             is {Admission.Granted:false},"old Site matrix explicitly fences new collector");
+        // Site #745 (Testing, FateIdleDiscovery): a valid "no" may slow discovery; authorized keeps exactly 5.
+        JsonNode With(JsonNode node,int retry) { var copy=node.DeepClone(); copy["fateContribution"]!["retryAfterSeconds"]=retry; return copy; }
+        FateDiscoveryResult? Idle(JsonNode node,FateSource? actual=null)=>FateIdleDiscovery.Parse(node.ToJsonString(),"session",device,actual??source,now);
+        check(Idle(root) is {Grant.Admission.Granted:true,RetryAfterSeconds:5} && Idle(off) is {Grant.Admission.Granted:false,RetryAfterSeconds:5},
+            "unloosened replies go through the frozen parser unchanged");
+        var idleOff=Idle(With(off,120));
+        check(idleOff is {Grant.Admission.Granted:false,Grant.Reason:"FATE_POLICY_REQUIRED",RetryAfterSeconds:120},"sharing-off denial carries the Site idle delay");
+        check(Idle(With(root,120))==null && Idle(With(off,4))==null && Idle(With(off,901))==null,"idle delay bounds: authorized 5 only, denial 5 to 900");
+        check(FateDiscovery.Parse(With(off,120).ToJsonString(),"session",device,source,now)==null,"the frozen Stable parser still accepts only 5");
+        foreach(var field in root["fateContribution"]!.AsObject().ToArray()) {
+            var missing=With(off,120); missing["fateContribution"]!.AsObject().Remove(field.Key);
+            check(Idle(missing)==null,"idle denial still needs mandatory field "+field.Key);
+        }
+        check(FateIdleDiscovery.Parse(With(off,120).ToJsonString().Replace("\"revision\":1","\"revision\":1,\"revision\":1"),"session",device,source,now)==null,
+            "duplicate keys stay rejected when a reply is normalized");
+        var mismatch=root.DeepClone(); mismatch["fateContribution"]!["referenceCompatibilityEpoch"]="fate-reference:2026.01.01.0000.0000";
+        check(Idle(mismatch) is {Grant.Admission.Granted:false,Grant.Reason:FateIdleDiscovery.ReferenceMismatch,RetryAfterSeconds:600},
+            "a well-formed different reference is a slow, never-sending reason, not malformed");
+        var badEpoch=root.DeepClone(); badEpoch["fateContribution"]!["referenceCompatibilityEpoch"]="wrong";
+        check(Idle(badEpoch)==null,"a malformed reference epoch is still rejected");
+        var unsupportedIdle=Idle(With(unsupported,600));
+        check(unsupportedIdle is {Grant.Admission.Granted:false,Grant.Reason:"FATE_SOURCE_UNSUPPORTED",RetryAfterSeconds:600},"unsupported denial carries its delay");
+        check(FateIdleDiscovery.PresenceAuthorized("{\"fateContribution\":{\"authorized\":true}}")
+            && !FateIdleDiscovery.PresenceAuthorized("{\"fateContribution\":{\"authorized\":false}}") && !FateIdleDiscovery.PresenceAuthorized("not json"),
+            "presence hint reads only fateContribution.authorized");
+        using (var idle=new FateSenderState()) {
+            idle.Bind("idle",1); check(idle.Discover(0),"idle first discovery"); idle.DiscoveryFinished();
+            idle.InstallIdle(idleOff!.Value.Grant,now,0,120);
+            check(!idle.Discover(119_999) && idle.Discover(120_000),"sharing off waits the Site delay"); idle.DiscoveryFinished();
+            idle.InstallIdle(idleOff!.Value.Grant,now,120_000,120); idle.Wake(135_000);
+            check(idle.Discover(135_000),"presence shows sharing back on: discovery asks at once"); idle.DiscoveryFinished();
+            idle.InstallIdle(unsupportedIdle!.Value.Grant,now,140_000,600); idle.Wake(155_000);
+            check(!idle.Discover(155_000) && idle.Discover(740_000),"only a sharing-off wait is woken"); idle.DiscoveryFinished();
+            idle.InstallIdle(idleOff!.Value.Grant,now,750_000,120); idle.Bind("idle",2);
+            check(idle.Discover(751_000),"a new binding drops the old idle wait"); idle.DiscoveryFinished();
+            idle.Install(denied,now,751_000);
+            check(!idle.Discover(760_999) && idle.Discover(761_000),"an answer of 5 keeps the 10 s cadence");
+        }
+        // Reviewer 1: the 30 s policy expiry (Maintain) must not end a sharing-off wake.
+        foreach(var (result,idleDelay,wakes) in new[]{(idleOff!.Value,120,true),(unsupportedIdle!.Value,600,false)}) {
+            using var late=new FateSenderState(); late.Bind("late",1); check(late.Discover(0),"late first discovery"); late.DiscoveryFinished();
+            late.InstallIdle(result.Grant,now,0,idleDelay); late.Maintain(now.AddSeconds(31),31_000);
+            check(!late.Status.StartsWith("Site discovery expired",StringComparison.Ordinal),"an idle wait keeps its denial status after expiry");
+            late.Wake(45_000);
+            check(late.Discover(45_000)==wakes,wakes ? "sharing back on wakes after the policy expired" : "an unsupported wait stays asleep after expiry");
+        }
         FateObservation Row(int second,int progress=1)=>new(1000,21,134,new("noninstanced",0),new("running",4),now.AddSeconds(second),
             (byte)progress,false,15,20,null,null,new((int)new DateTimeOffset(now).ToUnixTimeSeconds()-10,900));
         FatePrepared Batch(int second,int progress=1)=>FatePolicy.Prepare(1,source,[Row(second,progress)],now.AddSeconds(second))!;

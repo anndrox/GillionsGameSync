@@ -21,8 +21,9 @@ internal sealed class FakeHandler : HttpMessageHandler {
     }
 }
 internal sealed class ImmediateFramework { internal Task RunOnFrameworkThread(Action action) {action();return Task.CompletedTask;} }
-internal sealed class Noop {internal void SetEnabled(bool b){} internal void RefreshSession(object? o){} internal void ClearSession(){} internal void Clear(){} internal bool Supported=>false; internal void Apply(params object[] a){} internal void Debug(string s,params object[] a){} internal void Information(string s, params object[] a){} }
+internal sealed class Noop {internal void SetEnabled(bool b){} internal void RefreshSession(object? o){} internal void ClearSession(){} internal void Clear(){} internal bool Supported=>false; internal void Apply(params object[] a){} internal void Debug(string s,params object[] a){} internal void Information(string s, params object[] a){} internal void Wake(long c){} }
 internal static class MarketContributor {internal static bool Compatible(string s)=>false;}
+internal static class FateIdleDiscovery {internal static bool PresenceAuthorized(string s)=>false;}
 internal static class TravelSyncPolicy {internal const string Capability="travel_context_v1";internal static bool Compatible(string s,string o)=>false;}
 internal static class HuntFocusState {internal const string Header="X-Synthetic-Focus",Contract="none";}
 internal static class HuntMapTransport { internal static CancellationTokenSource Deadline(CancellationToken a,CancellationToken b)=>CancellationTokenSource.CreateLinkedTokenSource(a,b); }
@@ -52,7 +53,7 @@ public sealed partial class Plugin : IDisposable {
     private readonly BackgroundObservation backgroundObservation=new((name, error)=>throw new Exception(name, error));
     private bool Observe(string component, DateTime now, Action<Plugin, DateTime> tick) => backgroundObservation.Run(component, this, now, tick);
     private readonly Dictionary<string, ResourceRetry> privateRetries=new();
-    private readonly Noop marketContributor=new(),partyFinderContributor=new(),travelLocal=new(),travelRetries=new(),huntFocus=new(),log=new();
+    private readonly Noop marketContributor=new(),partyFinderContributor=new(),travelLocal=new(),travelRetries=new(),huntFocus=new(),fateSender=new(),log=new();
     private bool PartyFinderContributionEnabled=>false;
     private void ClearTravelPending(){}
     private void RequestConfigurationSave(){}
