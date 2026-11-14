@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.31.10 (Stable candidate)
+
+Game Sync supports the November game update. Hunt routing can defer a mark while its FATE or B rank is down, and tracked FATEs can announce their start in chat. Appearance shares a complete look with hidden headgear or a sheathed weapon. Settings shows your sharing choices and the result of sharing your location, and the pairing screen shows your saved destination.
+
+See the [release notes](releases/v1.0.31.10.md).
+
 ## 0.0.98 (Testing)
 
 - Qualifies Hunt, Travel, FATE, Submarine, Beastmaster and Appearance for the November game build and Dalamud 15.0.4.0. Dashboard stays paused on that runtime.
