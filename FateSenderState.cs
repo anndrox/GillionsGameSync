@@ -56,7 +56,10 @@ internal sealed class FateSenderState : IDisposable {
     internal void UploadFinished() { UploadBusy=false; inFlightId=null; }
     // retryAfterSeconds above 10 is a Site-requested idle wait after a valid "no"
     // (Testing only, FateIdleDiscovery). Stable always passes the default.
-    internal void Install(FateGrant? grant, DateTime now,long clock,int retryAfterSeconds=5) {
+    internal void Install(FateGrant? grant, DateTime now,long clock)=>InstallCore(grant,now,clock,5);
+    // Testing only (FateIdleDiscovery): a valid "no" with the Site's idle delay.
+    internal void InstallIdle(FateGrant grant, DateTime now,long clock,int retryAfterSeconds)=>InstallCore(grant,now,clock,retryAfterSeconds);
+    private void InstallCore(FateGrant? grant, DateTime now,long clock,int retryAfterSeconds) {
         bool continuity=!suspended && Grant is {Admission.Granted:true} prior && grant is {Admission.Granted:true}
             && prior.PolicyGeneration==grant.PolicyGeneration && prior.PairedAt==grant.PairedAt
             && prior.Admission.AdmittedSource==grant.Admission.AdmittedSource;

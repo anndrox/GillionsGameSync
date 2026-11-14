@@ -70,13 +70,13 @@ internal static class SenderTests {
             "presence hint reads only fateContribution.authorized");
         using (var idle=new FateSenderState()) {
             idle.Bind("idle",1); check(idle.Discover(0),"idle first discovery"); idle.DiscoveryFinished();
-            idle.Install(idleOff!.Value.Grant,now,0,120);
+            idle.InstallIdle(idleOff!.Value.Grant,now,0,120);
             check(!idle.Discover(119_999) && idle.Discover(120_000),"sharing off waits the Site delay"); idle.DiscoveryFinished();
-            idle.Install(idleOff!.Value.Grant,now,120_000,120); idle.Wake(135_000);
+            idle.InstallIdle(idleOff!.Value.Grant,now,120_000,120); idle.Wake(135_000);
             check(idle.Discover(135_000),"presence shows sharing back on: discovery asks at once"); idle.DiscoveryFinished();
-            idle.Install(unsupportedIdle!.Value.Grant,now,140_000,600); idle.Wake(155_000);
+            idle.InstallIdle(unsupportedIdle!.Value.Grant,now,140_000,600); idle.Wake(155_000);
             check(!idle.Discover(155_000) && idle.Discover(740_000),"only a sharing-off wait is woken"); idle.DiscoveryFinished();
-            idle.Install(idleOff!.Value.Grant,now,750_000,120); idle.Bind("idle",2);
+            idle.InstallIdle(idleOff!.Value.Grant,now,750_000,120); idle.Bind("idle",2);
             check(idle.Discover(751_000),"a new binding drops the old idle wait"); idle.DiscoveryFinished();
             idle.Install(denied,now,751_000);
             check(!idle.Discover(760_999) && idle.Discover(761_000),"an answer of 5 keeps the 10 s cadence");
@@ -84,7 +84,7 @@ internal static class SenderTests {
         // Reviewer 1: the 30 s policy expiry (Maintain) must not end a sharing-off wake.
         foreach(var (result,idleDelay,wakes) in new[]{(idleOff!.Value,120,true),(unsupportedIdle!.Value,600,false)}) {
             using var late=new FateSenderState(); late.Bind("late",1); check(late.Discover(0),"late first discovery"); late.DiscoveryFinished();
-            late.Install(result.Grant,now,0,idleDelay); late.Maintain(now.AddSeconds(31),31_000);
+            late.InstallIdle(result.Grant,now,0,idleDelay); late.Maintain(now.AddSeconds(31),31_000);
             check(!late.Status.StartsWith("Site discovery expired",StringComparison.Ordinal),"an idle wait keeps its denial status after expiry");
             late.Wake(45_000);
             check(late.Discover(45_000)==wakes,wakes ? "sharing back on wakes after the policy expired" : "an unsupported wait stays asleep after expiry");

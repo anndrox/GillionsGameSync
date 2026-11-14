@@ -2190,7 +2190,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 // Transport deadlines do not revoke authority to commit an
                 // already-classified OFF/denial/backoff result on this session.
                 if(!FateRequestCurrent(permit,binding,epoch,feature)) return;
-                if(grant is not null) fateSender.Install(grant,DateTime.UtcNow,Environment.TickCount64,idleRetry);
+                if(grant is not null) fateSender.InstallIdle(grant,DateTime.UtcNow,Environment.TickCount64,idleRetry);
                 else fateSender.DiscoveryFailed(Environment.TickCount64,retrySeconds);
                 if(!fateSender.Authorized(DateTime.UtcNow,Environment.TickCount64)) fateLocal.CancelUnsent();
             });
