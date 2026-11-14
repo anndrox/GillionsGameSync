@@ -87,6 +87,7 @@ public sealed partial class Plugin {
             Label(appearanceSharingStatus);
             Label($"{DesynthesisResults.Label}: Off");
             Label(DesynthesisResults.Description);
+            Label(CollectibleOwnership.SharingLine);
             return;
         }
         Dalamud.Bindings.ImGui.ImGui.PushTextWrapPos(0);
@@ -98,6 +99,7 @@ public sealed partial class Plugin {
         var desynthesis = status.Categories.FirstOrDefault(category => category.Key == DesynthesisResults.Permission);
         Label($"{DesynthesisResults.Label}: {desynthesis?.DisplayState ?? "Off"}");
         Label(DesynthesisResults.Description);
+        Label(CollectibleOwnership.SharingLine);
         Dalamud.Bindings.ImGui.ImGui.PopTextWrapPos();
         Link("Change on gillions.app", status.SettingsUrl);
     }

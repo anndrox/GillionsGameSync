@@ -192,6 +192,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Testing 0.0.106 sends facewear, hairstyle and outfit ownership for the collection galleries.",
         "Testing 0.0.103 shows location upload status and names the site used when pairing fails.",
         "Testing 0.0.102 adds Hunt target awareness and tracked FATE alerts.",
         "Testing 0.0.101.1 recovers background observation and shows appearance upload status.",
@@ -2799,7 +2800,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 
     private static string DescribePayload(JsonElement root, int bytes) {
         var parts = new List<string> { $"{bytes:N0} B" };
-        foreach (var name in new[] { "items", "armoireItems", "retainerListings", "retainerBags", "ids", "completedQuestIds", "alliedSocieties", "tabs", "cards", "minions", "mounts", "bardings", "emotes", "orchestrions", "fashions", "blueMageSpells", "sightseeingLogIds", "aetherCurrentIds", "portraitBackgrounds", "portraitConditions", "portraitDecorations", "portraitFacials", "portraitFrames", "portraitPoses", "masterRecipeBookIds", "folkloreBookIds", "jobs", "craftingRecipeIds", "gatheringLogIds" }) {
+        foreach (var name in new[] { "items", "armoireItems", "retainerListings", "retainerBags", "ids", "completedQuestIds", "alliedSocieties", "tabs", "cards", "minions", "mounts", "bardings", "emotes", "orchestrions", "fashions", "blueMageSpells", "sightseeingLogIds", "aetherCurrentIds", "portraitBackgrounds", "portraitConditions", "portraitDecorations", "portraitFacials", "portraitFrames", "portraitPoses", "masterRecipeBookIds", "folkloreBookIds", "jobs", "craftingRecipeIds", "gatheringLogIds", "facewearGlassesIds", "hairstyleUnlockLinks", "outfitSetIds" }) {
             if (root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array) parts.Add($"{name}={value.GetArrayLength()}");
         }
         if (root.TryGetProperty("eligibleCount", out var eligible) && eligible.TryGetInt32(out var eligibleCount)) parts.Add($"eligible={eligibleCount}");
