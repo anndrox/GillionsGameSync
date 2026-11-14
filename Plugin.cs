@@ -511,6 +511,8 @@ public sealed partial class Plugin : IDalamudPlugin {
 #endif
                 if (requestFocus && focusClock is not null) huntFocus.Apply(responseJson, focusClock.UtcNow, HuntFocusEligible() && personalAccepted.Contains("hunt_bills"), DateTime.UtcNow);
                 else huntFocus.Clear();
+                // FATE sharing turned back on: end a Site idle wait so discovery asks now.
+                if (NativeProduct.TransportOrigin(permit.Origin) && FateDiscovery.PresenceAuthorized(responseJson)) fateSender.Wake(Environment.TickCount64);
 #endif
                 nextRetainerPresenceUtc = DateTime.UtcNow.Add(SitePermissionOrigin ? TimeSpan.FromSeconds(15)
                     : RetainerPresencePolicy.NextSuccessDelay(Random.Shared.Next(-5, 6)));

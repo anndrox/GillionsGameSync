@@ -43,6 +43,33 @@ internal static class SenderTests {
         var unsupported=off.DeepClone(); unsupported["fateContribution"]!["reason"]="FATE_SOURCE_UNSUPPORTED";
         check(FateDiscovery.Parse(unsupported.ToJsonString(),"session",device,source with {CollectorVersion="0.0.86.0"},now)
             is {Admission.Granted:false},"old Site matrix explicitly fences new collector");
+        // Site #745: a valid "no" may slow discovery; authorized keeps exactly 5.
+        JsonNode With(JsonNode node,int retry) { var copy=node.DeepClone(); copy["fateContribution"]!["retryAfterSeconds"]=retry; return copy; }
+        var idleOff=Parse(With(off,120));
+        check(idleOff is {Admission.Granted:false,RetryAfterSeconds:120},"sharing-off denial carries the Site idle delay");
+        check(Parse(With(root,120))==null && Parse(With(off,4))==null && Parse(With(off,901))==null,"idle delay bounds: authorized 5 only, denial 5 to 900");
+        check(denied.RetryAfterSeconds==5,"an ungated Site still answers 5");
+        var mismatch=root.DeepClone(); mismatch["fateContribution"]!["referenceCompatibilityEpoch"]="fate-reference:2026.01.01.0000.0000";
+        check(Parse(mismatch) is {Admission.Granted:false,Reason:FateDiscovery.ReferenceMismatch,RetryAfterSeconds:600},
+            "a well-formed different reference is a slow, never-sending reason, not malformed");
+        var unsupportedIdle=Parse(With(unsupported,600)) ?? FateDiscovery.Parse(With(unsupported,600).ToJsonString(),"session",device,source with {CollectorVersion="0.0.86.0"},now);
+        check(unsupportedIdle is {Admission.Granted:false,Reason:"FATE_SOURCE_UNSUPPORTED",RetryAfterSeconds:600},"unsupported denial carries its delay");
+        check(FateDiscovery.PresenceAuthorized("{\"fateContribution\":{\"authorized\":true}}")
+            && !FateDiscovery.PresenceAuthorized("{\"fateContribution\":{\"authorized\":false}}") && !FateDiscovery.PresenceAuthorized("not json"),
+            "presence hint reads only fateContribution.authorized");
+        using (var idle=new FateSenderState()) {
+            idle.Bind("idle",1); check(idle.Discover(0),"idle first discovery"); idle.DiscoveryFinished();
+            idle.Install(idleOff,now,0);
+            check(!idle.Discover(119_999) && idle.Discover(120_000),"sharing off waits the Site delay"); idle.DiscoveryFinished();
+            idle.Install(idleOff,now,120_000); idle.Wake(135_000);
+            check(idle.Discover(135_000),"presence shows sharing back on: discovery asks at once"); idle.DiscoveryFinished();
+            idle.Install(unsupportedIdle,now,140_000); idle.Wake(155_000);
+            check(!idle.Discover(155_000) && idle.Discover(740_000),"only a sharing-off wait is woken"); idle.DiscoveryFinished();
+            idle.Install(idleOff,now,750_000); idle.Bind("idle",2);
+            check(idle.Discover(751_000),"a new binding drops the old idle wait"); idle.DiscoveryFinished();
+            idle.Install(denied,now,751_000);
+            check(!idle.Discover(760_999) && idle.Discover(761_000),"an answer of 5 keeps the 10 s cadence");
+        }
         FateObservation Row(int second,int progress=1)=>new(1000,21,134,new("noninstanced",0),new("running",4),now.AddSeconds(second),
             (byte)progress,false,15,20,null,null,new((int)new DateTimeOffset(now).ToUnixTimeSeconds()-10,900));
         FatePrepared Batch(int second,int progress=1)=>FatePolicy.Prepare(1,source,[Row(second,progress)],now.AddSeconds(second))!;
