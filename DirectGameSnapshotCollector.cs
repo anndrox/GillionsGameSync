@@ -74,11 +74,16 @@ public static class DirectGameSnapshotCollector {
             if (inventory is null) withheld?.Add("inventory:" + NativeAvailability.NotLoaded);
             else {
                 var retainerGil = (retainerGilBalances ?? new Dictionary<string, long>()).Where(entry => !string.IsNullOrWhiteSpace(entry.Key) && entry.Value >= 0).Select(entry => new { retainerId = entry.Key, gil = entry.Value }).ToArray();
-                yield return new GameSnapshot("inventory", new { character = identity, items = inventory.Items, armoireItems = inventory.ArmoireItems, armoireObserved = inventory.ArmoireObserved, retainerListings = inventory.RetainerListings, retainerListingsObserved = inventory.RetainerListingsObserved, retainerListingRetainerIds = inventory.RetainerListingRetainerIds, retainerBags = inventory.RetainerBags, retainerBagsObserved = inventory.RetainerBagsObserved, retainerGil,
+                object inventoryPayload = new { character = identity, items = inventory.Items, armoireItems = inventory.ArmoireItems, armoireObserved = inventory.ArmoireObserved, retainerListings = inventory.RetainerListings, retainerListingsObserved = inventory.RetainerListingsObserved, retainerListingRetainerIds = inventory.RetainerListingRetainerIds, retainerBags = inventory.RetainerBags, retainerBagsObserved = inventory.RetainerBagsObserved, retainerGil,
                     // Additive, ignored by older Sites: which player containers were
                     // read now, carried from their last loaded read, or never seen.
                     observedLocations = inventory.ObservedLocations, carriedLocations = inventory.CarriedLocations, unobservedLocations = inventory.UnobservedLocations,
-                    retainerBagRetainerIds = inventory.RetainerBagRetainerIds });
+                    retainerBagRetainerIds = inventory.RetainerBagRetainerIds };
+#if GILLIONS_TEST_BUILD
+                // Testing only: glamour dresser contents beside the armoire, same carry-forward rule.
+                inventoryPayload = GlamourDresserSnapshotPolicy.With(inventoryPayload, GlamourDresserCollector.Read(dataManager));
+#endif
+                yield return new GameSnapshot("inventory", inventoryPayload);
             }
         }
         if (selected.Contains("currencies")) {
@@ -804,6 +809,37 @@ internal static class ArmoireCollector {
     }
 }
 internal sealed record ArmoireRead(bool Observed, object[] Items);
+#if GILLIONS_TEST_BUILD
+// Read-only. Dresser slots load only after the player opens a glamour dresser this
+// session; MirageManager can stay allocated afterwards with nothing loaded, so an
+// unloaded or all-empty read is unobserved, never evidence (the glamour plate rule).
+internal static class GlamourDresserCollector {
+    public static unsafe GlamourDresserRead Read(IDataManager dataManager) {
+        try {
+            var manager = MirageManager.Instance();
+            if (manager == null || !manager->PrismBoxLoaded) return GlamourDresserRead.Unobserved;
+            var ids = manager->PrismBoxItemIds;
+            var stain0 = manager->PrismBoxStain0Ids;
+            var stain1 = manager->PrismBoxStain1Ids;
+            // Outfit pieces: ItemFinderModule's dresser cache, used per slot only where it
+            // holds the same item as the loaded dresser at this moment.
+            var finder = FFXIVClientStructs.FFXIV.Client.UI.Misc.ItemFinderModule.Instance();
+            var cached = finder != null && finder->IsGlamourDresserCached;
+            var finderIds = cached ? finder->GlamourDresserItemIds : default;
+            var finderBits = cached ? finder->GlamourDresserItemSetUnlockBits : default;
+            var slots = new GlamourDresserSlot[ids.Length];
+            for (var i = 0; i < ids.Length; i++) {
+                ushort? mask = cached && i < finderIds.Length && i < finderBits.Length && finderIds[i] == ids[i] ? finderBits[i] : null;
+                slots[i] = new(i, ids[i], i < stain0.Length ? stain0[i] : (byte)0, i < stain1.Length ? stain1[i] : (byte)0, mask);
+            }
+            var sets = SheetRowCache<MirageStoreSetItem>.Get(dataManager);
+            return GlamourDresserSnapshotPolicy.Build(slots, sets.Select(row => row.RowId).ToHashSet());
+        } catch {
+            return GlamourDresserRead.Unobserved;
+        }
+    }
+}
+#endif
 
 internal static class AchievementCollector {
     public static AchievementRead ReadUnlockedIds(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) {

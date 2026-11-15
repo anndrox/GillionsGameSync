@@ -17,6 +17,7 @@
     <Compile Include="..\..\PublicUrlConfiguration.cs" Link="PublicUrlConfiguration.cs" />
     <Compile Include="..\..\ProgressionSnapshots.cs" Link="ProgressionSnapshots.cs" />
     <Compile Include="..\..\ArmoireSnapshots.cs" Link="ArmoireSnapshots.cs" />
+    <Compile Include="..\..\GlamourDresserSnapshots.cs" Link="GlamourDresserSnapshots.cs" />
     <Compile Include="..\..\RetainerVentureSnapshots.cs" Link="RetainerVentureSnapshots.cs" />
     <Compile Include="..\..\RetainerClientPolicy.cs" Link="RetainerClientPolicy.cs" />
     <Compile Include="..\..\RetainerPresence.cs" Link="RetainerPresence.cs" />

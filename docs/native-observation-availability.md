@@ -76,6 +76,14 @@ reported as a connection failure.
 
 - An unavailable Cabinet catalog is retried on the next read, not cached as empty.
 
+### glamour dresser (Testing 0.0.107)
+
+- Read from ClientStructs `MirageManager` only while `PrismBoxLoaded` is set, which happens after the player opens a glamour dresser that session.
+- Sent in `inventory` as `glamourDresserItems` (item id with the HQ offset removed, `hq`, both stains, slot) and `glamourDresserObserved`.
+- An unloaded or all-empty read sends `[]` with `glamourDresserObserved: false`. Gillions keeps the last observed list, as for the armoire.
+- Outfit slots may carry `setPieceMask` from `ItemFinderModule`'s dresser cache, but only where that cache holds the same item for the slot at the same moment. The bit order is not yet confirmed in game.
+- **Privacy:** this is inventory data, which members already sync with Game Sync. There is no new data class or setting, and it stays on the member's own pages.
+
 ## Unchanged
 
 - Hunt, submarine, FATE and travel collectors.

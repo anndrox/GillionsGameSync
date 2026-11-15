@@ -18,8 +18,12 @@ for name in listed:
     assert (r / name).is_file(), 'listed fingerprint file is missing: ' + name
 
 # Every top-level source with ClientStructs or unsafe code is assigned to a set, or
-# explicitly outside: ordinary sync, local-only families without upload, and Plugin.cs
-# (its only native read is the non-Dalamud-build ContentId path; Testing uses IPlayerState).
+# explicitly outside: local-only families without upload; Plugin.cs (its only native read
+# is the non-Dalamud-build ContentId path; Testing uses IPlayerState); and
+# DirectGameSnapshotCollector.cs, ordinary sync, whose unsafe reads include the armoire
+# (UIState Cabinet), glamour plates and the glamour dresser (MirageManager.PrismBox, and
+# ItemFinderModule's dresser cache for outfit pieces). Ordinary sync is not fingerprinted:
+# TEST admits it by exact client version.
 outside = {'Plugin.cs', 'DirectGameSnapshotCollector.cs', 'BeastmasterLocalView.cs', 'DashboardLocalView.cs'}
 for path in sorted(r.glob('*.cs')):
     text = path.read_text(encoding='utf-8')
