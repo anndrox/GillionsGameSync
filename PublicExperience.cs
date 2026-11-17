@@ -62,8 +62,31 @@ internal static class PublicConnectionPresentation {
         "Gillions could not complete the request. Pending records were kept; please try again." => pairing
             ? "Pairing did not complete. Check the destination and connection, then create a fresh one-time code there and try again."
             : value,
+        _ when SyncResultMessage.IsShown(value) => value,
         _ => ""
     };
+}
+
+// The Sync now results that name resources: "not ready" and "paused". They are built only from the plugin's own resource
+// names and Collections list labels, so this exact shape is shown and anything else (a raw error, a secret) still is not.
+internal static class SyncResultMessage {
+    internal static readonly string[] Resources = ["inventory", "currencies", "achievements", "collectibles", "character", "quest_journal",
+        "reputation", "shared_fates", "glamour_plates", "gil_ledger", "retainer_ventures"];
+
+    private static readonly Regex Shape = Build();
+
+    private static Regex Build() {
+        static string Any(IEnumerable<string> values) => "(?:" + string.Join("|", values.Select(Regex.Escape)) + ")";
+        static string List(string item) => item + "(?:, " + item + ")*";
+        var labels = List(Any(CollectibleSnapshotPolicy.LabelValues));
+        var resource = "(?:" + Any(Resources) + @"|collectibles \(not ready: " + labels + @"\))";
+        return new Regex("^(?:Gillions paused updates for " + List(Any(Resources)) + @"\. Game Sync will retry\."
+            + @"|(?:Sync completed\. )?(?:Not ready yet, kept unchanged on Gillions: " + List(resource) + @"\.)?"
+            + "(?: ?Collections were sent without " + labels + @" \(not ready yet\)\.)? Try again in a moment\.)$",
+            RegexOptions.CultureInvariant);
+    }
+
+    internal static bool IsShown(string value) => Shape.IsMatch(value);
 }
 
 internal sealed record HuntProgressRow(string Key, string Name, int Current, int Required) {

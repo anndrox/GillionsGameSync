@@ -14,6 +14,14 @@ accepted=subprocess.check_output(['git','show',public+':PublicExperience.cs'],cw
 experience=experience.replace("None of your Hunt targets are in this zone.",
     "No observed Hunt targets in this area. Current bill coverage is unverified.").replace(
     "The Hunt targets you can see here are complete.", "Observed targets complete; current bill coverage is unverified.")
+# Proposed with the per-list Collections send, for the owner's look: the window also shows the Sync now results that name
+# resources ("not ready", "paused"). Only that one switch arm and its SyncResultMessage block differ from the accepted file.
+sync_result_arm="        _ when SyncResultMessage.IsShown(value) => value,\n"
+assert experience.count(sync_result_arm)==1
+experience=experience.replace(sync_result_arm,'')
+sync_result_start=experience.index('// The Sync now results that name resources')
+experience=experience[:sync_result_start]+experience[experience.index('internal sealed record HuntProgressRow(',sync_result_start):]
+assert 'SyncResultMessage' not in experience
 assert outside_status(experience)==outside_status(accepted)
 hunt=(r/'HuntBillLocalView.cs').read_text(encoding='utf-8').replace('    internal bool Reading => ReadEnabled;\n','')
 hunt=hunt[:hunt.index('    internal HuntBillItemSnapshot? CurrentCoverage')] + hunt[hunt.index('    internal DateTime? CoverageObservedAtUtc'):]

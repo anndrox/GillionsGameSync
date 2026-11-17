@@ -102,6 +102,7 @@ internal static class CollectibleReadinessTests {
                 Check(capture.Payload is null, $"{failing}: a list the Site clears when left out still withholds the whole send");
                 Check(capture.Withheld.SequenceEqual([$"collectibles.{failing}:NotLoaded", "collectibles:NotLoaded"]), $"{failing}: the whole send and its cause are named");
                 Check(text == $"Not ready yet, kept unchanged on Gillions: collectibles (not ready: {label}).", $"{failing}: Sync now names the list that stopped Collections ({text})");
+                Check(Shown(false, text), $"{failing}: the Sync now window shows that message");
             } else {
                 Check(capture.Payload is not null, $"{failing}: the other lists are still sent");
                 var json = Json(capture);
@@ -110,6 +111,7 @@ internal static class CollectibleReadinessTests {
                 Check(json.GetProperty("complete").GetBoolean(), $"{failing}: the sent snapshot stays complete for the lists it carries");
                 Check(capture.Withheld.SequenceEqual([$"collectibles.{failing}:NotLoaded"]), $"{failing}: only that list is named as withheld");
                 Check(text == $"Collections were sent without {label} (not ready yet).", $"{failing}: Sync now names the list left out ({text})");
+                Check(Shown(true, text), $"{failing}: the Sync now window shows that message");
             }
         }
         Check(CollectibleSnapshotPolicy.ClearedWhenOmitted.SetEquals(["minions", "mounts", "orchestrions", "fashions"]),
@@ -124,7 +126,24 @@ internal static class CollectibleReadinessTests {
             "two lists left out and another resource are named together");
         Check(CollectibleSnapshotPolicy.NotReadyText(["achievements", "inventory"]) == "Not ready yet, kept unchanged on Gillions: achievements, inventory.",
             "other resources keep the existing wording");
+        Check(Shown(true, CollectibleSnapshotPolicy.NotReadyText(["achievements", .. two.Withheld.Select(entry => entry.Split(':')[0])])) && Shown(false, "Not ready yet, kept unchanged on Gillions: achievements, inventory."),
+            "the window shows combined not-ready messages, with and without a completed send");
+        Check(PublicConnectionPresentation.ActionMessage("Gillions paused updates for collectibles, gil_ledger. Game Sync will retry.") == "Gillions paused updates for collectibles, gil_ledger. Game Sync will retry.",
+            "the window shows which resources Gillions paused");
+        Check(PublicConnectionPresentation.ActionMessage("Sync completed.") == "Sync completed." && PublicConnectionPresentation.ActionMessage("Your supported data is already current.") == "Your supported data is already current.",
+            "the existing Sync now results are still shown");
+        foreach (var marker in new[] { "synthetic-bearer", "account-id-123", "https://example.invalid/", "collectibles:NotLoaded", "Minions 12" }) {
+            Check(PublicConnectionPresentation.ActionMessage($"Not ready yet, kept unchanged on Gillions: {marker}. Try again in a moment.").Length == 0, "not-ready shape excludes other text: " + marker);
+            Check(PublicConnectionPresentation.ActionMessage($"Sync completed. Collections were sent without {marker} (not ready yet). Try again in a moment.").Length == 0, "left-out shape excludes other text: " + marker);
+            Check(PublicConnectionPresentation.ActionMessage($"Gillions paused updates for {marker}. Game Sync will retry.").Length == 0, "paused shape excludes other text: " + marker);
+        }
         Console.WriteLine($"Collectible readiness PASS: {checks}; managed fault/lifecycle fixtures, not physical FFXIV proof.");
+    }
+
+    // As the plugin composes a Sync now result, and only if the window shows it unchanged.
+    private static bool Shown(bool submitted, string notReadyText) {
+        var message = (submitted ? "Sync completed. " : "") + notReadyText + " Try again in a moment.";
+        return PublicConnectionPresentation.ActionMessage(message) == message;
     }
 
     private static IEnumerable<long> Interrupted() {
