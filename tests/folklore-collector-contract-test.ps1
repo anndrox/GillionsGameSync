@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $collector = Get-Content (Join-Path $root 'DirectGameSnapshotCollector.cs') -Raw
 
-if ($collector -notmatch 'folkloreBookIds\s*=\s*CollectibleCollector\.ReadFolkloreBookIds') {
+if ($collector -notmatch 'new\("folkloreBookIds",\s*\(\)\s*=>\s*CollectibleCollector\.ReadFolkloreBookIds') {
     throw 'The complete Collectibles payload does not expose folkloreBookIds.'
 }
 if ($collector -notmatch 'SheetRowCache<GatheringSubCategory>') {

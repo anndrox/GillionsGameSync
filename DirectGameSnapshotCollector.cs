@@ -152,18 +152,19 @@ public static class DirectGameSnapshotCollector {
             });
         }
         if (selected.Contains("collectibles")) {
-            var collectibles = CollectibleSnapshotPolicy.Capture(() => CollectibleCollector.ReadCharacter(clientState), () => new {
-            character = identity, complete = true,
-            cards = CollectibleCollector.ReadCards(dataManager, unlockState, budget), minions = CollectibleCollector.ReadMinions(dataManager, unlockState, budget), mounts = CollectibleCollector.ReadMounts(dataManager, unlockState, budget), bardings = CollectibleCollector.ReadBardings(dataManager, unlockState, budget), emotes = CollectibleCollector.ReadEmotes(dataManager, unlockState, budget),
-            orchestrions = CollectibleCollector.ReadOrchestrions(dataManager, unlockState, budget), fashions = CollectibleCollector.ReadFashions(dataManager, unlockState, budget), blueMageSpells = CollectibleCollector.ReadBlueMageSpells(dataManager, unlockState, budget), sightseeingLogIds = CollectibleCollector.ReadSightseeingLog(dataManager, unlockState, budget), aetherCurrentIds = CollectibleCollector.ReadAetherCurrents(dataManager, unlockState, budget),
-            portraitBackgrounds = CollectibleCollector.ReadPortraitBackgrounds(dataManager, unlockState, budget), portraitConditions = CollectibleCollector.ReadPortraitConditions(dataManager, unlockState, budget), portraitDecorations = CollectibleCollector.ReadPortraitDecorations(dataManager, unlockState, budget), portraitFacials = CollectibleCollector.ReadPortraitFacials(dataManager, unlockState, budget), portraitFrames = CollectibleCollector.ReadPortraitFrames(dataManager, unlockState, budget), portraitPoses = CollectibleCollector.ReadPortraitPoses(dataManager, unlockState, budget),
-            masterRecipeBookIds = CollectibleCollector.ReadMasterRecipeBooks(dataManager, unlockState, budget), folkloreBookIds = CollectibleCollector.ReadFolkloreBookIds(dataManager, budget)
-            });
-            // All or nothing: one unavailable source (a portrait condition row, the folklore books, an empty catalog) or a
-            // character change mid-read drops the whole payload. Record it as withheld so a manual sync says "Not ready yet"
-            // and the diagnostic names it, instead of Collections silently keeping an old time.
-            if (collectibles is not null) yield return new GameSnapshot("collectibles", collectibles);
-            else withheld?.Add("collectibles:" + NativeAvailability.NotLoaded);
+            // Per list: one unavailable source (a portrait condition row, the folklore books, an empty catalog) leaves only
+            // that list out, and the rest is sent. A list the Site would clear when left out (minions, mounts, orchestrion
+            // rolls, fashion accessories) still withholds the whole send, as does a character change mid-read. Every list
+            // left out is recorded as withheld, so a manual sync names it instead of Collections silently keeping an old time.
+            // The parts keep the earlier payload's property order, so an all-ready payload and its hash are unchanged.
+            var collectibles = CollectibleSnapshotPolicy.Capture(() => CollectibleCollector.ReadCharacter(clientState), identity, [
+                new("cards", () => CollectibleCollector.ReadCards(dataManager, unlockState, budget)), new("minions", () => CollectibleCollector.ReadMinions(dataManager, unlockState, budget)), new("mounts", () => CollectibleCollector.ReadMounts(dataManager, unlockState, budget)), new("bardings", () => CollectibleCollector.ReadBardings(dataManager, unlockState, budget)), new("emotes", () => CollectibleCollector.ReadEmotes(dataManager, unlockState, budget)),
+                new("orchestrions", () => CollectibleCollector.ReadOrchestrions(dataManager, unlockState, budget)), new("fashions", () => CollectibleCollector.ReadFashions(dataManager, unlockState, budget)), new("blueMageSpells", () => CollectibleCollector.ReadBlueMageSpells(dataManager, unlockState, budget)), new("sightseeingLogIds", () => CollectibleCollector.ReadSightseeingLog(dataManager, unlockState, budget)), new("aetherCurrentIds", () => CollectibleCollector.ReadAetherCurrents(dataManager, unlockState, budget)),
+                new("portraitBackgrounds", () => CollectibleCollector.ReadPortraitBackgrounds(dataManager, unlockState, budget)), new("portraitConditions", () => CollectibleCollector.ReadPortraitConditions(dataManager, unlockState, budget)), new("portraitDecorations", () => CollectibleCollector.ReadPortraitDecorations(dataManager, unlockState, budget)), new("portraitFacials", () => CollectibleCollector.ReadPortraitFacials(dataManager, unlockState, budget)), new("portraitFrames", () => CollectibleCollector.ReadPortraitFrames(dataManager, unlockState, budget)), new("portraitPoses", () => CollectibleCollector.ReadPortraitPoses(dataManager, unlockState, budget)),
+                new("masterRecipeBookIds", () => CollectibleCollector.ReadMasterRecipeBooks(dataManager, unlockState, budget)), new("folkloreBookIds", () => CollectibleCollector.ReadFolkloreBookIds(dataManager, budget)),
+            ]);
+            if (collectibles.Payload is not null) yield return new GameSnapshot(CollectibleSnapshotPolicy.Resource, collectibles.Payload);
+            foreach (var entry in collectibles.Withheld) withheld?.Add(entry);
         }
         if (selected.Contains("glamour_plates")) {
             var plates = GlamourPlateCollector.Read();
