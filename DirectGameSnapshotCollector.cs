@@ -78,7 +78,10 @@ public static class DirectGameSnapshotCollector {
                     // Additive, ignored by older Sites: which player containers were
                     // read now, carried from their last loaded read, or never seen.
                     observedLocations = inventory.ObservedLocations, carriedLocations = inventory.CarriedLocations, unobservedLocations = inventory.UnobservedLocations,
-                    retainerBagRetainerIds = inventory.RetainerBagRetainerIds });
+                    retainerBagRetainerIds = inventory.RetainerBagRetainerIds,
+                    // Additive, ignored by older Sites: the retainer whose selling list was loaded and read in this capture
+                    // (empty otherwise), so the Site marks listings "seen now" only after a real re-read, not a cached copy.
+                    retainerListingsReadRetainerIds = inventory.RetainerListingsReadRetainerIds });
             }
         }
         if (selected.Contains("currencies")) {
@@ -542,7 +545,12 @@ internal static class NativeInventoryCollector {
         return null;
     }
 
-    public static bool CaptureLoadedRetainerListings() {
+    public static bool CaptureLoadedRetainerListings() => CaptureLoadedRetainerListings(out _);
+
+    // readRetainerIds: the retainer whose RetainerMarket was read in this call (RetainerListingReadPolicy), whether or not its
+    // listings changed; empty when nothing was read. The return value still means "the cached listings changed".
+    internal static bool CaptureLoadedRetainerListings(out string[] readRetainerIds) {
+        readRetainerIds = [];
         unsafe {
             // Do not walk retained inventory containers while normal gameplay
             // is active. The manager can keep stale page data resident after
@@ -553,6 +561,7 @@ internal static class NativeInventoryCollector {
             if (manager == null) return false;
             ReadLoadedRetainerBags(manager);
             var read = ReadActiveRetainerListings(manager);
+            readRetainerIds = RetainerListingReadPolicy.ReadRetainerIds(read.Observed, read.RetainerIds);
             if (!read.Observed || read.RetainerIds.Length != 1) return false;
             lock (RetainerListingCacheLock) {
                 var retainerId = read.RetainerIds[0];
@@ -591,14 +600,14 @@ internal static class NativeInventoryCollector {
         if (assembled is null) return null;
         var retainerBags = ReadLoadedRetainerBags(manager);
         var armoire = ArmoireCollector.Read(dataManager);
-        CaptureLoadedRetainerListings();
+        CaptureLoadedRetainerListings(out var readRetainerIds);
         RetainerListingRead retainerListings;
         lock (RetainerListingCacheLock) {
             var cached = RetainerListingCache.Values.ToArray();
             retainerListings = new RetainerListingRead(cached.SelectMany((entry) => entry.Items).ToArray(), cached.Length > 0, cached.SelectMany((entry) => entry.RetainerIds).Distinct(StringComparer.Ordinal).ToArray());
         }
         return new InventoryRead(assembled.Items, retainerListings.Items, retainerListings.Observed, retainerListings.RetainerIds, retainerBags.Items, retainerBags.Observed, armoire.Items, armoire.Observed,
-            assembled.ObservedLocations, assembled.CarriedLocations, assembled.UnobservedLocations, retainerBags.RetainerIds);
+            assembled.ObservedLocations, assembled.CarriedLocations, assembled.UnobservedLocations, retainerBags.RetainerIds, readRetainerIds);
     }
 
     // Null when the equipped container is not loaded.
@@ -742,7 +751,7 @@ internal static class NativeInventoryCollector {
 }
 
 internal sealed record InventoryRead(InventoryRow[] Items, object[] RetainerListings, bool RetainerListingsObserved, string[] RetainerListingRetainerIds, object[] RetainerBags, bool RetainerBagsObserved, object[] ArmoireItems, bool ArmoireObserved,
-    string[] ObservedLocations, string[] CarriedLocations, string[] UnobservedLocations, string[] RetainerBagRetainerIds);
+    string[] ObservedLocations, string[] CarriedLocations, string[] UnobservedLocations, string[] RetainerBagRetainerIds, string[] RetainerListingsReadRetainerIds);
 internal sealed record RetainerBagRead(object[] Items, bool Observed, string[] RetainerIds);
 internal sealed record RetainerContext(string RetainerId, string RetainerName);
 internal sealed record RetainerBalanceRead(string RetainerId, string RetainerName, string Town, long Gil);
