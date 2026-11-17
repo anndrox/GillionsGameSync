@@ -109,7 +109,7 @@ public sealed partial class Plugin {
         if (HasPairedSession) partyFinder=configuration.EnablePartyFinderContributions ? "Ready" : "Off";
 #endif
         publicHealth=new(connection,character,hunts,partyFinder,fates,market,
-            activeOwnedState?.LastSyncUtc,IsTesting ? "Testing" : "Public",PluginVersion,game);
+            activeOwnedState?.LastSyncUtc,IsTesting ? "Testing" : "Public",PluginVersion,game,SectionStatusLines(now));
     }
     private static void Label(string text)=>ImGui.TextWrapped(text);
     private void DrawBranding(float size) {
@@ -311,6 +311,8 @@ public sealed partial class Plugin {
             DrawFeatureHealth(publicHealth);
             ImGui.Separator(); ImGui.TextDisabled("Recent sync & support");
             Label(publicHealth.LastSync is { } last ? $"Last successful sync: {last.ToLocalTime():g}" : "No successful sync recorded for this character.");
+            // Each section's result from the last sync this session, with its last-sent time and any reason it was skipped.
+            if(publicHealth.Sections is { Count: > 0 } sections) { ImGui.TextDisabled("Sync sections"); foreach(var line in sections) Label(line); }
             if(ImGui.Button("Copy support summary")) { ImGui.SetClipboardText(publicHealth.SupportSummary()); supportCopyAcknowledged=true; }
             if(supportCopyAcknowledged) Label("Support summary copied.");
             DrawActionFeedback();

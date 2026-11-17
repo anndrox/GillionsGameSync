@@ -82,36 +82,51 @@ internal static class CollectibleReadinessTests {
         Check(Json(Capture()).GetProperty("portraitConditions").EnumerateArray().Select(x => x.GetInt64()).SequenceEqual([344L, 938L]),
             "reconnect and multiple observations reread current ownership");
 
-        // The collector's full list set: all ready, then each source failing on its own.
+        // The collector's full list set: all ready, then each source failing on its own, with the sheet and row it names.
         character = 1;
+        var now = new DateTime(2026, 11, 17, 5, 12, 0, DateTimeKind.Utc);
+        var noParks = new Dictionary<string, SyncSectionPark>();
+        var noLastSent = new Dictionary<string, DateTime>();
         CollectibleCapture Full(string? failing) => CollectibleSnapshotPolicy.Capture(() => character, identity,
-            Keys.Select((key, index) => new CollectiblePart(key, () => key == failing ? throw new CollectibleSourceUnavailableException() : new long[] { index + 1 })).ToArray());
+            Keys.Select((key, index) => new CollectiblePart(key, () => key == failing ? throw new CollectibleSourceUnavailableException("BannerCondition", (uint)(index + 100)) : new long[] { index + 1 })).ToArray());
+        IReadOnlyList<SyncSectionStatus> Report(CollectibleCapture capture) => SyncSectionReport.Build(["collectibles"],
+            capture.Payload is null ? new HashSet<string>() : new HashSet<string> { "collectibles" }, capture.Withheld, noParks, now, noLastSent);
         var allReady = Full(null);
         var allJson = Json(allReady);
         Check(allReady.Withheld.Length == 0, "all ready: nothing withheld");
         Check(allJson.EnumerateObject().Select(p => p.Name).SequenceEqual(["character", "complete", .. Keys]),
             "all ready: every list is sent, in the collector's earlier payload order (same hash as before)");
         Check(Keys.Select((key, index) => allJson.GetProperty(key)[0].GetInt64() == index + 1).All(x => x), "all ready: each list carries its own values");
-        Check(CollectibleSnapshotPolicy.NotReadyText([]) == "", "all ready: no not-ready text");
-        foreach (var failing in Keys) {
+        var allReport = Report(allReady);
+        Check(allReport.Single().Outcome == SyncSectionOutcome.Sent && allReport.Single().Lists.Count == 0, "all ready: Collections sent with nothing left out");
+        Check(SyncSectionReport.Message(allReport, anySent: true) == "Sync completed.", "all ready: Sync completed.");
+        Check(SyncSectionReport.LogLine(allReport.Single()) == "Gillions Game Sync: Collections sent.", "all ready: the log line says sent");
+        foreach (var (failing, index) in Keys.Select((key, index) => (key, index))) {
             var capture = Full(failing);
             var label = CollectibleSnapshotPolicy.Label(failing);
+            var row = index + 100;
             Check(label != failing || failing is "minions" or "mounts" or "bardings" or "emotes", $"{failing}: has a player-facing name");
-            var text = CollectibleSnapshotPolicy.NotReadyText(capture.Withheld.Select(entry => entry.Split(':')[0]).Distinct().ToArray());
+            var status = Report(capture).Single();
+            var message = SyncSectionReport.Message([status], anySent: capture.Payload is not null);
+            var line = SyncSectionReport.LogLine(status);
+            Check(status.Lists.Single() == new SyncSectionList(failing, "BannerCondition", (uint)row), $"{failing}: the report names the list, the sheet and the row");
+            Check(PublicConnectionPresentation.ActionMessage(message) == message, $"{failing}: the Sync now window shows the message ({message})");
             if (CollectibleSnapshotPolicy.ClearedWhenOmitted.Contains(failing)) {
                 Check(capture.Payload is null, $"{failing}: a list the Site clears when left out still withholds the whole send");
-                Check(capture.Withheld.SequenceEqual([$"collectibles.{failing}:NotLoaded", "collectibles:NotLoaded"]), $"{failing}: the whole send and its cause are named");
-                Check(text == $"Not ready yet, kept unchanged on Gillions: collectibles (not ready: {label}).", $"{failing}: Sync now names the list that stopped Collections ({text})");
-                Check(Shown(false, text), $"{failing}: the Sync now window shows that message");
+                Check(capture.Withheld.SequenceEqual([$"collectibles.{failing}:NotLoaded:BannerCondition:{row}", "collectibles:NotLoaded"]), $"{failing}: the whole send and its cause are named");
+                Check(status.Outcome == SyncSectionOutcome.Skipped && status.Reason == SyncSectionReport.ListsNotReady, $"{failing}: Collections skipped, lists not ready");
+                Check(message == $"Not ready yet, kept unchanged on Gillions: Collections (not ready: {label}). Try again in a moment.", $"{failing}: Sync now names the list that stopped Collections ({message})");
+                Check(line == $"Gillions Game Sync: Collections skipped, not ready: {label} (BannerCondition row {row} missing).", $"{failing}: the log names the list, sheet and row ({line})");
             } else {
                 Check(capture.Payload is not null, $"{failing}: the other lists are still sent");
                 var json = Json(capture);
                 Check(!json.TryGetProperty(failing, out _), $"{failing}: the list that isn't ready is left out, never sent empty");
                 Check(json.EnumerateObject().Select(p => p.Name).SequenceEqual(["character", "complete", .. Keys.Where(key => key != failing)]), $"{failing}: every other list is sent");
                 Check(json.GetProperty("complete").GetBoolean(), $"{failing}: the sent snapshot stays complete for the lists it carries");
-                Check(capture.Withheld.SequenceEqual([$"collectibles.{failing}:NotLoaded"]), $"{failing}: only that list is named as withheld");
-                Check(text == $"Collections were sent without {label} (not ready yet).", $"{failing}: Sync now names the list left out ({text})");
-                Check(Shown(true, text), $"{failing}: the Sync now window shows that message");
+                Check(capture.Withheld.SequenceEqual([$"collectibles.{failing}:NotLoaded:BannerCondition:{row}"]), $"{failing}: only that list is named as withheld");
+                Check(status.Outcome == SyncSectionOutcome.Sent && status.Reason == SyncSectionReport.ListsNotReady, $"{failing}: Collections sent, with that list left out");
+                Check(message == $"Collections were sent without {label} (not ready yet). Try again in a moment.", $"{failing}: Sync now names the list left out ({message})");
+                Check(line == $"Gillions Game Sync: Collections sent without {label} (BannerCondition row {row} missing).", $"{failing}: the log names the list, sheet and row ({line})");
             }
         }
         Check(CollectibleSnapshotPolicy.ClearedWhenOmitted.SetEquals(["minions", "mounts", "orchestrions", "fashions"]),
@@ -119,31 +134,11 @@ internal static class CollectibleReadinessTests {
         var none = CollectibleSnapshotPolicy.Capture(() => character, identity, Keys.Where(key => !CollectibleSnapshotPolicy.ClearedWhenOmitted.Contains(key))
             .Select(key => new CollectiblePart(key, () => throw new CollectibleSourceUnavailableException())).ToArray());
         Check(none.Payload is null && none.Withheld[^1] == "collectibles:NotLoaded", "no list ready: nothing is sent");
-        var two = CollectibleSnapshotPolicy.Capture(() => character, identity, [new("portraitConditions", () => throw new CollectibleSourceUnavailableException()),
-            new("cards", () => new long[] { 1 }), new("folkloreBookIds", () => throw new CollectibleSourceUnavailableException())]);
-        Check(CollectibleSnapshotPolicy.NotReadyText(["achievements", .. two.Withheld.Select(entry => entry.Split(':')[0])])
-            == "Not ready yet, kept unchanged on Gillions: achievements. Collections were sent without portrait conditions, folklore tomes (not ready yet).",
-            "two lists left out and another resource are named together");
-        Check(CollectibleSnapshotPolicy.NotReadyText(["achievements", "inventory"]) == "Not ready yet, kept unchanged on Gillions: achievements, inventory.",
-            "other resources keep the existing wording");
-        Check(Shown(true, CollectibleSnapshotPolicy.NotReadyText(["achievements", .. two.Withheld.Select(entry => entry.Split(':')[0])])) && Shown(false, "Not ready yet, kept unchanged on Gillions: achievements, inventory."),
-            "the window shows combined not-ready messages, with and without a completed send");
-        Check(PublicConnectionPresentation.ActionMessage("Gillions paused updates for collectibles, gil_ledger. Game Sync will retry.") == "Gillions paused updates for collectibles, gil_ledger. Game Sync will retry.",
-            "the window shows which resources Gillions paused");
-        Check(PublicConnectionPresentation.ActionMessage("Sync completed.") == "Sync completed." && PublicConnectionPresentation.ActionMessage("Your supported data is already current.") == "Your supported data is already current.",
-            "the existing Sync now results are still shown");
-        foreach (var marker in new[] { "synthetic-bearer", "account-id-123", "https://example.invalid/", "collectibles:NotLoaded", "Minions 12" }) {
-            Check(PublicConnectionPresentation.ActionMessage($"Not ready yet, kept unchanged on Gillions: {marker}. Try again in a moment.").Length == 0, "not-ready shape excludes other text: " + marker);
-            Check(PublicConnectionPresentation.ActionMessage($"Sync completed. Collections were sent without {marker} (not ready yet). Try again in a moment.").Length == 0, "left-out shape excludes other text: " + marker);
-            Check(PublicConnectionPresentation.ActionMessage($"Gillions paused updates for {marker}. Game Sync will retry.").Length == 0, "paused shape excludes other text: " + marker);
-        }
+        var folklore = CollectibleSnapshotPolicy.Capture(() => character, identity, [new("cards", () => new long[] { 1 }), new("folkloreBookIds", () => throw new CollectibleSourceUnavailableException("PlayerState"))]);
+        Check(SyncSectionReport.LogLine(Report(folklore).Single()) == "Gillions Game Sync: Collections sent without folklore tomes (PlayerState not loaded).",
+            "a native state that isn't loaded is named without a row");
+        Check(new CollectibleSourceUnavailableException("Bad name; drop table", 1).SourceName == "", "a source name that isn't a plain identifier is dropped");
         Console.WriteLine($"Collectible readiness PASS: {checks}; managed fault/lifecycle fixtures, not physical FFXIV proof.");
-    }
-
-    // As the plugin composes a Sync now result, and only if the window shows it unchanged.
-    private static bool Shown(bool submitted, string notReadyText) {
-        var message = (submitted ? "Sync completed. " : "") + notReadyText + " Try again in a moment.";
-        return PublicConnectionPresentation.ActionMessage(message) == message;
     }
 
     private static IEnumerable<long> Interrupted() {

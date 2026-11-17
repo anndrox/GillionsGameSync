@@ -22,13 +22,19 @@ internal sealed class ObservedSheetRows<T> {
     }
 }
 
-internal sealed class CollectibleSourceUnavailableException : Exception;
+// SourceName is the game sheet or native state that wasn't ready (a type name such as "BannerCondition" or
+// "PlayerState"), and Row the first row that was missing, when there is one. Neither carries character data.
+internal sealed class CollectibleSourceUnavailableException(string sourceName = "", uint? row = null) : Exception {
+    internal string SourceName { get; } = SyncSectionReport.SafeToken(sourceName);
+    internal uint? Row { get; } = row;
+}
 
 // One Collections list and the read that produces it. Key is the payload property name.
 internal sealed record CollectiblePart(string Key, Func<object> Read);
 
 // Payload is null when nothing is sent. Withheld holds "<resource>:<availability>" entries: "collectibles" for the whole
-// send, "collectibles.<key>" for one list left out of a send (or the list that stopped it).
+// send, "collectibles.<key>:NotLoaded:<source>:<row>" for one list left out of a send (or the list that stopped it), with
+// the sheet or state that wasn't ready and its first missing row (empty when there is none).
 internal sealed record CollectibleCapture(Dictionary<string, object>? Payload, string[] Withheld);
 
 internal static class CollectibleSnapshotPolicy {
@@ -50,15 +56,16 @@ internal static class CollectibleSnapshotPolicy {
         if (character == 0) return new(null, [Resource + ":" + NativeAvailability.NotLoaded]);
         var payload = new Dictionary<string, object>(StringComparer.Ordinal) { ["character"] = identity, ["complete"] = true };
         var notReady = new List<string>();
+        var withheld = new List<string>();
         foreach (var part in parts) {
             try {
                 payload[part.Key] = part.Read();
-            } catch (CollectibleSourceUnavailableException) {
+            } catch (CollectibleSourceUnavailableException unavailable) {
                 notReady.Add(part.Key);
+                withheld.Add($"{PartResource(part.Key)}:{NativeAvailability.NotLoaded}:{unavailable.SourceName}:{unavailable.Row?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? ""}");
             }
         }
         if (readCharacter() != character) return new(null, [Resource + ":" + NativeAvailability.StaleContext]);
-        var withheld = notReady.Select(key => PartResource(key) + ":" + NativeAvailability.NotLoaded).ToList();
         if (notReady.Count == parts.Count || notReady.Any(ClearedWhenOmitted.Contains)) {
             withheld.Add(Resource + ":" + NativeAvailability.NotLoaded);
             return new(null, [.. withheld]);
@@ -78,19 +85,4 @@ internal static class CollectibleSnapshotPolicy {
     internal static string Label(string key) => Labels.TryGetValue(key, out var label) ? label : key;
 
     internal static IEnumerable<string> LabelValues => Labels.Values;
-
-    // The Sync now text for resources that weren't ready (resource names before ':', in order, once each). A list left
-    // out of a sent Collections snapshot is named as such; a whole resource keeps the existing "kept unchanged" wording,
-    // with the Collections lists that stopped it in brackets.
-    internal static string NotReadyText(IReadOnlyList<string> notReady) {
-        var prefix = Resource + ".";
-        var parts = notReady.Where(name => name.StartsWith(prefix, StringComparison.Ordinal)).Select(name => Label(name[prefix.Length..])).ToArray();
-        var wholeCollections = notReady.Contains(Resource, StringComparer.Ordinal);
-        var whole = notReady.Where(name => !name.StartsWith(prefix, StringComparison.Ordinal))
-            .Select(name => name == Resource && parts.Length > 0 ? $"{Resource} (not ready: {string.Join(", ", parts)})" : name).ToArray();
-        var sentences = new List<string>();
-        if (whole.Length > 0) sentences.Add($"Not ready yet, kept unchanged on Gillions: {string.Join(", ", whole)}.");
-        if (parts.Length > 0 && !wholeCollections) sentences.Add($"Collections were sent without {string.Join(", ", parts)} (not ready yet).");
-        return string.Join(" ", sentences);
-    }
 }

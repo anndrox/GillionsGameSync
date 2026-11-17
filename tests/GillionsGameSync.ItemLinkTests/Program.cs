@@ -8,6 +8,7 @@ PermissionAuthorityTests.Run();
 await Testing99PerformanceTests.Run();
 SyncFailureDiagnosticTests.Run();
 CollectibleReadinessTests.Run();
+SyncSectionReportTests.Run();
 NativeObservationPolicyTests.Run();
 RetainerUploadPolicyTests.Run();
 InventoryUploadScheduleTests.Run();
