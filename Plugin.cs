@@ -160,6 +160,11 @@ public sealed partial class Plugin : IDalamudPlugin {
     private int presenceFailureCount;
     private ulong activeRetainerCharacterContentId;
     private bool retainerUploadServerSupported;
+    // Per-section sync diagnostics for the logged-in character, this session only (framework thread).
+    private bool syncStatusServerSupported;
+    private readonly Dictionary<string, SyncSectionStatus> sectionStatuses = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DateTime> sectionLastSent = new(StringComparer.Ordinal);
+    private object? sectionStatusOwner;
     private long? lastObservedGil;
     private string? lastObservedRetainerId;
     private long? lastObservedRetainerGil;
@@ -192,6 +197,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Testing 0.0.108 sends Collections even when one list isn't ready, names what was left out in Sync now and the log, and shows each section's last sync in Advanced.",
         "Testing 0.0.107 sends your glamour dresser contents with your inventory, after you open a dresser.",
         "Testing 0.0.106 sends facewear, hairstyle and outfit ownership for the collection galleries.",
         "Testing 0.0.103 shows location upload status and names the site used when pairing fails.",
@@ -484,6 +490,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 throw new InvalidOperationException("Invalid presence response.");
             await CommitAsync(permit, _ => {
                 retainerUploadServerSupported = uploadSupported; presenceFailureCount = 0;
+                ObserveSyncStatusContract(responseJson);
                 ClearConnectionFailure(presence: true);
                 var permissionsAccepted = ApplyPermissions(responseJson, permit, response, Stopwatch.GetElapsedTime(permissionRequestStarted));
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
@@ -581,6 +588,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 
     private void ClearRetainerServerAcceptance() {
         retainerUploadServerSupported = false;
+        syncStatusServerSupported = false;
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         personalAccepted.Clear();
         huntCoverageAccepted = false;
@@ -1662,6 +1670,8 @@ public sealed partial class Plugin : IDalamudPlugin {
             var preparedSnapshots = await Task.Run(() => snapshots.Select(snapshot => PrepareSnapshot(snapshot, captured.RecordDiagnostics)).ToArray(), captured.Permit.Cancellation);
             var submitted = 0;
             var parked = new List<string>();
+            var sent = new HashSet<string>(StringComparer.Ordinal);
+            var parks = new Dictionary<string, SyncSectionPark>(StringComparer.Ordinal);
             foreach (var snapshot in preparedSnapshots) {
                 if (!force && snapshot.SentResultFingerprints.Count == 0 && captured.PayloadHashes.TryGetValue(snapshot.ResourceType, out var previousHash)
                     && previousHash == snapshot.PayloadHash) continue;
@@ -1670,7 +1680,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 var semanticRevision = snapshot.SemanticHash is { } retainerHash
                     ? retainerHash + ":" + string.Join(",", snapshot.SentResultFingerprints.Values.Order(StringComparer.Ordinal))
                     : snapshot.PayloadHash;
-                if (!await OrdinaryReadyAsync(captured.Permit, snapshot.ResourceType, semanticRevision)) {
+                if (!await OrdinaryReadyAsync(captured.Permit, snapshot.ResourceType, semanticRevision, parks)) {
                     parked.Add(snapshot.ResourceType);
                     continue;
                 }
@@ -1681,7 +1691,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 failureStage = "snapshot_http";
                 using var response = await SendAsync(request, captured.Permit);
                 failureHttpStatus = (int)response.StatusCode; failureStage = "snapshot_status";
-                if (!await OrdinaryResponseAcceptedAsync(response, captured.Permit, snapshot.ResourceType, semanticRevision)) {
+                if (!await OrdinaryResponseAcceptedAsync(response, captured.Permit, snapshot.ResourceType, semanticRevision, parks)) {
                     parked.Add(snapshot.ResourceType);
                     continue;
                 }
@@ -1714,12 +1724,13 @@ public sealed partial class Plugin : IDalamudPlugin {
                     if (captured.RecordDiagnostics) RecordDiagnostic($"Uploaded {snapshot.ResourceType}: HTTP {(int)response.StatusCode}; {snapshot.PayloadUtf8.Length:N0} bytes.");
                 });
                 submitted++;
+                sent.Add(snapshot.ResourceType);
             }
             foreach (var events in captured.GilEvents.Chunk(200)) {
                 failureResource = "gil_ledger"; failureHttpStatus = null; failureStage = "gil_prepare";
                 var payload = GilLedgerPolicy.PreparePayload(captured.CharacterName, captured.CharacterWorld, captured.GilSessionId, events);
                 var ledgerRevision = Convert.ToHexString(SHA256.HashData(payload));
-                if (!await OrdinaryReadyAsync(captured.Permit, "gil_ledger", ledgerRevision)) {
+                if (!await OrdinaryReadyAsync(captured.Permit, "gil_ledger", ledgerRevision, parks)) {
                     parked.Add("gil_ledger");
                     break;
                 }
@@ -1729,7 +1740,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 failureStage = "gil_http";
                 using var response = await SendAsync(request, captured.Permit);
                 failureHttpStatus = (int)response.StatusCode; failureStage = "gil_status";
-                if (!await OrdinaryResponseAcceptedAsync(response, captured.Permit, "gil_ledger", ledgerRevision)) {
+                if (!await OrdinaryResponseAcceptedAsync(response, captured.Permit, "gil_ledger", ledgerRevision, parks)) {
                     parked.Add("gil_ledger");
                     break;
                 }
@@ -1743,8 +1754,11 @@ public sealed partial class Plugin : IDalamudPlugin {
                     RecordDiagnostic($"Uploaded Gil records: {events.Length}; HTTP {(int)response.StatusCode}.");
                 });
                 submitted++;
+                sent.Add("gil_ledger");
             }
             failureStage = "final_commit";
+            IReadOnlyList<SyncSectionStatus>? sectionReport = null;
+            var sendSectionReport = false;
             await CommitAsync(captured.Permit, _ => {
                 if (submitted > 0) characterRefusals.Reset();
                 if (submitted > 0 && !string.IsNullOrEmpty(configuration.SyncBlockedCode)) {
@@ -1766,12 +1780,13 @@ public sealed partial class Plugin : IDalamudPlugin {
                 if (mode == SyncRequestMode.Hydration && notReady.Contains(PairedClientHydrationState.CharacterResource, StringComparer.Ordinal))
                     pairedClientHydration.RetryCharacterSync(DateTime.UtcNow.AddSeconds(5));
                 if (notReady.Length > 0) RecordDiagnostic($"Not ready, not uploaded (Site keeps prior data): {string.Join("; ", withheld.Distinct(StringComparer.Ordinal))}.");
-                if (!background) settingsMessage = parked.Count > 0
-                    ? $"Gillions paused updates for {string.Join(", ", parked)}. Game Sync will retry."
-                    : notReady.Length > 0
-                    ? (submitted > 0 ? "Sync completed. " : "") + $"Not ready yet, kept unchanged on Gillions: {string.Join(", ", notReady)}. Try again in a moment."
-                    : submitted > 0 ? "Sync completed." : "Your supported data is already current.";
+                sectionReport = RecordSectionStatuses(laterScopes, sent, withheld, parks, background);
+                sendSectionReport = syncStatusServerSupported;
+                if (!background) settingsMessage = SyncSectionReport.Message(sectionReport, submitted > 0);
             });
+            // Not awaited: the status never holds the sync open (Reviewer 1); it fails silently on its own.
+            if (sendSectionReport && sectionReport is not null)
+                _ = SendSectionStatusAsync(captured.Permit, captured.CharacterName, captured.CharacterWorld, sectionReport);
         } catch (SyncNotStartedException notStarted) {
             if (!disposed) await framework.RunOnFrameworkThread(() => {
                 if (disposed) return;
@@ -1837,6 +1852,43 @@ public sealed partial class Plugin : IDalamudPlugin {
         foreach (var pair in store.OrderBy(entry => entry.Key, StringComparer.Ordinal)) { stamp.Add(pair.Key); stamp.Add(pair.Value?.ObservedAtUtc); }
         return stamp.ToHashCode();
     }
+    // Framework thread only. A presence response that names sync_status_v1 lets this session send the section report.
+    private void ObserveSyncStatusContract(string presenceJson) => syncStatusServerSupported = SyncSectionReport.SiteSupportsStatus(presenceJson);
+
+    // Framework thread only. Keeps the last status of each section for the logged-in character, logs it to /xllog (every
+    // section on a manual sync; on a background sync only a section whose line changed) and returns this sync's report.
+    private IReadOnlyList<SyncSectionStatus> RecordSectionStatuses(IReadOnlyList<string> sections, IReadOnlySet<string> sent,
+        IReadOnlyList<string> withheld, IReadOnlyDictionary<string, SyncSectionPark> parks, bool background) {
+        if (!ReferenceEquals(activeOwnedState, sectionStatusOwner)) {
+            sectionStatuses.Clear(); sectionLastSent.Clear(); sectionStatusOwner = activeOwnedState;
+        }
+        var statuses = SyncSectionReport.Build(sections, sent, withheld, parks, DateTime.UtcNow, sectionLastSent);
+        foreach (var status in statuses) {
+            sectionStatuses.TryGetValue(status.Resource, out var previous);
+            if (SyncSectionReport.ShouldLog(!background, previous, status)) log.Information("{Line}", SyncSectionReport.LogLine(status));
+            sectionStatuses[status.Resource] = status;
+            if (status.LastSentUtc is { } last) sectionLastSent[status.Resource] = last;
+        }
+        return statuses;
+    }
+
+    // Framework thread only. The Advanced tab and support summary lines, in sync order, for the logged-in character.
+    private string[] SectionStatusLines(DateTime now) =>
+        ReferenceEquals(activeOwnedState, sectionStatusOwner)
+            ? SyncSectionReport.Resources.Where(sectionStatuses.ContainsKey).Select(resource => SyncSectionReport.StatusLine(sectionStatuses[resource], now)).ToArray()
+            : [];
+
+    // Best effort, after the sync has finished: only a Site that advertised sync_status_v1 receives the section report.
+    private async Task SendSectionStatusAsync(SyncRequestPermit permit, string characterName, string characterWorld, IReadOnlyList<SyncSectionStatus> statuses) {
+        try {
+            using var request = Request(SyncSectionReport.StatusPath, permit, SyncSectionReport.SiteStatus(new { name = characterName, world = characterWorld }, statuses));
+            using var response = await SendAsync(request, permit);
+        } catch (Exception) {
+            // The status is diagnostic only and the sync itself already completed, so no failure here may turn it into a
+            // failed sync, a connection error or a retry.
+        }
+    }
+
     private static string[] WithheldResources(IEnumerable<string> withheld) =>
         withheld.Select(entry => entry.Split(':')[0]).Distinct(StringComparer.Ordinal).ToArray();
 

@@ -14,6 +14,13 @@ accepted=subprocess.check_output(['git','show',public+':PublicExperience.cs'],cw
 experience=experience.replace("None of your Hunt targets are in this zone.",
     "No observed Hunt targets in this area. Current bill coverage is unverified.").replace(
     "The Hunt targets you can see here are complete.", "Observed targets complete; current bill coverage is unverified.")
+# Owner-approved with the per-list Collections send (Partner, 2026-11-17): the window also shows the Sync now results
+# that name sections ("not ready", "paused"), in the exact shape SyncSectionReport.Message builds. Only that one switch arm
+# differs from the accepted file outside the PublicHealth record.
+sync_result_arm="        _ when SyncSectionReport.IsMessage(value) => value,\n"
+assert experience.count(sync_result_arm)==1
+experience=experience.replace(sync_result_arm,'')
+assert 'SyncSectionReport' not in outside_status(experience)
 assert outside_status(experience)==outside_status(accepted)
 hunt=(r/'HuntBillLocalView.cs').read_text(encoding='utf-8').replace('    internal bool Reading => ReadEnabled;\n','')
 hunt=hunt[:hunt.index('    internal HuntBillItemSnapshot? CurrentCoverage')] + hunt[hunt.index('    internal DateTime? CoverageObservedAtUtc'):]

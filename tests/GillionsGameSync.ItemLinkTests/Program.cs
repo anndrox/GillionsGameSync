@@ -10,6 +10,7 @@ SyncFailureDiagnosticTests.Run();
 CollectibleReadinessTests.Run();
 CollectibleOwnershipTests.Run();
 GlamourDresserSnapshotTests.Run();
+SyncSectionReportTests.Run();
 NativeObservationPolicyTests.Run();
 RetainerUploadPolicyTests.Run();
 InventoryUploadScheduleTests.Run();

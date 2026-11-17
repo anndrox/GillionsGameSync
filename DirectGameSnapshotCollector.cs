@@ -93,7 +93,10 @@ public static class DirectGameSnapshotCollector {
         }
         if (selected.Contains("achievements")) {
             var achievements = AchievementCollector.ReadUnlockedIds(dataManager, unlockState, budget);
+            // The game exposes the achievement list only after the Achievements window has been opened in this session. Until
+            // then, record it as withheld so a manual sync says "Not ready yet" and names achievements, instead of "already current".
             if (achievements.Loaded) yield return new GameSnapshot("achievements", new { character = identity, ids = achievements.Ids, complete = true });
+            else withheld?.Add("achievements:" + NativeAvailability.NotLoaded);
         }
         if (selected.Contains("character")) {
             // The Site replaces jobs, gear, recipes and fish wholesale.
@@ -103,7 +106,9 @@ public static class DirectGameSnapshotCollector {
         }
         if (selected.Contains("quest_journal")) {
             var quests = QuestJournalCollector.Read(dataManager, unlockState, budget);
-            if (quests != null) yield return new GameSnapshot("quest_journal", new {
+            // A section that isn't read is named as withheld, so Sync now and the log say so instead of nothing.
+            if (quests == null) withheld?.Add("quest_journal:" + NativeAvailability.NotLoaded);
+            else yield return new GameSnapshot("quest_journal", new {
                 character = identity,
                 schemaVersion = 1,
                 ready = true,
@@ -124,7 +129,8 @@ public static class DirectGameSnapshotCollector {
         }
         if (selected.Contains("reputation")) {
             var reputation = ReputationCollector.Read();
-            if (reputation != null) yield return new GameSnapshot("reputation", new {
+            if (reputation == null) withheld?.Add("reputation:" + NativeAvailability.NotLoaded);
+            else yield return new GameSnapshot("reputation", new {
                 character = identity,
                 schemaVersion = 1,
                 complete = true,
@@ -137,7 +143,8 @@ public static class DirectGameSnapshotCollector {
         }
         if (selected.Contains("shared_fates")) {
             var sharedFates = SharedFateCollector.ReadComplete();
-            if (sharedFates != null) yield return new GameSnapshot("shared_fates", new {
+            if (sharedFates == null) withheld?.Add("shared_fates:" + NativeAvailability.NotLoaded);
+            else yield return new GameSnapshot("shared_fates", new {
                 character = identity,
                 schemaVersion = 1,
                 complete = true,
@@ -154,22 +161,26 @@ public static class DirectGameSnapshotCollector {
             });
         }
         if (selected.Contains("collectibles")) {
-            var collectibles = CollectibleSnapshotPolicy.Capture(() => CollectibleCollector.ReadCharacter(clientState), () => {
-            object payload = new {
-            character = identity, complete = true,
-            cards = CollectibleCollector.ReadCards(dataManager, unlockState, budget), minions = CollectibleCollector.ReadMinions(dataManager, unlockState, budget), mounts = CollectibleCollector.ReadMounts(dataManager, unlockState, budget), bardings = CollectibleCollector.ReadBardings(dataManager, unlockState, budget), emotes = CollectibleCollector.ReadEmotes(dataManager, unlockState, budget),
-            orchestrions = CollectibleCollector.ReadOrchestrions(dataManager, unlockState, budget), fashions = CollectibleCollector.ReadFashions(dataManager, unlockState, budget), blueMageSpells = CollectibleCollector.ReadBlueMageSpells(dataManager, unlockState, budget), sightseeingLogIds = CollectibleCollector.ReadSightseeingLog(dataManager, unlockState, budget), aetherCurrentIds = CollectibleCollector.ReadAetherCurrents(dataManager, unlockState, budget),
-            portraitBackgrounds = CollectibleCollector.ReadPortraitBackgrounds(dataManager, unlockState, budget), portraitConditions = CollectibleCollector.ReadPortraitConditions(dataManager, unlockState, budget), portraitDecorations = CollectibleCollector.ReadPortraitDecorations(dataManager, unlockState, budget), portraitFacials = CollectibleCollector.ReadPortraitFacials(dataManager, unlockState, budget), portraitFrames = CollectibleCollector.ReadPortraitFrames(dataManager, unlockState, budget), portraitPoses = CollectibleCollector.ReadPortraitPoses(dataManager, unlockState, budget),
-            masterRecipeBookIds = CollectibleCollector.ReadMasterRecipeBooks(dataManager, unlockState, budget), folkloreBookIds = CollectibleCollector.ReadFolkloreBookIds(dataManager, budget)
-            };
+            // Per list: one unavailable source (a portrait condition row, the folklore books, an empty catalog) leaves only
+            // that list out, and the rest is sent. A list the Site would clear when left out (minions, mounts, orchestrion
+            // rolls, fashion accessories) still withholds the whole send, as does a character change mid-read. Every list
+            // left out is recorded as withheld, so a manual sync names it instead of Collections silently keeping an old time.
+            // The parts keep the earlier payload's property order, so an all-ready payload and its hash are unchanged.
+            var collectibles = CollectibleSnapshotPolicy.Capture(() => CollectibleCollector.ReadCharacter(clientState), identity, [
+                new("cards", () => CollectibleCollector.ReadCards(dataManager, unlockState, budget)), new("minions", () => CollectibleCollector.ReadMinions(dataManager, unlockState, budget)), new("mounts", () => CollectibleCollector.ReadMounts(dataManager, unlockState, budget)), new("bardings", () => CollectibleCollector.ReadBardings(dataManager, unlockState, budget)), new("emotes", () => CollectibleCollector.ReadEmotes(dataManager, unlockState, budget)),
+                new("orchestrions", () => CollectibleCollector.ReadOrchestrions(dataManager, unlockState, budget)), new("fashions", () => CollectibleCollector.ReadFashions(dataManager, unlockState, budget)), new("blueMageSpells", () => CollectibleCollector.ReadBlueMageSpells(dataManager, unlockState, budget)), new("sightseeingLogIds", () => CollectibleCollector.ReadSightseeingLog(dataManager, unlockState, budget)), new("aetherCurrentIds", () => CollectibleCollector.ReadAetherCurrents(dataManager, unlockState, budget)),
+                new("portraitBackgrounds", () => CollectibleCollector.ReadPortraitBackgrounds(dataManager, unlockState, budget)), new("portraitConditions", () => CollectibleCollector.ReadPortraitConditions(dataManager, unlockState, budget)), new("portraitDecorations", () => CollectibleCollector.ReadPortraitDecorations(dataManager, unlockState, budget)), new("portraitFacials", () => CollectibleCollector.ReadPortraitFacials(dataManager, unlockState, budget)), new("portraitFrames", () => CollectibleCollector.ReadPortraitFrames(dataManager, unlockState, budget)), new("portraitPoses", () => CollectibleCollector.ReadPortraitPoses(dataManager, unlockState, budget)),
+                new("masterRecipeBookIds", () => CollectibleCollector.ReadMasterRecipeBooks(dataManager, unlockState, budget)), new("folkloreBookIds", () => CollectibleCollector.ReadFolkloreBookIds(dataManager, budget)),
 #if GILLIONS_TEST_BUILD
-            // Testing only: gallery ownership keys. Outfits are omitted, never empty, until a dresser is loaded.
-            payload = CollectibleOwnership.With(payload, CollectibleCollector.ReadFacewear(dataManager, unlockState, budget),
-                CollectibleCollector.ReadHairstyleUnlockLinks(dataManager, unlockState, budget), CollectibleCollector.ReadOutfitSetIds(dataManager));
+                // Testing only: gallery ownership keys, after the others as before. A list past the Site's limit, and outfits
+                // until a dresser is loaded this session, are left out (unknown on the Site), never sent empty.
+                new("facewearGlassesIds", () => CollectibleOwnership.WithinLimit(CollectibleCollector.ReadFacewear(dataManager, unlockState, budget))),
+                new("hairstyleUnlockLinks", () => CollectibleOwnership.WithinLimit(CollectibleCollector.ReadHairstyleUnlockLinks(dataManager, unlockState, budget))),
+                new("outfitSetIds", () => CollectibleOwnership.WithinLimit(CollectibleCollector.ReadOutfitSetIds(dataManager))),
 #endif
-            return payload;
-            });
-            if (collectibles is not null) yield return new GameSnapshot("collectibles", collectibles);
+            ]);
+            if (collectibles.Payload is not null) yield return new GameSnapshot(CollectibleSnapshotPolicy.Resource, collectibles.Payload);
+            foreach (var entry in collectibles.Withheld) withheld?.Add(entry);
         }
         if (selected.Contains("glamour_plates")) {
             var plates = GlamourPlateCollector.Read();
@@ -177,6 +188,7 @@ public static class DirectGameSnapshotCollector {
             // Absence is not proof that every plate was cleared, so retain the
             // last successful server snapshot until a loaded manager is read.
             if (plates != null) yield return new GameSnapshot("glamour_plates", new { character = identity, complete = true, plates });
+            else withheld?.Add("glamour_plates:" + NativeAvailability.NotLoaded);
         }
         if (selected.Contains("retainer_ventures") && retainerVentureState is not null && !string.IsNullOrWhiteSpace(retainerVentureState.CharacterContentId)) {
             var retainerIdentity = new { contentId = retainerVentureState.CharacterContentId, name = identity.name, world = identity.world };
@@ -905,7 +917,7 @@ internal static class CollectibleCollector {
     public static unsafe long[] ReadPortraitConditions(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<BannerCondition>(dataManager, row => {
         // IUnlockState returns false for an unavailable native EXD row, too.
         // Check its maintained source before interpreting false as not owned.
-        if (ExdModule.GetBannerConditionByIndex(row.RowId) == null) throw new CollectibleSourceUnavailableException();
+        if (ExdModule.GetBannerConditionByIndex(row.RowId) == null) throw new CollectibleSourceUnavailableException(nameof(BannerCondition), row.RowId);
         return unlockState.IsBannerConditionUnlocked(row);
     }, budget);
     public static long[] ReadPortraitDecorations(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<BannerDecoration>(dataManager, unlockState.IsBannerDecorationUnlocked, budget);
@@ -941,7 +953,7 @@ internal static class CollectibleCollector {
     public static unsafe long[] ReadFolkloreBookIds(IDataManager dataManager, NativeRowBudget budget) {
         var player = PlayerState.Instance();
         var books = SheetRowCache<GatheringSubCategory>.GetRequired(dataManager);
-        if (player == null || !player->IsLoaded) throw new CollectibleSourceUnavailableException();
+        if (player == null || !player->IsLoaded) throw new CollectibleSourceUnavailableException(nameof(PlayerState));
         return budget.Ids(books, row => row.RowId > 0 && row.Item.RowId > 0 && player->IsFolkloreBookUnlocked((uint)row.RowId),
                 row => row.Item.RowId)
             .Distinct()
@@ -964,7 +976,7 @@ internal static class SheetRowCache<T> where T : struct, Lumina.Excel.IExcelRow<
         var rows = Get(dataManager);
         // These supported catalogs contain definitions even for an owner with
         // zero unlocks. Empty definitions cannot prove complete-empty ownership.
-        if (rows.Length == 0) throw new CollectibleSourceUnavailableException();
+        if (rows.Length == 0) throw new CollectibleSourceUnavailableException(typeof(T).Name);
         return rows;
     }
 }

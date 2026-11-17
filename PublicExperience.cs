@@ -7,7 +7,7 @@ namespace GillionsGameSync;
 
 // Pure presentation state. No gameplay reads, transport, credentials or history.
 internal sealed record PublicHealth(string Connection, string Character, string Hunts, string PartyFinder,
-    string Fates, string Market, DateTime? LastSync, string Channel, string Version, string GameVersion) {
+    string Fates, string Market, DateTime? LastSync, string Channel, string Version, string GameVersion, IReadOnlyList<string>? Sections = null) {
     private static string SafeVersion(string v) => Regex.IsMatch(v,@"^\d{1,8}(?:\.\d{1,8}){2,4}$") ? v : "unavailable";
     private static string SafeStatus(string s) => s is "Connected" or "Not connected" or "Connecting" or "Authorization expired or revoked"
         or "Account unavailable" or "Ready" or "Off on Gillions" or "Waiting for supported context" or "Temporarily unavailable" or "Gillions unavailable" or "Update required"
@@ -16,7 +16,7 @@ internal sealed record PublicHealth(string Connection, string Character, string 
     internal const string OtherCharacter = "Paired to a different character";
     internal const string ReconnectRequired = "Reconnect required";
     internal const string Refused = "Refused by Gillions";
-    internal string SupportSummary() => $"Gillions Game Sync {SafeVersion(Version)}\nChannel: {(Channel is "Testing" or "Public" ? Channel : "unavailable")}\nConnection: {SafeStatus(Connection)}\nGame: {SafeVersion(GameVersion)}\nHunts: {SafeStatus(Hunts)}\nParty Finder: {SafeStatus(PartyFinder)}\nFATEs: {SafeStatus(Fates)}\nMarket: {SafeStatus(Market)}\nLast successful sync: {LastSync?.ToString("O") ?? "Not yet"}";
+    internal string SupportSummary() => $"Gillions Game Sync {SafeVersion(Version)}\nChannel: {(Channel is "Testing" or "Public" ? Channel : "unavailable")}\nConnection: {SafeStatus(Connection)}\nGame: {SafeVersion(GameVersion)}\nHunts: {SafeStatus(Hunts)}\nParty Finder: {SafeStatus(PartyFinder)}\nFATEs: {SafeStatus(Fates)}\nMarket: {SafeStatus(Market)}\nLast successful sync: {LastSync?.ToString("O") ?? "Not yet"}\n{(Sections is { Count: > 0 } ? "Sections:\n" + string.Join("\n", Sections.Select(line => "- " + line)) : "Sections: no sync this session")}";
     internal static string ConnectionState(bool paired, bool pairing, string code) => pairing ? "Connecting"
         : code is "DEVICE_INVALID" or "DEVICE_REVOKED" or "TOKEN_INVALID" ? "Authorization expired or revoked"
         : code is "UNSUPPORTED_CLIENT" or "VERSION_UNSUPPORTED" or "CLIENT_VERSION_UNSUPPORTED" ? "Update required"
@@ -62,6 +62,7 @@ internal static class PublicConnectionPresentation {
         "Gillions could not complete the request. Pending records were kept; please try again." => pairing
             ? "Pairing did not complete. Check the destination and connection, then create a fresh one-time code there and try again."
             : value,
+        _ when SyncSectionReport.IsMessage(value) => value,
         _ => ""
     };
 }

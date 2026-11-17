@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = "Stop"
 $source = Get-Content -LiteralPath $CollectorPath -Raw
 
-if ($source -notmatch "bardings\s*=\s*CollectibleCollector\.ReadBardings\(dataManager, unlockState, budget\)") {
+if ($source -notmatch 'new\("bardings",\s*\(\)\s*=>\s*CollectibleCollector\.ReadBardings\(dataManager, unlockState, budget\)') {
   throw "Collectibles payload must include the authoritative bardings array."
 }
 

@@ -27,6 +27,9 @@ internal static class CollectibleOwnership {
             .Where(sets.Contains).Select(id => (long)id));
     }
 
+    // A list the Site would refuse (past MaximumEntries), or one not read (outfits before a dresser loads), is left out: null.
+    internal static long[]? WithinLimit(long[]? ids) => ids is not null && ids.Length <= MaximumEntries ? ids : null;
+
     // Outfits stay absent (not empty) when the dresser was not loaded this session.
     internal static JsonObject With(object payload, long[] facewear, long[] hairstyleUnlockLinks, long[]? outfitSetIds) {
         var root = JsonSerializer.SerializeToNode(payload)!.AsObject();
