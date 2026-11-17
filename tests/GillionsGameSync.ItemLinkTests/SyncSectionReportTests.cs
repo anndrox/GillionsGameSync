@@ -29,7 +29,7 @@ internal static class SyncSectionReportTests {
             ("quest_journal", SyncSectionOutcome.Skipped, SyncSectionReport.SiteRefused, "Gillions Game Sync: Quest journal skipped, Gillions refused it (HTTP 400, INVALID_PAYLOAD)."),
             ("reputation", SyncSectionOutcome.Unchanged, "", "Gillions Game Sync: Allied societies unchanged."),
             ("shared_fates", SyncSectionOutcome.Unchanged, "", "Gillions Game Sync: Shared FATEs unchanged."),
-            ("glamour_plates", SyncSectionOutcome.Skipped, SyncSectionReport.NotLoaded, "Gillions Game Sync: Glamour plates skipped, not loaded in game yet."),
+            ("glamour_plates", SyncSectionOutcome.Skipped, SyncSectionReport.NotOpened, "Gillions Game Sync: Glamour plates skipped, not loaded in game right now, Gillions keeps the last copy."),
             ("collectibles", SyncSectionOutcome.Unchanged, "", "Gillions Game Sync: Collections unchanged."),
             ("retainer_ventures", SyncSectionOutcome.Unchanged, "", "Gillions Game Sync: Retainer ventures unchanged."),
             ("gil_ledger", SyncSectionOutcome.Skipped, SyncSectionReport.SiteRetryWait, "Gillions Game Sync: Gil history skipped, waiting to retry after Gillions refused it."),
@@ -42,8 +42,8 @@ internal static class SyncSectionReportTests {
         Check(byResource["currencies"].LastSentUtc == now && byResource["inventory"].LastSentUtc == earlier && byResource["achievements"].LastSentUtc is null,
             "last sent is now for a sent section, kept for a skipped one, empty when never sent");
         var message = SyncSectionReport.Message(report, anySent: true);
-        Check(message == "Gillions paused updates for Quest journal, Gil history. Game Sync will retry. Not ready yet, kept unchanged on Gillions: Inventory, Achievements, Character, Glamour plates. Try again in a moment.",
-            "Sync now names paused and skipped sections, never Sync completed. (" + message + ")");
+        Check(message == "Gillions paused updates for Quest journal, Gil history. Game Sync will retry. Not ready yet, kept unchanged on Gillions: Inventory, Character. Try again in a moment. "
+            + SyncSectionReport.AchievementsStep, "Sync now names paused and skipped sections and the Achievements step, never Sync completed. (" + message + ")");
         Check(PublicConnectionPresentation.ActionMessage(message) == message, "the window shows the combined message");
 
         // "Sync completed." only when every section was sent or unchanged.
@@ -52,16 +52,34 @@ internal static class SyncSectionReportTests {
         Check(SyncSectionReport.Message(SyncSectionReport.Build(["inventory"], new HashSet<string>(), [], noParks, now, none), anySent: false) == "Your supported data is already current.",
             "nothing new: already current");
         var oneSkipped = SyncSectionReport.Build(["inventory", "achievements"], new HashSet<string> { "inventory" }, ["achievements:NotLoaded"], noParks, now, none);
-        Check(SyncSectionReport.Message(oneSkipped, anySent: true) == "Not ready yet, kept unchanged on Gillions: Achievements. Try again in a moment.",
-            "one skipped section: no Sync completed.");
+        Check(SyncSectionReport.Message(oneSkipped, anySent: true) == SyncSectionReport.AchievementsStep,
+            "achievements not loaded: the step that loads them, no Sync completed. and no Try again");
+        var loadedLater = SyncSectionReport.Build(["inventory", "currencies"], new HashSet<string> { "inventory" }, ["currencies:NotLoaded"], noParks, now, none);
+        Check(SyncSectionReport.Message(loadedLater, anySent: true) == "Not ready yet, kept unchanged on Gillions: Currencies. Try again in a moment.",
+            "a section the game loads on its own: no Sync completed., try again");
+        // Reviewer 1 (c0c3448): a section that loads only with its window open is reported, but an ordinary sync still completes.
+        foreach (var resource in new[] { "glamour_plates", "shared_fates", "quest_journal", "reputation" }) {
+            var ordinary = SyncSectionReport.Build(["inventory", resource], new HashSet<string> { "inventory" }, [resource + ":NotLoaded"], noParks, now, none);
+            var skipped = ordinary.Single(status => status.Resource == resource);
+            Check(skipped.Outcome == SyncSectionOutcome.Skipped && skipped.Reason == SyncSectionReport.NotOpened, resource + ": reported as not opened");
+            Check(SyncSectionReport.Message(ordinary, anySent: true) == "Sync completed.", resource + " not loaded plus an accepted send: Sync completed.");
+            Check(SyncSectionReport.Message(SyncSectionReport.Build([resource], new HashSet<string>(), [resource + ":NotLoaded"], noParks, now, none), anySent: false) == "Your supported data is already current.",
+                resource + " alone: already current");
+            Check(SyncSectionReport.StatusLine(skipped, now).Contains(" · not loaded in game right now, Gillions keeps the last copy", StringComparison.Ordinal), resource + ": the Advanced tab still says so");
+        }
         var pausedOnly = SyncSectionReport.Build(["inventory"], new HashSet<string>(), [], new Dictionary<string, SyncSectionPark> { ["inventory"] = new(409, "STALE", false) }, now, none);
         var pausedMessage = SyncSectionReport.Message(pausedOnly, anySent: false);
         Check(pausedMessage == "Gillions paused updates for Inventory. Game Sync will retry." && PublicConnectionPresentation.ActionMessage(pausedMessage) == pausedMessage, "paused only");
         var partial = SyncSectionReport.Build(["achievements", "collectibles"], new HashSet<string> { "collectibles" },
             ["achievements:NotLoaded", "collectibles.portraitConditions:NotLoaded:BannerCondition:123", "collectibles.folkloreBookIds:NotLoaded:PlayerState:"], noParks, now, none);
         var partialMessage = SyncSectionReport.Message(partial, anySent: true);
-        Check(partialMessage == "Not ready yet, kept unchanged on Gillions: Achievements. Collections were sent without portrait conditions, folklore tomes (not ready yet). Try again in a moment."
-            && PublicConnectionPresentation.ActionMessage(partialMessage) == partialMessage, "skipped section and left-out lists together (" + partialMessage + ")");
+        Check(partialMessage == "Collections were sent without portrait conditions, folklore tomes (not ready yet). Try again in a moment. " + SyncSectionReport.AchievementsStep
+            && PublicConnectionPresentation.ActionMessage(partialMessage) == partialMessage, "left-out lists and the Achievements step together (" + partialMessage + ")");
+        foreach (var shown in new[] { SyncSectionReport.AchievementsStep, "Gillions paused updates for Inventory. Game Sync will retry. " + SyncSectionReport.AchievementsStep,
+            "Gillions paused updates for Inventory. Game Sync will retry. Not ready yet, kept unchanged on Gillions: Currencies, Collections (not ready: minions). Collections were sent without portrait conditions (not ready yet). Try again in a moment. " + SyncSectionReport.AchievementsStep })
+            Check(PublicConnectionPresentation.ActionMessage(shown) == shown, "the window shows: " + shown);
+        foreach (var refused in new[] { "", " " + SyncSectionReport.AchievementsStep, SyncSectionReport.AchievementsStep + " synthetic-bearer", "Try again in a moment. synthetic-token" })
+            Check(PublicConnectionPresentation.ActionMessage(refused).Length == 0, "the window refuses: [" + refused + "]");
         Check(SyncSectionReport.LogLine(partial[1]) == "Gillions Game Sync: Collections sent without portrait conditions (BannerCondition row 123 missing), folklore tomes (PlayerState not loaded).",
             "the log names each left-out list with its sheet and row");
         var unchangedPartial = SyncSectionReport.Build(["collectibles"], new HashSet<string>(), ["collectibles.portraitConditions:NotLoaded:BannerCondition:123"], noParks, now, none).Single();

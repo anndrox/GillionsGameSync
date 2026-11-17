@@ -1742,8 +1742,9 @@ public sealed partial class Plugin : IDalamudPlugin {
                 sendSectionReport = syncStatusServerSupported;
                 if (!background) settingsMessage = SyncSectionReport.Message(sectionReport, submitted > 0);
             });
+            // Not awaited: the status never holds the sync open (Reviewer 1); it fails silently on its own.
             if (sendSectionReport && sectionReport is not null)
-                await SendSectionStatusAsync(captured.Permit, captured.CharacterName, captured.CharacterWorld, sectionReport);
+                _ = SendSectionStatusAsync(captured.Permit, captured.CharacterName, captured.CharacterWorld, sectionReport);
         } catch (SyncNotStartedException notStarted) {
             if (!disposed) await framework.RunOnFrameworkThread(() => {
                 if (disposed) return;
