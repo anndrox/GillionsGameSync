@@ -106,7 +106,9 @@ public static class DirectGameSnapshotCollector {
         }
         if (selected.Contains("quest_journal")) {
             var quests = QuestJournalCollector.Read(dataManager, unlockState, budget);
-            if (quests != null) yield return new GameSnapshot("quest_journal", new {
+            // A section that isn't read is named as withheld, so Sync now and the log say so instead of nothing.
+            if (quests == null) withheld?.Add("quest_journal:" + NativeAvailability.NotLoaded);
+            else yield return new GameSnapshot("quest_journal", new {
                 character = identity,
                 schemaVersion = 1,
                 ready = true,
@@ -127,7 +129,8 @@ public static class DirectGameSnapshotCollector {
         }
         if (selected.Contains("reputation")) {
             var reputation = ReputationCollector.Read();
-            if (reputation != null) yield return new GameSnapshot("reputation", new {
+            if (reputation == null) withheld?.Add("reputation:" + NativeAvailability.NotLoaded);
+            else yield return new GameSnapshot("reputation", new {
                 character = identity,
                 schemaVersion = 1,
                 complete = true,
@@ -140,7 +143,8 @@ public static class DirectGameSnapshotCollector {
         }
         if (selected.Contains("shared_fates")) {
             var sharedFates = SharedFateCollector.ReadComplete();
-            if (sharedFates != null) yield return new GameSnapshot("shared_fates", new {
+            if (sharedFates == null) withheld?.Add("shared_fates:" + NativeAvailability.NotLoaded);
+            else yield return new GameSnapshot("shared_fates", new {
                 character = identity,
                 schemaVersion = 1,
                 complete = true,
@@ -184,6 +188,7 @@ public static class DirectGameSnapshotCollector {
             // Absence is not proof that every plate was cleared, so retain the
             // last successful server snapshot until a loaded manager is read.
             if (plates != null) yield return new GameSnapshot("glamour_plates", new { character = identity, complete = true, plates });
+            else withheld?.Add("glamour_plates:" + NativeAvailability.NotLoaded);
         }
         if (selected.Contains("retainer_ventures") && retainerVentureState is not null && !string.IsNullOrWhiteSpace(retainerVentureState.CharacterContentId)) {
             var retainerIdentity = new { contentId = retainerVentureState.CharacterContentId, name = identity.name, world = identity.world };
@@ -912,7 +917,7 @@ internal static class CollectibleCollector {
     public static unsafe long[] ReadPortraitConditions(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<BannerCondition>(dataManager, row => {
         // IUnlockState returns false for an unavailable native EXD row, too.
         // Check its maintained source before interpreting false as not owned.
-        if (ExdModule.GetBannerConditionByIndex(row.RowId) == null) throw new CollectibleSourceUnavailableException();
+        if (ExdModule.GetBannerConditionByIndex(row.RowId) == null) throw new CollectibleSourceUnavailableException(nameof(BannerCondition), row.RowId);
         return unlockState.IsBannerConditionUnlocked(row);
     }, budget);
     public static long[] ReadPortraitDecorations(IDataManager dataManager, IUnlockState unlockState, NativeRowBudget budget) => Read<BannerDecoration>(dataManager, unlockState.IsBannerDecorationUnlocked, budget);
@@ -948,7 +953,7 @@ internal static class CollectibleCollector {
     public static unsafe long[] ReadFolkloreBookIds(IDataManager dataManager, NativeRowBudget budget) {
         var player = PlayerState.Instance();
         var books = SheetRowCache<GatheringSubCategory>.GetRequired(dataManager);
-        if (player == null || !player->IsLoaded) throw new CollectibleSourceUnavailableException();
+        if (player == null || !player->IsLoaded) throw new CollectibleSourceUnavailableException(nameof(PlayerState));
         return budget.Ids(books, row => row.RowId > 0 && row.Item.RowId > 0 && player->IsFolkloreBookUnlocked((uint)row.RowId),
                 row => row.Item.RowId)
             .Distinct()
@@ -971,7 +976,7 @@ internal static class SheetRowCache<T> where T : struct, Lumina.Excel.IExcelRow<
         var rows = Get(dataManager);
         // These supported catalogs contain definitions even for an owner with
         // zero unlocks. Empty definitions cannot prove complete-empty ownership.
-        if (rows.Length == 0) throw new CollectibleSourceUnavailableException();
+        if (rows.Length == 0) throw new CollectibleSourceUnavailableException(typeof(T).Name);
         return rows;
     }
 }

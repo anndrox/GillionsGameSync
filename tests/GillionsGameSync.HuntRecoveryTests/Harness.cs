@@ -63,7 +63,9 @@ public sealed partial class Plugin : IDisposable {
     private ulong activeRetainerCharacterContentId=123;
     private HuntBillItemSync huntCoverageSync=new();
     private LocalCoverage huntLocal;
-    private bool huntCoverageAccepted,disposed,personalInFlight,retainerUploadServerSupported,presenceInFlight,travelAccepted;
+    private bool huntCoverageAccepted,disposed,personalInFlight,retainerUploadServerSupported,presenceInFlight,travelAccepted,syncStatusServerSupported;
+    // The section report contract is parsed and tested in the ItemLink fixtures; presence here only needs the call.
+    private void ObserveSyncStatusContract(string presenceJson) => syncStatusServerSupported = presenceJson.Contains("sync_status_v1", StringComparison.Ordinal);
     private string marketAcceptedGeneration="",personalStatus="";
     private readonly HashSet<string> personalAccepted=[];
     private readonly Dictionary<string,CancellationTokenSource> personalCancellation=[];
