@@ -26,6 +26,10 @@ internal sealed record SyncSectionPark(int? HttpStatus, string Code, bool Waitin
 // HTTP statuses. Character names, worlds, content ids, tokens and payloads never reach these inputs.
 internal static class SyncSectionReport {
     internal const string NotLoaded = "not_loaded";
+    // A section the game loads only while the player has its window or list open (glamour plates, Shared FATEs, the quest
+    // journal, allied societies). Not having it is the usual state, Gillions keeps the last copy, and trying again doesn't
+    // help, so it is reported but never costs "Sync completed." or asks to try again.
+    internal const string NotOpened = "not_opened";
     internal const string AchievementsWindow = "achievements_window";
     internal const string ChangedDuringRead = "changed_during_read";
     internal const string ListsNotReady = "lists_not_ready";
@@ -39,6 +43,8 @@ internal static class SyncSectionReport {
         ("character", "Character"), ("quest_journal", "Quest journal"), ("reputation", "Allied societies"), ("shared_fates", "Shared FATEs"),
         ("glamour_plates", "Glamour plates"), ("gil_ledger", "Gil history"), ("retainer_ventures", "Retainer ventures"),
     ];
+
+    private static readonly HashSet<string> OpenInGameSections = new(StringComparer.Ordinal) { "glamour_plates", "shared_fates", "quest_journal", "reputation" };
 
     internal static IEnumerable<string> Resources => Sections.Select(section => section.Resource);
     internal static IEnumerable<string> Names => Sections.Select(section => section.Name);
@@ -79,7 +85,8 @@ internal static class SyncSectionReport {
                 result.Add(new(resource, SyncSectionOutcome.Skipped,
                     whole == nameof(NativeAvailability.StaleContext) ? ChangedDuringRead
                     : lists.Count > 0 ? ListsNotReady
-                    : resource == "achievements" ? AchievementsWindow : NotLoaded, lists, null, "", now, last));
+                    : resource == "achievements" ? AchievementsWindow
+                    : OpenInGameSections.Contains(resource) ? NotOpened : NotLoaded, lists, null, "", now, last));
             else
                 result.Add(new(resource, sent.Contains(resource) ? SyncSectionOutcome.Sent : SyncSectionOutcome.Unchanged,
                     lists.Count > 0 ? ListsNotReady : "", lists, null, "", now, last));
@@ -99,6 +106,7 @@ internal static class SyncSectionReport {
 
     internal static string ReasonText(SyncSectionStatus status) => status.Reason switch {
         NotLoaded => "not loaded in game yet",
+        NotOpened => "not loaded in game right now, Gillions keeps the last copy",
         AchievementsWindow => "the Achievements window hasn't been opened since login",
         ChangedDuringRead => "the area or character changed during the read",
         ListsNotReady when status.Outcome == SyncSectionOutcome.Skipped => "not ready: " + Lists(status),
@@ -143,20 +151,25 @@ internal static class SyncSectionReport {
         return string.Join(" · ", parts);
     }
 
-    // The Sync now result. "Sync completed." only when every section was sent or unchanged; otherwise it names what was
-    // paused, what wasn't ready and which Collections lists were left out.
+    internal const string AchievementsStep = "Open the Achievements window in game, then sync again.";
+
+    // The Sync now result. "Sync completed." only when every section was sent or unchanged (a section that only loads with
+    // its window open doesn't count against it); otherwise it names what was paused, what wasn't ready and which Collections
+    // lists were left out, and "Try again in a moment." only when trying again can help. Achievements name their step.
     internal static string Message(IReadOnlyList<SyncSectionStatus> statuses, bool anySent) {
         var paused = statuses.Where(status => status.Reason is SiteRefused or SiteRetryWait).Select(status => Name(status.Resource)).ToArray();
-        var notReady = statuses.Where(status => status.Outcome == SyncSectionOutcome.Skipped && status.Reason is not (SiteRefused or SiteRetryWait))
+        var notReady = statuses.Where(status => status.Outcome == SyncSectionOutcome.Skipped && status.Reason is not (SiteRefused or SiteRetryWait or NotOpened or AchievementsWindow))
             .Select(status => status.Lists.Count > 0 ? $"{Name(status.Resource)} (not ready: {Labels(status)})" : Name(status.Resource)).ToArray();
         var partial = statuses.Where(status => status.Outcome != SyncSectionOutcome.Skipped && status.Lists.Count > 0).ToArray();
-        if (paused.Length == 0 && notReady.Length == 0 && partial.Length == 0)
+        var achievements = statuses.Any(status => status.Outcome == SyncSectionOutcome.Skipped && status.Reason == AchievementsWindow);
+        if (paused.Length == 0 && notReady.Length == 0 && partial.Length == 0 && !achievements)
             return anySent ? "Sync completed." : "Your supported data is already current.";
         var sentences = new List<string>();
         if (paused.Length > 0) sentences.Add($"Gillions paused updates for {string.Join(", ", paused)}. Game Sync will retry.");
         if (notReady.Length > 0) sentences.Add($"Not ready yet, kept unchanged on Gillions: {string.Join(", ", notReady)}.");
         foreach (var status in partial) sentences.Add($"{Name(status.Resource)} were sent without {Labels(status)} (not ready yet).");
         if (notReady.Length > 0 || partial.Length > 0) sentences.Add("Try again in a moment.");
+        if (achievements) sentences.Add(AchievementsStep);
         return string.Join(" ", sentences);
     }
 
@@ -172,8 +185,10 @@ internal static class SyncSectionReport {
         var paused = "Gillions paused updates for " + List(name) + "\\. Game Sync will retry\\.";
         var notReady = "Not ready yet, kept unchanged on Gillions: " + List(notReadyItem) + "\\.";
         var partial = name + " were sent without " + labels + " \\(not ready yet\\)\\.";
-        return new Regex("^(?:" + paused + "|(?:" + paused + " )?(?:(?:" + notReady + ")(?: " + partial + ")*|" + partial + "(?: " + partial + ")*) Try again in a moment\\.)$",
-            RegexOptions.CultureInvariant);
+        var tryAgain = "(?:(?:" + notReady + ")(?: " + partial + ")*|" + partial + "(?: " + partial + ")*) Try again in a moment\\.";
+        var step = Regex.Escape(AchievementsStep);
+        // paused, then the not-ready and left-out sentences with "Try again", then the Achievements step; at least one of them.
+        return new Regex("^(?=.)(?:" + paused + ")?(?:(?<=\\.) )?(?:" + tryAgain + ")?(?:(?<=\\.) )?(?:" + step + ")?$", RegexOptions.CultureInvariant);
     }
 
     internal static bool IsMessage(string value) => MessageShape.IsMatch(value);
