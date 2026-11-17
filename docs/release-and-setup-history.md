@@ -1,5 +1,13 @@
 # Gillions Game Sync
 
+## Stable 1.0.31.11 (prepared)
+
+Collections now update list by list. If one list isn't ready yet, the others still update, and Game Sync names the one it left out; before this, one list that wasn't ready stopped the whole Collections update without saying so. "Sync completed." appears only when every section was sent or was already up to date, and the Game Sync window says which part is not ready or paused. The Advanced tab lists each sync section with its last-sent time and reason, Copy support summary includes those lines, and /xllog gets one line per section. Achievements that can't be read yet say what to do: open the Achievements window in game, then sync again.
+
+Unlike earlier Stables, this one is not a Testing source with the Stable identity: it is Stable 1.0.31.10 plus five reviewed commits. The next Stable built from Testing already carries them, through Testing 0.0.108.0.
+
+See the [candidate notes](releases/v1.0.31.11.md).
+
 ## Stable 1.0.31.10 (prepared)
 
 Game Sync supports the November game update. Hunt routing can defer a mark while its FATE or B rank is down, and tracked FATEs can announce their start in chat. Appearance shares a complete look with hidden headgear or a sheathed weapon. Settings shows your sharing choices and the result of sharing your location, and the pairing screen shows your saved destination.
