@@ -197,6 +197,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 #endif
     private static readonly string[] CurrentChangelog = [
 #if GILLIONS_TEST_BUILD
+        "Testing 0.0.108 sends Collections even when one list isn't ready, names what was left out in Sync now and the log, and shows each section's last sync in Advanced.",
         "Testing 0.0.107 sends your glamour dresser contents with your inventory, after you open a dresser.",
         "Testing 0.0.106 sends facewear, hairstyle and outfit ownership for the collection galleries.",
         "Testing 0.0.103 shows location upload status and names the site used when pairing fails.",
