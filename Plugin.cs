@@ -1769,7 +1769,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                 if (!background) settingsMessage = parked.Count > 0
                     ? $"Gillions paused updates for {string.Join(", ", parked)}. Game Sync will retry."
                     : notReady.Length > 0
-                    ? (submitted > 0 ? "Sync completed. " : "") + $"Not ready yet, kept unchanged on Gillions: {string.Join(", ", notReady)}. Try again in a moment."
+                    ? (submitted > 0 ? "Sync completed. " : "") + CollectibleSnapshotPolicy.NotReadyText(notReady) + " Try again in a moment."
                     : submitted > 0 ? "Sync completed." : "Your supported data is already current.";
             });
         } catch (SyncNotStartedException notStarted) {
