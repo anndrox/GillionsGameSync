@@ -93,7 +93,10 @@ public static class DirectGameSnapshotCollector {
         }
         if (selected.Contains("achievements")) {
             var achievements = AchievementCollector.ReadUnlockedIds(dataManager, unlockState, budget);
+            // The game exposes the achievement list only after the Achievements window has been opened in this session. Until
+            // then, record it as withheld so a manual sync says "Not ready yet" and names achievements, instead of "already current".
             if (achievements.Loaded) yield return new GameSnapshot("achievements", new { character = identity, ids = achievements.Ids, complete = true });
+            else withheld?.Add("achievements:" + NativeAvailability.NotLoaded);
         }
         if (selected.Contains("character")) {
             // The Site replaces jobs, gear, recipes and fish wholesale.
@@ -169,7 +172,11 @@ public static class DirectGameSnapshotCollector {
 #endif
             return payload;
             });
+            // All or nothing: one unavailable source (a portrait condition row, the folklore books, an empty catalog) or a
+            // character change mid-read drops the whole payload. Record it as withheld so a manual sync says "Not ready yet"
+            // and the diagnostic names it, instead of Collections silently keeping an old time.
             if (collectibles is not null) yield return new GameSnapshot("collectibles", collectibles);
+            else withheld?.Add("collectibles:" + NativeAvailability.NotLoaded);
         }
         if (selected.Contains("glamour_plates")) {
             var plates = GlamourPlateCollector.Read();
