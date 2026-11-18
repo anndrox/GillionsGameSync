@@ -175,6 +175,16 @@ Testing `0.0.0` is a local validation identity, not a testing release. The packa
 6. Apply the [release title and notes format](release-notes-template.md) to the new GitHub Release using `gh release edit vX.Y.Z --repo anndrox/GillionsGameSync --title "Gillions Game Sync X.Y.Z (Stable)" --notes-file <reviewed-notes-file>`. Include the recorded package SHA-256 in that release body.
 7. Confirm that the tag's tree equals the source tree merged into `main` (use a merge commit; do not squash or rebase, and do not merge other changes into the release branch after publishing), the release body, raw manifest, immutable download, checksum and embedded Dalamud identity/version. Report verified public availability separately from any user's installed version.
 
+### When the release branch is not built from `main`
+
+A Stable release branch normally starts from the Testing source on `main`, so its PR merges cleanly and step 7 holds as written. Since Stable 1.0.31.11 (Partner ruling, 2026-11-17), a Stable release can instead be the previous Stable tag plus a small reviewed set of commits, while `main` already carries the same fixes on the Testing source. That release branch then conflicts with `main`, and no merge can give `main` the tag's tree. Land such a release this way:
+
+1. Publish from the reviewed release-PR head exactly as in steps 4 to 6. The tag holds the exact Stable source.
+2. Build a landing merge commit with two parents, current `main` and the release head. Its tree is `main`'s tree plus exactly the release commit's own changes (version, Stable feed, checksum record, notes and version checks); `main`'s code is kept in every other file. Apply the release commit's diff onto `main` (for example `git cherry-pick -n <release commit>`), then record both parents with `git commit-tree`. Don't resolve a plain three-way merge by hand: the same fixes in two forms can merge twice.
+3. Replace step 7's tree check with two checks: the tag's tree equals the release head's tree, and the landing commit's diff from `main` equals the release commit's diff, line for line.
+4. The landing commit is a new head: it needs its own review and its own publication approval. Open it as its own PR into `main` and merge it with a merge commit right after publishing, because the Stable feed is read from `main` and players get the release only when it lands. The release PR then shows as merged.
+
+
 Never replace an artifact under an existing version or publish a testing artifact as stable. `DownloadLinkTesting` in the stable entry intentionally equals the stable release URL. The entry does not expose `TestingAssemblyVersion` or `TestingDalamudApiLevel`, so Dalamud cannot select that field as a testing build. Gillions testing uses the distinct `GillionsGameSyncTest` identity and testing feed; it is not published through stable GitHub Releases.
 
 Publishing credentials and server configuration are intentionally not stored in this repository.
