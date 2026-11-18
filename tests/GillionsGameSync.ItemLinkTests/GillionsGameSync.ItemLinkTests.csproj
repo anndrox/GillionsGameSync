@@ -13,6 +13,7 @@
     <Compile Include="..\..\CollectibleOwnership.cs" Link="CollectibleOwnership.cs" />
     <Compile Include="..\..\SyncSectionReport.cs" Link="SyncSectionReport.cs" />
     <Compile Include="..\..\NativeObservationPolicy.cs" Link="NativeObservationPolicy.cs" />
+    <Compile Include="..\..\RetainerListingReads.cs" Link="RetainerListingReads.cs" />
     <Compile Include="..\..\BeastmasterReadiness.cs" Link="BeastmasterReadiness.cs" />
     <Compile Include="..\..\ItemLinkRequests.cs" Link="ItemLinkRequests.cs" />
     <Compile Include="..\..\PublicUrlConfiguration.cs" Link="PublicUrlConfiguration.cs" />

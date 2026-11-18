@@ -99,6 +99,27 @@ internal static class NativeObservationPolicyTests {
         Check(hydration.CharacterSyncPending && !hydration.TryBeginCharacterSync(false, now.AddSeconds(1)), "a not-ready hydration does not retry every frame");
         Check(hydration.TryBeginCharacterSync(false, now.AddSeconds(5)) && !hydration.CharacterSyncPending, "a not-ready hydration is retried after the backoff");
 
+        // retainerListingsReadRetainerIds: only the retainer whose selling list was read in this capture, never the cache.
+        Check(RetainerListingReadPolicy.ReadRetainerIds(true, ["10023456"]).SequenceEqual(["10023456"]), "a stably active retainer's read names it");
+        Check(RetainerListingReadPolicy.ReadRetainerIds(false, ["10023456"]).Length == 0, "nothing read: empty, even with a known retainer");
+        Check(RetainerListingReadPolicy.ReadRetainerIds(true, []).Length == 0, "a read with no retainer names none");
+        Check(RetainerListingReadPolicy.ReadRetainerIds(true, ["10023456", "10023457"]).Length == 0, "two retainers at once is not one stable read");
+        Check(RetainerListingReadPolicy.ReadRetainerIds(true, [" "]).Length == 0 && RetainerListingReadPolicy.ReadRetainerIds(true, [""]).Length == 0, "a blank id names none");
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "DirectGameSnapshotCollector.cs"))) root = root.Parent;
+        var source = File.ReadAllText(Path.Combine(root!.FullName, "DirectGameSnapshotCollector.cs")).Replace("\r\n", "\n");
+        var readAll = source[source.IndexOf("public static unsafe InventoryRead? ReadAllContainers(", StringComparison.Ordinal)..];
+        readAll = readAll[..readAll.IndexOf("\n    }\n", StringComparison.Ordinal)];
+        Check(readAll.Contains("CaptureLoadedRetainerListings(out var readRetainerIds);", StringComparison.Ordinal)
+            && readAll.Contains("retainerBags.RetainerIds, readRetainerIds);", StringComparison.Ordinal), "the read ids come from this capture's read");
+        Check(!System.Text.RegularExpressions.Regex.IsMatch(readAll, @"RetainerListingCache[^;]*readRetainerIds"), "the read ids never come from the listing cache");
+        Check(source.Contains("retainerListingsReadRetainerIds = inventory.RetainerListingsReadRetainerIds }", StringComparison.Ordinal)
+            && source.Contains("retainerListingRetainerIds = inventory.RetainerListingRetainerIds,", StringComparison.Ordinal), "the upload carries the read ids beside the unchanged cached ids");
+        var capture = source[source.IndexOf("internal static bool CaptureLoadedRetainerListings(out string[] readRetainerIds)", StringComparison.Ordinal)..];
+        capture = capture[..capture.IndexOf("\n    }\n", StringComparison.Ordinal)];
+        Check(capture.IndexOf("readRetainerIds = RetainerListingReadPolicy.ReadRetainerIds(read.Observed, read.RetainerIds);", StringComparison.Ordinal)
+            < capture.IndexOf("prior.Items.SequenceEqual(read.Items)) return false;", StringComparison.Ordinal), "an unchanged re-read still counts as read");
+        Check(source.Contains("public static bool CaptureLoadedRetainerListings() => CaptureLoadedRetainerListings(out _);", StringComparison.Ordinal), "the change-only trigger keeps its meaning");
         Console.WriteLine($"Native observation availability/carry/isolation/wire/retainer-context PASS: {checks}; synthetic reads, not physical FFXIV collection.");
     }
 }

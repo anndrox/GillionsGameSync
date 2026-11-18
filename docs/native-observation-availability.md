@@ -46,6 +46,7 @@ reported as a connection failure.
   - `carriedLocations`
   - `unobservedLocations`
   - `retainerBagRetainerIds`
+  - `retainerListingsReadRetainerIds`
 - Item rows keep the established shape: `itemId`, `quantity`, `hqQuantity`, `equippedQuantity`, `location`, `source`.
 
 ### currencies
@@ -64,6 +65,7 @@ reported as a connection failure.
 - They are attributed only to the active retainer, after it has stayed active for 1.5 s (`RetainerContextStability`).
 - Otherwise they are not observed, and the Site keeps the prior per-retainer data.
 - `retainerBagRetainerIds` names retainers whose pages were read, including empty ones.
+- `retainerListingsReadRetainerIds` names the retainer whose selling list was loaded and read in this capture, and is empty otherwise. `retainerListingRetainerIds` keeps naming every retainer in the listing cache, so the Site can tell a real re-read ("seen now") from a cached copy.
 
 ### character
 
