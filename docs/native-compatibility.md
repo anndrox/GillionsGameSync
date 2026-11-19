@@ -60,6 +60,21 @@ These are source and managed metadata checks. Physical acceptance is pending
 for the entire November runtime. Use the [Testing 0.0.98 checklist](releases/testing-0.0.98.md).
 Any Site capability and source admission requires its own evidence.
 
+### Dalamud 15.0.4.1
+
+The [15.0.4.1 source diff](https://github.com/goatcorp/Dalamud/compare/12e318c1936e449e5883faa61214eb2ced478349...d0e93484f99fdb7d58b3a2f22152cf108f3486ff)
+changes only the Dalamud version. The [release archive](https://github.com/goatcorp/dalamud-distrib/commit/74c1ebada2e4b2036d39c2f1ff52f1d4b95180fa)
+reports the same game and ClientStructs revisions and library versions as
+15.0.4.0. The layout fingerprints match for Hunt bills (`2312d897d65b4177`),
+Hunt routing (`22c25911f7cc88bf`) and FATEs (`6923c1e09b662322`). Those
+families are source-qualified for the exact new runtime. In-game acceptance
+is pending.
+
+FATE discovery sends `X-Gillions-Fate-Dalamud-Revision` so Site can issue a grant
+for the observed runtime. Older clients omit the header and receive their
+existing version-specific grant. The plugin still requires an exact source and
+reference epoch match before sending FATE observations.
+
 ## Historical table (through October)
 
 | Family | Native layouts read | Qualified runtimes |

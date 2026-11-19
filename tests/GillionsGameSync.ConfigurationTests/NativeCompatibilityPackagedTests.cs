@@ -155,11 +155,10 @@ internal static class NativeCompatibilityPackagedTests {
         object[] Builds(string family)=>((Array)qualified.Invoke(null,[Family(family)])!).Cast<object>().ToArray();
         bool Supports(string family,string game,string sdk)=>(bool)supports.Invoke(null,[Family(family),game,sdk])!;
         // The pinned runtime must be a reviewed, exactly matching table entry.
-        var runtime=Enum.GetNames(familyType).SelectMany(Builds).FirstOrDefault(b=>P(b,"ClientStructsVersion")==installed);
-        Check(runtime is not null,"uninspected ClientStructs "+installed+" requires qualification (docs/native-compatibility.md)");
-        Check(P(runtime!,"DalamudVersion")==dalamud,"table Dalamud "+P(runtime!,"DalamudVersion")+" differs from inspected "+dalamud);
-        Check(Revision(native)==P(runtime!,"ClientStructsRevision"),"inspected ClientStructs revision differs from the table");
-        Check(Revision(typeof(IFramework).Assembly)==P(runtime!,"DalamudRevision"),"inspected Dalamud revision differs from the table");
+        var runtime=Enum.GetNames(familyType).SelectMany(Builds).FirstOrDefault(b=>
+            P(b,"ClientStructsVersion")==installed && P(b,"ClientStructsRevision")==Revision(native)
+            && P(b,"DalamudVersion")==dalamud && P(b,"DalamudRevision")==Revision(typeof(IFramework).Assembly));
+        Check(runtime is not null,$"uninspected Dalamud {dalamud} / ClientStructs {installed} (docs/native-compatibility.md)");
         var fingerprints=Fingerprints(native);
         foreach(var (family,_) in Families) {
             var listed=Builds(family).Any(b=>P(b,"ClientStructsVersion")==installed);
@@ -221,7 +220,9 @@ internal static class NativeCompatibilityPackagedTests {
         var next=installed[..(installed.LastIndexOf('.')+1)]+(int.Parse(installed[(installed.LastIndexOf('.')+1)..])+1);
         foreach(var family in Enum.GetNames(familyType)) {
             var listed=Builds(family).Any(b=>P(b,"GameBuild")==game&&P(b,"ClientStructsVersion")==installed);
-            Check((bool)supportsRuntime.Invoke(null,[Family(family),game])! == listed,"loaded runtime differs from "+family+" qualification");
+            var exact=Builds(family).Contains(runtime);
+            Check((bool)supportsRuntime.Invoke(null,[Family(family),game])! == exact,"loaded runtime differs from "+family+" qualification");
+            if(dalamud=="15.0.4.1")Check(exact==(family is "Hunt" or "Travel" or "Fate"),"15.0.4.1 qualification changed for "+family);
             foreach(var wrong in mismatch)
                 Check(!(bool)supportsExact.Invoke(null,[Family(family),wrong])!,"mismatched runtime must block "+family);
             Check(Supports(family,game,installed)==listed,"packaged "+family+" gate differs from its own qualification list");
@@ -233,7 +234,7 @@ internal static class NativeCompatibilityPackagedTests {
             Activator.CreateInstance(source,new object[]{"dalamud-fate-table",plugin.GetName().Version!.ToString(4),g??game,15,dalamud,
                 revision??P(runtime!,"DalamudRevision"),installed,P(runtime!,"ClientStructsRevision"),"7.7.0","7.5.1",reference??game})!;
         var compatible=plugin.GetType("GillionsGameSync.FatePolicy",true)!.GetMethod("Compatible",flags)!;
-        Check((bool)compatible.Invoke(null,new[]{Source()})! == Builds("Fate").Any(b=>P(b,"ClientStructsVersion")==installed),"packaged FATE matrix for the pinned runtime");
+        Check((bool)compatible.Invoke(null,new[]{Source()})! == Builds("Fate").Contains(runtime),"packaged FATE matrix for the pinned runtime");
         Check(!(bool)compatible.Invoke(null,new[]{Source(reference:game=="2026.09.15.0000.0000"?"2026.10.06.0000.0000":"2026.09.15.0000.0000")})!,"actual reference build cannot be spoofed");
         Check(!(bool)compatible.Invoke(null,new[]{Source(revision:"unknown")})!,"exact revision fence");
         Check(!(bool)compatible.Invoke(null,new[]{Source(g:"2099.01.01.0000.0000",reference:"2099.01.01.0000.0000")})!,"future FATE game fence");

@@ -27,10 +27,16 @@ internal static partial class NativeCompatibility {
     // Release-channel archive promoted on 2026-11-10.
     internal static readonly NativeBuild November = new("2026.11.03.0000.0000", "15.0.4.0",
         "12e318c1936e449e5883faa61214eb2ced478349", "7.57.0.9480", "80cb4a7b7e11a6702e2eb8839afd301a918c638e", "7.7.0", "7.5.1");
+    // Dalamud's version-only rebuild for the same game and ClientStructs revision.
+    internal static readonly NativeBuild NovemberDalamudUpdate = November with {
+        DalamudVersion = "15.0.4.1", DalamudRevision = "d0e93484f99fdb7d58b3a2f22152cf108f3486ff",
+    };
 
     internal static NativeBuild[] Qualified(NativeFamily family) => family switch {
-        NativeFamily.Hunt or NativeFamily.Fate or NativeFamily.Appearance => [September, October, OctoberHotfix, November],
-        NativeFamily.Submarine or NativeFamily.Travel => [September, OctoberHotfix, November],
+        NativeFamily.Hunt or NativeFamily.Fate => [September, October, OctoberHotfix, November, NovemberDalamudUpdate],
+        NativeFamily.Appearance => [September, October, OctoberHotfix, November],
+        NativeFamily.Travel => [September, OctoberHotfix, November, NovemberDalamudUpdate],
+        NativeFamily.Submarine => [September, OctoberHotfix, November],
         NativeFamily.Beastmaster => [September, November],
         NativeFamily.Dashboard => [September],
         NativeFamily.Desynthesis => [November],
