@@ -2229,6 +2229,7 @@ public sealed partial class Plugin : IDalamudPlugin {
             using var request=new HttpRequestMessage(HttpMethod.Get,permit.Origin+FateDiscovery.Path);
             request.Headers.Authorization=new AuthenticationHeaderValue("Bearer",permit.Token);
             request.Headers.UserAgent.ParseAdd($"{RetainerClient.ProductName}/{PluginVersion}");
+            request.Headers.Add("X-Gillions-Fate-Dalamud-Revision",source.DalamudRevision);
             using var response=await DispatchFateAsync(request,permit,binding,epoch,deadline.Token,false);
             serverDelay=response.Headers.RetryAfter?.Delta?.TotalSeconds
                 ?? (response.Headers.RetryAfter?.Date is { } at ? (at-DateTimeOffset.UtcNow).TotalSeconds : null);
