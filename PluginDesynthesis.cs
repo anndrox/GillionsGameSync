@@ -61,7 +61,7 @@ public sealed partial class Plugin {
             request.Headers.Add("X-Gillions-Personal-Capability", DesynthesisResults.Capability);
             Task<HttpResponseMessage>? pending = null;
             await framework.RunOnFrameworkThread(() => {
-                RequirePermit(permit);
+                RequireDispatch(request, permit);
                 token.ThrowIfCancellationRequested();
                 if (!DesynthesisAllowed || !desynthesisSupported || !ReferenceEquals(batch, desynthesisQueue.Prepare()))
                     throw new OperationCanceledException();

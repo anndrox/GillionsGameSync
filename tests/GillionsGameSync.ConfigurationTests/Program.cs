@@ -18,6 +18,10 @@ AssemblyLoadContext.Default.Resolving += (_, name) => {
     return File.Exists(path) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(path) : null;
 };
 var pluginAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(assemblyPath);
+if (args.Length == 4 && args[3] == "--wire-baseline") {
+    await WireContractPackagedTests.RunAsync(pluginAssembly, fixturePath, baseline: true);
+    return;
+}
 if (args.Length == 4 && args[3] == "--desynthesis-check") {
     DesynthesisPackagedTests.Run(pluginAssembly);
     return;
@@ -67,6 +71,7 @@ if (args.Length != 4 || args[3] != "--skip-channel-uninstall")
     ChannelIsolationPackagedTests.Run(pluginAssembly,fixturePath);
 DistributionManifestPackagedTests.Run(pluginAssembly);
 OriginPackagedTests.Run(pluginAssembly);
+await WireContractPackagedTests.RunAsync(pluginAssembly, fixturePath);
 await DeviceRevocationPackagedTests.RunAsync(pluginAssembly);
 var nativeCapabilities = pluginAssembly.GetType("GillionsGameSync.FateLocalView") is not null;
 FatePackagedTests.Run(pluginAssembly,testingProduct,fixturePath);

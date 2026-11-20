@@ -181,7 +181,7 @@ public sealed partial class Plugin {
             using var request=SnapshotRequest("/api/game-sync/sync",permit,AppearancePolicy.Resource,p.Nonce,Encoding.UTF8.GetBytes(p.Payload));AppearanceHeaders(request);request.Headers.Add("X-Gillions-Appearance-Grant",grant);
             if(request.Content!.Headers.ContentLength>20480)throw new InvalidOperationException();
             Task<HttpResponseMessage>? pending=null;
-            await framework.RunOnFrameworkThread(()=>{RequirePermit(permit);token.ThrowIfCancellationRequested();if(!AppearanceAuthorized(DateTime.UtcNow)||appearanceGrant!=grant||!appearanceCollector.Available(permit.ContentId))throw new OperationCanceledException();pending=personalHttp.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,token);});
+            await framework.RunOnFrameworkThread(()=>{RequireDispatch(request, permit);token.ThrowIfCancellationRequested();if(!AppearanceAuthorized(DateTime.UtcNow)||appearanceGrant!=grant||!appearanceCollector.Available(permit.ContentId))throw new OperationCanceledException();pending=personalHttp.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,token);});
             using var response = await pending!;
             if (await ReadPersonalUploadFailureAsync(response, token) is { } refusal) throw refusal;
             if ((int)response.StatusCode is not (200 or 201)) throw new InvalidOperationException("Invalid appearance receipt.");

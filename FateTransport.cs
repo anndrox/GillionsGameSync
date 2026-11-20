@@ -69,8 +69,10 @@ internal static class FateTransportPolicy {
         >=500 => FateSendDisposition.Retry,
         _ => FateSendDisposition.Invalid
     };
-    internal static FateSendDisposition Response(int? status,bool receipt,bool transportFailed=false) =>
-        status is null || status is 200 or 201 && !receipt && transportFailed
+    // The body is immutable UTF-8 from our serializer. A body-reader refusal
+    // can retry that same batch within its existing lifetime and backoff budget.
+    internal static FateSendDisposition Response(int? status,bool receipt,bool transportFailed=false,string? code=null) =>
+        status is null || status == 400 && code == "INVALID_JSON" || status is 200 or 201 && !receipt && transportFailed
             ? FateSendDisposition.Retry : Classify(status!.Value,receipt);
     internal static int RetrySeconds(int failures, double? retryAfter = null) {
         double backoff=5*Math.Pow(2,Math.Clamp(failures,0,7));

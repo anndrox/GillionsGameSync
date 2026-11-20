@@ -21,6 +21,7 @@ internal static class DeviceRevocation {
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Headers.UserAgent.ParseAdd($"{NativeProduct.Name}/{version}");
+        if (!NativeProduct.CanDispatch(origin, request.RequestUri)) return false;
         try {
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
             if (response.StatusCode != HttpStatusCode.OK) return false;

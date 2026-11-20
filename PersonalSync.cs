@@ -88,12 +88,13 @@ internal static class PersonalSyncPolicy {
                 && entries[0].GetProperty("maxPayloadBytes").GetInt32() == MaximumPayloadBytes;
         } catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException) { return false; }
     }
-    internal static bool HuntCoverageFresh(string payload, DateTime now) {
+    internal static bool HuntCoverageFresh(string payload, DateTime now, bool forDispatch = false) {
         try {
             using var doc = JsonDocument.Parse(payload);
             var time = doc.RootElement.GetProperty("billItemCoverage").GetProperty("observedAtUtc").GetDateTime();
             return PersonalObservationCompatibility.Utc(now) && PersonalObservationCompatibility.Utc(time)
-                && now >= time && now - time <= TimeSpan.FromSeconds(HuntBillItemCoverage.MaximumAgeSeconds);
+                && (forDispatch ? HuntBillItemCoverage.UploadFresh(time, now)
+                    : now >= time && now - time < TimeSpan.FromSeconds(HuntBillItemCoverage.MaximumAgeSeconds));
         } catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException) { return false; }
     }
     internal static bool HuntCoveragePayloadValid(string payload) {
@@ -111,8 +112,8 @@ internal static class PersonalSyncPolicy {
                 && PersonalObservationCompatibility.Utc(c.GetProperty("observedAtUtc").GetDateTime())
                 && new[] { "gameVersion", "collectorVersion", "sdkVersion" }.All(k => PersonalObservationCompatibility.Metadata(c.GetProperty(k).GetString()))
                 && domains.Length == 22 && domains.Select(d => d.GetProperty("billTypeId").GetInt32()).OrderBy(i => i).SequenceEqual(Enumerable.Range(0,22))
-                && domains.Select(d => d.GetProperty("keyItemId").GetUInt32()).Distinct().Count() == 22
-                && domains.All(d => d.GetProperty("keyItemId").GetUInt32() > 0 && d.GetProperty("state").GetString() is "absent_confirmed" or "present_unresolved" or "unavailable");
+                && domains.All(d => HuntBillItemCoverage.WireDomainValid(d.GetProperty("billTypeId").GetInt32(), d.GetProperty("keyItemId").GetUInt32())
+                    && d.GetProperty("state").GetString() is "absent_confirmed" or "present_unresolved" or "unavailable");
         } catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException) { return false; }
     }
     internal static bool PayloadValid(string resource, string payload) {

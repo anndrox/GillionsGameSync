@@ -36,7 +36,7 @@ reset = plugin.split('private void ResetSessionContext()', 1)[1].split('private 
 assert 'travelAccepted = false; travelBinding = "";' in reset and 'plugin.ClearTravelPending();' in reset and 'plugin.travelLocal.ClearSession();' in reset
 assert 'personalHttp.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,token)' in plugin
 send=plugin.split('private async Task SendTravelAsync',1)[1].split('private bool PersonalEnabled',1)[0]
-assert 'RequirePermit(permit)' in send and '!TravelAdmitted()' in send and '!prepared.Fresh(DateTime.UtcNow)' in send
+assert 'RequireDispatch(request, permit)' in send and '!TravelAdmitted()' in send and '!prepared.Fresh(DateTime.UtcNow)' in send
 assert 'X-Gillions-Personal-Resource' in send and 'X-Gillions-Personal-Capability' in send
 assert 'status is not (200 or 201)' in send and 'ReadPersonalUploadFailureAsync' in send
 assert 'local.CurrentWorld.RowId' in source and 'CurrentWorldId = currentWorldId' in source

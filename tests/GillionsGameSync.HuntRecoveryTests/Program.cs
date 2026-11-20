@@ -49,6 +49,17 @@ await Case("published HTTP400 classification and fresh timestamps remain blocked
     var body=Sample(p);Check(HuntBillItemCoverage.SameStates(old.Payload,body),"fixture semantics changed");
     Check(!p.Current(old)&&ReferenceEquals(old,p.Prepare(body)),"unchanged blocked input escaped");
 });
+await Case("confirmed Site age refusal retires the nonce without parking the unchanged Hunt state",async()=>{
+    using var p = new Plugin();
+    await p.Presence(Presence(current));
+    var prior = p.Prepare(Sample(p))!;
+    p.Handler.RejectionBody = """{"ok":false,"code":"INVALID_HUNT_COVERAGE","error":"Hunt coverage is not current."}""";
+    await p.Send(prior);
+    var fresh = p.Prepare(Sample(p))!;
+    Check(p.Handler.Calls == 1 && !p.Current(prior) && !prior.Blocked && fresh.Nonce != prior.Nonce
+        && HuntBillItemCoverage.SameStates(prior.Payload, fresh.Payload),
+        "Time refusal suppressed a fresh observation with unchanged item states.");
+});
 await Case("ordinary healthy same-authority presence renewals do not retry unchanged legacy support",async()=>{
     using var p=new Plugin();var old=await Rejected(p,legacy);
     for(int i=0;i<5;i++){await p.Presence(Presence(legacy));Check(ReferenceEquals(old,p.Prepare(Sample(p))),"unchanged contract cleared terminal stop");}

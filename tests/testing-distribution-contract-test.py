@@ -1,5 +1,6 @@
 """Channel isolation/source correspondence; no network or player state."""
 from pathlib import Path
+import re
 import subprocess
 
 r=Path(__file__).resolve().parents[1]
@@ -83,6 +84,18 @@ for name in ['Request(string path','SnapshotRequest(string path']:
     body=plugin.split(name,1)[1].split('private ',1)[0]
     assert body.index('NativeProduct.RequestOrigin(permit.Origin)') < body.index('new HttpRequestMessage')
 assert (r/'PartyFinderContributionCore.cs').read_text().find('AllowAutoRedirect = false')>=0
+# Every device-authenticated send uses the same destination check just before dispatch.
+for name in ['Plugin.cs', 'PluginAppearance.cs', 'PluginDesynthesis.cs', 'PluginHuntSplit.cs', 'PluginWatchedFates.cs', 'DeviceRevocation.cs']:
+    source=(r/name).read_text(encoding='utf-8')
+    sends=list(re.finditer(r'\.SendAsync\(request,',source))
+    last_send=0
+    for send in sends:
+        preceding=source[max(last_send,send.start()-1400):send.start()]
+        assert ('RequireDispatch(request, permit)' in preceding
+            or 'NativeProduct.CanDispatch(permit.Origin, request.RequestUri)' in preceding
+            or 'NativeProduct.CanDispatch(origin, request.RequestUri)' in preceding
+            or '#else\n            pending = http' in preceding),name
+        last_send=send.end()
 pack=(r/'scripts/package.ps1').read_text()
 assert "if ($Channel -eq 'testing') { $allowedRepositories += '/anndrox/GillionsGameSync-Testing' }" in pack
 assert "$PublicBaseUrl -cne 'https://test.gillions.app'" in pack
@@ -95,7 +108,6 @@ import json
 stable=json.loads((r/'data/GillionsGameSync.json').read_text(encoding='utf-8'))
 assert len(stable)==1 and stable[0]['InternalName']=='GillionsGameSync' and stable[0]['RepoUrl']=='https://github.com/anndrox/GillionsGameSync'
 version=stable[0]['AssemblyVersion']
-import re
 project=(r/'GillionsGameSync.csproj').read_text(encoding='utf-8')
 assert re.search(r'<Version>(\d+\.\d+\.\d+\.\d+)</Version>',project).group(1)==version,'Stable feed version must equal the Public project version'
 asset=f'https://github.com/anndrox/GillionsGameSync/releases/download/v{version}/GillionsGameSync-{version}.zip'

@@ -43,6 +43,13 @@ internal static class TravelTransportTests {
         Check(sync.Prepare("session1",Row(now.AddSeconds(-45)),now)==null,"expired prepare");
         var first=sync.Prepare("session1",Row(),now)!;
         Check(first is not null&&Guid.TryParseExact(first.Nonce,"N",out _),"bounded nonce preparation");
+        var siteTime = new DateTime(2026, 11, 20, 2, 25, 0, DateTimeKind.Utc).AddMilliseconds(123);
+        var observed = siteTime.AddTicks(9999);
+        using (var precise = new TravelPrepared("session1", Row(observed), observed)) {
+            using var wire = JsonDocument.Parse(precise.Payload);
+            Check(wire.RootElement.GetProperty("observedAtUtc").GetDateTime() == siteTime
+                && precise.ObservedAtUtc == observed, "Wire time truncates to Site precision without changing local freshness.");
+        }
         Check(ReferenceEquals(sync.Prepare("session1",Row() with { MapX=30.1 },now),first),"changed body under same observation regenerates nonce");
         sync.Dispatched(now);
         Check(!sync.Maintain("session1",true,now.AddSeconds(14)),"send faster than15s");
