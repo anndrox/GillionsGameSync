@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.31.13 (Stable candidate)
+
+Hunt bills, Hunt routing, and FATEs work again on the November game build with Dalamud 15.0.4.1.
+
+See the [release notes](releases/v1.0.31.13.md).
+
 ## 1.0.31.12 (Stable candidate)
 
 Retainer listings stay current. When you open a retainer's market listings and nothing has changed, Game Sync now tells Gillions it read them again, so the Retainers and Retainer Listings pages show them as seen now instead of when they last changed.
