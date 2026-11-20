@@ -33,7 +33,9 @@ internal sealed class HuntSplitUpload {
 
     internal HuntSplitPreparation? Prepare(HuntUploadRevision revision, HuntBillItemSnapshot sample, DateTime now, long clock,
         Func<HuntBillObservation[]> readHistory) {
-        if (pending is { } previous && IsCurrent(previous, revision, sample, now)) return previous;
+        if (!HuntBillItemCoverage.UploadFresh(sample.ObservedAtUtc, now)) return null;
+        if (pending is { } previous && IsCurrent(previous, revision, sample, now)
+            && HuntBillItemCoverage.UploadFresh(previous.Key.ObservedAtUtc, now)) return previous;
         if (pending is not null) lastExamined = null;
         pending = null;
 
@@ -75,6 +77,12 @@ internal sealed class HuntSplitUpload {
         nextCoverage = clock + CoverageInterval;
         if (preparation.Reconciles) nextHistory = clock + HistoryInterval;
         pending = null;
+    }
+
+    internal void DiscardStale(HuntSplitPreparation preparation) {
+        if (!ReferenceEquals(pending, preparation)) return;
+        pending = null;
+        lastExamined = null;
     }
 
     internal void Clear() {

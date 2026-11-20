@@ -73,9 +73,11 @@ public sealed partial class Plugin {
             Task<HttpResponseMessage>? pending = null;
             long dispatched = 0;
             await framework.RunOnFrameworkThread(() => {
-                RequirePermit(permit);
+                RequireDispatch(request, permit);
                 linked.Token.ThrowIfCancellationRequested();
                 if (!HuntSplitCurrent(preparation, key, DateTime.UtcNow)) throw new SyncNotStartedException("Hunt data changed.");
+                if (!HuntBillItemCoverage.UploadFresh(preparation.Key.ObservedAtUtc, DateTime.UtcNow))
+                    throw new SyncNotStartedException("Hunt observation is too close to expiry.");
                 dispatched = Environment.TickCount64;
                 pending = personalHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linked.Token);
             });
@@ -94,7 +96,9 @@ public sealed partial class Plugin {
             if (!disposed) await framework.RunOnFrameworkThread(() => {
                 if (!PermitIsCurrent(permit) || feature.IsCancellationRequested || !HuntSplitEnabled) return;
                 if (error is NullReferenceException) backgroundObservation.Report("Hunt bills", error);
-                huntSplitRetry.Failed(Environment.TickCount64, preparation.Key.Revision, error);
+                if (error is GillionsHttpException { HuntCoverageNotCurrent: true }) huntSplitUpload.DiscardStale(preparation);
+                huntSplitRetry.Failed(Environment.TickCount64, preparation.Key.Revision, error,
+                    retryableRefusal: error is GillionsHttpException { HuntCoverageNotCurrent: true });
                 personalStatus = error is GillionsHttpException refused
                     ? $"Gillions paused Hunt uploads. HTTP {refused.Status} ({refused.Code})."
                     : "Hunt upload will retry.";

@@ -77,6 +77,7 @@ public static class SyncResponsePolicy {
                 && detail is "Travel metadata is unsupported." or "Travel reference is not qualified." or "Travel build metadata is invalid.";
         code = SiteRefusalPolicy.Classify(code, detail);
         var status = (int)response.StatusCode;
+        var huntCoverageNotCurrent = status == 400 && code == "INVALID_HUNT_COVERAGE" && detail == "Hunt coverage is not current.";
         var retry = response.Headers.RetryAfter;
         var retryAfter = retry?.Delta ?? retry?.Date - DateTimeOffset.UtcNow;
         var message = code switch {
@@ -85,7 +86,9 @@ public static class SyncResponsePolicy {
             _ => $"Gillions rejected the request (HTTP {status}).",
         };
         if (SiteRefusalPolicy.IsRefusal(status))
-            return new GillionsSyncRejectedException(code, message, status, retryAfter) { ServerCode = serverCode, TravelBuildRejected = travelBuildRejected };
+            return new GillionsSyncRejectedException(code, message, status, retryAfter) {
+                ServerCode = serverCode, TravelBuildRejected = travelBuildRejected, HuntCoverageNotCurrent = huntCoverageNotCurrent
+            };
         return new GillionsHttpException(code, message, status, retryAfter) { ServerCode = serverCode, TravelBuildRejected = travelBuildRejected };
     }
 
@@ -172,6 +175,7 @@ public class GillionsHttpException(string code, string message, int status, Time
     public TimeSpan? RetryAfter { get; } = retryAfter;
     internal string ServerCode { get; init; } = SiteRefusalPolicy.Rejected;
     internal bool TravelBuildRejected { get; init; }
+    internal bool HuntCoverageNotCurrent { get; init; }
 }
 
 public sealed class GillionsSyncRejectedException(string code, string message, int status = 0, TimeSpan? retryAfter = null)
@@ -189,10 +193,10 @@ internal sealed class ResourceRetry {
         return TimeSpan.FromMilliseconds(Math.Max(0, Math.Max(serverUntil, park) - now));
     }
 
-    internal void Failed(long now, object revision, Exception error) {
+    internal void Failed(long now, object revision, Exception error, bool retryableRefusal = false) {
         var serverDelay = (error as GillionsHttpException)?.RetryAfter?.TotalMilliseconds ?? 0;
         serverUntil = now + (long)Math.Max(0, serverDelay);
-        if (error is GillionsHttpException { Status: >= 400 and < 500 and not 408 and not 429 }) {
+        if (!retryableRefusal && error is GillionsHttpException { Status: >= 400 and < 500 and not 408 and not 429 }) {
             refusedRevision = revision;
             until = now + SlowProbe;
             return;

@@ -7,6 +7,10 @@ internal static class HuntBillItemCoverageTests {
     internal static void Run(Action<bool,string> check) {
         uint[] ids = [2001361,2001700,2001701,2001702,2001362,2001703,2002113,2002114,2002115,2002116,2002628,2002629,2002630,2002631,2003090,2003091,2003092,2003093,2003509,2003510,2003511,2003512];
         var catalog = ids.Select((id,i) => new HuntBillItemDomain((byte)i,id,1,1,10)).ToArray();
+        var swapped = catalog.ToArray();
+        swapped[0] = catalog[0] with { KeyItemId = catalog[1].KeyItemId };
+        swapped[1] = catalog[1] with { KeyItemId = catalog[0].KeyItemId };
+        check(!HuntBillItemCoverage.CatalogValid(swapped), "Site requires the exact bill-type to Key Item mapping.");
         var key = HuntBillRetentionPolicy.CharacterKey(123); var other = HuntBillRetentionPolicy.CharacterKey(456);
         var now = new DateTime(2026,10,4,12,0,0,DateTimeKind.Utc); var mono = Stopwatch.GetTimestamp();
         long At(double seconds) => mono + (long)(Stopwatch.Frequency * seconds);
@@ -100,6 +104,12 @@ internal static class HuntBillItemCoverageTests {
         check(!PersonalSyncPolicy.CanSend(false,true,PersonalSyncPolicy.Origin,true,first),"E: permission OFF sent coverage");
         check(!PersonalSyncPolicy.CanSend(true,true,"https://gillions.app",true,first),"Production coverage admitted");
         check(sync.Current(first,owner,payload,c.Epoch,now.AddSeconds(7),At(7)),"Current retry rejected");
+        using var preparedJson = JsonDocument.Parse(payload);
+        var sampledAt = preparedJson.RootElement.GetProperty("billItemCoverage").GetProperty("observedAtUtc").GetDateTime();
+        check(PersonalSyncPolicy.HuntCoverageFresh(payload, sampledAt.AddSeconds(12), forDispatch: true)
+            && !PersonalSyncPolicy.HuntCoverageFresh(payload, sampledAt.AddSeconds(13), forDispatch: true)
+            && PersonalSyncPolicy.HuntCoverageFresh(payload, sampledAt.AddSeconds(13))
+            && !PersonalSyncPolicy.HuntCoverageFresh(payload, sampledAt.AddSeconds(15)), "Hunt dispatch reserves time without extending receipt freshness.");
         check(!sync.Current(first,owner,payload,c.Epoch,now.AddSeconds(17),At(17)),"Delayed response fixture did not expire preparation");
         foreach(var status in new[]{503,429,200}) {
             // Malformed200 has no accepted receipt; classification remains retry

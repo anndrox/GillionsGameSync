@@ -11,13 +11,14 @@ internal sealed class FakeHandler : HttpMessageHandler {
     internal int Status=400;
     internal int Calls;
     internal Action? BeforeResponse;
+    internal string RejectionBody = "synthetic terminal";
     internal readonly List<string> Bodies=[];
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token) {
         token.ThrowIfCancellationRequested();Calls++;
         Bodies.Add(await request.Content!.ReadAsStringAsync(token));
         BeforeResponse?.Invoke();BeforeResponse=null;
         return new((HttpStatusCode)Status) { RequestMessage=request,Content=new StringContent(Status is >=200 and <=299
-            ? JsonSerializer.Serialize(new {ok=true,snapshotId=Guid.NewGuid(),unchanged=false,receivedAt=DateTime.UtcNow}) : "synthetic terminal") };
+            ? JsonSerializer.Serialize(new {ok=true,snapshotId=Guid.NewGuid(),unchanged=false,receivedAt=DateTime.UtcNow}) : RejectionBody) };
     }
 }
 internal sealed class ImmediateFramework { internal Task RunOnFrameworkThread(Action action) {action();return Task.CompletedTask;} }

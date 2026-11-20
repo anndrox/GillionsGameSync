@@ -26,7 +26,18 @@ internal sealed record HuntBillItemSnapshot(string ObservationId, DateTime Obser
 internal sealed class HuntBillItemCoverage {
     internal const int KeyItemsContainer = 2004;
     internal const int MaximumAgeSeconds = 15;
+    // Site rechecks the 15-second age after taking its database locks.
+    internal static readonly TimeSpan UploadHeadroom = TimeSpan.FromSeconds(2);
+    internal static bool UploadFresh(DateTime observedAt, DateTime now) =>
+        observedAt <= now && now - observedAt < TimeSpan.FromSeconds(MaximumAgeSeconds) - UploadHeadroom;
     internal const string DomainKind = "currently-held-item-backed-bills";
+    // Site's hunt-bill-items-v1 mapping. Check the native sheet against it
+    // rather than translating an unexpected item into an absence assertion.
+    private static readonly uint[] WireKeyItems = [2001361, 2001700, 2001701, 2001702, 2001362, 2001703,
+        2002113, 2002114, 2002115, 2002116, 2002628, 2002629, 2002630, 2002631, 2003090, 2003091,
+        2003092, 2003093, 2003509, 2003510, 2003511, 2003512];
+    internal static bool WireDomainValid(int billTypeId, uint keyItemId) =>
+        billTypeId >= 0 && billTypeId < WireKeyItems.Length && WireKeyItems[billTypeId] == keyItemId;
     private HuntBillItemDomain[]? catalog;
     private string character = "";
     private HuntBillItemSnapshot? latest;
@@ -38,7 +49,7 @@ internal sealed class HuntBillItemCoverage {
         ? s.ItemId == 0 && s.Quantity > 0
         : (s.ItemId == 0 && s.Quantity == 0) || (s.ItemId > 0 && s.Quantity > 0);
     internal static bool CatalogValid(HuntBillItemDomain[]? rows) => rows is { Length: 22 }
-        && rows.All(r => r is not null && r.BillTypeId < 22 && r.KeyItemId > 0 && r.NativeType is 1 or 2
+        && rows.All(r => r is not null && WireDomainValid(r.BillTypeId, r.KeyItemId) && r.NativeType is 1 or 2
             && r.OrderStart > 0 && r.OrderAmount > 0 && (ulong)r.OrderStart + r.OrderAmount <= uint.MaxValue)
         && rows.Select(r => r.BillTypeId).Distinct().Count() == 22
         && rows.Select(r => r.KeyItemId).Distinct().Count() == 22;
@@ -161,6 +172,10 @@ internal sealed class HuntBillItemSync {
     // commit. It stops only this exact RAM preparation, never another session.
     internal void Block(PersonalPreparedSnapshot p, int status = 400) {
         if (ReferenceEquals(pending, p)) { p.Blocked = true; supportRecoveryAllowed = status == 400; }
+    }
+
+    internal void DiscardStale(PersonalPreparedSnapshot p) {
+        if (ReferenceEquals(pending, p)) pending = null;
     }
     // This is a dispatch deadline, not a new observation cadence. Measure from
     // the actual assertion time, not preparation/ACK; retries never renew it.

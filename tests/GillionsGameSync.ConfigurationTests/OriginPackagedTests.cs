@@ -19,11 +19,22 @@ internal static class OriginPackagedTests {
             "https://gillions.app:444","https://test.gillions.app:444","https://gillions.app:443",
             "https://gillions.app/","https://gillions.app/path","https://gillions.app?x=1","https://user@gillions.app",
             "HTTPS://GILLIONS.APP",""];
+        foreach (var origin in new[] { test, prod }) {
+            foreach (var destination in new[] { test + "/api/game-sync/sync", prod + "/api/game-sync/sync",
+                "https://test.gillions.app:444/presence", "https://user@test.gillions.app/presence",
+                "https://test.gillions.app/presence#local", "http://test.gillions.app/presence", "https://example.invalid/presence" }) {
+                var uri = new Uri(destination);
+                var allowed = destination.StartsWith(origin + "/api/", StringComparison.Ordinal) && (!testing || origin == test);
+                Check((bool)Call("NativeProduct", "CanDispatch", origin, uri)! == allowed, "Dispatch binds to the captured allowlisted origin");
+            }
+        }
+        using var primaryHandler = (HttpClientHandler)Call("PartyFinderHttp", "CreateHandler")!;
+        Check(!primaryHandler.AllowAutoRedirect && !primaryHandler.UseCookies, "Sync transport rejects redirects and cookies");
         var prepared=Activator.CreateInstance(T("PersonalPreparedSnapshot"),["owner","hunt_bills","nonce","{}","hash"])!;
         foreach(var origin in origins) {
             bool allowed=origin==test || !testing && origin==prod;
             Check((bool)Call("NativeProduct","TransportOrigin",origin)! == allowed,"exact allow-list "+origin);
-            Check((bool)Call("NativeProduct","RequestOrigin",origin)! == (!testing || origin==test),"Testing ALL-request destination fence "+origin);
+            Check((bool)Call("NativeProduct","RequestOrigin",origin)! == allowed,"All-request destination fence "+origin);
             Check((bool)Call("HuntMapPolicy","Admit",true,true,origin,true)! == allowed,"Hunt admission "+origin);
             Check(!(bool)Call("HuntMapPolicy","Admit",false,true,origin,true)!,"origin never grants Hunt consent");
             Check((bool)Call("TravelSyncPolicy","Admit",true,true,true,true,origin,true)! == allowed,"travel admission "+origin);

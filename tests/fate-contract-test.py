@@ -55,7 +55,7 @@ assert 'FateRequestCurrent(permit,binding,epoch,deadline.Token)' not in discover
 assert 'FateRequestCurrent(permit,binding,epoch,feature)' in discovery_caller
 assert 'DiscoveryFailed(Environment.TickCount64,serverDelay)' in discovery_caller
 contribute_caller = plugin.split('private async Task ContributeFateAsync',1)[1].split('private MarketContributionSession',1)[0]
-assert 'FateTransportPolicy.Response(responseStatus,receipt)' in contribute_caller
+assert 'FateTransportPolicy.Response(responseStatus,receipt,code:code)' in contribute_caller
 assert 'FateTransportPolicy.Response(responseStatus,false,FateTransportPolicy.TransportFailure(error))' in contribute_caller
 assert 'inFlightId!=batch.BatchId' in sender and 'if(grant is not null) discoveryFailures=0' in sender
 assert not re.search(r'WriteAll|SavePluginConfig|File\.|IPlayerState|IObjectTable|IFateTable',sender+discovery)

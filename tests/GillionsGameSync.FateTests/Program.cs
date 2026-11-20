@@ -132,6 +132,10 @@ Check(!FateTransportPolicy.Receipt(Receipt(1,0).Replace(prepared.BatchId.ToStrin
 foreach(int status in new[]{401,403,404,422}) Check(FateTransportPolicy.Classify(status,false)==FateSendDisposition.Suspended,"suspend only FATE");
 foreach(int status in new[]{429,503,502}) Check(FateTransportPolicy.Classify(status,false)==FateSendDisposition.Retry,"transient");
 foreach(int status in new[]{400,409,413,415,200}) Check(FateTransportPolicy.Classify(status,false)==FateSendDisposition.Invalid,"no blind correction retry");
+Check(FateTransportPolicy.Response(400, false, code: "INVALID_JSON") == FateSendDisposition.Retry
+    && FateTransportPolicy.Response(413, false, code: "INVALID_JSON") == FateSendDisposition.Invalid
+    && FateTransportPolicy.Response(400, false, code: "INVALID_FATE_SHAPE") == FateSendDisposition.Invalid,
+    "only the exact body-reader failure retries a complete serialized batch");
 Check(FateTransportPolicy.RetrySeconds(0)==5 && FateTransportPolicy.RetrySeconds(1,90)==90 && FateTransportPolicy.RetrySeconds(100)==640,"bounded backoff");
 Check(FateTransportPolicy.RetrySeconds(0,1800)==1800 && FateTransportPolicy.RetrySeconds(0,5.1)==6,"honor long/fractional server delay without early retry");
 Check(FateTransportPolicy.RetrySeconds(0,double.NaN)==5 && FateTransportPolicy.RetrySeconds(0,double.PositiveInfinity)==5,"malformed retry header cannot create spin");

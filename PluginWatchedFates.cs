@@ -61,6 +61,7 @@ public sealed partial class Plugin {
             request.Headers.UserAgent.ParseAdd($"{RetainerClient.ProductName}/{PluginVersion}");
             if (etag is not null) request.Headers.IfNoneMatch.ParseAdd(etag);
             var started = Stopwatch.GetTimestamp();
+            RequireDispatch(request, permit);
             using var response = await personalHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
             if (response.RequestMessage?.RequestUri != request.RequestUri) return new(HttpStatusCode.BadGateway);
             retry = response.Headers.RetryAfter?.Delta?.TotalSeconds

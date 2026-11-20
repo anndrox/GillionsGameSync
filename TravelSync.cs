@@ -13,7 +13,11 @@ namespace GillionsGameSync;
 internal sealed class TravelPrepared : IDisposable {
     internal TravelPrepared(string binding, TravelObservation observation, DateTime now) {
         Binding = binding; ObservedAtUtc = observation.ObservedAtUtc;
-        Payload = JsonSerializer.Serialize(observation, PersonalObservationCompatibility.Json);
+        // Site evaluates freshness on a millisecond clock. Preserve the original
+        // observation and its local deadline, but do not send a fractional tick
+        // that Site can treat as future within the same millisecond.
+        var wireTime = ObservedAtUtc.AddTicks(-(ObservedAtUtc.Ticks % TimeSpan.TicksPerMillisecond));
+        Payload = JsonSerializer.Serialize(observation with { ObservedAtUtc = wireTime }, PersonalObservationCompatibility.Json);
         Nonce = Guid.NewGuid().ToString("N");
         Lifetime.CancelAfter(ObservedAtUtc.AddSeconds(TravelPolicy.TtlSeconds) - now);
     }

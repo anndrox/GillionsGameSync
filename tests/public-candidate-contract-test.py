@@ -16,7 +16,23 @@ assert '<Version>1.0.31.13</Version>' in cs and 'GILLIONS_PUBLIC_BUILD' in cs
 assert 'https://xivpf.com/contribute/multiple' not in cs
 for p in ['FateTransport.cs','FateDiscovery.cs','PersonalSync.cs','TravelSync.cs','MarketContributionCore.cs','PartyFinderLinkRequests.cs']:
  text=(r/p).read_text()
- assert text==subprocess.check_output(['git','show',runtime_base+':'+p],cwd=r).decode().replace('\r\n','\n'),p
+ previous=subprocess.check_output(['git','show',runtime_base+':'+p],cwd=r).decode().replace('\r\n','\n')
+ # These three wire fixes have focused behavior tests. Keep the rest frozen.
+ contract_changes={
+  'FateTransport.cs': ('    };\n', '    internal static int RetrySeconds', '    internal static FateSendDisposition Response'),
+  'PersonalSync.cs': ('    internal static bool HuntCoverageFresh', '    internal static bool PayloadValid', None),
+  'TravelSync.cs': ('        Binding = binding; ObservedAtUtc = observation.ObservedAtUtc;\n', '        Nonce = ', None),
+ }
+ if p in contract_changes:
+  start,end,old_start=contract_changes[p]
+  if p=='FateTransport.cs':
+   start='    // The body is immutable UTF-8'
+  def outside_change(source, marker):
+   left, rest=source.split(marker,1)
+   return left+end+rest.split(end,1)[1]
+  assert outside_change(text,start)==outside_change(previous,old_start or start),p
+ else:
+  assert text==previous,p
  assert 'NativeProduct.Name' in text,p
  assert '"GillionsGameSyncTest"' not in text,p
 for p in ['BeastmasterLocalView.cs','DashboardLocalView.cs']:

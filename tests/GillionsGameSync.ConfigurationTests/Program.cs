@@ -18,6 +18,10 @@ AssemblyLoadContext.Default.Resolving += (_, name) => {
     return File.Exists(path) ? AssemblyLoadContext.Default.LoadFromAssemblyPath(path) : null;
 };
 var pluginAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(assemblyPath);
+if (args.Length == 4 && args[3] == "--wire-baseline") {
+    await WireContractPackagedTests.RunAsync(pluginAssembly, fixturePath, baseline: true);
+    return;
+}
 if (args.Length == 4 && args[3] == "--desynthesis-check") {
     DesynthesisPackagedTests.Run(pluginAssembly);
     return;
@@ -67,6 +71,8 @@ if (args.Length != 4 || args[3] != "--skip-channel-uninstall")
     ChannelIsolationPackagedTests.Run(pluginAssembly,fixturePath);
 DistributionManifestPackagedTests.Run(pluginAssembly);
 OriginPackagedTests.Run(pluginAssembly);
+await WireContractPackagedTests.RunAsync(pluginAssembly, fixturePath);
+await DeviceRevocationPackagedTests.RunAsync(pluginAssembly);
 var nativeCapabilities = pluginAssembly.GetType("GillionsGameSync.FateLocalView") is not null;
 FatePackagedTests.Run(pluginAssembly,testingProduct,fixturePath);
 PermissionPackagedTests.Run(pluginAssembly);
@@ -516,8 +522,8 @@ foreach (var fixture in cases) {
         "Ordinary typed dates must retain the default serializer's value and Kind.");
     Assert(roundTrip["UnrecognizedOrdinary"] is null,
         "Unknown ordinary fields must retain the default ignored-field behavior.");
-    Assert(roundTrip.Value<string>("DeviceToken") == "SYNTHETIC-DEVICE-TOKEN"
-        && roundTrip.Value<bool>("AutomaticSync") == false, "Unrelated config fields must survive normal save.");
+    Assert(roundTrip["DeviceToken"] is null && roundTrip.Value<string>("ProtectedDeviceToken") is { Length: > 0 }
+        && roundTrip.Value<bool>("AutomaticSync") == false, "Normal save must migrate the credential and preserve unrelated settings.");
     Assert(roundTrip.Value<bool>("EnableAutoRetainerVenturePlans") == fixture.Value<bool>("EnableAutoRetainerVenturePlans"),
         "Legacy opt-in must survive inertly, including the absent-field default.");
     Assert(roundTrip.Value<bool>("EnablePartyFinderContributions") == fixture.Value<bool>("EnablePartyFinderContributions"),
@@ -525,6 +531,8 @@ foreach (var fixture in cases) {
     var restarted = load.Invoke(configurations, [product])!;
     configurationType.GetMethod("Save")!.Invoke(restarted, [savedViaPlugin]);
     var second = Parse(File.ReadAllText(pathForFixture));
+    Assert((string)configurationType.GetProperty("DeviceToken")!.GetValue(restarted)! == "SYNTHETIC-DEVICE-TOKEN",
+        "The actual Dalamud serializer could not reload the migrated credential.");
     Assert(JToken.DeepEquals(roundTrip, second), "Repeated ordinary saves must not normalize or lose legacy data.");
 }
 // Exercise the actual future configuration schema, not a parallel DTO serializer.

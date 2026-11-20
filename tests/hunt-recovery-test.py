@@ -27,6 +27,7 @@ methods = [method(source, anchor) for anchor in [
     '    private async Task SendRetainerPresenceAsync(',
     '    private void ClearRetainerServerAcceptance()',
     '    private bool CoveragePreparedCurrent(',
+    '    private void RequireDispatch(',
     '    private void DelayLegacyCoverage(',
     '    private ResourceRetry PrivateRetry(',
     '    private async Task SendPersonalAsync(',

@@ -121,7 +121,7 @@ internal static class FatePackagedTests {
         var responsePolicy=T("FateTransportPolicy").GetMethod("Response",flags)!;
         foreach(int status in new[]{401,403,404,422,429,503,502,400,409,413,415,200,201})
             foreach(bool failed in new[]{false,true}) {
-                var result=responsePolicy.Invoke(null,[status,false,failed])!.ToString();
+                var result=responsePolicy.Invoke(null,[status,false,failed,null])!.ToString();
                 var expected=status is 401 or 403 or 404 or 422 ? "Suspended"
                     : status is 429 or >=500 || status is 200 or 201 && failed ? "Retry" : "Invalid";
                 Check(result==expected,"Packaged HTTP disposition survives empty/malformed/stalled body: "+status);
@@ -134,7 +134,7 @@ internal static class FatePackagedTests {
             foreach(int status in new[]{200,201,401,403,422,429,503}) {
                 var expected=status is 401 or 403 or 422 ? "Suspended"
                     : status is 429 or 503 || failed ? "Retry" : "Invalid";
-                Check(responsePolicy.Invoke(null,[status,false,failed])!.ToString()==expected,"Packaged truncated versus malformed complete response "+status);
+                Check(responsePolicy.Invoke(null,[status,false,failed,null])!.ToString()==expected,"Packaged truncated versus malformed complete response "+status);
             }
         }
         var read=T("SyncResponsePolicy").GetMethod("ReadAsync",BindingFlags.Public|BindingFlags.Static)!;
@@ -144,7 +144,7 @@ internal static class FatePackagedTests {
             catch(Exception error) { observed=error; }
             Check(observed is HttpIOException,"Packaged bounded reader exposes premature response termination.");
             foreach(int status in new[]{200,201})
-                Check(responsePolicy.Invoke(null,[status,false,(bool)transportFailure.Invoke(null,[observed])!])!.ToString()=="Retry","Packaged actual truncated success retries immutable batch.");
+                Check(responsePolicy.Invoke(null,[status,false,(bool)transportFailure.Invoke(null,[observed])!,null])!.ToString()=="Retry","Packaged actual truncated success retries immutable batch.");
         }
         var canCommit=T("FateTransportPolicy").GetMethod("CanCommit",flags)!;
         using var transportDeadline=new CancellationTokenSource(); using var feature=new CancellationTokenSource(); transportDeadline.Cancel();

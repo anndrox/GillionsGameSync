@@ -26,7 +26,7 @@ Assert-Contains $pluginSource "delayTicks: 1, cancellationToken: permit.Cancella
 Assert-Contains $pluginSource "await framework.RunOnFrameworkThread" "All game-owned state capture must be marshaled to the framework thread."
 
 Assert-Contains $pluginSource "JsonSerializer.SerializeToUtf8Bytes(snapshot.Payload)" "Snapshots must be serialized once into UTF-8 bytes."
-Assert-Contains $pluginSource "writer.WriteRawValue(payloadUtf8, skipInputValidation: true)" "The prepared payload must be reused verbatim inside the upload wrapper."
+Assert-Contains $pluginSource "writer.WriteRawValue(payloadUtf8)" "The prepared payload must be validated and reused verbatim inside the upload wrapper."
 Assert-NotContains $pluginSource "GetPayloadHash(object payload)" "The legacy second serialization path must remain removed."
 Assert-NotContains $collectorSource "JsonSerializer.Serialize(prior) == JsonSerializer.Serialize(read)" "Retainer listing comparisons must not serialize both snapshots."
 Assert-Contains $collectorSource "prior.Items.SequenceEqual(read.Items)" "Retainer listing changes must use typed structural comparison."

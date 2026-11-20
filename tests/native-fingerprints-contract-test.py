@@ -24,7 +24,8 @@ for name in listed:
 # (UIState Cabinet), glamour plates and the glamour dresser (MirageManager.PrismBox, and
 # ItemFinderModule's dresser cache for outfit pieces). Ordinary sync is not fingerprinted:
 # TEST admits it by exact client version.
-outside = {'Plugin.cs', 'DirectGameSnapshotCollector.cs', 'BeastmasterLocalView.cs', 'DashboardLocalView.cs'}
+# DeviceCredential.cs uses Windows DPAPI buffers and reads no game memory.
+outside = {'Plugin.cs', 'DirectGameSnapshotCollector.cs', 'BeastmasterLocalView.cs', 'DashboardLocalView.cs', 'DeviceCredential.cs'}
 for path in sorted(r.glob('*.cs')):
     text = path.read_text(encoding='utf-8')
     if 'FFXIVClientStructs' in text or re.search(r'\bunsafe\b', text):

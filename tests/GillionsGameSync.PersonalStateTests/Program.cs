@@ -327,7 +327,9 @@ HuntBillItemCoverageTests.Run(Check);
 var split = new HuntSplitUpload();
 var rev = new HuntUploadRevision(1, 1, 1);
 var history = new[] { Bill(), Bill(1) };
-var domains = Enumerable.Range(0, 22).Select(i => new HuntBillItemState((byte)i, (uint)(2001361 + i), "absent_confirmed")).ToArray();
+uint[] huntKeyItems = [2001361,2001700,2001701,2001702,2001362,2001703,2002113,2002114,2002115,2002116,2002628,
+    2002629,2002630,2002631,2003090,2003091,2003092,2003093,2003509,2003510,2003511,2003512];
+var domains = huntKeyItems.Select((keyItem, i) => new HuntBillItemState((byte)i, keyItem, "absent_confirmed")).ToArray();
 HuntBillItemSnapshot Sample(int seconds, HuntBillItemState[]? states = null) => new(Guid.NewGuid().ToString("N"), now.AddSeconds(seconds),
     "2026.11.03.0000.0000", "0.0.99.0", "7.57.0.9480", states ?? domains);
 HuntSplitPreparation? Prepare(HuntUploadRevision revision, int seconds, HuntBillItemState[]? states = null) =>
