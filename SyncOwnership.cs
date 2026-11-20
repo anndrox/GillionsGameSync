@@ -11,12 +11,20 @@ public sealed record PairedSession(int SchemaVersion, string Origin, string Devi
     public static PairedSession Create(string origin, string deviceId, string token) {
         if (!SyncOrigin.TryNormalize(origin, out var normalized) || !Guid.TryParse(deviceId, out _) || !ValidToken(token))
             throw new InvalidOperationException("Gillions returned invalid pairing details.");
-        return new(1, normalized, deviceId, Guid.NewGuid().ToString("N"), Fingerprint(token));
+        return new(2, normalized, deviceId, Guid.NewGuid().ToString("N"), Fingerprint(normalized + "\n" + token));
     }
-    public bool IsValid(string deviceId, string token) => SchemaVersion == 1
-        && SyncOrigin.TryNormalize(Origin, out var normalized) && normalized == Origin
+    public bool IsValid(string deviceId, string token) => SchemaVersion == 2
+        && HasValidIdentity(deviceId, token) && CredentialFingerprint == Fingerprint(Origin + "\n" + token);
+
+    internal PairedSession? UpgradeLegacy(string deviceId, string token) =>
+        SchemaVersion == 1 && HasValidIdentity(deviceId, token) && CredentialFingerprint == Fingerprint(token)
+            ? this with { SchemaVersion = 2, CredentialFingerprint = Fingerprint(Origin + "\n" + token) }
+            : null;
+
+    private bool HasValidIdentity(string deviceId, string token) =>
+        SyncOrigin.TryNormalize(Origin, out var normalized) && normalized == Origin
         && Guid.TryParse(Generation, out _) && Guid.TryParse(DeviceId, out _)
-        && DeviceId == deviceId && ValidToken(token) && CredentialFingerprint == Fingerprint(token);
+        && DeviceId == deviceId && ValidToken(token);
     private static bool ValidToken(string? token) => token is { Length: >= 24 and <= 256 }
         && token.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
     private static string Fingerprint(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));

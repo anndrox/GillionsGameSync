@@ -21,6 +21,14 @@ sync_result_arm="        _ when SyncSectionReport.IsMessage(value) => value,\n"
 assert experience.count(sync_result_arm)==1
 experience=experience.replace(sync_result_arm,'')
 assert 'SyncSectionReport' not in outside_status(experience)
+# Disconnect may report either confirmed Site revocation or a local-only clear.
+for line in [
+    '    internal const string Disconnected = "Disconnected. Saved history remains on this PC.";\n',
+    '    internal const string DisconnectedLocally = "Disconnected on this PC. Gillions could not confirm revocation. Disconnect this device in Gillions settings.";\n',
+]:
+    assert experience.count(line) == 1
+    experience = experience.replace(line, '')
+experience = experience.replace('or Disconnected or DisconnectedLocally', 'or "Disconnected. Saved history remains on this PC."')
 assert outside_status(experience)==outside_status(accepted)
 hunt=(r/'HuntBillLocalView.cs').read_text(encoding='utf-8').replace('    internal bool Reading => ReadEnabled;\n','')
 hunt=hunt[:hunt.index('    internal HuntBillItemSnapshot? CurrentCoverage')] + hunt[hunt.index('    internal DateTime? CoverageObservedAtUtc'):]
@@ -69,7 +77,8 @@ assert pair.index('!NativeProduct.RequestOrigin(origin)') < pair.index('configur
 permit=plugin.split('private bool PermitIsCurrent(',1)[1].split('private ',1)[0]
 assert 'NativeProduct.RequestOrigin(permit.Origin)' in permit
 assert 'configuration.PairingRequired, configuration.DeviceId, configuration.DeviceToken, NativeProduct.RequestOrigin)' in plugin
-assert '#if GILLIONS_TEST_BUILD\n    private readonly HttpClient http = PartyFinderHttp.CreateClient();' in plugin
+assert '    private readonly HttpClient http = PartyFinderHttp.CreateClient();' in plugin
+assert 'private readonly HttpClient http = new' not in plugin
 for name in ['Request(string path','SnapshotRequest(string path']:
     body=plugin.split(name,1)[1].split('private ',1)[0]
     assert body.index('NativeProduct.RequestOrigin(permit.Origin)') < body.index('new HttpRequestMessage')

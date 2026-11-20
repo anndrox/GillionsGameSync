@@ -110,11 +110,7 @@ public sealed partial class Plugin : IDalamudPlugin {
     private bool huntMapPollInFlight;
     private volatile string huntMapStatus = "Automatic Hunt maps OFF.";
 #endif
-#if GILLIONS_TEST_BUILD
     private readonly HttpClient http = PartyFinderHttp.CreateClient();
-#else
-    private readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(30) };
-#endif
     private readonly HttpClient partyFinderHttp = PartyFinderHttp.CreateClient();
     private readonly PluginConfiguration configuration;
     private readonly IPartyFinderContributor partyFinderContributor;
@@ -131,6 +127,7 @@ public sealed partial class Plugin : IDalamudPlugin {
     private volatile string pairingFailureMessage = "";
     private string uiPairingCode = "";
     private bool pairingInFlight;
+    private CancellationTokenSource? disconnectAttempt;
     private bool observedAutomaticSync;
     private bool observedItemLinks;
     private DateTime nextRetainerUploadUtc = DateTime.MinValue;
@@ -296,6 +293,8 @@ public sealed partial class Plugin : IDalamudPlugin {
         playerState = travelPlayerState;
 #endif
         configuration = pluginInterface.GetPluginConfig() as PluginConfiguration ?? new PluginConfiguration();
+        var pairingUpgraded = configuration.UpgradeDevicePairing();
+        if (configuration.CredentialStorageChanged || pairingUpgraded) RequestConfigurationSave();
         if (configuration.ApplyPairingDestinationForVersion(PluginVersion, IsTesting,
             pluginInterface.Reason is PluginLoadReason.Installer or PluginLoadReason.Update)) RequestConfigurationSave();
         partyFinderContributor = PartyFinderContributorFactory.Create(partyFinderGui, partyFinderHttp, log,
@@ -395,7 +394,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         var ownsPairAttempt = false;
         try {
             permit = await framework.RunOnFrameworkThread(() => {
-                if (disposed || pairingInFlight) throw new OperationCanceledException();
+                if (disposed || pairingInFlight || disconnectAttempt is not null) throw new OperationCanceledException();
                 if (string.IsNullOrWhiteSpace(configuration.PairingCode) || !SyncOrigin.TryNormalize(configuration.ServerUrl, out var origin)
                     || !NativeProduct.RequestOrigin(origin))
                     throw new InvalidOperationException("Enter a pairing code and a supported HTTPS server address for this channel.");
@@ -430,7 +429,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         } catch (Exception error) {
             if (!disposed) await framework.RunOnFrameworkThread(() => {
                 // A refused local input or overlapping attempt never reached Gillions.
-                if (disposed || permit is null && pairingInFlight || permit is not null && !PermitIsCurrent(permit)) return;
+                if (disposed || disconnectAttempt is not null || permit is null && pairingInFlight || permit is not null && !PermitIsCurrent(permit)) return;
                 pairingFailureMessage = PublicUrlConfiguration.PairingFailure(error, permit?.Origin);
                 settingsMessage = OperationFailureMessage(error);
                 if (permit is not null) ObserveConnectionFailure(error);
@@ -439,6 +438,34 @@ public sealed partial class Plugin : IDalamudPlugin {
         } finally {
             if (ownsPairAttempt && !disposed) await framework.RunOnFrameworkThread(() => { if (!disposed) pairingInFlight = false; });
         }
+    }
+
+    private async Task DisconnectAsync() {
+        // The UI queues this on the framework thread. Pause other sends and
+        // enrollment until Site responds or the bounded revocation attempt ends.
+        if (disposed || pairingInFlight || !HasPairedSession) return;
+        var origin = configuration.ActiveSession!.Origin;
+        var token = configuration.DeviceToken;
+        using var attempt = new CancellationTokenSource();
+        disconnectAttempt = attempt;
+        var revoked = false;
+        try {
+            ResetSessionContext();
+            revoked = await DeviceRevocation.TryRevokeAsync(http, origin, token, PluginVersion, attempt.Token);
+        } catch (Exception error) {
+            log.Warning("Gillions device revocation did not complete ({Type}).", error.GetType().Name);
+        } finally {
+            if (!disposed) await framework.RunOnFrameworkThread(() => {
+                if (!disposed && ReferenceEquals(disconnectAttempt, attempt)) FinishDisconnect(revoked);
+            });
+        }
+    }
+
+    private void FinishDisconnect(bool revoked) {
+        disconnectAttempt = null;
+        configuration.ClearDevicePairing();
+        RequestConfigurationSave();
+        settingsMessage = revoked ? PublicConnectionPresentation.Disconnected : PublicConnectionPresentation.DisconnectedLocally;
     }
 
     private async Task SendRetainerPresenceAsync(SyncRequestPermit permit, RetainerPresenceDocument presence) {
@@ -1946,7 +1973,7 @@ public sealed partial class Plugin : IDalamudPlugin {
 
     private PairingValidationCache? pairingValidation;
     private ulong? frameworkTickContentId;
-    private bool HasPairedSession => LazyInitializer.EnsureInitialized(ref pairingValidation).IsBound(configuration.ActiveSession,
+    private bool HasPairedSession => disconnectAttempt is null && LazyInitializer.EnsureInitialized(ref pairingValidation).IsBound(configuration.ActiveSession,
         configuration.PairingRequired, configuration.DeviceId, configuration.DeviceToken, NativeProduct.RequestOrigin);
     private OwnedCharacterState CurrentState => activeOwnedState ?? throw new InvalidOperationException("Pair and log into a character before syncing.");
 
@@ -2357,18 +2384,21 @@ public sealed partial class Plugin : IDalamudPlugin {
     private void RequirePermit(SyncRequestPermit permit) {
         if (!PermitIsCurrent(permit)) throw new OperationCanceledException("The connection or sync settings changed.");
     }
+
+    private void RequireDispatch(HttpRequestMessage request, SyncRequestPermit permit) {
+        if (!NativeProduct.CanDispatch(permit.Origin, request.RequestUri))
+            throw new OperationCanceledException("Unsupported destination for this Game Sync channel.");
+        RequirePermit(permit);
+    }
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
     private async Task<HttpResponseMessage> SendPresenceAsync(HttpRequestMessage request, SyncRequestPermit permit, CancellationToken cancellation) {
-        if (NativeProduct.TransportOrigin(permit.Origin)) {
-            Task<HttpResponseMessage>? pending = null;
-            await framework.RunOnFrameworkThread(() => {
-                RequirePermit(permit); cancellation.ThrowIfCancellationRequested();
-                if (inDuty) request.Headers.Remove(HuntFocusState.Header);
-                pending = personalHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation);
-            });
-            return await pending!;
-        }
-        return await SendAsync(request, permit);
+        Task<HttpResponseMessage>? pending = null;
+        await framework.RunOnFrameworkThread(() => {
+            RequireDispatch(request, permit); cancellation.ThrowIfCancellationRequested();
+            if (inDuty) request.Headers.Remove(HuntFocusState.Header);
+            pending = personalHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation);
+        });
+        return await pending!;
     }
 #endif
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, SyncRequestPermit permit
@@ -2379,7 +2409,7 @@ public sealed partial class Plugin : IDalamudPlugin {
         if (disposed) throw new OperationCanceledException();
         Task<HttpResponseMessage>? pending = null;
         await framework.RunOnFrameworkThread(() => {
-            RequirePermit(permit);
+            RequireDispatch(request, permit);
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
             pending = (client ?? http).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, permit.Cancellation);
 #else
@@ -2869,6 +2899,10 @@ public sealed partial class Plugin : IDalamudPlugin {
 
     public void Dispose() {
         if (disposed) return;
+        if (disconnectAttempt is { } attempt) {
+            FinishDisconnect(revoked: false);
+            attempt.Cancel();
+        }
         framework.Update -= OnFrameworkUpdate;
         huntLocal.Dispose();
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
@@ -2965,7 +2999,6 @@ public sealed partial class PluginConfiguration : IPluginConfiguration {
     public string PairingDestinationNotice { get; set; } = "";
     public string PairingCode { get; set; } = "";
     public string DeviceId { get; set; } = "";
-    public string DeviceToken { get; set; } = "";
     public bool AutomaticSync { get; set; } = true;
     public bool EnableItemLinkRequests { get; set; } = true;
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD

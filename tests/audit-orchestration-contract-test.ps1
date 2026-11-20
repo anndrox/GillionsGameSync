@@ -12,7 +12,7 @@ Require (([regex]::Matches($runtime, '\(client \?\? http\)\.SendAsync\(')).Count
 $dispatchStart = $runtime.IndexOf('private async Task<HttpResponseMessage> SendAsync')
 $dispatchEnd = $runtime.IndexOf('private async Task CommitAsync', $dispatchStart)
 $dispatch = $runtime.Substring($dispatchStart, $dispatchEnd - $dispatchStart)
-Require ($dispatch.Contains('RunOnFrameworkThread') -and $dispatch.IndexOf('RequirePermit(permit)') -lt $dispatch.IndexOf('(client ?? http).SendAsync')) 'A captured permit must still be current immediately before HTTP dispatch.'
+Require ($dispatch.Contains('RunOnFrameworkThread') -and $dispatch.Contains('RequireDispatch(request, permit)') -and $dispatch.IndexOf('RequireDispatch(request, permit)') -lt $dispatch.IndexOf('(client ?? http).SendAsync')) 'A captured permit must still be current immediately before HTTP dispatch.'
 Require ($dispatch.Contains('HttpCompletionOption.ResponseHeadersRead') -and $dispatch.Contains('permit.Cancellation')) 'Requests must stream bounded replies and support lifecycle cancellation.'
 Require ($runtime.Contains('await CommitAsync(captured.Permit, state =>')) 'Snapshot and Gil ACKs must commit atomically through their captured owner permit.'
 Require ($runtime.Contains('configurationWriter.Enqueue(() => snapshot.Save(pluginInterface))') -and -not $runtime.Contains('configuration.Save(pluginInterface)')) 'Only the ordered checkpoint writer may save configuration.'

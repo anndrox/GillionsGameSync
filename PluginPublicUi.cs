@@ -58,15 +58,8 @@ public sealed partial class Plugin {
 #else
     private const bool IsTesting=false;
 #endif
-    private string UiOrigin {
-        get {
-#if GILLIONS_TEST_BUILD
-            return NativeProduct.TransportOrigin(configuration.ActiveSession?.Origin) ? configuration.ActiveSession!.Origin : GillionsEndpoints.DefaultServerUrl;
-#else
-            return configuration.ActiveSession?.Origin ?? GillionsEndpoints.DefaultServerUrl;
-#endif
-        }
-    }
+    private string UiOrigin => NativeProduct.RequestOrigin(configuration.ActiveSession?.Origin)
+        ? configuration.ActiveSession!.Origin : GillionsEndpoints.DefaultServerUrl;
     private string PrivacyUrl => (SyncOrigin.TryNormalize(UiOrigin,out var current) ? current : GillionsEndpoints.DefaultServerUrl)+"/gillions-sync";
     private void DrawActionFeedback(bool pairing=false) {
         string message=pairing && pairingFailureMessage.Length > 0
@@ -81,7 +74,7 @@ public sealed partial class Plugin {
     }
     private void PublishPublicHealth(DateTime now) {
         string code=publicConnectionFailure.Length>0 ? publicConnectionFailure : configuration.SyncBlockedCode;
-        string connection=pairingInFlight ? "Connecting" : code=="UNAVAILABLE" ? "Gillions unavailable" : PublicHealth.ConnectionState(HasPairedSession,false,code);
+        string connection=disconnectAttempt is not null ? "Disconnecting" : pairingInFlight ? "Connecting" : code=="UNAVAILABLE" ? "Gillions unavailable" : PublicHealth.ConnectionState(HasPairedSession,false,code);
         string character=activeOwnedState is { } c ? $"{c.CharacterName} · {c.CharacterWorld}" : "Character unavailable";
         string waiting=HasPairedSession ? "Waiting for supported context" : "Gillions unavailable";
         string game=dataManager.GameData.Repositories.TryGetValue("ffxiv",out var repo) ? repo.Version : "unavailable";
@@ -351,13 +344,12 @@ public sealed partial class Plugin {
             DrawConnection(publicHealth.Connection); Label(publicHealth.Character); DrawPrivacy();
             DrawActionFeedback();
             Link("Open Gillions",UiOrigin);
+            ImGui.BeginDisabled(disconnectAttempt is not null);
             if(ImGui.Button("Reconnect")) { pairingRepair=true; publicUi.ShowPairing(); }
             if(uiState.Paired) { ImGui.Spacing(); ImGui.Separator(); }
-            if(uiState.Paired && ImGui.Button("Disconnect Game Sync")) QueueUiAction(()=> {
-                configuration.PairingRequired=true; configuration.ActiveSession=null;
-                configuration.DeviceToken=""; configuration.DeviceId=""; configuration.PairingCode="";
-                ResetSessionContext(); RequestConfigurationSave(); settingsMessage="Disconnected. Saved history remains on this PC.";
-            });
+            if(uiState.Paired && ImGui.Button("Disconnect Game Sync")) QueueUiAction(() => _ = DisconnectAsync());
+            ImGui.EndDisabled();
+            if(disconnectAttempt is not null) Label("Disconnecting from Gillions…");
             ImGui.EndTabItem();
         }
         if(ImGui.BeginTabItem("Advanced")) {
