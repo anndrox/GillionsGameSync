@@ -122,7 +122,7 @@ foreach(var (name,method,paired,width,scale,tab) in cases) {
     if(name.StartsWith("19-"))Set("uiServerAddress","http://invalid.example/synthetic-secret");
     var health=New("PublicHealth",paired?"Connected":"Not connected",paired?"Example Character · Example World":"Character unavailable",
         paired?"Ready":"Gillions unavailable",paired?"Ready":"Gillions unavailable",paired?"Ready":"Gillions unavailable",paired?"Ready":"Gillions unavailable",
-        paired?new DateTime(2026,10,7,12,0,0,DateTimeKind.Utc):null,testing?"Testing":"Public",assembly.GetName().Version!.ToString(4),"2026.09.15.0000.0000");
+        paired?new DateTime(2026,10,7,12,0,0,DateTimeKind.Utc):null,testing?"Testing":"Public",assembly.GetName().Version!.ToString(4),"2026.09.15.0000.0000",null);
     if(name.StartsWith("35-")) foreach(string field in new[]{"Hunts","PartyFinder","Fates","Market"})
         health.GetType().GetProperty(field)!.SetValue(health,"Waiting for supported context");
     if(name.StartsWith("36-"))health.GetType().GetProperty("Connection")!.SetValue(health,"Update required");

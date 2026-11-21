@@ -332,7 +332,7 @@ internal sealed class HuntBillLocalView : IDisposable {
             if (targetTerritory == 0) complete = false;
             // Both views use this admitted read, never a maximum from retained history.
             var row = new HuntProgressRow($"{bill.BillTypeId}:{bill.OrderId}:{target.TargetIndex}:{target.TargetId}",
-                presentation.TargetName(target), target.ObservedKills, target.RequiredKills);
+                presentation.TargetName(target), target.ObservedKills, target.RequiredKills) { NpcNameId = target.NpcNameId };
             if (targetTerritory == territory) rows.Add(row);
             var targetZone = territories.GetRowOrDefault(targetTerritory)?.PlaceName.Value.Name.ExtractText();
             var fateName = target.FateId != 0

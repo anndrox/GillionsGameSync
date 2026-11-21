@@ -70,6 +70,7 @@ internal static class PublicConnectionPresentation {
 }
 
 internal sealed record HuntProgressRow(string Key, string Name, int Current, int Required) {
+    internal uint NpcNameId { get; init; }
     internal int Remaining => Math.Max(0, Required - Current);
     internal bool Complete => Current == Required;
 }
@@ -84,52 +85,119 @@ internal sealed record HuntProgressDisplay(string Area, string Status, HuntProgr
 internal sealed class HuntProgressState {
     private uint territory;
     private bool enabled, suppressed, visible, manuallyOpened;
-    private readonly Dictionary<string, HuntProgressRow> prior = new();
+    private Dictionary<string, (HuntProgressRow Row, long LastCountChange)> prior = new();
     private readonly Dictionary<string, (HuntProgressRow Row, long Until)> completed = new();
-    private long allCompleteUntil;
+    private HuntProgressRow[] priorRows = [], orderedIncomplete = [];
+    private long countRevision, allCompleteUntil;
+    private uint priorTargetNpcNameId;
+    private string? activeMarkKey;
     internal long InteractionRevision { get; private set; }
     internal bool Visible => visible;
     internal HuntProgressDisplay Display { get; private set; } = new("", "Hunt progress unavailable", []);
     internal void Close() { InteractionRevision++; visible = false; suppressed = true; manuallyOpened = false; }
     internal void Open() { InteractionRevision++; suppressed = false; manuallyOpened = true; visible = true; }
     internal void Invalidate(bool endTerritorySession = false) {
-        prior.Clear(); completed.Clear(); allCompleteUntil = 0; visible = false;
+        ClearRows();
+        visible = false;
         Display = new("", "Hunt progress unavailable", []);
         if (endTerritorySession) { InteractionRevision++; territory = 0; suppressed = false; manuallyOpened = false; }
     }
-    internal void Update(bool show, uint currentTerritory, HuntProgressSnapshot sample, long clock) {
+    private void ClearRows() {
+        prior.Clear(); completed.Clear();
+        priorRows = []; orderedIncomplete = [];
+        countRevision = 0; allCompleteUntil = 0;
+        priorTargetNpcNameId = 0; activeMarkKey = null;
+    }
+
+    internal void Update(bool show, uint currentTerritory, HuntProgressSnapshot sample, long clock,
+        uint targetNpcNameId = 0) {
         if (territory != currentTerritory || enabled != show) {
             InteractionRevision++;
             territory = currentTerritory; enabled = show; suppressed = false; visible = false;
-            manuallyOpened = false; prior.Clear(); completed.Clear(); allCompleteUntil = 0;
+            manuallyOpened = false;
+            ClearRows();
         }
         if (!show) { visible = false; return; }
         bool fresh = currentTerritory != 0 && sample.Territory == currentTerritory && clock < sample.ExpiresAt;
         if (!fresh || sample.Availability.Length != 0) {
             // Never leave stale numbers displayed as current during reconciliation.
-            prior.Clear(); completed.Clear(); allCompleteUntil = 0;
+            ClearRows();
             Display = new(sample.Territory == currentTerritory ? sample.Area : "", sample == HuntProgressSnapshot.Unavailable ? "Hunt progress unavailable"
                 : fresh ? sample.Availability : "Hunt progress updating…", []);
             return;
         }
         var rows = sample.Rows;
-        foreach (var row in rows) {
-            if (row.Complete && prior.TryGetValue(row.Key, out var before) && !before.Complete)
-                completed[row.Key] = (row, clock + 2500);
+        bool rowsChanged = !ReferenceEquals(rows, priorRows) && !rows.AsSpan().SequenceEqual(priorRows);
+        bool hasIncomplete = rows.Any(row => !row.Complete);
+        if (rowsChanged) {
+            if (!hasIncomplete && sample.CoverageComplete && priorRows.Any(row => !row.Complete))
+                allCompleteUntil = clock + 2500;
+            TrackCountChanges(rows, clock);
         }
-        foreach (var key in completed.Where(p => clock >= p.Value.Until || !rows.Any(r => r.Key == p.Key && r.Complete)).Select(p => p.Key).ToArray()) completed.Remove(key);
-        var incomplete = rows.Where(r => !r.Complete).ToArray();
-        if (incomplete.Length > 0 && !suppressed) visible = true;
-        if (incomplete.Length == 0 && sample.CoverageComplete && prior.Values.Any(r => !r.Complete))
-            allCompleteUntil = clock + 2500;
-        // Empty coverage at initial load is not a target-completion event.
-        bool allComplete = incomplete.Length == 0 && sample.CoverageComplete && clock < allCompleteUntil;
+        priorRows = rows;
+
+        bool reordered = false;
+        if (rowsChanged || targetNpcNameId != priorTargetNpcNameId) {
+            priorTargetNpcNameId = targetNpcNameId;
+            var nextActive = SelectActiveMark(rows, targetNpcNameId);
+            if (rowsChanged || nextActive != activeMarkKey) {
+                activeMarkKey = nextActive;
+                // LINQ's stable ordering keeps the other unfinished marks in bill order.
+                orderedIncomplete = rows.Where(row => !row.Complete).OrderBy(row => row.Key != activeMarkKey).ToArray();
+                reordered = true;
+            }
+        }
+
+        int heldBefore = completed.Count;
+        if (heldBefore > 0) {
+            foreach (var key in completed.Where(pair => clock >= pair.Value.Until
+                || !prior.TryGetValue(pair.Key, out var mark) || !mark.Row.Complete).Select(pair => pair.Key).ToArray())
+                completed.Remove(key);
+        }
+
+        if (hasIncomplete && !suppressed) visible = true;
+        // Show only recent completion transitions until each hold expires.
+        var displayRows = orderedIncomplete;
+        if (completed.Count > 0) {
+            displayRows = reordered || completed.Count != heldBefore
+                ? orderedIncomplete.Concat(completed.Values.Select(hold => hold.Row)).ToArray()
+                : Display.Rows;
+        }
+        bool allComplete = !hasIncomplete && sample.CoverageComplete && clock < allCompleteUntil;
         Display = new(sample.Area, allComplete ? "All current Hunt targets here are complete."
             : rows.Length == 0 ? "None of your Hunt targets are in this zone."
-            : incomplete.Length == 0 && !sample.CoverageComplete ? "The Hunt targets you can see here are complete." : "",
-            incomplete.Concat(completed.Values.Select(p => p.Row)).ToArray());
-        if (incomplete.Length == 0 && completed.Count == 0 && !allComplete && !manuallyOpened) visible = false;
-        prior.Clear(); foreach (var row in rows) prior[row.Key] = row;
+            : !hasIncomplete && !sample.CoverageComplete ? "The Hunt targets you can see here are complete." : "", displayRows);
+        if (!hasIncomplete && completed.Count == 0 && !allComplete && !manuallyOpened) visible = false;
+    }
+
+    private void TrackCountChanges(HuntProgressRow[] rows, long clock) {
+        // All count changes in one snapshot share a revision: their exact order is unknown.
+        countRevision++;
+        var next = new Dictionary<string, (HuntProgressRow Row, long LastCountChange)>(rows.Length);
+        foreach (var row in rows) {
+            long lastCountChange = 0;
+            if (prior.TryGetValue(row.Key, out var before)) {
+                lastCountChange = before.Row.Current == row.Current ? before.LastCountChange : countRevision;
+                if (row.Complete && !before.Row.Complete) completed[row.Key] = (row, clock + 2500);
+            }
+            next[row.Key] = (row, lastCountChange);
+        }
+        prior = next;
+    }
+
+    private string? SelectActiveMark(HuntProgressRow[] rows, uint targetNpcNameId) {
+        string? recent = null;
+        long latestChange = 0;
+        foreach (var row in rows) {
+            if (row.Complete) continue;
+            if (targetNpcNameId != 0 && row.NpcNameId == targetNpcNameId) return row.Key;
+            long lastCountChange = prior[row.Key].LastCountChange;
+            if (lastCountChange > latestChange) {
+                latestChange = lastCountChange;
+                recent = row.Key;
+            }
+        }
+        return recent;
     }
 }
 

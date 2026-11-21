@@ -41,6 +41,7 @@ internal static class PublicExperienceTests {
         state.Update(true,100,Snapshot(8700),8700);state.Update(true,100,Snapshot(8800,3),8800);
         state.Update(true,100,new(100,"Current area","",false,[new("new-bill","New target",0,1)],15000),8900);
         Check(state.Display.Rows.Length==1&&state.Display.Rows[0].Key=="new-bill","removed or replaced bill cannot retain a completion row");
+        CheckHuntOrdering(Check);
         var gate=new HuntProgressWindowGate();
         Check(gate.Prepare(true,0),"visible model may open standard window");
         Check(gate.Observe(true,false,0),"post-draw user close invokes model dismissal once");
@@ -70,5 +71,78 @@ internal static class PublicExperienceTests {
         var watch=System.Diagnostics.Stopwatch.StartNew();
         for(int i=0;i<10000;i++) state.Update(true,100,Snapshot(i),i);
         Console.WriteLine($"Public UX/Hunt Progress PASS: {checks} assertions; 10,000 synthetic model updates {watch.Elapsed.TotalMilliseconds:F2} ms (not in-game frame cost).");
+    }
+
+    private static void CheckHuntOrdering(Action<bool, string> check) {
+        var state = new HuntProgressState();
+        var leafkin = new HuntProgressRow("leafkin", "Blue Leafkin", 0, 3) { NpcNameId = 11 };
+        var moth = new HuntProgressRow("moth", "Ja Tiika Moth", 0, 3) { NpcNameId = 22 };
+        var necrosis = new HuntProgressRow("necrosis", "Necrosis", 0, 3) { NpcNameId = 33 };
+        void Update(long clock, uint targetNpcNameId = 0, uint territory = 100) =>
+            state.Update(true, territory, new(territory, "Yak T'el", "", false, [leafkin, moth, necrosis], clock + 6000),
+                clock, targetNpcNameId);
+        void Order(string why, params string[] expected) =>
+            check(state.Display.Rows.Select(row => row.Key).SequenceEqual(expected), why);
+
+        Update(0);
+        Order("An initial snapshot uses bill order", "leafkin", "moth", "necrosis");
+        Update(250, 33);
+        Order("Targeted Necrosis moves ahead of the other bill marks", "necrosis", "leafkin", "moth");
+        var targetedRows = state.Display.Rows;
+        Update(500, 33);
+        check(ReferenceEquals(targetedRows, state.Display.Rows), "An equivalent refreshed snapshot reuses the ordering");
+
+        moth = moth with { Current = 1 };
+        Update(750, 33);
+        Order("The selected mark takes priority over a different mark's count change", "necrosis", "leafkin", "moth");
+        Update(1000, 99);
+        Order("A non-bill target falls back to the most recently changed count", "moth", "leafkin", "necrosis");
+        var recentRows = state.Display.Rows;
+        Update(1250);
+        check(ReferenceEquals(recentRows, state.Display.Rows), "Losing an unrelated target does not reorder the same active mark");
+
+        necrosis = necrosis with { Current = 1 };
+        Update(1500);
+        Order("A newer count change moves its mark ahead of the earlier one", "necrosis", "leafkin", "moth");
+        moth = moth with { Current = 2 };
+        necrosis = necrosis with { Current = 2 };
+        Update(1750);
+        Order("Count changes from one snapshot tie in bill order", "moth", "leafkin", "necrosis");
+
+        moth = moth with { Current = 3 };
+        Update(2000, 22);
+        Order("A targeted completed mark stays below every unfinished mark", "necrosis", "leafkin", "moth");
+        leafkin = leafkin with { Current = 3 };
+        Update(2250, 11);
+        Order("Completion holds retain their observation order", "necrosis", "moth", "leafkin");
+        var finishedRows = state.Display.Rows;
+        Update(4499);
+        check(ReferenceEquals(finishedRows, state.Display.Rows), "Unchanged ordering is reused before either completion hold expires");
+        Update(4500);
+        Order("The first completed mark disappears after 2.5 seconds while hunting continues", "necrosis", "leafkin");
+        Update(4749);
+        Order("The later completion keeps its own hold", "necrosis", "leafkin");
+        Update(4750);
+        Order("The later completed mark disappears after its own 2.5 seconds", "necrosis");
+        Update(5000, territory: 101);
+        Order("Already completed marks do not get a new hold when entering an area", "necrosis");
+        necrosis = necrosis with { Current = 0 };
+        leafkin = leafkin with { Current = 0 };
+        moth = moth with { Current = 0 };
+        Update(5250, territory: 102);
+        Order("A fresh set of marks starts in bill order", "leafkin", "moth", "necrosis");
+
+        necrosis = necrosis with { Current = 1 };
+        Update(5500, territory: 102);
+        Order("New progress in the current area starts a new history", "necrosis", "leafkin", "moth");
+        Update(5750, territory: 103);
+        Order("A territory change clears recent progress even when the observed counts are identical", "leafkin", "moth", "necrosis");
+
+        necrosis = necrosis with { Current = 2 };
+        Update(6000, territory: 103);
+        Order("Progress can promote the mark again after the territory reset", "necrosis", "leafkin", "moth");
+        state.Update(true, 103, HuntProgressSnapshot.Unavailable, 6250);
+        Update(6500, territory: 103);
+        Order("Recovery cannot infer a recent kill from the first available count", "leafkin", "moth", "necrosis");
     }
 }

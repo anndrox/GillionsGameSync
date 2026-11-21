@@ -410,9 +410,9 @@ public sealed partial class Plugin {
         Label(display.Area);
         if(display.Status.Length>0) Label(display.Status);
         foreach(var row in display.Rows) {
-            ImGui.Separator(); Label(row.Name);
-            Label(row.Complete ? "✓ Complete" : $"{row.Remaining} left");
-            if(!row.Complete) ImGui.TextDisabled($"{row.Current} / {row.Required}");
+            ImGui.Separator();
+            var progress = row.Complete ? "✓ Complete" : $"{row.Remaining} left ({row.Current}/{row.Required})";
+            Label($"{row.Name} · {progress}");
         }
     }
 }

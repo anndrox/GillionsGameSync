@@ -1,20 +1,35 @@
 """Channel isolation/source correspondence; no network or player state."""
+from hashlib import sha256
 from pathlib import Path
 import re
 import subprocess
 
 r=Path(__file__).resolve().parents[1]
 public='43a86941f8f8e60c583c961b1502345df76c7e64'
-# The owner-directed status correction (2026-10-24 regression audit) replaces only
-# the PublicHealth status record; every other presentation rule stays byte-frozen.
+# PublicHealth is covered by the owner-directed status correction and its own tests.
 def outside_status(text):
-    head,rest=text.split('internal sealed record PublicHealth(',1)
-    return head+rest.split('\n}\n',1)[1]
+    head, rest = text.split('internal sealed record PublicHealth(', 1)
+    return head + rest.split('\n}\n', 1)[1]
+
+def hunt_progress_state(text):
+    declaration = 'internal sealed class HuntProgressState {'
+    assert text.count(declaration) == 1
+    start = text.index(declaration)
+    end = text.index('\n}\n', start) + len('\n}\n')
+    return text[start:end]
 experience=(r/'PublicExperience.cs').read_bytes().replace(b'\r\n',b'\n').decode('utf-8')
 accepted=subprocess.check_output(['git','show',public+':PublicExperience.cs'],cwd=r).replace(b'\r\n',b'\n').decode('utf-8')
-experience=experience.replace("None of your Hunt targets are in this zone.",
-    "No observed Hunt targets in this area. Current bill coverage is unverified.").replace(
-    "The Hunt targets you can see here are complete.", "Observed targets complete; current bill coverage is unverified.")
+# Require review for any further change to the LF-normalized class text.
+# Only substitute the frozen baseline after verifying the approved replacement.
+reviewed_hunt_state = hunt_progress_state(experience)
+assert sha256(reviewed_hunt_state.encode('utf-8')).hexdigest() == (
+    '53136d093bd12080e548abaa3274b61fc930f885ff9f93152af5f0b2917ae846'
+), 'HuntProgressState changed; review the exact class and update its pin.'
+experience = experience.replace(reviewed_hunt_state, hunt_progress_state(accepted), 1)
+# The existing bill NPC identifier is carried only in the local display model.
+npc_name_id = '    internal uint NpcNameId { get; init; }\n'
+assert experience.count(npc_name_id) == 1
+experience = experience.replace(npc_name_id, '')
 # Owner-approved with the per-list Collections send (Partner, 2026-11-17): the window also shows the Sync now results
 # that name sections ("not ready", "paused"), in the exact shape SyncSectionReport.Message builds. Only that one switch arm
 # differs from the accepted file outside the PublicHealth record.
@@ -30,7 +45,7 @@ for line in [
     assert experience.count(line) == 1
     experience = experience.replace(line, '')
 experience = experience.replace('or Disconnected or DisconnectedLocally', 'or "Disconnected. Saved history remains on this PC."')
-assert outside_status(experience)==outside_status(accepted)
+assert outside_status(experience) == outside_status(accepted)
 hunt=(r/'HuntBillLocalView.cs').read_text(encoding='utf-8').replace('    internal bool Reading => ReadEnabled;\n','')
 hunt=hunt[:hunt.index('    internal HuntBillItemSnapshot? CurrentCoverage')] + hunt[hunt.index('    internal DateTime? CoverageObservedAtUtc'):]
 # The framework guard logs failed background reads after the existing cleanup.
