@@ -86,8 +86,8 @@ internal sealed class HuntProgressState {
     private uint territory;
     private bool enabled, suppressed, visible, manuallyOpened;
     private Dictionary<string, (HuntProgressRow Row, long LastCountChange)> prior = new();
-    private readonly Dictionary<string, long> completed = new();
-    private HuntProgressRow[] priorRows = [], orderedRows = [];
+    private readonly Dictionary<string, (HuntProgressRow Row, long Until)> completed = new();
+    private HuntProgressRow[] priorRows = [], orderedIncomplete = [];
     private long countRevision, allCompleteUntil;
     private uint priorTargetNpcNameId;
     private string? activeMarkKey;
@@ -104,7 +104,7 @@ internal sealed class HuntProgressState {
     }
     private void ClearRows() {
         prior.Clear(); completed.Clear();
-        priorRows = []; orderedRows = [];
+        priorRows = []; orderedIncomplete = [];
         countRevision = 0; allCompleteUntil = 0;
         priorTargetNpcNameId = 0; activeMarkKey = null;
     }
@@ -136,32 +136,32 @@ internal sealed class HuntProgressState {
         }
         priorRows = rows;
 
+        bool reordered = false;
         if (rowsChanged || targetNpcNameId != priorTargetNpcNameId) {
             priorTargetNpcNameId = targetNpcNameId;
             var nextActive = SelectActiveMark(rows, targetNpcNameId);
             if (rowsChanged || nextActive != activeMarkKey) {
                 activeMarkKey = nextActive;
-                // LINQ's stable ordering keeps every other mark in bill order.
-                orderedRows = rows.OrderBy(row => row.Complete).ThenBy(row => row.Key != activeMarkKey).ToArray();
+                // LINQ's stable ordering keeps the other unfinished marks in bill order.
+                orderedIncomplete = rows.Where(row => !row.Complete).OrderBy(row => row.Key != activeMarkKey).ToArray();
+                reordered = true;
             }
         }
 
         int heldBefore = completed.Count;
         if (heldBefore > 0) {
-            foreach (var key in completed.Where(pair => clock >= pair.Value
+            foreach (var key in completed.Where(pair => clock >= pair.Value.Until
                 || !prior.TryGetValue(pair.Key, out var mark) || !mark.Row.Complete).Select(pair => pair.Key).ToArray())
                 completed.Remove(key);
         }
 
         if (hasIncomplete && !suppressed) visible = true;
-        // Keep finished rows at the bottom while hunting. Once all are finished,
-        // keep the existing brief completion hold and auto-hide behavior.
-        var displayRows = orderedRows;
-        if (!hasIncomplete) {
-            if (completed.Count == 0) displayRows = [];
-            else if (rowsChanged || completed.Count != heldBefore)
-                displayRows = orderedRows.Where(row => completed.ContainsKey(row.Key)).ToArray();
-            else displayRows = Display.Rows;
+        // Show only recent completion transitions until each hold expires.
+        var displayRows = orderedIncomplete;
+        if (completed.Count > 0) {
+            displayRows = reordered || completed.Count != heldBefore
+                ? orderedIncomplete.Concat(completed.Values.Select(hold => hold.Row)).ToArray()
+                : Display.Rows;
         }
         bool allComplete = !hasIncomplete && sample.CoverageComplete && clock < allCompleteUntil;
         Display = new(sample.Area, allComplete ? "All current Hunt targets here are complete."
@@ -178,7 +178,7 @@ internal sealed class HuntProgressState {
             long lastCountChange = 0;
             if (prior.TryGetValue(row.Key, out var before)) {
                 lastCountChange = before.Row.Current == row.Current ? before.LastCountChange : countRevision;
-                if (row.Complete && !before.Row.Complete) completed[row.Key] = clock + 2500;
+                if (row.Complete && !before.Row.Complete) completed[row.Key] = (row, clock + 2500);
             }
             next[row.Key] = (row, lastCountChange);
         }

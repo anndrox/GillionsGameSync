@@ -114,21 +114,35 @@ internal static class PublicExperienceTests {
         Order("A targeted completed mark stays below every unfinished mark", "necrosis", "leafkin", "moth");
         leafkin = leafkin with { Current = 3 };
         Update(2250, 11);
-        Order("Completed marks also retain bill order", "necrosis", "leafkin", "moth");
+        Order("Completion holds retain their observation order", "necrosis", "moth", "leafkin");
         var finishedRows = state.Display.Rows;
-        Update(5000);
-        check(ReferenceEquals(finishedRows, state.Display.Rows), "Finished rows stay at the bottom while another mark remains");
+        Update(4499);
+        check(ReferenceEquals(finishedRows, state.Display.Rows), "Unchanged ordering is reused before either completion hold expires");
+        Update(4500);
+        Order("The first completed mark disappears after 2.5 seconds while hunting continues", "necrosis", "leafkin");
+        Update(4749);
+        Order("The later completion keeps its own hold", "necrosis", "leafkin");
+        Update(4750);
+        Order("The later completed mark disappears after its own 2.5 seconds", "necrosis");
+        Update(5000, territory: 101);
+        Order("Already completed marks do not get a new hold when entering an area", "necrosis");
         necrosis = necrosis with { Current = 0 };
         leafkin = leafkin with { Current = 0 };
         moth = moth with { Current = 0 };
-        Update(5250, territory: 101);
-        Order("A territory change does not carry over count recency", "leafkin", "moth", "necrosis");
+        Update(5250, territory: 102);
+        Order("A fresh set of marks starts in bill order", "leafkin", "moth", "necrosis");
 
         necrosis = necrosis with { Current = 1 };
-        Update(5500, territory: 101);
+        Update(5500, territory: 102);
         Order("New progress in the current area starts a new history", "necrosis", "leafkin", "moth");
-        state.Update(true, 101, HuntProgressSnapshot.Unavailable, 5750);
-        Update(6000, territory: 101);
+        Update(5750, territory: 103);
+        Order("A territory change clears recent progress even when the observed counts are identical", "leafkin", "moth", "necrosis");
+
+        necrosis = necrosis with { Current = 2 };
+        Update(6000, territory: 103);
+        Order("Progress can promote the mark again after the territory reset", "necrosis", "leafkin", "moth");
+        state.Update(true, 103, HuntProgressSnapshot.Unavailable, 6250);
+        Update(6500, territory: 103);
         Order("Recovery cannot infer a recent kill from the first available count", "leafkin", "moth", "necrosis");
     }
 }

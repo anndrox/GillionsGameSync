@@ -1,19 +1,31 @@
 """Channel isolation/source correspondence; no network or player state."""
+from hashlib import sha256
 from pathlib import Path
 import re
 import subprocess
 
 r=Path(__file__).resolve().parents[1]
 public='43a86941f8f8e60c583c961b1502345df76c7e64'
-# PublicHealth and the Hunt Progress state have separate behavioral tests.
-# Keep the surrounding presentation rules under the historical source comparison.
-def outside_status_and_hunt_state(text):
-    for declaration in ('internal sealed record PublicHealth(', 'internal sealed class HuntProgressState {'):
-        head, rest = text.split(declaration, 1)
-        text = head + rest.split('\n}\n', 1)[1]
-    return text
+# PublicHealth is covered by the owner-directed status correction and its own tests.
+def outside_status(text):
+    head, rest = text.split('internal sealed record PublicHealth(', 1)
+    return head + rest.split('\n}\n', 1)[1]
+
+def hunt_progress_state(text):
+    declaration = 'internal sealed class HuntProgressState {'
+    assert text.count(declaration) == 1
+    start = text.index(declaration)
+    end = text.index('\n}\n', start) + len('\n}\n')
+    return text[start:end]
 experience=(r/'PublicExperience.cs').read_bytes().replace(b'\r\n',b'\n').decode('utf-8')
 accepted=subprocess.check_output(['git','show',public+':PublicExperience.cs'],cwd=r).replace(b'\r\n',b'\n').decode('utf-8')
+# Require review for any further change to the LF-normalized class text.
+# Only substitute the frozen baseline after verifying the approved replacement.
+reviewed_hunt_state = hunt_progress_state(experience)
+assert sha256(reviewed_hunt_state.encode('utf-8')).hexdigest() == (
+    '53136d093bd12080e548abaa3274b61fc930f885ff9f93152af5f0b2917ae846'
+), 'HuntProgressState changed; review the exact class and update its pin.'
+experience = experience.replace(reviewed_hunt_state, hunt_progress_state(accepted), 1)
 # The existing bill NPC identifier is carried only in the local display model.
 npc_name_id = '    internal uint NpcNameId { get; init; }\n'
 assert experience.count(npc_name_id) == 1
@@ -24,7 +36,7 @@ experience = experience.replace(npc_name_id, '')
 sync_result_arm="        _ when SyncSectionReport.IsMessage(value) => value,\n"
 assert experience.count(sync_result_arm)==1
 experience=experience.replace(sync_result_arm,'')
-assert 'SyncSectionReport' not in outside_status_and_hunt_state(experience)
+assert 'SyncSectionReport' not in outside_status(experience)
 # Disconnect may report either confirmed Site revocation or a local-only clear.
 for line in [
     '    internal const string Disconnected = "Disconnected. Saved history remains on this PC.";\n',
@@ -33,7 +45,7 @@ for line in [
     assert experience.count(line) == 1
     experience = experience.replace(line, '')
 experience = experience.replace('or Disconnected or DisconnectedLocally', 'or "Disconnected. Saved history remains on this PC."')
-assert outside_status_and_hunt_state(experience)==outside_status_and_hunt_state(accepted)
+assert outside_status(experience) == outside_status(accepted)
 hunt=(r/'HuntBillLocalView.cs').read_text(encoding='utf-8').replace('    internal bool Reading => ReadEnabled;\n','')
 hunt=hunt[:hunt.index('    internal HuntBillItemSnapshot? CurrentCoverage')] + hunt[hunt.index('    internal DateTime? CoverageObservedAtUtc'):]
 # The framework guard logs failed background reads after the existing cleanup.
