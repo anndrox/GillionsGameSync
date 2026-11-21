@@ -64,6 +64,9 @@ try {
 }
 
 $publisher = Get-Content -LiteralPath (Join-Path $root 'scripts/publish-testing-github-release.ps1') -Raw
+if (-not $publisher.Contains('UseTestingProjectVersion = $true')) {
+  throw 'The Testing publisher must package the reviewed project version without a build override.'
+}
 foreach ($mutation in "  gh @releaseArgs", "  gh api --method PUT") {
   $start = $publisher.IndexOf($mutation, [StringComparison]::Ordinal)
   if ($start -lt 0 -or $publisher.LastIndexOf('Assert-TestingSiteAdmission', $start, [StringComparison]::Ordinal) -lt
