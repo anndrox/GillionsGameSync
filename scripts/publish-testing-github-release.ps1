@@ -78,7 +78,7 @@ if (-not $tagRef) {
   if ($LASTEXITCODE -ne 0) { throw 'Could not publish the Testing prerelease.' }
 }
 
-$release = gh release view $tag --repo $repo --json isDraft,isPrerelease,body,url | ConvertFrom-Json
+$release = gh release view $tag --repo $repo --json "isDraft,isPrerelease,body,url" | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0 -or $release.isDraft -or -not $release.isPrerelease -or
     -not $release.body.Contains($sourceEvidence) -or -not $release.body.Contains($hashEvidence)) {
   throw 'The Testing prerelease does not match the reviewed source and ZIP.'

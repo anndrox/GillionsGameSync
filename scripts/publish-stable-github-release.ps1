@@ -26,7 +26,7 @@ $head = (& git -C $root rev-parse HEAD).Trim()
 $onMain = @(& git -C $root branch -r --contains $head) -match '^\s*upstream/main$'
 if (-not $onMain) {
   # Same-repository branches only: a fork PR head is never tagged or published.
-  $openPrJson = & gh pr list --repo anndrox/GillionsGameSync --state open --base main --limit 200 --json number,headRefOid,isCrossRepository
+  $openPrJson = & gh pr list --repo anndrox/GillionsGameSync --state open --base main --limit 200 --json "number,headRefOid,isCrossRepository"
   if ($LASTEXITCODE -ne 0) { throw 'Could not list open release PRs.' }
   $openPr = @(($openPrJson | ConvertFrom-Json) | Where-Object { $_.headRefOid -ceq $head -and -not $_.isCrossRepository })
   if ($openPr.Count -ne 1) { throw 'The exact release source and manifest commit must be the head of one open same-repository PR into main (or on upstream/main).' }
