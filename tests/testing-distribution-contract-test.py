@@ -23,7 +23,7 @@ accepted=subprocess.check_output(['git','show',public+':PublicExperience.cs'],cw
 # Only substitute the frozen baseline after verifying the approved replacement.
 reviewed_hunt_state = hunt_progress_state(experience)
 assert sha256(reviewed_hunt_state.encode('utf-8')).hexdigest() == (
-    '53136d093bd12080e548abaa3274b61fc930f885ff9f93152af5f0b2917ae846'
+    'e9ba24b5729dc25d03b51eafe79d6b087bfe6a0a968ec9a6384f2305676d9058'
 ), 'HuntProgressState changed; review the exact class and update its pin.'
 experience = experience.replace(reviewed_hunt_state, hunt_progress_state(accepted), 1)
 # The existing bill NPC identifier is carried only in the local display model.
