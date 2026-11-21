@@ -12,7 +12,8 @@ param(
   [string]$StableReleaseBaseUrl = 'https://github.com/anndrox/GillionsGameSync/releases/download',
   [string]$TestingReleaseBaseUrl = '',
   [string]$StableIconUrl = 'https://raw.githubusercontent.com/anndrox/GillionsGameSync/main/assets/GillionsGameSync-icon-v4.png',
-  [long]$PublishedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+  [long]$PublishedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds(),
+  [switch]$UseTestingProjectVersion
 )
 
 $ErrorActionPreference = 'Stop'
@@ -71,6 +72,13 @@ if (-not [Uri]::TryCreate($StableIconUrl, [UriKind]::Absolute, [ref]$parsedIcon)
 
 $isTesting = $Channel -eq 'testing'
 $assemblyVersion = if ($Version.Split('.').Count -eq 3) { "$Version.0" } else { $Version }
+if ($UseTestingProjectVersion) {
+  if (-not $isTesting) { throw 'UseTestingProjectVersion requires the Testing channel.' }
+  $configuredVersion = dotnet msbuild $project -nologo -getProperty:Version -p:GillionsTestBuild=true
+  if ($LASTEXITCODE -ne 0 -or $configuredVersion -cne $assemblyVersion) {
+    throw 'The requested Testing package version differs from the project version.'
+  }
+}
 $internalName = if ($isTesting) { 'GillionsGameSyncTest' } else { 'GillionsGameSync' }
 $displayName = if ($isTesting) { 'Gillions Game Sync Testing' } else { 'Gillions Game Sync' }
 $zipBase = if ($isTesting) { 'GillionsGameSyncTesting' } else { 'GillionsGameSync' }
@@ -80,7 +88,9 @@ $zipPath = Join-Path $packageDirectory "$zipBase-$Version.zip"
 $manifestPath = Join-Path $packageDirectory "$zipBase.json"
 
 New-Item -ItemType Directory -Path $output -Force | Out-Null
-$arguments = @('build', $project, '-c', 'Release', '-warnaserror', "-p:Version=$Version", "-p:GillionsPublicBaseUrl=$PublicBaseUrl", "-p:GillionsRepositoryUrl=$RepositoryUrl", "-p:OutputPath=$output")
+$arguments = @('build', $project, '-c', 'Release', '-warnaserror')
+if (-not $UseTestingProjectVersion) { $arguments += "-p:Version=$Version" }
+$arguments += @("-p:GillionsPublicBaseUrl=$PublicBaseUrl", "-p:GillionsRepositoryUrl=$RepositoryUrl", "-p:OutputPath=$output")
 if ($isTesting) { $arguments += '-p:GillionsTestBuild=true' }
 dotnet @arguments
 if ($LASTEXITCODE -ne 0) { throw "$displayName build failed." }

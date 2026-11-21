@@ -48,7 +48,7 @@ if ($previousEntry.Count -ne 1 -or $previousEntry[0].InternalName -cne 'Gillions
 # Bind the manifest timestamp to source so the same release can be verified after a retry.
 $publishedAt = [long](git -C $root show -s --format=%ct HEAD)
 $package = @{ Channel = 'testing'; Version = $Version; PublishedAt = $publishedAt
-  RepositoryUrl = $repoUrl; TestingReleaseBaseUrl = "$repoUrl/releases/download" }
+  RepositoryUrl = $repoUrl; TestingReleaseBaseUrl = "$repoUrl/releases/download"; UseTestingProjectVersion = $true }
 & (Join-Path $PSScriptRoot 'package.ps1') @package
 $directory = Join-Path $root "artifacts/package/testing/$Version"
 $zip = Join-Path $directory $zipName
