@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.31.14 (Stable candidate)
+
+Aligns Hunt and Travel uploads with Site validation, verifies every authenticated destination, encrypts device credentials per Windows user, and revokes the device on Disconnect.
+
+**Rolling back to Stable 1.0.31.13 leaves every migrated player unpaired.** See the [release notes](releases/v1.0.31.14.md).
+
 ## 1.0.31.13 (Stable candidate)
 
 Hunt bills, Hunt routing, and FATEs work again on the November game build with Dalamud 15.0.4.1.
