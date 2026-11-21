@@ -1,5 +1,28 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+
+# A comma expression becomes an array when a PowerShell command is wrapped.
+# gh must always receive its comma-separated field list as one argument.
+$unquotedJson = foreach ($scriptFile in Get-ChildItem -LiteralPath (Join-Path $root 'scripts') -Filter '*.ps1' -File) {
+  $tokens = $null
+  $parseErrors = $null
+  $syntax = [Management.Automation.Language.Parser]::ParseFile($scriptFile.FullName, [ref]$tokens, [ref]$parseErrors)
+  if ($parseErrors.Count) { throw "Cannot inspect scripts/$($scriptFile.Name): $($parseErrors[0].Message)" }
+  $commands = $syntax.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] }, $true)
+  foreach ($command in $commands) {
+    $elements = $command.CommandElements
+    for ($i = 0; $i -lt $elements.Count - 1; $i++) {
+      $flag = $elements[$i]
+      if ($flag -is [Management.Automation.Language.StringConstantExpressionAst] -and $flag.Value -ceq '--json' -and
+          $elements[$i + 1] -is [Management.Automation.Language.ArrayLiteralAst]) {
+        "scripts/$($scriptFile.Name):$($flag.Extent.StartLineNumber): quote the entire --json field list."
+      }
+    }
+  }
+}
+if ($unquotedJson) { throw ("Unquoted --json field lists found:" + [Environment]::NewLine + ($unquotedJson -join [Environment]::NewLine)) }
+Write-Output 'Publisher --json argument quoting contract passed.'
+
 . (Join-Path $root 'scripts/testing-site-admission.ps1')
 $version = '0.0.103.0'
 $build = '2026.11.03.0000.0000'
