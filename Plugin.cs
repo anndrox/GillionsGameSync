@@ -16,6 +16,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Game.Chat;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Command;
 using Dalamud.Configuration;
 using Dalamud.Game.Inventory;
@@ -1940,8 +1941,15 @@ public sealed partial class Plugin : IDalamudPlugin {
         settingsVisible = publicUi.Visible;
         if (settingsVisible) Observe("Hunts tab", now, static (plugin, at) => plugin.huntTab = plugin.ReadHuntsTab(at));
         Observe("connection status", now, static (plugin, at) => plugin.PublishPublicHealth(at));
-        Observe("Hunt progress display", now, static (plugin, _) => plugin.huntProgress.Update(
-            plugin.configuration.ShowHuntProgress, plugin.clientState.TerritoryType, plugin.huntLocal.Progress, Environment.TickCount64));
+        Observe("Hunt progress display", now, static (plugin, _) => {
+            var show = plugin.configuration.ShowHuntProgress;
+            var territory = plugin.clientState.TerritoryType;
+            var sample = plugin.huntLocal.Progress;
+            var tick = Environment.TickCount64;
+            uint targetNpcNameId = show && territory == sample.Territory && tick < sample.ExpiresAt && sample.Rows.Length > 0
+                && plugin.objects.LocalPlayer?.TargetObject is IBattleNpc target ? target.NameId : 0;
+            plugin.huntProgress.Update(show, territory, sample, tick, targetNpcNameId);
+        });
         if (!uiRefreshPolicy.ShouldRefresh(settingsVisible, now)) return;
         uiState = new PluginUiSnapshot(
             PluginWindowModel.Create(HasPairedSession, configuration.PairingRequired, clientState.IsLoggedIn,

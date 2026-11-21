@@ -5,23 +5,26 @@ import subprocess
 
 r=Path(__file__).resolve().parents[1]
 public='43a86941f8f8e60c583c961b1502345df76c7e64'
-# The owner-directed status correction (2026-10-24 regression audit) replaces only
-# the PublicHealth status record; every other presentation rule stays byte-frozen.
-def outside_status(text):
-    head,rest=text.split('internal sealed record PublicHealth(',1)
-    return head+rest.split('\n}\n',1)[1]
+# PublicHealth and the Hunt Progress state have separate behavioral tests.
+# Keep the surrounding presentation rules under the historical source comparison.
+def outside_status_and_hunt_state(text):
+    for declaration in ('internal sealed record PublicHealth(', 'internal sealed class HuntProgressState {'):
+        head, rest = text.split(declaration, 1)
+        text = head + rest.split('\n}\n', 1)[1]
+    return text
 experience=(r/'PublicExperience.cs').read_bytes().replace(b'\r\n',b'\n').decode('utf-8')
 accepted=subprocess.check_output(['git','show',public+':PublicExperience.cs'],cwd=r).replace(b'\r\n',b'\n').decode('utf-8')
-experience=experience.replace("None of your Hunt targets are in this zone.",
-    "No observed Hunt targets in this area. Current bill coverage is unverified.").replace(
-    "The Hunt targets you can see here are complete.", "Observed targets complete; current bill coverage is unverified.")
+# The existing bill NPC identifier is carried only in the local display model.
+npc_name_id = '    internal uint NpcNameId { get; init; }\n'
+assert experience.count(npc_name_id) == 1
+experience = experience.replace(npc_name_id, '')
 # Owner-approved with the per-list Collections send (Partner, 2026-11-17): the window also shows the Sync now results
 # that name sections ("not ready", "paused"), in the exact shape SyncSectionReport.Message builds. Only that one switch arm
 # differs from the accepted file outside the PublicHealth record.
 sync_result_arm="        _ when SyncSectionReport.IsMessage(value) => value,\n"
 assert experience.count(sync_result_arm)==1
 experience=experience.replace(sync_result_arm,'')
-assert 'SyncSectionReport' not in outside_status(experience)
+assert 'SyncSectionReport' not in outside_status_and_hunt_state(experience)
 # Disconnect may report either confirmed Site revocation or a local-only clear.
 for line in [
     '    internal const string Disconnected = "Disconnected. Saved history remains on this PC.";\n',
@@ -30,7 +33,7 @@ for line in [
     assert experience.count(line) == 1
     experience = experience.replace(line, '')
 experience = experience.replace('or Disconnected or DisconnectedLocally', 'or "Disconnected. Saved history remains on this PC."')
-assert outside_status(experience)==outside_status(accepted)
+assert outside_status_and_hunt_state(experience)==outside_status_and_hunt_state(accepted)
 hunt=(r/'HuntBillLocalView.cs').read_text(encoding='utf-8').replace('    internal bool Reading => ReadEnabled;\n','')
 hunt=hunt[:hunt.index('    internal HuntBillItemSnapshot? CurrentCoverage')] + hunt[hunt.index('    internal DateTime? CoverageObservedAtUtc'):]
 # The framework guard logs failed background reads after the existing cleanup.
