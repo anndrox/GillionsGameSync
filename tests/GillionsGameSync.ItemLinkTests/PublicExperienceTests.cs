@@ -42,6 +42,7 @@ internal static class PublicExperienceTests {
         state.Update(true,100,new(100,"Current area","",false,[new("new-bill","New target",0,1)],15000),8900);
         Check(state.Display.Rows.Length==1&&state.Display.Rows[0].Key=="new-bill","removed or replaced bill cannot retain a completion row");
         CheckHuntOrdering(Check);
+        CheckSiteHuntOrdering(Check);
         var gate=new HuntProgressWindowGate();
         Check(gate.Prepare(true,0),"visible model may open standard window");
         Check(gate.Observe(true,false,0),"post-draw user close invokes model dismissal once");
@@ -71,6 +72,45 @@ internal static class PublicExperienceTests {
         var watch=System.Diagnostics.Stopwatch.StartNew();
         for(int i=0;i<10000;i++) state.Update(true,100,Snapshot(i),i);
         Console.WriteLine($"Public UX/Hunt Progress PASS: {checks} assertions; 10,000 synthetic model updates {watch.Elapsed.TotalMilliseconds:F2} ms (not in-game frame cost).");
+    }
+
+    private static void CheckSiteHuntOrdering(Action<bool, string> check) {
+        var state = new HuntProgressState();
+        var sample = new HuntProgressSnapshot(100, "Mare Lamentorum", "", false, [
+            new("wanderer", "Wanderer", 0, 2) { NpcNameId = 11 },
+            new("trimmer", "Trimmer", 0, 2),
+            new("mousse", "Mousse", 0, 2),
+            new("scraper", "Scraper", 0, 3)
+        ], 6000);
+        state.Update(true, 100, sample, 0, siteMarkKey: "wanderer");
+        check(state.Display.Rows[0].Key == "wanderer", "Wanderer starts on top");
+        state.Update(true, 100, sample, 250, siteMarkKey: "mousse");
+        check(state.Display.Rows.Select(row => row.Key).SequenceEqual(
+            ["mousse", "wanderer", "trimmer", "scraper"]),
+            "A new Site map target moves to the top without a kill or game target");
+        var orderedRows = state.Display.Rows;
+        state.Update(true, 100, sample, 500, siteMarkKey: "mousse");
+        check(ReferenceEquals(orderedRows, state.Display.Rows), "Unchanged guidance reuses the order");
+        state.Update(true, 100, sample, 750);
+        check(state.Display.Rows[0].Key == "wanderer", "Expired guidance falls back to bill order");
+
+        state.Update(true, 100, sample, 1000, targetNpcNameId: 11, siteMarkKey: "mousse");
+        check(state.Display.Rows[0].Key == "wanderer", "A game target takes priority over Site guidance");
+
+        var progressed = sample with {
+            Rows = [sample.Rows[0], sample.Rows[1] with { Current = 1 }, sample.Rows[2], sample.Rows[3]]
+        };
+        state.Update(true, 100, progressed, 1250, siteMarkKey: "mousse");
+        check(state.Display.Rows[0].Key == "mousse" && state.Display.Rows.Single(row => row.Key == "trimmer").Current == 1,
+            "The Site mark takes priority over a newly changed unfinished kill count");
+
+        var completed = progressed with {
+            Rows = [progressed.Rows[0], progressed.Rows[1], progressed.Rows[2] with { Current = 2 }, progressed.Rows[3]]
+        };
+        state.Update(true, 100, completed, 1500, siteMarkKey: "mousse");
+        check(state.Display.Rows.Select(row => row.Key).SequenceEqual(
+            ["trimmer", "wanderer", "scraper", "mousse"]),
+            "A completed Site mark cannot outrank unfinished marks during its completion hold");
     }
 
     private static void CheckHuntOrdering(Action<bool, string> check) {

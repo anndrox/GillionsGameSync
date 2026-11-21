@@ -1946,9 +1946,15 @@ public sealed partial class Plugin : IDalamudPlugin {
             var territory = plugin.clientState.TerritoryType;
             var sample = plugin.huntLocal.Progress;
             var tick = Environment.TickCount64;
-            uint targetNpcNameId = show && territory == sample.Territory && tick < sample.ExpiresAt && sample.Rows.Length > 0
-                && plugin.objects.LocalPlayer?.TargetObject is IBattleNpc target ? target.NameId : 0;
-            plugin.huntProgress.Update(show, territory, sample, tick, targetNpcNameId);
+            bool freshRows = show && territory == sample.Territory && tick < sample.ExpiresAt && sample.Rows.Length > 0;
+            uint targetNpcNameId = freshRows && plugin.objects.LocalPlayer?.TargetObject is IBattleNpc target
+                ? target.NameId : 0;
+            var bills = plugin.huntLocal.TabBills;
+            string? siteMarkKey = freshRows && tick < bills.ExpiresAt && plugin.CurrentHuntTabPoint() is { } point
+                ? bills.Rows.FirstOrDefault(bill => bill.TargetId == point.TargetId && !bill.Target.Complete
+                    && sample.Rows.Contains(bill.Target))?.Target.Key
+                : null;
+            plugin.huntProgress.Update(show, territory, sample, tick, targetNpcNameId, siteMarkKey);
         });
         if (!uiRefreshPolicy.ShouldRefresh(settingsVisible, now)) return;
         uiState = new PluginUiSnapshot(

@@ -90,7 +90,7 @@ internal sealed class HuntProgressState {
     private HuntProgressRow[] priorRows = [], orderedIncomplete = [];
     private long countRevision, allCompleteUntil;
     private uint priorTargetNpcNameId;
-    private string? activeMarkKey;
+    private string? activeMarkKey, priorSiteMarkKey;
     internal long InteractionRevision { get; private set; }
     internal bool Visible => visible;
     internal HuntProgressDisplay Display { get; private set; } = new("", "Hunt progress unavailable", []);
@@ -106,11 +106,11 @@ internal sealed class HuntProgressState {
         prior.Clear(); completed.Clear();
         priorRows = []; orderedIncomplete = [];
         countRevision = 0; allCompleteUntil = 0;
-        priorTargetNpcNameId = 0; activeMarkKey = null;
+        priorTargetNpcNameId = 0; activeMarkKey = priorSiteMarkKey = null;
     }
 
     internal void Update(bool show, uint currentTerritory, HuntProgressSnapshot sample, long clock,
-        uint targetNpcNameId = 0) {
+        uint targetNpcNameId = 0, string? siteMarkKey = null) {
         if (territory != currentTerritory || enabled != show) {
             InteractionRevision++;
             territory = currentTerritory; enabled = show; suppressed = false; visible = false;
@@ -137,9 +137,10 @@ internal sealed class HuntProgressState {
         priorRows = rows;
 
         bool reordered = false;
-        if (rowsChanged || targetNpcNameId != priorTargetNpcNameId) {
+        if (rowsChanged || targetNpcNameId != priorTargetNpcNameId || siteMarkKey != priorSiteMarkKey) {
             priorTargetNpcNameId = targetNpcNameId;
-            var nextActive = SelectActiveMark(rows, targetNpcNameId);
+            priorSiteMarkKey = siteMarkKey;
+            var nextActive = SelectActiveMark(rows, targetNpcNameId, siteMarkKey);
             if (rowsChanged || nextActive != activeMarkKey) {
                 activeMarkKey = nextActive;
                 // LINQ's stable ordering keeps the other unfinished marks in bill order.
@@ -185,19 +186,20 @@ internal sealed class HuntProgressState {
         prior = next;
     }
 
-    private string? SelectActiveMark(HuntProgressRow[] rows, uint targetNpcNameId) {
-        string? recent = null;
+    private string? SelectActiveMark(HuntProgressRow[] rows, uint targetNpcNameId, string? siteMarkKey) {
+        string? guided = null, recent = null;
         long latestChange = 0;
         foreach (var row in rows) {
             if (row.Complete) continue;
             if (targetNpcNameId != 0 && row.NpcNameId == targetNpcNameId) return row.Key;
+            if (row.Key == siteMarkKey) guided = row.Key;
             long lastCountChange = prior[row.Key].LastCountChange;
             if (lastCountChange > latestChange) {
                 latestChange = lastCountChange;
                 recent = row.Key;
             }
         }
-        return recent;
+        return guided ?? recent;
     }
 }
 
