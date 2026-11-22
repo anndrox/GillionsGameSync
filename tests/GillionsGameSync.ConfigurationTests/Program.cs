@@ -76,6 +76,7 @@ await DeviceRevocationPackagedTests.RunAsync(pluginAssembly);
 var nativeCapabilities = pluginAssembly.GetType("GillionsGameSync.FateLocalView") is not null;
 FatePackagedTests.Run(pluginAssembly,testingProduct,fixturePath);
 PermissionPackagedTests.Run(pluginAssembly);
+MapFlagPackagedTests.Run(pluginAssembly);
 await PersonalUploadAndPairingPackagedTests.Run(pluginAssembly, testingProduct);
 DutyPausePackagedTests.Run(pluginAssembly);
 HuntV2PackagedTests.Run(pluginAssembly, nativeCapabilities, args.Length == 4 && args[3] != "--skip-channel-uninstall" ? args[3] : null);

@@ -215,13 +215,20 @@ internal static class HuntMapTransport {
 internal sealed class HuntMapProcessor {
     private readonly HashSet<string> attempted = new(StringComparer.Ordinal);
     private readonly Queue<string> order = new();
+    private readonly object gate = new();
+    internal bool TryBegin(string requestId) {
+        lock (gate) {
+            if (!attempted.Add(requestId)) return false;
+            order.Enqueue(requestId);
+            while (order.Count > 128) attempted.Remove(order.Dequeue());
+            return true;
+        }
+    }
     internal async Task<string> ProcessAsync(HuntMapRequest? request, Func<DateTime> now, Func<Task<bool>> permitted,
         Func<HuntMapRequest, Task<bool>> consume, Func<HuntMapRequest, Task<bool>> present) {
         if (request is null || !HuntMapPolicy.Valid(request, now())) return "No valid current Hunt request";
         if (!await permitted()) return "Hunt map disabled or stale session";
-        if (!attempted.Add(request.RequestId)) return "Hunt request already attempted";
-        order.Enqueue(request.RequestId);
-        while (order.Count > 128) attempted.Remove(order.Dequeue());
+        if (!TryBegin(request.RequestId)) return "Hunt request already attempted";
         // Revision is opaque, NOT sortable. Site atomically checks it at consume.
         // Same revision + new authorized request ID is the manual Show fallback.
         // Never retry a lost consume response. Single polling owner serializes presentations.

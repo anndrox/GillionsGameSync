@@ -96,6 +96,9 @@ public sealed partial class Plugin : IDalamudPlugin {
     private volatile string personalStatus = "Private Hunt/submarine sync OFF. Local retention and ordinary sync are independent.";
     private PartyFinderLinkRequestProcessor partyFinderLinkProcessor = new();
     private bool observedPartyFinderLinks;
+#if GILLIONS_TEST_BUILD
+    private bool observedMapFlags;
+#endif
     private volatile string partyFinderLinkStatus = "Party Finder website links OFF; existing item links unchanged.";
     private readonly IGameGui huntMapGui;
     private HuntMapProcessor huntMapProcessor = new();
@@ -310,6 +313,9 @@ public sealed partial class Plugin : IDalamudPlugin {
             if (!string.IsNullOrWhiteSpace(configuration.DeviceToken)) { configuration.PairingRequired = true; RequestConfigurationSave(); }
         }
         observedAutomaticSync = configuration.AutomaticSync; observedItemLinks = configuration.EnableItemLinkRequests;
+#if GILLIONS_TEST_BUILD
+        observedMapFlags = configuration.EnableMapFlagRequests;
+#endif
         if (!evidenceBudget.Measure(configuration.OwnedCharacters.Values).Fits && !configuration.CoverageGap.Paused) {
             configuration.CoverageGap.Reject(DateTime.UtcNow); RequestConfigurationSave();
         }
@@ -870,8 +876,14 @@ public sealed partial class Plugin : IDalamudPlugin {
             });
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
             var pfAllowed = await framework.RunOnFrameworkThread(() => PartyFinderLinksPermitted(permit));
-            // Only a PF-capable poll advertises native requests: the Site routes any
-            // advertisement through its stricter PF admission, which must not refuse item links.
+            // Each delivery advertises only its own effective permission.
+            // The existing item-link lane owns the single request in flight.
+#if GILLIONS_TEST_BUILD
+            var mapFlagsAllowed = await framework.RunOnFrameworkThread(() => MapFlagPermitted(permit));
+            var itemLinksAllowed = await framework.RunOnFrameworkThread(() => ItemLinksEnabled);
+            using var pollRequest = Request("/api/game-sync/item-links/poll", permit,
+                MapFlagPolicy.PollBody(PluginVersion, itemLinksAllowed, pfAllowed, mapFlagsAllowed));
+#else
             using var pollRequest = pfAllowed
                 ? Request("/api/game-sync/item-links/poll", permit, new {
                     capability = "native_item_link", pluginVersion = PluginVersion,
@@ -879,6 +891,7 @@ public sealed partial class Plugin : IDalamudPlugin {
                         capabilities = new[] { PartyFinderLinkPolicy.Capability } }
                 })
                 : Request("/api/game-sync/item-links/poll", permit, new { capability = "native_item_link", pluginVersion = PluginVersion });
+#endif
 #else
             using var pollRequest = Request("/api/game-sync/item-links/poll", permit, new { capability = "native_item_link", pluginVersion = PluginVersion });
 #endif
@@ -909,6 +922,11 @@ public sealed partial class Plugin : IDalamudPlugin {
             if (pollDocument.RootElement.TryGetProperty("request", out var typedRequest) && typedRequest.ValueKind == JsonValueKind.Object
                 && typedRequest.TryGetProperty("requestType", out var requestType)
                 && !(requestType.ValueKind == JsonValueKind.String && requestType.GetString() == "item")) {
+#if GILLIONS_TEST_BUILD
+                if (requestType.ValueKind == JsonValueKind.String && requestType.GetString() == MapFlagPolicy.RequestType) {
+                    await ProcessMapFlagAsync(permit, pollDocument.RootElement, commandClock);
+                } else
+#endif
                 if (requestType.ValueKind == JsonValueKind.String && requestType.GetString() == PartyFinderLinkPolicy.RequestType) {
                     var pfRequest = PartyFinderLinkPolicy.Parse(pollDocument.RootElement);
                     var pfProcessor = await framework.RunOnFrameworkThread(() => { RequirePermit(permit); return partyFinderLinkProcessor; });
@@ -1022,7 +1040,10 @@ public sealed partial class Plugin : IDalamudPlugin {
 #endif
         huntTabMap = null;
         huntMapNegotiation.Reset();
-        huntMapProcessor = new(); huntMapStatus = "No active Hunt map request; local observations preserved.";
+#if !GILLIONS_TEST_BUILD
+        huntMapProcessor = new();
+#endif
+        huntMapStatus = "No active Hunt map request; local observations preserved.";
     }
     private void CancelHuntMapPoll() {
         huntMapCancellation.Cancel(); huntMapCancellation.Dispose(); huntMapCancellation = new();
@@ -2064,6 +2085,9 @@ public sealed partial class Plugin : IDalamudPlugin {
             plugin.travelRetries.Clear();
         });
         Observe("FATE reset", now, static (plugin, _) => plugin.fateLocal.ClearAuthorization());
+#if GILLIONS_TEST_BUILD
+        huntMapProcessor = new();
+#endif
         Observe("Hunt map reset", now, static (plugin, _) => plugin.ClearHuntMapRequests());
         huntFocus.Clear(); nextHuntFocusPresenceUtc = DateTime.MinValue;
         foreach (var cancellation in personalCancellation.Values)
@@ -2113,6 +2137,12 @@ public sealed partial class Plugin : IDalamudPlugin {
             requestLifetime.InvalidateAutomatic(); ClearTransientState();
             if (observedAutomaticSync) nextAutomaticSyncUtc = DateTime.MinValue;
         }
+#if GILLIONS_TEST_BUILD
+        if (observedMapFlags != configuration.EnableMapFlagRequests) {
+            observedMapFlags = configuration.EnableMapFlagRequests;
+            requestLifetime.InvalidateItemLinks();
+        }
+#endif
         if (observedItemLinks != configuration.EnableItemLinkRequests) {
             observedItemLinks = configuration.EnableItemLinkRequests;
             requestLifetime.InvalidateItemLinks();
@@ -3035,6 +3065,9 @@ public sealed partial class PluginConfiguration : IPluginConfiguration {
     public bool AutomaticSync { get; set; } = true;
     public bool EnableItemLinkRequests { get; set; } = true;
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
+#if GILLIONS_TEST_BUILD
+    public bool EnableMapFlagRequests { get; set; } = true;
+#endif
     public bool EnablePartyFinderLinkRequests { get; set; }
     public bool AutomaticallyShowHuntMap { get; set; }
 #endif

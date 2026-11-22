@@ -31,18 +31,18 @@ internal sealed record ConsentStatus(long CharacterId, DateTimeOffset IssuedAt, 
             if (url != origin + "/gillions-sync") return null;
             var rows = status.GetProperty("categories");
             var length = rows.GetArrayLength();
-            if (length != Keys.Length && length != Keys.Length + 1) return null;
+            if (length < Keys.Length || length > Keys.Length + 2) return null;
 
             var categories = new ConsentCategory[length];
             var nextKey = 0;
-            var desynthesisSeen = false;
+            var optional = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < categories.Length; i++) {
                 var row = rows[i];
                 var key = row.GetProperty("key").GetString();
                 var label = row.GetProperty("label").GetString();
                 var state = row.GetProperty("state").GetString();
                 var generation = row.TryGetProperty("generation", out var id) ? id.GetString() : null;
-                if (key == "desynthesisResults" && !desynthesisSeen) desynthesisSeen = true;
+                if (key is "desynthesisResults" or "mapFlags") { if (!optional.Add(key)) return null; }
                 else if (nextKey >= Keys.Length || key != Keys[nextKey++]) return null;
                 if (string.IsNullOrWhiteSpace(label)
                     || state is not ("on" or "off" or "not-set") || row.GetProperty("changeOn").GetString() != "site"
