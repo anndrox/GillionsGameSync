@@ -323,6 +323,13 @@ public sealed partial class Plugin {
         if(ImGui.BeginTabItem("General")) {
             Label("Window placement and resizing follow Dalamud. Drag a window edge to resize it; shorter windows scroll. Game Sync never automates gameplay.");
             DrawHuntSettings();
+#if GILLIONS_TEST_BUILD
+            SettingsGroup("Website map flags");
+            var mapFlags = configuration.EnableMapFlagRequests;
+            if (ImGui.Checkbox(MapFlagPolicy.Label, ref mapFlags))
+                QueueUiAction(() => { configuration.EnableMapFlagRequests = mapFlags; RequestConfigurationSave(); });
+            SettingsHelp("Show a map flag when you choose a place on Gillions.");
+#endif
             ImGui.EndTabItem();
         }
         if(ImGui.BeginTabItem("Hunts")) {

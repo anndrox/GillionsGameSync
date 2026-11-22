@@ -101,3 +101,22 @@ assert 'configuration.UseSonarChatMessages' in awareness.split('private void Rea
 for forbidden in ['HttpClient', 'SendAsync', 'SendChat', 'GetIpc', 'unsafe', 'WriteAll']:
     assert forbidden not in awareness, forbidden
 print('Testing awareness wiring PASS: current claimed Hunt, local exact flags and tracked alerts, quiet opt-in Sonar, no observation transport.')
+
+map_flag=(root/'MapFlagRequests.cs').read_text(encoding='utf-8')
+map_plugin=(root/'PluginMapFlags.cs').read_text(encoding='utf-8')
+assert map_flag.startswith('#if GILLIONS_TEST_BUILD || GILLIONS_HUNT_MAP_TESTS')
+assert map_plugin.startswith('#if GILLIONS_TEST_BUILD\n')
+assert 'MapFlagPolicy.PollBody(PluginVersion, itemLinksAllowed, pfAllowed, mapFlagsAllowed)' in p
+assert 'await ProcessMapFlagAsync(permit, pollDocument.RootElement, commandClock)' in p
+assert 'server:game-sync:receive:map-flag:v1' in map_flag and 'Map flags from the site' in map_flag
+assert 'MapFlagCatalogValid(flag)' in map_plugin.split('using var request =',1)[0]
+assert 'MapFlagPermitted(permit)' in map_plugin.split('pending = personalHttp.SendAsync',1)[0]
+assert 'framework.RunOnFrameworkThread(() => {' in map_plugin
+assert 'new MapLinkPayload(r.TerritoryId, r.MapId, r.MapX, r.MapY)' in map_plugin
+assert 'Gillions: flagged {r.Label} on your map.' in map_plugin
+assert 'MobHuntTarget' not in map_plugin and 'Telepo' not in map_plugin and 'unsafe' not in map_plugin
+assert 'attempts.TryBegin(request.RequestId)' in map_flag and 'lock (gate)' in m
+assert 'EnableMapFlagRequests { get; set; } = true' in p
+permissions=(root/'PluginPermissions.cs').read_text()
+assert '|| MapFlagsEnabled' in permissions and 'requestLifetime.InvalidateItemLinks()' in permissions
+print('Testing map flags use the existing website lane, shared attempt memory, pre-consume catalog gate and public framework map API.')

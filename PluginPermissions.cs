@@ -26,6 +26,9 @@ public sealed partial class Plugin {
         : configuration.EnableItemLinkRequests && configuration.EnablePartyFinderLinkRequests;
 #endif
     private bool WebsiteLinksEnabled => ItemLinksEnabled
+#if GILLIONS_TEST_BUILD
+        || MapFlagsEnabled
+#endif
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         || PartyFinderLinksEnabled
 #endif
@@ -114,6 +117,7 @@ public sealed partial class Plugin {
         if (permissionTransitions.GetValueOrDefault(key) == identity) return;
 #if GILLIONS_TEST_BUILD
         if (key == DesynthesisResults.Permission) ResetDesynthesis();
+        if (key == MapFlagPolicy.PermissionKey) requestLifetime.InvalidateItemLinks();
 #endif
 #if GILLIONS_TEST_BUILD || GILLIONS_PUBLIC_BUILD
         if (key == "marketContribution") { marketContributor.SetEnabled(false); marketContributor.RefreshSession(null); }
