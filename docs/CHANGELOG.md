@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.31.15 (Stable candidate)
+
+Hunt Progress puts the mark you are hunting at the top and fits each mark on one line. See the [release notes](releases/v1.0.31.15.md).
+
 ## 1.0.31.14 (Stable candidate)
 
 Aligns Hunt and Travel uploads with Site validation, verifies every authenticated destination, encrypts device credentials per Windows user, and revokes the device on Disconnect.
