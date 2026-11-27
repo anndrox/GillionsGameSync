@@ -15,28 +15,31 @@ Check(FatePolicy.Compatible(source),"exact researched matrix");
 var october=source with {CollectorVersion="0.0.89.0",GameVersion="2026.10.06.0000.0000",ReferenceGameVersion="2026.10.06.0000.0000",
     DalamudVersion="15.0.3.7",DalamudRevision="c9dacb095340ebe6513f13af6c38b13517ae70e4",
     ClientStructsVersion="7.57.0.9378",ClientStructsRevision="78975d8306c2766250ee4dca1925ef81f5dfd4f7"};
-Check(FatePolicy.Compatible(october),"exact inspected October source matrix");
-foreach(var bad in new[] {october with {GameVersion="2026.10.07.0000.0000",ReferenceGameVersion="2026.10.07.0000.0000"},
-    october with {GameVersion=source.GameVersion,ReferenceGameVersion=source.GameVersion},
-    october with {DalamudVersion=source.DalamudVersion},october with {DalamudRevision=source.DalamudRevision},
-    october with {ClientStructsVersion=source.ClientStructsVersion},october with {ClientStructsRevision=source.ClientStructsRevision},
-    october with {ReferenceGameVersion=source.GameVersion},october with {DalamudApiLevel=16},
-    october with {LuminaVersion="future"},october with {ExcelVersion="future"},october with {CollectorVersion="unknown"},
-    october with {Family="unknown"}}) Check(!FatePolicy.Compatible(bad),"mixed/future/unknown October source fails closed");
 var hotfix=october with {CollectorVersion="0.0.90.0",GameVersion="2026.10.16.0000.0000",ReferenceGameVersion="2026.10.16.0000.0000",
     DalamudVersion="15.0.3.9",DalamudRevision="30509c3b4fd00edd9a3d65b7bbf16433d84be03b",
     ClientStructsVersion="7.57.0.9414",ClientStructsRevision="dd57986b8287e7c6ed9c27198f8c76cb04a81dfe"};
-Check(FatePolicy.Compatible(hotfix),"exact inspected hotfix source matrix");
-foreach(var bad in new[] {hotfix with {DalamudVersion="15.0.3.8",DalamudRevision="f7d06f363955251991222363a7c008b8998b6565",
-        ClientStructsVersion="7.57.0.9386",ClientStructsRevision="d6397a76b3a63c2b247025dc296653182b718ca6"},
-    hotfix with {GameVersion=october.GameVersion,ReferenceGameVersion=october.GameVersion},
-    hotfix with {DalamudRevision=october.DalamudRevision},hotfix with {ClientStructsRevision=october.ClientStructsRevision},
-    hotfix with {ReferenceGameVersion=october.GameVersion},october with {GameVersion=hotfix.GameVersion,ReferenceGameVersion=hotfix.GameVersion}})
-    Check(!FatePolicy.Compatible(bad),"mixed/unqualified hotfix source fails closed");
-Check(!FateTransportPolicy.CanSend(null,hotfix,"synthetic",true,true,FatePolicy.Prepare(1,hotfix,[Row()],now),1,now),"Hotfix qualification cannot authorize Site contributions");
-var octoberPrepared=FatePolicy.Prepare(1,october,[Row()],now);
-Check(octoberPrepared is not null,"October positive row managed preparation");
-Check(!FateTransportPolicy.CanSend(null,october,"synthetic",true,true,octoberPrepared,1,now),"Local qualification cannot authorize Site contributions");
+// The October runtimes are retired: no family lists them, so both fail closed.
+Check(!FatePolicy.Compatible(october),"retired October source fails closed");
+Check(!FatePolicy.Compatible(hotfix),"retired October hotfix source fails closed");
+var november=source with {CollectorVersion="0.0.98.0",GameVersion="2026.11.03.0000.0000",ReferenceGameVersion="2026.11.03.0000.0000",
+    DalamudVersion="15.0.4.0",DalamudRevision="12e318c1936e449e5883faa61214eb2ced478349",
+    ClientStructsVersion="7.57.0.9480",ClientStructsRevision="80cb4a7b7e11a6702e2eb8839afd301a918c638e"};
+Check(FatePolicy.Compatible(november),"exact inspected November source matrix");
+var novemberUpdate=november with {DalamudVersion="15.0.4.1",DalamudRevision="d0e93484f99fdb7d58b3a2f22152cf108f3486ff"};
+Check(FatePolicy.Compatible(novemberUpdate),"exact November Dalamud update source matrix");
+foreach(var bad in new[] {november with {GameVersion="2026.11.04.0000.0000",ReferenceGameVersion="2026.11.04.0000.0000"},
+    november with {GameVersion=hotfix.GameVersion,ReferenceGameVersion=hotfix.GameVersion},
+    november with {DalamudVersion=hotfix.DalamudVersion},november with {DalamudRevision=hotfix.DalamudRevision},
+    november with {ClientStructsVersion=hotfix.ClientStructsVersion},november with {ClientStructsRevision=hotfix.ClientStructsRevision},
+    november with {ReferenceGameVersion=hotfix.GameVersion},november with {DalamudApiLevel=16},
+    november with {LuminaVersion="future"},november with {ExcelVersion="future"},november with {CollectorVersion="unknown"},
+    november with {Family="unknown"},novemberUpdate with {DalamudRevision=november.DalamudRevision},
+    hotfix with {GameVersion=november.GameVersion,ReferenceGameVersion=november.GameVersion}})
+    Check(!FatePolicy.Compatible(bad),"mixed/future/unknown November source fails closed");
+Check(!FateTransportPolicy.CanSend(null,hotfix,"synthetic",true,true,FatePolicy.Prepare(1,hotfix,[Row()],now),1,now),"Retired hotfix cannot authorize Site contributions");
+var novemberPrepared=FatePolicy.Prepare(1,november,[Row()],now);
+Check(novemberPrepared is not null,"November positive row managed preparation");
+Check(!FateTransportPolicy.CanSend(null,november,"synthetic",true,true,novemberPrepared,1,now),"Local qualification cannot authorize Site contributions");
 foreach(var bad in new[] {
     source with {GameVersion="next"},source with {ReferenceGameVersion="next"},source with {DalamudApiLevel=16},
     source with {DalamudVersion="15.0.3.7"},source with {DalamudRevision="next"},source with {ClientStructsVersion="next"},

@@ -32,11 +32,14 @@ internal static partial class NativeCompatibility {
         DalamudVersion = "15.0.4.1", DalamudRevision = "d0e93484f99fdb7d58b3a2f22152cf108f3486ff",
     };
 
+    // October and OctoberHotfix are retired: the 2026.11.03 patch replaced both
+    // game builds, so no client can run them. Their records stay as identities
+    // for fail-closed tests and the recorded layout evidence; no family lists them.
     internal static NativeBuild[] Qualified(NativeFamily family) => family switch {
-        NativeFamily.Hunt or NativeFamily.Fate => [September, October, OctoberHotfix, November, NovemberDalamudUpdate],
-        NativeFamily.Appearance => [September, October, OctoberHotfix, November],
-        NativeFamily.Travel => [September, OctoberHotfix, November, NovemberDalamudUpdate],
-        NativeFamily.Submarine => [September, OctoberHotfix, November],
+        NativeFamily.Hunt or NativeFamily.Fate => [September, November, NovemberDalamudUpdate],
+        NativeFamily.Appearance => [September, November],
+        NativeFamily.Travel => [September, November, NovemberDalamudUpdate],
+        NativeFamily.Submarine => [September, November],
         NativeFamily.Beastmaster => [September, November],
         NativeFamily.Dashboard => [September],
         NativeFamily.Desynthesis => [November],

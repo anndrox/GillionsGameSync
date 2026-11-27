@@ -20,6 +20,12 @@ qualified = set()
 for families, names in re.findall(r'((?:NativeFamily\.\w+(?: or )?)+) => \[([\w, ]*)\]', native):
     if any(builds.get(name.strip()) == game for name in names.split(',') if name.strip()):
         qualified.update(re.findall(r'NativeFamily\.(\w+)', families))
+# A retired build (no family lists it any more) is checked against the families that
+# qualified it when the table was published. 2026.10.16 retired with the October drop.
+RETIRED = {'2026.10.16.0000.0000': {'Hunt', 'Submarine', 'Travel', 'Fate', 'Appearance'}}
+if not qualified and game in RETIRED:
+    assert game in builds.values(), 'retired build record removed from NativeCompatibility.cs'
+    qualified = set(RETIRED[game])
 family = {'personalHunts': 'Hunt', 'personalSubmarines': 'Submarine', 'huntRoutingLocation': 'Travel', 'fate': 'Fate'}
 
 project = (r / 'GillionsGameSync.csproj').read_text(encoding='utf-8')
