@@ -216,9 +216,10 @@ if (nativeCapabilities) {
     Assert(NativeSupports("Dashboard","2026.09.15.0000.0000") == (installedNativeVersion=="7.56.2.9136")
         && !NativeSupports("Dashboard","2026.10.06.0000.0000") && !NativeSupports("Dashboard","2026.10.16.0000.0000")
         && !NativeSupports("Dashboard","2026.11.03.0000.0000"),"New runtime must not bypass unrelated personal SDK gates.");
-    foreach(var family in new[]{"Submarine","Travel"})
-        Assert(!NativeSupports(family,"2026.10.06.0000.0000") && NativeSupports(family,"2026.10.16.0000.0000") == (installedNativeVersion=="7.57.0.9414"),
-            "October Submarine/travel support must not follow Hunt-only qualification.");
+    foreach(var family in new[]{"Hunt","Fate","Submarine","Travel","Appearance"})
+        Assert(!NativeSupports(family,"2026.10.06.0000.0000") && !NativeSupports(family,"2026.10.16.0000.0000")
+            && NativeSupports(family,"2026.11.03.0000.0000") == (installedNativeVersion=="7.57.0.9480"),
+            "Retired October runtimes must stay off; November follows the installed SDK.");
     var info=native.GetType("FFXIVClientStructs.FFXIV.Client.Game.UI.TeleportInfo",true)!;
     foreach(var name in new[] { "AetheryteId","GilCost","TerritoryId","IsFavourite","IsFreeAetheryte" }) Assert(info.GetField(name) is not null,"Travel field changed.");
     var agent=native.GetType("FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentTeleport",true)!;

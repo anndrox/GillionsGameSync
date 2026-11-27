@@ -75,6 +75,15 @@ for the observed runtime. Older clients omit the header and receive their
 existing version-specific grant. The plugin still requires an exact source and
 reference epoch match before sending FATE observations.
 
+## October runtimes retired
+
+The 2026.11.03 patch replaced the 2026.10.06 and 2026.10.16 game builds, so no client can run them.
+`NativeCompatibility.Qualified` no longer lists `October` or `OctoberHotfix` for any family, so they fail closed like any
+unlisted runtime.
+- The two records stay in the file as identities for fail-closed tests.
+- Their recorded layout fingerprints and CI archive rechecks stay too, because the November qualification compared against them.
+- The Site retires the matching dated native-build parity exceptions once both released channels drop them.
+
 ## Historical table (through October)
 
 | Family | Native layouts read | Qualified runtimes |

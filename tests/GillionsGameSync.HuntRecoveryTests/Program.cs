@@ -31,10 +31,10 @@ string Sample(Plugin plugin,int counter=0) {
     var history=new HuntBillRetention{LocalRetentionEnabled=false};
     var policy=new HuntBillRetentionPolicy(history){SiteRetentionAuthorized=()=>plugin.Enabled};
     var rows=targets.Select(t=>t with{ObservedKills=counter}).ToArray();
-    Check(policy.Observe(key,[new((byte)input["billTypeId"]!.GetValue<int>(),"daily",1,input["orderId"]!.GetValue<uint>(),ids[18],rows,now,NativeCompatibility.OctoberHotfix.GameBuild,"1.0.31.7"){SourceEvidence=HuntObservationAdmission.KeyItemEvidence}]),"actual retention refused permitted fixture");
+    Check(policy.Observe(key,[new((byte)input["billTypeId"]!.GetValue<int>(),"daily",1,input["orderId"]!.GetValue<uint>(),ids[18],rows,now,NativeCompatibility.November.GameBuild,"1.0.31.7"){SourceEvidence=HuntObservationAdmission.KeyItemEvidence}]),"actual retention refused permitted fixture");
     coverage=new();coverage.SetCatalog(ids.Select((id,i)=>new HuntBillItemDomain((byte)i,id,1,1,1000)).ToArray());
     HuntKeyItemSlot[] slots=[new(0,2004,false,ids[18],1),new(1,2004,false,0,0)];
-    coverage.Observe(key,key,true,true,2004,slots.Length,slots,true,now,mono,NativeCompatibility.OctoberHotfix.GameBuild,"1.0.31.7",NativeCompatibility.OctoberHotfix.ClientStructsVersion);
+    coverage.Observe(key,key,true,true,2004,slots.Length,slots,true,now,mono,NativeCompatibility.November.GameBuild,"1.0.31.7",NativeCompatibility.November.ClientStructsVersion);
     plugin.SetLive(coverage,policy);
     var payload=coverage.Payload(policy,key,now,mono)!;
     Check(PersonalSyncPolicy.HuntCoveragePayloadValid(payload),"actual serializer invalid");return payload;
