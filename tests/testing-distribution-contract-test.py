@@ -56,6 +56,13 @@ hunt_fault = '''        } catch (Exception) {
         }'''
 assert hunt.count(hunt_fault) == 1
 hunt = hunt.replace(hunt_fault, '        } catch (Exception) { itemCoverage.Clear(); Publish("Hunt read/save failed; history preserved. New data may be memory-only. No live correctness claim."); }')
+# Stale Hunt bills Fix B (2026-11-27): after the read's Observe, the current complete Key Items snapshot marks ended
+# bill types (HuntBillRetentionPolicy.MarkEnded). The collector's reads are otherwise unchanged.
+hunt_mark_ended = '''            // After this read's bills: a type this complete snapshot confirms ended starts fresh on its next held bill.
+            if (policy.MarkEnded(characterKey, itemCoverage.Current(characterKey, now, Stopwatch.GetTimestamp()))) persist();
+'''
+assert hunt.count(hunt_mark_ended) == 1
+hunt = hunt.replace(hunt_mark_ended, '')
 # The Hunts tab projects the same admitted observations without changing how they are read.
 # Reverse its presentation-only additions before comparing the rest of the collector.
 hunt=hunt[:hunt.index('    internal HuntTabBills TabBills')] + '    internal void ClearProgress() => Progress = HuntProgressSnapshot.Unavailable;\n' + hunt[hunt.index('    private bool ReadEnabled'):]
