@@ -226,6 +226,93 @@ foreach (var required in new[] { 1, 2, 3 }) {
     Check(!new HuntBillRetentionPolicy(reloaded).Observe(key, [Native(required - 1, 60)]), "Restart stale count erased retained positive completion.");
     Check(eventRetention.Observe(key, [Native(0, 61) with { OrderId = 2 }]), "New obtained order incorrectly inherits old progress.");
 }
+// Fix B (stale Hunt bills): a re-picked bill with the same order ID after a confirmed end is a new bill.
+{
+    HuntBillObservation Held(int kills, int seconds, byte type = 0) => Bill(type, kills) with {
+        ObservedAtUtc = now.AddSeconds(seconds), ObservationId = Guid.NewGuid().ToString("N"), SourceEvidence = HuntObservationAdmission.KeyItemEvidence };
+    HuntBillItemSnapshot Snapshot(int seconds, params (byte Type, string State)[] states) => new(Guid.NewGuid().ToString("N"),
+        now.AddSeconds(seconds), "synthetic-game", "0.0.68.0", "synthetic-sdk", states.Select(s => new HuntBillItemState(s.Type, 2001361u + s.Type, s.State)).ToArray());
+    int Kills(HuntBillRetention s, string character, byte type = 0) =>
+        s.Characters.Single(c => c.LocalCharacterKey == character).Bills.Single(b => b.BillTypeId == type).Targets[0].ObservedKills;
+    List<byte> Marks(HuntBillRetention s, string character) => s.Characters.Single(c => c.LocalCharacterKey == character).EndedBillTypes ?? [];
+    // 1. Same order with a confirmed absence in between: the fresh count replaces the old.
+    var endedStore = new HuntBillRetention { LocalRetentionEnabled = true }; var ended = new HuntBillRetentionPolicy(endedStore);
+    Check(ended.Observe(key, [Held(3, 0)]) && Kills(endedStore, key) == 3, "Fix B: completed bill not retained.");
+    Check(ended.MarkEnded(key, Snapshot(10, (0, "absent_confirmed"))) && Marks(endedStore, key).SequenceEqual(new byte[] { 0 }), "Fix B: confirmed absence not marked.");
+    Check(!ended.MarkEnded(key, Snapshot(11, (0, "absent_confirmed"))), "Fix B: an existing mark reported a change.");
+    Check(ended.Observe(key, [Held(0, 20)]) && Kills(endedStore, key) == 0 && ended.LastSemanticChange, "Fix B: re-picked same-order bill inherited old kills.");
+    Check(Marks(endedStore, key).Count == 0, "Fix B: held observation did not clear the end mark.");
+    // 2. Same order with no absence: the higher count is kept (the restart guard).
+    Check(ended.Observe(key, [Held(2, 40)]) && Kills(endedStore, key) == 2, "Fix B: progress after a fresh start lost.");
+    Check(!ended.Observe(key, [Held(1, 50)]) && Kills(endedStore, key) == 2, "Fix B: same-order stale count undid progress without an absence.");
+    var restartedEnded = JsonSerializer.Deserialize<HuntBillRetention>(JsonSerializer.Serialize(endedStore))!;
+    Check(!new HuntBillRetentionPolicy(restartedEnded).Observe(key, [Held(0, 60)]) && Kills(restartedEnded, key) == 2, "Fix B: restart guard weakened.");
+    // 3. An incomplete or unavailable snapshot, a present item, or no snapshot marks nothing.
+    Check(!ended.MarkEnded(key, Snapshot(70, (0, "unavailable"))) && !ended.MarkEnded(key, Snapshot(70, (0, "present_unresolved")))
+        && !ended.MarkEnded(key, null) && Marks(endedStore, key).Count == 0, "Fix B: an unproven absence marked a bill ended.");
+    // 4. A final read (no Key Item evidence) keeps the mark; the next held bill still starts fresh.
+    Check(ended.Observe(key, [Held(3, 80)]) && ended.MarkEnded(key, Snapshot(81, (0, "absent_confirmed"))), "Fix B: second end not marked.");
+    ended.Observe(key, [Held(3, 82) with { SourceEvidence = null }]);
+    Check(Marks(endedStore, key).SequenceEqual(new byte[] { 0 }), "Fix B: a final read cleared the end mark.");
+    Check(ended.Observe(key, [Held(1, 90)]) && Kills(endedStore, key) == 1 && Marks(endedStore, key).Count == 0, "Fix B: held bill after a final read inherited old kills.");
+    // 5. A type with no stored bill, or a bill stored after the snapshot, is never marked.
+    Check(!ended.MarkEnded(key, Snapshot(100, (5, "absent_confirmed"))) && !ended.MarkEnded(key, Snapshot(89, (0, "absent_confirmed")))
+        && Marks(endedStore, key).Count == 0, "Fix B: a type without an earlier stored bill was marked.");
+    Check(!ended.MarkEnded(HuntBillRetentionPolicy.CharacterKey(42), Snapshot(100, (0, "absent_confirmed"))), "Fix B: a character with no bills was marked.");
+    Check(!new HuntBillRetentionPolicy(new HuntBillRetention()).MarkEnded(key, Snapshot(100, (0, "absent_confirmed"))), "Fix B: marked with retention off.");
+    // 6. Config round-trip; older configs load empty; a malformed list makes the store unsupported.
+    Check(ended.MarkEnded(key, Snapshot(100, (0, "absent_confirmed"))), "Fix B: round-trip mark missing.");
+    var reloadedEnded = JsonSerializer.Deserialize<HuntBillRetention>(JsonSerializer.Serialize(endedStore))!;
+    Check(new HuntBillRetentionPolicy(reloadedEnded).Supported && Marks(reloadedEnded, key).SequenceEqual(new byte[] { 0 }), "Fix B: end mark lost on save/load.");
+    var older = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(endedStore))!;
+    older["Characters"]![0]!.AsObject().Remove("EndedBillTypes");
+    var olderStore = JsonSerializer.Deserialize<HuntBillRetention>(older.ToJsonString())!;
+    Check(new HuntBillRetentionPolicy(olderStore).Supported && olderStore.Characters[0].EndedBillTypes is null, "Fix B: an older config without end marks is unsupported.");
+    var cleared = JsonSerializer.Deserialize<HuntBillRetention>(JsonSerializer.Serialize(endedStore))!;
+    Check(new HuntBillRetentionPolicy(cleared) { }.Observe(key, [Held(0, 101)]) && cleared.Characters[0].EndedBillTypes is null
+        && !JsonSerializer.Serialize(cleared).Contains("EndedBillTypes"), "Fix B: a cleared mark left bytes in the saved store.");
+    foreach (var malformedMarks in new List<byte>[] { [0, 0], [7], [22] }) {
+        var broken = JsonSerializer.Deserialize<HuntBillRetention>(JsonSerializer.Serialize(endedStore))!;
+        broken.Characters[0].EndedBillTypes = malformedMarks;
+        Check(!new HuntBillRetentionPolicy(broken).Supported, "Fix B: malformed end marks accepted: " + string.Join(',', malformedMarks));
+    }
+    // 7. Marks are per character.
+    var other = HuntBillRetentionPolicy.CharacterKey(987654321);
+    Check(ended.Observe(other, [Held(3, 110)]) && Marks(endedStore, other).Count == 0, "Fix B: second character not retained.");
+    Check(ended.Observe(key, [Held(0, 111)]) && Marks(endedStore, key).Count == 0 && Marks(endedStore, other).Count == 0, "Fix B: mark state crossed characters.");
+    Check(ended.MarkEnded(key, Snapshot(120, (0, "absent_confirmed"))) && Marks(endedStore, other).Count == 0, "Fix B: one character's end marked another.");
+    Check(!ended.Observe(other, [Held(1, 130)]) && Kills(endedStore, other) == 3, "Fix B: another character's mark reset this character's bill.");
+    // 8. The wire payload is unchanged: marks are local state only.
+    var unmarked = JsonSerializer.Deserialize<HuntBillRetention>(JsonSerializer.Serialize(endedStore))!;
+    foreach (var c in unmarked.Characters) c.EndedBillTypes = null;
+    Check(Marks(endedStore, key).Count == 1 && ended.PreparePrivateExport(key) == new HuntBillRetentionPolicy(unmarked).PreparePrivateExport(key)
+        && !ended.PreparePrivateExport(key).Contains("Ended", StringComparison.OrdinalIgnoreCase), "Fix B: end marks changed the wire payload.");
+    // 9. Size limit: a mark never takes the store past the bytes Observe keeps free (Reviewer, 11-28).
+    var nearStore = new HuntBillRetention { LocalRetentionEnabled = true }; var near = new HuntBillRetentionPolicy(nearStore);
+    var wide = new string('a', 80);
+    HuntBillObservation Wide(byte type) => Held(3, 0, type) with { GameVersion = wide, CollectorVersion = wide,
+        Targets = Enumerable.Range(0, 5).Select(i => Held(3, 0, type).Targets[0] with { TargetIndex = (byte)i }).ToArray() };
+    int StoreBytes() => JsonSerializer.SerializeToUtf8Bytes(nearStore.Characters).Length;
+    int limit = HuntBillRetentionPolicy.MaximumBytes - 1024;
+    for (int c = 0; c < HuntBillRetentionPolicy.MaximumCharacters && StoreBytes() <= limit; c++) {
+        var character = new RetainedHuntCharacter { LocalCharacterKey = HuntBillRetentionPolicy.CharacterKey((ulong)(5000 + c)) };
+        nearStore.Characters.Add(character);
+        for (byte type = 0; type < 22 && StoreBytes() <= limit; type++) character.Bills.Add(Wide(type));
+    }
+    Check(StoreBytes() > limit, "Fix B: near-cap fixture too small.");
+    // Shorten metadata, one byte per character of GameVersion, until the store sits exactly at the limit Observe keeps.
+    foreach (var character in nearStore.Characters) for (int n = 0; n < character.Bills.Count && StoreBytes() > limit; n++) {
+        var bill = character.Bills[n];
+        character.Bills[n] = bill with { GameVersion = new string('a', Math.Max(1, bill.GameVersion.Length - (StoreBytes() - limit))) };
+    }
+    Check(StoreBytes() == limit && near.Supported, "Fix B: near-cap fixture not exactly at the limit.");
+    var nearKey = nearStore.Characters[0].LocalCharacterKey;
+    var nearBefore = JsonSerializer.Serialize(nearStore);
+    Check(!near.MarkEnded(nearKey, Snapshot(1, (0, "absent_confirmed"))) && JsonSerializer.Serialize(nearStore) == nearBefore && near.Supported,
+        "Fix B: a mark took a full store past its size limit.");
+    nearStore.Characters[^1].Bills.RemoveAt(nearStore.Characters[^1].Bills.Count - 1);
+    Check(near.MarkEnded(nearKey, Snapshot(1, (0, "absent_confirmed"))) && near.Supported, "Fix B: a mark refused with room to spare.");
+}
 session.Reset(); session.Bind(key); session.Record(Progress(1, 3));
 Check(session.Queue(Message(2)), "Bound final event not queued.");
 var eventFinal = session.Apply(Progress(1, 6) with { SourceEvidence = null }, out var finalEventApplied);

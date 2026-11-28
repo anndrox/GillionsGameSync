@@ -4,6 +4,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace GillionsGameSync;
 
@@ -130,6 +131,11 @@ internal static class HuntObservationAdmission {
 public sealed class RetainedHuntCharacter {
     public string LocalCharacterKey { get; set; } = "";
     public List<HuntBillObservation> Bills { get; set; } = [];
+    // Bill types whose stored bill a complete Key Items snapshot later confirmed absent: that bill ended.
+    // The next held observation of the type is a new bill and takes the native counts. Null means none: older
+    // configs load null, and an emptied list is stored as null, so the store's size check sees no new bytes.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<byte>? EndedBillTypes { get; set; }
 }
 public sealed class HuntBillRetention {
     public int SchemaVersion { get; set; } = 1;
@@ -164,7 +170,9 @@ internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
                 return store.SchemaVersion == 1 && store.Characters is not null && store.Characters.Count <= MaximumCharacters
                     && store.Characters.All(c => c is not null && PersonalObservationCompatibility.Key(c.LocalCharacterKey)
                         && c.Bills is not null && c.Bills.Count <= 22 && c.Bills.All(BillValid)
-                        && c.Bills.Select(b => b.BillTypeId).Distinct().Count() == c.Bills.Count)
+                        && c.Bills.Select(b => b.BillTypeId).Distinct().Count() == c.Bills.Count
+                        && (c.EndedBillTypes is null || (c.EndedBillTypes.Distinct().Count() == c.EndedBillTypes.Count
+                            && c.EndedBillTypes.All(t => c.Bills.Any(b => b.BillTypeId == t)))))
                     && store.Characters.Select(c => c.LocalCharacterKey).Distinct().Count() == store.Characters.Count
                     && JsonSerializer.SerializeToUtf8Bytes(store).Length <= MaximumBytes;
             } catch (Exception) { return false; }
@@ -182,17 +190,22 @@ internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
             || observations.Length is 0 or > 22 || !observations.All(BillValid)
             || observations.Select(b => b.BillTypeId).Distinct().Count() != observations.Length) return false;
         var current = store.Characters.SingleOrDefault(c => c.LocalCharacterKey == characterKey);
-        var candidate = new RetainedHuntCharacter { LocalCharacterKey = characterKey, Bills = current?.Bills.ToList() ?? [] };
+        var candidate = new RetainedHuntCharacter { LocalCharacterKey = characterKey, Bills = current?.Bills.ToList() ?? [],
+            EndedBillTypes = current?.EndedBillTypes?.ToList() };
         bool changed = false;
         bool semantic = false;
         foreach (var input in observations) {
             var observation = input;
             var prior = candidate.Bills.SingleOrDefault(b => b.BillTypeId == observation.BillTypeId);
             if (prior is not null && observation.ObservedAtUtc < prior.ObservedAtUtc) continue;
+            // After a confirmed end (MarkEnded), the next held bill of the type is a new bill, even when its
+            // order ID repeats. It takes the native counts. A final read (no Key Item evidence) keeps the mark.
+            bool ended = observation.SourceEvidence == HuntObservationAdmission.KeyItemEvidence
+                && candidate.EndedBillTypes?.Remove(observation.BillTypeId) == true;
             // A stale cache cannot undo positively observed progress for the same
             // exact order. A decreased same-order count is not reset proof.
             // New orders remain independently admitted; reset generation is unknown.
-            if (prior is not null && prior.OrderId == observation.OrderId && prior.EventItemId == observation.EventItemId
+            if (!ended && prior is not null && prior.OrderId == observation.OrderId && prior.EventItemId == observation.EventItemId
                 && SameTargets(prior, observation)) {
                 observation = observation with { Targets = observation.Targets.Select(t => {
                     var known = prior.Targets.Single(p => p.TargetIndex == t.TargetIndex);
@@ -201,20 +214,41 @@ internal sealed class HuntBillRetentionPolicy(HuntBillRetention store) {
             }
             var comparison = prior is null ? null : prior with { ObservedAtUtc = observation.ObservedAtUtc, ObservationId = observation.ObservationId };
             bool same = comparison is not null && JsonSerializer.Serialize(comparison) == JsonSerializer.Serialize(observation);
-            // Refresh provenance at most once/minute; semantic changes save promptly.
-            if (same
+            // Refresh provenance at most once/minute; semantic changes and a cleared end mark save promptly.
+            if (same && !ended
                 && observation.ObservedAtUtc - prior!.ObservedAtUtc < TimeSpan.FromMinutes(1)) continue;
             semantic |= !same;
             if (prior is not null) candidate.Bills.Remove(prior);
             candidate.Bills.Add(observation); changed = true;
         }
         if (!changed) return false;
+        if (candidate.EndedBillTypes is { Count: 0 }) candidate.EndedBillTypes = null;
         var candidates = store.Characters.Where(c => c != current).Append(candidate).ToList();
         if (candidates.Count > MaximumCharacters || JsonSerializer.SerializeToUtf8Bytes(candidates).Length + 1024 > MaximumBytes) {
             bool signal = !store.CapacityReached; store.CapacityReached = true; return signal;
         }
         store.Characters = candidates;
         LastSemanticChange = semantic;
+        return true;
+    }
+    // A complete Key Items snapshot that confirms a type's item absent at or after its stored bill proves
+    // that bill ended (completed, expired or abandoned). Only types with a stored bill are marked; an
+    // incomplete or unavailable snapshot marks nothing. Nothing is deleted and the wire payload is unchanged.
+    internal bool MarkEnded(string characterKey, HuntBillItemSnapshot? snapshot) {
+        if (snapshot is null || !RetentionEnabled || !Supported || !PersonalObservationCompatibility.Key(characterKey)) return false;
+        var current = store.Characters.SingleOrDefault(c => c.LocalCharacterKey == characterKey);
+        if (current is null) return false;
+        var ended = snapshot.Domains.Where(d => d.State == "absent_confirmed").Select(d => d.BillTypeId).Distinct()
+            .Where(type => current.EndedBillTypes?.Contains(type) != true
+                && current.Bills.Any(b => b.BillTypeId == type && b.ObservedAtUtc <= snapshot.ObservedAtUtc)).ToArray();
+        if (ended.Length == 0) return false;
+        // Built like Observe's change: a new character object, and never past the size limit Observe keeps.
+        // A refused mark leaves the store as it was; the next bill of that type then keeps the old merge.
+        var candidate = new RetainedHuntCharacter { LocalCharacterKey = characterKey, Bills = current.Bills.ToList(),
+            EndedBillTypes = [.. current.EndedBillTypes ?? [], .. ended] };
+        var candidates = store.Characters.Select(c => c == current ? candidate : c).ToList();
+        if (JsonSerializer.SerializeToUtf8Bytes(candidates).Length + 1024 > MaximumBytes) return false;
+        store.Characters = candidates;
         return true;
     }
     internal string PreparePrivateExport(string characterKey, bool allowEmpty = false) {

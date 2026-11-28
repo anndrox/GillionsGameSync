@@ -286,6 +286,8 @@ internal sealed class HuntBillLocalView : IDisposable {
             }
             if (policy.Observe(characterKey, observations.ToArray())) { export = ""; persist(); }
             if (policy.LastSemanticChange) SemanticRevision++;
+            // After this read's bills: a type this complete snapshot confirms ended starts fresh on its next held bill.
+            if (policy.MarkEnded(characterKey, itemCoverage.Current(characterKey, now, Stopwatch.GetTimestamp()))) persist();
             PublishProgress(characterKey, observations, partial, now);
             foreach (var observation in observations) {
                 var saved = store.Characters.SingleOrDefault(c => c.LocalCharacterKey == characterKey)?.Bills.SingleOrDefault(b => b.BillTypeId == observation.BillTypeId);
